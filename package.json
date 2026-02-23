@@ -1,0 +1,14 @@
+{
+  "name": "drep-accountability-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live Cardano DRep accountability dashboard backed by Blockfrost governance endpoints.",
+  "scripts": {
+    "start": "node server.js",
+    "build": "npm --prefix frontend run build",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "lint": "npm --prefix frontend run lint",
+    "test": "node scripts/smoke-check.mjs",
+    "ci": "npm run lint && npm run build && npm run test"
+  }
+}

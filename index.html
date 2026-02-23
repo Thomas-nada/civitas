@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DRep Accountability Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">Cardano Governance</p>
+        <h1>DRep Accountability Dashboard</h1>
+        <p>
+          Compare DRep behavior using attendance, rationale quality, and
+          consistency metrics.
+        </p>
+      </header>
+
+      <section class="cards" id="summaryCards"></section>
+
+      <section class="controls">
+        <label>
+          Dashboard Mode
+          <select id="modeSelect">
+            <option value="drep">DReps</option>
+            <option value="committee">Constitutional Committee</option>
+          </select>
+        </label>
+        <label>
+          Search DRep
+          <input id="searchInput" type="search" placeholder="Name or ID..." />
+        </label>
+        <label>
+          Minimum Attendance
+          <input id="attendanceInput" type="range" min="0" max="100" value="0" />
+          <span id="attendanceValue">0%</span>
+        </label>
+        <label>
+          Sort By
+          <select id="sortSelect">
+            <option value="accountability">Accountability Score</option>
+            <option value="attendance">Attendance</option>
+            <option value="transparencyScore">Transparency</option>
+            <option value="consistency">Outcome Alignment</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+        <label>
+          Governance Action
+          <select id="actionSelect">
+            <option value="">All governance actions</option>
+          </select>
+        </label>
+        <label class="type-filter">
+          Governance Types
+          <select id="actionTypeSelect" multiple size="5"></select>
+          <span class="muted">Use Ctrl/Cmd + click to select multiple types.</span>
+        </label>
+        <label class="toggle">
+          Include Active Actions
+          <input id="includeActiveActionsInput" type="checkbox" />
+        </label>
+        <label class="toggle">
+          Include Attendance In Score
+          <input id="includeAttendanceInput" type="checkbox" checked />
+        </label>
+        <label class="toggle">
+          Include Transparency In Score
+          <input id="includeTransparencyInput" type="checkbox" checked />
+        </label>
+        <label class="toggle">
+          Include Alignment In Score
+          <input id="includeAlignmentInput" type="checkbox" />
+        </label>
+        <label class="toggle">
+          Include Responsiveness In Score
+          <input id="includeResponsivenessInput" type="checkbox" />
+        </label>
+      </section>
+
+      <section class="status-row">
+        <p class="muted" id="statusText">Loading live governance data...</p>
+        <button id="refreshButton" type="button">Refresh</button>
+      </section>
+
+      <section class="layout">
+        <div class="panel">
+          <table>
+            <thead>
+              <tr>
+                <th id="actorHeader">DRep</th>
+                <th>Attendance</th>
+                <th>Transparency</th>
+                <th>Alignment</th>
+                <th>Abstain</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="drepTableBody"></tbody>
+          </table>
+        </div>
+
+        <aside class="detail panel" id="detailPanel">
+          <p class="muted">Select a DRep to inspect voting behavior.</p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,295 @@
+:root {
+  --bg: #0d1416;
+  --bg-soft: #162427;
+  --panel: rgba(9, 14, 16, 0.9);
+  --line: rgba(178, 219, 211, 0.18);
+  --text: #e7fff9;
+  --text-muted: #98bab2;
+  --mint: #54e4bc;
+  --amber: #ffc766;
+  --rose: #ff6f7d;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at 10% 10%, #1e3438 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, #143035 0%, transparent 35%),
+    var(--bg);
+}
+
+.shell {
+  width: min(1120px, 92vw);
+  margin: 2rem auto 3rem;
+}
+
+.hero h1 {
+  margin: 0.3rem 0;
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem);
+}
+
+.hero p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.eyebrow {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  color: var(--mint);
+}
+
+.cards {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.card,
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(3px);
+}
+
+.card {
+  padding: 1rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.card strong {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 1.4rem;
+}
+
+.controls {
+  margin: 1rem 0;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+button {
+  background: var(--mint);
+  color: #0a1512;
+  border: 0;
+  border-radius: 9px;
+  padding: 0.5rem 0.85rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+input,
+select {
+  width: 100%;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 0.56rem 0.65rem;
+  font: inherit;
+}
+
+.type-filter {
+  grid-column: 1 / -1;
+}
+
+#actionTypeSelect {
+  min-height: 9.5rem;
+  overflow-y: auto;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  transform: scale(1.1);
+  accent-color: var(--mint);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 2fr 1fr;
+}
+
+.panel {
+  padding: 0.6rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.94rem;
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+tbody tr {
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+tbody tr:hover,
+tbody tr.active {
+  background: rgba(84, 228, 188, 0.12);
+}
+
+.mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.name-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ext-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(84, 228, 188, 0.55);
+  text-underline-offset: 0.14em;
+}
+
+.ext-link:hover {
+  color: var(--mint);
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.pill.good {
+  background: rgba(84, 228, 188, 0.16);
+  color: var(--mint);
+}
+
+.pill.mid {
+  background: rgba(255, 199, 102, 0.17);
+  color: var(--amber);
+}
+
+.pill.low {
+  background: rgba(255, 111, 125, 0.17);
+  color: var(--rose);
+}
+
+.detail {
+  min-height: 420px;
+}
+
+.detail h2 {
+  margin: 0 0 0.3rem;
+}
+
+.meta {
+  margin: 0.5rem 0 0.9rem;
+}
+
+.meta p {
+  margin: 0.22rem 0;
+}
+
+.vote-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.vote-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.vote-item h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+
+.vote-item details {
+  margin-top: 0.45rem;
+}
+
+.vote-item summary {
+  cursor: pointer;
+  color: var(--mint);
+  font-size: 0.88rem;
+}
+
+.rationale-text {
+  margin: 0.55rem 0 0;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .controls,
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
