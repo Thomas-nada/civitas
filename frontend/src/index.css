@@ -234,23 +234,40 @@ a {
 }
 
 .topbar-inner {
-  display: grid;
-  gap: 0.75rem;
-  min-height: 72px;
-  padding-top: 0.35rem;
-  padding-bottom: 0.35rem;
+  display: block;
+  min-height: 52px;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
 }
 
 .topbar-row-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  min-height: 44px;
+  gap: 0.8rem;
+  min-height: 48px;
+}
+
+.topbar-left {
+  flex: 0 0 auto;
+  min-width: 168px;
+}
+
+.topbar-left-spacer {
+  display: inline-block;
+  width: 1px;
+  height: 1px;
+}
+
+.topbar-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
 }
 
 .topbar-row-main.is-landing {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .brand {
@@ -280,8 +297,8 @@ a {
 }
 
 .brand-mark {
-  width: 40px;
-  height: 40px;
+  width: 51px;
+  height: 51px;
   flex: 0 0 auto;
   display: block;
   filter: drop-shadow(0 0 6px rgba(84, 228, 188, 0.22));
@@ -289,7 +306,7 @@ a {
 
 .brand {
   font-family: "Orbitron", "Space Grotesk", sans-serif;
-  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+  font-size: clamp(0.98rem, 1.4vw, 1.2rem);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -315,13 +332,17 @@ a {
 }
 
 .topnav-row {
-  justify-content: flex-start;
+  justify-content: center;
+  flex: 1 1 auto;
+  width: auto;
 }
 
 .topnav a {
   text-decoration: none;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1;
   transition: color 120ms ease;
 }
 
@@ -347,8 +368,9 @@ a {
   border-radius: 999px;
   background: var(--surface-soft);
   color: var(--text);
-  padding: 0.4rem 0.78rem;
   font: inherit;
+  padding: 0.3rem 0.64rem;
+  font-size: 0.86rem;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
@@ -357,6 +379,31 @@ a {
 .theme-toggle-btn:hover {
   border-color: var(--mint);
   color: var(--mint);
+}
+
+.social-x-link {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.social-x-link:hover {
+  border-color: var(--mint);
+  color: var(--mint);
+}
+
+.social-x-link svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
 }
 
 .shell {
@@ -936,6 +983,9 @@ a {
 
 .wallet-trigger {
   min-width: 110px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.84rem;
+  line-height: 1.2;
 }
 
 .wallet-popover {
@@ -1581,23 +1631,29 @@ tbody tr.active {
 }
 
 @media (max-width: 900px) {
-  .topbar-inner {
-    gap: 0.45rem;
-  }
-
   .topbar-row-main {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
 
+  .topbar-left {
+    min-width: auto;
+  }
+
+  .topbar-controls {
+    margin-left: auto;
+    align-items: flex-end;
+  }
+
   .topnav {
     width: 100%;
-    gap: 0.8rem;
-    padding-top: 0.2rem;
+    gap: 0.9rem;
+    padding-top: 0.1rem;
+    justify-content: center;
   }
 
   .theme-toggle-btn {
-    margin-left: auto;
+    margin-left: 0;
   }
 
   .feature-layout,

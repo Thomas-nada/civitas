@@ -23,6 +23,25 @@ const C = {
 
 const TYPE_PALETTE = ["#54e4bc","#ffc766","#ff6f7d","#7eb8ff","#c084fc","#fb923c","#34d399","#f472b6"];
 
+const CC_TERM_OVERRIDES_BY_HOT = {
+  cc_hot1qvr7p6ms588athsgfd0uez5m9rlhwu3g9dt7wcxkjtr4hhsq6ytv2: { seatStartEpoch: 507, expirationEpoch: 596 },
+  cc_hot1qv7fa08xua5s7qscy9zct3asaa5a3hvtdc8sxexetcv3unq7cfkq5: { seatStartEpoch: 507, expirationEpoch: 580 },
+  cc_hot1qwzuglw5hx3wwr5gjewerhtfhcvz64s9kgam2fgtrj2t7eqs00fzv: { seatStartEpoch: 507, expirationEpoch: 580 },
+  cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9: { seatStartEpoch: 507, expirationEpoch: 580 },
+  cc_hot1q0wzkpcxzzfs4mf4yk6yx7d075vqtyx2tnxsr256he6gnwq6yfy5w: { seatStartEpoch: 507, expirationEpoch: 580 },
+  cc_hot1qdqp9j44qfnwlkx9h78kts8hvee4ycc7czrw0xl4lqhsw4gcxgkpt: { seatStartEpoch: 507, expirationEpoch: 580 },
+};
+
+const CC_TERM_OVERRIDES_BY_NAME = {
+  "cardano atlantic council": { seatStartEpoch: 507, expirationEpoch: 596 },
+  "intersect constitutional council": { seatStartEpoch: 507, expirationEpoch: 580 },
+  emurgo: { seatStartEpoch: 507, expirationEpoch: 580 },
+  "cardano foundation": { seatStartEpoch: 507, expirationEpoch: 580 },
+  "cardano japan": { seatStartEpoch: 507, expirationEpoch: 580 },
+  "input | output": { seatStartEpoch: 507, expirationEpoch: 580 },
+  "input output": { seatStartEpoch: 507, expirationEpoch: 580 },
+};
+
 // Governance type → short label
 const TYPE_SHORT = {
   "Hard Fork Initiation": "Hard Fork",
@@ -56,6 +75,36 @@ function fmtAda(ada) {
   return `${fmt(ada)} ₳`;
 }
 function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
+
+function getCommitteeTermOverride(actor) {
+  const hot = String(actor?.hotCredential || "").trim().toLowerCase();
+  const name = String(actor?.name || "").trim().toLowerCase();
+  return CC_TERM_OVERRIDES_BY_HOT[hot] || CC_TERM_OVERRIDES_BY_NAME[name] || null;
+}
+
+function getCommitteeEligibilityWindow(actor, proposalInfo) {
+  const termOverride = getCommitteeTermOverride(actor);
+  const startEpoch = Number(termOverride?.seatStartEpoch || actor?.seatStartEpoch || 0);
+  const endEpoch = Number(termOverride?.expirationEpoch || actor?.expirationEpoch || 0);
+  const hasStartEpoch = Number.isFinite(startEpoch) && startEpoch > 0;
+  const hasEndEpoch = Number.isFinite(endEpoch) && endEpoch > 0;
+  const actorStatus = String(actor?.status || "").toLowerCase();
+  const allVoteEpochs = (actor?.votes || [])
+    .map((vote) => Number(proposalInfo?.[vote.proposalId]?.submittedEpoch || 0))
+    .filter((epoch) => Number.isFinite(epoch) && epoch > 0);
+  const lastVoteEpoch = allVoteEpochs.length > 0 ? Math.max(...allVoteEpochs) : 0;
+  const inferredRetiredEndEpoch = actorStatus === "retired" && !hasEndEpoch && lastVoteEpoch > 0 ? lastVoteEpoch : 0;
+  const inferredExpiredEndEpoch = actorStatus === "expired" && !hasEndEpoch && lastVoteEpoch > 0 ? lastVoteEpoch : 0;
+  const inferredEndEpoch = inferredRetiredEndEpoch || inferredExpiredEndEpoch || 0;
+  const effectiveEndEpoch =
+    hasEndEpoch && inferredEndEpoch > 0
+      ? Math.min(endEpoch, inferredEndEpoch)
+      : hasEndEpoch
+        ? endEpoch
+        : inferredEndEpoch;
+  const hasEffectiveEndEpoch = Number.isFinite(effectiveEndEpoch) && effectiveEndEpoch > 0;
+  return { startEpoch, hasStartEpoch, effectiveEndEpoch, hasEffectiveEndEpoch };
+}
 
 // ── Tooltip skin ──────────────────────────────────────────────────────────────
 const TooltipStyle = {
@@ -105,8 +154,8 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
 
   const PAD_LEFT  = 160;
   const PAD_RIGHT = 32;
-  const ROW_H     = 32;
-  const BAR_H     = 14;
+  const ROW_H     = 24;
+  const BAR_H     = 12;
   const TICK_STEP = 20; // epoch ticks every N epochs
 
   // Sort: active first, then by seatStartEpoch
@@ -276,30 +325,22 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
 }
 
 // ── Governance Actions Timeline ────────────────────────────────────────────────
-// Type → colour index
-const TYPE_COLORS_MAP = {};
-function getTypeColor(type) {
-  if (!TYPE_COLORS_MAP[type]) {
-    const idx = Object.keys(TYPE_COLORS_MAP).length;
-    TYPE_COLORS_MAP[type] = TYPE_PALETTE[idx % TYPE_PALETTE.length];
-  }
-  return TYPE_COLORS_MAP[type];
-}
-
-function GovernanceActionsTimeline({ proposals, epochMin, epochMax }) {
+function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch }) {
+  const DEFAULT_VISIBLE = 10;
   const [tooltip, setTooltip] = useState(null);
   const [filterType, setFilterType] = useState(null);
   const [filterOutcome, setFilterOutcome] = useState(null);
+  const [showAll, setShowAll] = useState(false);
   const svgRef = useRef(null);
 
   const PAD_LEFT  = 20;
   const PAD_RIGHT = 20;
   const ROW_H     = 10;
   const GAP       = 2;
-  const TICK_STEP = 20;
+  const TICK_STEP = 5;
 
-  // Sort proposals by submittedEpoch
-  const sorted = useMemo(() => {
+  // Filter + sort proposals by submittedEpoch
+  const filtered = useMemo(() => {
     let list = [...proposals]
       .filter(p => p.submittedEpoch)
       .sort((a, b) => (a.submittedEpoch || 0) - (b.submittedEpoch || 0));
@@ -308,24 +349,64 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax }) {
     return list;
   }, [proposals, filterType, filterOutcome]);
 
+  // Default view is newest 10 governance actions, expandable to all
+  const visible = useMemo(
+    () => (showAll ? filtered : filtered.slice(-DEFAULT_VISIBLE)),
+    [filtered, showAll]
+  );
+
   // Build type list for legend/filter
   const allTypes    = [...new Set(proposals.map(p => p.governanceType || "Unknown"))].sort();
   const allOutcomes = [...new Set(proposals.map(p => p.outcome || "Pending"))].sort();
 
-  // Reset type color map on each render so colours are consistent
-  Object.keys(TYPE_COLORS_MAP).forEach(k => delete TYPE_COLORS_MAP[k]);
-  allTypes.forEach(t => getTypeColor(t)); // pre-assign stable order
+  // Stable type-to-colour map, avoids render glitches while filtering
+  const typeColorMap = useMemo(() => {
+    const map = {};
+    allTypes.forEach((t, i) => {
+      map[t] = TYPE_PALETTE[i % TYPE_PALETTE.length];
+    });
+    return map;
+  }, [allTypes]);
+  const getTypeColor = (type) => typeColorMap[type] || C.muted;
 
-  const svgH = sorted.length * (ROW_H + GAP) + 48;
+  // If the current filtered set is small, collapse back to default compact mode
+  useEffect(() => {
+    if (filtered.length <= DEFAULT_VISIBLE) setShowAll(false);
+  }, [filtered.length]);
+
+  // Filter-scoped domain prevents the timeline from looking broken when filters change
+  const [timelineMin, timelineMax] = useMemo(() => {
+    if (!visible.length) return [epochMin, epochMax];
+    const starts = visible.map(p => Number(p.submittedEpoch || 0)).filter(v => Number.isFinite(v) && v > 0);
+    const ends = visible.map(p => {
+      const term = Number(
+        p.enactedEpoch ||
+        p.ratifiedEpoch ||
+        p.droppedEpoch ||
+        p.expiredEpoch ||
+        p.expirationEpoch ||
+        epochMax
+      );
+      return Number.isFinite(term) && term > 0 ? term : epochMax;
+    });
+    const current = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
+      ? Number(currentEpoch)
+      : epochMax;
+    const min = starts.length ? Math.min(...starts) : epochMin;
+    const max = Math.max(ends.length ? Math.max(...ends) : epochMax, current);
+    return [Math.min(min, max), Math.max(min, max)];
+  }, [visible, epochMin, epochMax, currentEpoch]);
+
+  const svgH = visible.length * (ROW_H + GAP) + 48;
 
   function epochToX(ep, w) {
-    const span = epochMax - epochMin || 1;
-    return PAD_LEFT + ((ep - epochMin) / span) * (w - PAD_LEFT - PAD_RIGHT);
+    const span = timelineMax - timelineMin || 1;
+    return PAD_LEFT + ((ep - timelineMin) / span) * (w - PAD_LEFT - PAD_RIGHT);
   }
 
   const ticks = [];
-  const firstTick = Math.ceil(epochMin / TICK_STEP) * TICK_STEP;
-  for (let ep = firstTick; ep <= epochMax; ep += TICK_STEP) ticks.push(ep);
+  const firstTick = Math.ceil(timelineMin / TICK_STEP) * TICK_STEP;
+  for (let ep = firstTick; ep <= timelineMax; ep += TICK_STEP) ticks.push(ep);
 
   return (
     <div>
@@ -368,8 +449,17 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax }) {
           ))}
         </div>
         <span style={{ color: C.muted, fontSize: 11, marginLeft: "auto", alignSelf: "center" }}>
-          {sorted.length} / {proposals.filter(p=>p.submittedEpoch).length} proposals
+          showing {visible.length} / {filtered.length} filtered · {filtered.length} / {proposals.filter(p=>p.submittedEpoch).length} total
         </span>
+        {filtered.length > DEFAULT_VISIBLE && (
+          <button
+            className="stats-filter-btn active"
+            onClick={() => setShowAll(v => !v)}
+            style={{ marginLeft: "0.2rem" }}
+          >
+            {showAll ? "Show newest 10" : "Show all"}
+          </button>
+        )}
       </div>
 
       {/* Timeline SVG */}
@@ -385,35 +475,42 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax }) {
             const x = epochToX(ep, 800);
             return (
               <g key={ep}>
-                <line x1={x} y1={0} x2={x} y2={sorted.length * (ROW_H + GAP)} stroke={C.line} strokeWidth={1} />
-                <text x={x} y={sorted.length * (ROW_H + GAP) + 14} textAnchor="middle" fill={C.muted} fontSize={10}>{ep}</text>
+                <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.line} strokeWidth={1} />
+                <text x={x} y={visible.length * (ROW_H + GAP) + 14} textAnchor="middle" fill={C.muted} fontSize={10}>{ep}</text>
               </g>
             );
           })}
 
           {/* "Now" marker */}
           {(() => {
-            const x = epochToX(epochMax, 800);
+            const baseCurrentEpoch = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
+              ? Number(currentEpoch)
+              : epochMax;
+            const nowEpoch = Math.min(Math.max(baseCurrentEpoch, timelineMin), timelineMax);
+            const x = epochToX(nowEpoch, 800);
             return (
               <g>
-                <line x1={x} y1={0} x2={x} y2={sorted.length * (ROW_H + GAP)} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.5} />
+                <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.5} />
+                <text x={Math.min(x + 4, 760)} y={12} fill={C.yes} fontSize={9} opacity={0.75}>
+                  Current epoch {nowEpoch}
+                </text>
               </g>
             );
           })()}
 
           {/* Proposal bars */}
-          {sorted.map((p, i) => {
+          {visible.map((p, i) => {
             const startEp  = p.submittedEpoch || epochMin;
             const termEp   = p.enactedEpoch || p.ratifiedEpoch || p.droppedEpoch || p.expiredEpoch || p.expirationEpoch || epochMax;
             const x1 = epochToX(startEp, 800);
-            const x2 = Math.max(epochToX(Math.min(termEp, epochMax), 800), x1 + 3);
+            const x2 = Math.max(epochToX(Math.min(termEp, timelineMax), 800), x1 + 3);
             const y  = i * (ROW_H + GAP);
             const typeColor = getTypeColor(p.governanceType || "Unknown");
             const outColor  = outcomeColor(p.outcome);
 
             return (
               <g
-                key={p.txHash || i}
+                key={`${p.txHash || "tx"}:${p.certIndex ?? "na"}:${p.actionName || p.governanceType || "row"}:${startEp}:${i}`}
                 onMouseEnter={e => {
                   const rect = svgRef.current?.getBoundingClientRect();
                   setTooltip({
@@ -492,58 +589,35 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax }) {
   );
 }
 
-// ── CC Attendance Grouped Bar (replaces radar) ─────────────────────────────────
-function CcAttendanceBar({ ccAttendance }) {
-  // Sort by attendance desc, show all members
-  const data = [...ccAttendance].sort((a, b) => b.pct - a.pct).map(m => ({
-    name: m.name,
-    "Attendance %":  m.pct,
-    "Rationale %":   pct(m.withRationale, m.cast || 1),
-    cast:            m.cast,
-    eligible:        m.eligible,
-    withRationale:   m.withRationale,
-    active:          m.active,
-  }));
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    const d = data.find(r => r.name === label);
-    return (
-      <div style={{ ...TooltipStyle.contentStyle, padding: "8px 12px" }}>
-        <strong style={{ color: C.text }}>{label}</strong>
-        <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ color: C.yes }}>Attendance: {payload.find(p=>p.dataKey==="Attendance %")?.value ?? 0}%</span>
-          <span style={{ color: C.abstain }}>Rationale coverage: {payload.find(p=>p.dataKey==="Rationale %")?.value ?? 0}%</span>
-          {d && <span style={{ color: C.muted, fontSize: 11 }}>{d.cast} / {d.eligible} votes · {d.withRationale} with rationale</span>}
-        </div>
-      </div>
-    );
-  };
+// ── CC Vote Types by Seat ───────────────────────────────────────────────────────
+function CcVoteTypesBySeatBar({ rows }) {
+  const data = [...rows]
+    .sort((a, b) => b.cast - a.cast)
+    .map((m) => ({
+      name: m.name,
+      Constitutional: m.constitutionalVotes || 0,
+      Unconstitutional: m.unconstitutionalVotes || 0,
+      Abstain: m.abstainVotes || 0,
+      cast: m.cast || 0,
+    }));
 
   return (
-    <ResponsiveContainer width="100%" height={Math.max(200, data.length * 36 + 40)}>
+    <ResponsiveContainer width="100%" height={Math.max(320, data.length * 30 + 56)}>
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 4, right: 60, bottom: 4, left: 8 }}
-        barCategoryGap="25%"
+        margin={{ top: 4, right: 22, bottom: 4, left: 8 }}
+        barCategoryGap="24%"
         barGap={3}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-        <XAxis
-          type="number" domain={[0, 100]}
-          tick={{ fill: C.muted, fontSize: 11 }}
-          tickFormatter={v => `${v}%`}
-        />
-        <YAxis
-          type="category" dataKey="name"
-          tick={{ fill: C.text, fontSize: 10 }}
-          width={140}
-        />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(84,228,188,0.05)" }} />
+        <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: 10 }} width={150} />
+        <Tooltip {...TooltipStyle} />
         <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
-        <Bar dataKey="Attendance %" fill={C.yes}     radius={[0, 3, 3, 0]} />
-        <Bar dataKey="Rationale %" fill={C.abstain}  radius={[0, 3, 3, 0]} />
+        <Bar dataKey="Constitutional" fill={C.yes} radius={[0, 3, 3, 0]} />
+        <Bar dataKey="Unconstitutional" fill={C.no} radius={[0, 3, 3, 0]} />
+        <Bar dataKey="Abstain" fill={C.abstain} radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -554,6 +628,7 @@ export default function StatsPage() {
   const [raw, setRaw]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
+  const [showAllCcMembers, setShowAllCcMembers] = useState(false);
 
   // Active slice index for interactive donuts
   const [activePropType, setActivePropType]       = useState(0);
@@ -569,7 +644,8 @@ export default function StatsPage() {
 
   const s = useMemo(() => {
     if (!raw) return null;
-    const proposals = Object.values(raw.proposalInfo || {});
+    const proposalInfo = raw.proposalInfo || {};
+    const proposals = Object.values(proposalInfo);
     const dreps     = raw.dreps || [];
     const cc        = raw.committeeMembers || [];
     const spos      = raw.spos || [];
@@ -630,6 +706,7 @@ export default function StatsPage() {
     const ccEpochMax = Math.max(...ccExpEpochs, ...proposals.map(p=>p.expirationEpoch||0), ...proposals.map(p=>p.enactedEpoch||0), ...proposals.map(p=>p.ratifiedEpoch||0));
     const epochMin = Math.max(ccEpochMin, 500);
     const epochMax = Math.max(ccEpochMax, epochMin + 10);
+    const currentEpoch = Number(raw.latestEpoch || 0) || null;
 
     // ── DReps ─────────────────────────────────────────────────────────────────
     const activeDreps   = dreps.filter(d => d.active === true);
@@ -698,14 +775,92 @@ export default function StatsPage() {
     // ── CC ────────────────────────────────────────────────────────────────────
     const activeCc = cc.filter(m => m.status === "active");
 
-    const ccAttendance = cc.map(m => ({
-      name: m.name || m.id.slice(0,12),
-      cast: (m.votes||[]).length,
-      eligible: m.totalEligibleVotes || 1,
-      pct: pct((m.votes||[]).length, m.totalEligibleVotes||1),
-      withRationale: (m.votes||[]).filter(v=>v.hasRationale).length,
-      active: m.status === "active",
-    })).sort((a,b)=>b.pct-a.pct);
+    const isEarlyDroppedAction = (proposalId) => {
+      const info = proposalInfo[proposalId] || {};
+      const droppedEpoch = Number(info?.droppedEpoch || 0);
+      const expirationEpoch = Number(info?.expirationEpoch || 0);
+      if (!Number.isFinite(droppedEpoch) || droppedEpoch <= 0) return false;
+      if (!Number.isFinite(expirationEpoch) || expirationEpoch <= 0) return false;
+      return droppedEpoch < expirationEpoch;
+    };
+    const requiresCommitteeParticipation = (proposalId) => {
+      const info = proposalInfo[proposalId] || {};
+      const type = String(info?.governanceType || "").toLowerCase();
+      if (type.includes("no confidence")) return false;
+      if (type.includes("new committee")) return false;
+      if (isEarlyDroppedAction(proposalId)) return false;
+      return true;
+    };
+    const committeeProposalTerminalEpoch = (proposalId) => {
+      const info = proposalInfo[proposalId] || {};
+      const candidates = [
+        Number(info.enactedEpoch || 0),
+        Number(info.ratifiedEpoch || 0),
+        Number(info.droppedEpoch || 0),
+        Number(info.expiredEpoch || 0),
+        Number(info.expirationEpoch || 0),
+      ].filter((x) => Number.isFinite(x) && x > 0);
+      if (candidates.length === 0) return null;
+      return Math.min(...candidates);
+    };
+    const proposalIds = Object.keys(proposalInfo);
+    const proposalEpochs = new Map(
+      proposalIds.map((proposalId) => [proposalId, Number(proposalInfo[proposalId]?.submittedEpoch || 0)])
+    );
+
+    const ccAttendance = cc.map((m) => {
+      const eligibility = getCommitteeEligibilityWindow(m, proposalInfo);
+      const startEpoch = Number(eligibility?.startEpoch || 0);
+      const hasStartEpoch = Boolean(eligibility?.hasStartEpoch);
+      const effectiveEndEpoch = Number(eligibility?.effectiveEndEpoch || 0);
+      const hasEffectiveEndEpoch = Boolean(eligibility?.hasEffectiveEndEpoch);
+
+      const votes = (m.votes || []).filter((vote) => {
+        if (hasStartEpoch || hasEffectiveEndEpoch) {
+          const proposalEpoch = Number(proposalInfo[vote.proposalId]?.submittedEpoch || 0);
+          if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
+            if (hasStartEpoch && proposalEpoch < startEpoch) return false;
+            if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) return false;
+          }
+        }
+        return true;
+      });
+
+      const cast = votes.length;
+      const committeeEligibleProposalIds = proposalIds.filter((proposalId) => requiresCommitteeParticipation(proposalId));
+      const actorVoteByProposal = new Set(votes.map((v) => v.proposalId));
+
+      let eligible = 0;
+      if (hasStartEpoch || hasEffectiveEndEpoch) {
+        for (const proposalId of committeeEligibleProposalIds) {
+          const proposalEpoch = Number(proposalEpochs.get(proposalId) || 0);
+          if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
+            if (hasStartEpoch && proposalEpoch < startEpoch) continue;
+            if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) continue;
+          }
+          if (hasEffectiveEndEpoch && !actorVoteByProposal.has(proposalId)) {
+            const terminalEpoch = committeeProposalTerminalEpoch(proposalId);
+            if (!terminalEpoch || terminalEpoch > effectiveEndEpoch) continue;
+          }
+          eligible += 1;
+        }
+      } else {
+        eligible = committeeEligibleProposalIds.length;
+      }
+      const totalEligibleVotes = Math.max(eligible, cast, 0);
+
+      return {
+        name: m.name || m.id.slice(0,12),
+        cast,
+        eligible: totalEligibleVotes,
+        pct: pct(cast, totalEligibleVotes || 1),
+        withRationale: votes.filter(v => v.hasRationale).length,
+        constitutionalVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "yes").length,
+        unconstitutionalVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "no").length,
+        abstainVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "abstain").length,
+        active: m.status === "active",
+      };
+    }).sort((a,b)=>b.pct-a.pct);
 
     // ── SPOs ──────────────────────────────────────────────────────────────────
     const delMap = {};
@@ -715,14 +870,73 @@ export default function StatsPage() {
 
     const totalSpoAda = spos.reduce((s,p)=>s+(p.votingPowerAda||0), 0);
 
+    const toSortedPower = (rows) => [...rows]
+      .map((r) => Number(r?.votingPowerAda || 0))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => b - a);
+    const minEntitiesForThresholdPct = (sortedPowers, thresholdPct) => {
+      if (!sortedPowers.length) return null;
+      const total = sortedPowers.reduce((sum, n) => sum + n, 0);
+      if (!(total > 0) || !(thresholdPct > 0)) return null;
+      const target = total * (thresholdPct / 100);
+      let acc = 0;
+      for (let i = 0; i < sortedPowers.length; i += 1) {
+        acc += sortedPowers[i];
+        if (acc >= target) return i + 1;
+      }
+      return sortedPowers.length;
+    };
+    const nakamotoCoefficient = (sortedPowers) => {
+      if (!sortedPowers.length) return null;
+      const total = sortedPowers.reduce((sum, n) => sum + n, 0);
+      if (!(total > 0)) return null;
+      const target = total / 2;
+      let acc = 0;
+      for (let i = 0; i < sortedPowers.length; i += 1) {
+        acc += sortedPowers[i];
+        if (acc > target) return i + 1;
+      }
+      return sortedPowers.length;
+    };
+
+    const drepPowers = toSortedPower(dreps);
+    const spoPowers = toSortedPower(spos);
+
+    const tc = raw.thresholdContext || {};
+    const thresholdRowsRaw = [
+      ["Motion No Confidence", Number(tc?.drep?.motionNoConfidence || 0)],
+      ["Committee Normal", Number(tc?.drep?.committeeNormal || 0)],
+      ["Constitution Update", Number(tc?.drep?.updateToConstitution || 0)],
+      ["Hard Fork Initiation", Number(tc?.drep?.hardForkInitiation || 0)],
+      ["Network Group", Number(tc?.drep?.networkGroup || 0)],
+      ["Economic Group", Number(tc?.drep?.economicGroup || 0)],
+      ["Technical Group", Number(tc?.drep?.technicalGroup || 0)],
+      ["Governance Group", Number(tc?.drep?.govGroup || 0)],
+      ["Treasury Withdrawal", Number(tc?.drep?.treasuryWithdrawal || 0)],
+    ].filter(([, pct]) => Number.isFinite(pct) && pct > 0);
+
+    const drepThresholdReachRows = (thresholdRowsRaw.length > 0
+      ? thresholdRowsRaw
+      : [["50% Majority", 50], ["66.7% Supermajority", 66.7]]
+    )
+      .sort((a, b) => a[1] - b[1])
+      .map(([threshold, pct]) => ({
+        threshold,
+        requiredPct: pct,
+        topDrepsNeeded: minEntitiesForThresholdPct(drepPowers, pct) || 0,
+      }));
+
+    const drepNakamoto = nakamotoCoefficient(drepPowers);
+    const spoNakamoto = nakamotoCoefficient(spoPowers);
+
     return {
       proposals, byType, byOutcome, byEpoch,
       totalYes, totalNo, totalAbstain, votesByRole,
       dreps, activeDreps, retiredDreps, totalDrepAda, abstainAda, noConfAda,
       attBuckets, tsBuckets, rtBuckets, medianRT, top10Dreps,
       cc, activeCc, ccAttendance,
-      spos, byDelegation, totalSpoAda,
-      epochMin, epochMax,
+      spos, byDelegation, totalSpoAda, drepThresholdReachRows, drepNakamoto, spoNakamoto,
+      epochMin, epochMax, currentEpoch,
     };
   }, [raw]);
 
@@ -731,16 +945,14 @@ export default function StatsPage() {
   if (!s)      return null;
 
   const totalVotes = s.totalYes + s.totalNo + s.totalAbstain;
+  const ccChartRows = showAllCcMembers ? s.ccAttendance : s.ccAttendance.filter((row) => row.active);
+  const hasInactiveCcMembers = s.ccAttendance.some((row) => !row.active);
 
   return (
     <main className="shell stats-page">
       {/* Header */}
       <div className="stats-header">
         <h1 className="stats-title">Governance Statistics</h1>
-        <p className="muted stats-subtitle">
-          Live eagle-eye view of Cardano on-chain governance ·{" "}
-          {s.proposals.length} proposals · synced {raw.generatedAt ? new Date(raw.generatedAt).toLocaleString() : "—"}
-        </p>
       </div>
 
       {/* ── KPI Row ───────────────────────────────────────────────────────────── */}
@@ -749,7 +961,7 @@ export default function StatsPage() {
         <KpiCard label="Total Votes Cast"  value={fmt(totalVotes)}               sub="across all groups & proposals"                                  accent="#7eb8ff" />
         <KpiCard label="Active DReps"      value={fmt(s.activeDreps.length)}     sub={`of ${fmt(s.dreps.length)} registered`}                        accent={C.yes} />
         <KpiCard label="DRep Voting Power" value={fmtAda(s.totalDrepAda)}        sub="delegated active stake"                                         accent={C.abstain} />
-        <KpiCard label="CC Members"        value={fmt(s.activeCc.length)}        sub={`${s.activeCc.filter(m => s.ccAttendance.find(a=>a.name===(m.name||m.id.slice(0,12)) && a.pct===100)).length} at 100% attendance · ${s.cc.length} historical`} accent={C.no} />
+        <KpiCard label="CC Members"        value={fmt(s.activeCc.length)}        sub={`${s.cc.length} historical`} accent={C.no} />
         <KpiCard label="SPOs Voting"       value={fmt(s.spos.length)}            sub={fmtAda(s.totalSpoAda) + " combined"}                            accent="#c084fc" />
         <KpiCard label="Always Abstain"    value={fmtAda(s.abstainAda)}          sub="delegated to abstain pool"                                      accent={C.muted} />
         <KpiCard label="No Confidence"     value={fmtAda(s.noConfAda)}           sub="delegated to no-confidence"                                     accent={C.no} />
@@ -772,11 +984,12 @@ export default function StatsPage() {
       </Section>
 
       {/* ── Governance Actions Timeline ──────────────────────────────────────── */}
-      <Section title="Governance Actions Timeline — Submitted → Enacted / Expired" wide>
+      <Section title="Governance Actions Timeline" wide>
         <GovernanceActionsTimeline
           proposals={s.proposals}
           epochMin={s.epochMin}
           epochMax={s.epochMax}
+          currentEpoch={s.currentEpoch}
         />
       </Section>
 
@@ -844,7 +1057,7 @@ export default function StatsPage() {
       </div>
 
       {/* ── Votes by group ────────────────────────────────────────────────────── */}
-      <Section title="Vote Breakdown by Group (Yes / No / Abstain)" wide>
+      <Section title="Vote Breakdown by Group" wide>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={s.votesByRole} layout="vertical" margin={{top:4,right:32,bottom:4,left:80}}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
@@ -857,6 +1070,26 @@ export default function StatsPage() {
             <Bar dataKey="abstain" name="Abstain" fill={C.abstain} radius={[0,2,2,0]} />
           </BarChart>
         </ResponsiveContainer>
+      </Section>
+
+      <Section title="Top DReps Needed per Threshold" wide>
+        <ResponsiveContainer width="100%" height={Math.max(240, s.drepThresholdReachRows.length * 34 + 44)}>
+          <BarChart data={s.drepThresholdReachRows} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
+            <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+            <YAxis type="category" dataKey="threshold" tick={{ fill: C.text, fontSize: 10 }} width={170} />
+            <Tooltip
+              {...TooltipStyle}
+              formatter={(v, _name, item) => [`${v}`, `Top DReps needed (${Number(item?.payload?.requiredPct || 0).toFixed(1)}%)`]}
+            />
+            <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
+            <Bar dataKey="topDrepsNeeded" name="Top DReps Needed" fill="#7eb8ff" radius={[0, 3, 3, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="stats-kpi-grid" style={{ marginTop: "0.8rem" }}>
+          <KpiCard label="DRep Nakamoto" value={s.drepNakamoto ?? "—"} sub="entities to exceed 50% voting power" accent="#7eb8ff" />
+          <KpiCard label="SPO Nakamoto" value={s.spoNakamoto ?? "—"} sub="entities to exceed 50% voting power" accent="#c084fc" />
+        </div>
       </Section>
 
       {/* ── DRep section ──────────────────────────────────────────────────────── */}
@@ -927,7 +1160,7 @@ export default function StatsPage() {
       {/* ── CC section ────────────────────────────────────────────────────────── */}
 
       {/* CC Membership Timeline */}
-      <Section title="Constitutional Committee — Membership Timeline (Epoch-Based)" wide>
+      <Section title="Constitutional Committee Timeline" wide>
         <CcMembershipTimeline
           cc={s.cc}
           epochMin={s.epochMin}
@@ -935,68 +1168,47 @@ export default function StatsPage() {
         />
       </Section>
 
-      {/* CC Attendance vs Rationale Coverage (grouped horizontal bar, replaces radar) */}
-      <Section title="Constitutional Committee — Attendance & Rationale Coverage" wide>
-        <CcAttendanceBar ccAttendance={s.ccAttendance} />
-        <p className="muted stats-note">
-          Attendance = share of eligible votes cast. Rationale coverage = share of votes with published rationale.
-          Active members shown in brighter colour.
-        </p>
+      {/* CC Vote Types by Seat */}
+      <Section title="Constitutional Committee — Vote Types by Seat" wide>
+        {hasInactiveCcMembers && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.5rem" }}>
+            <button
+              className="stats-filter-btn active"
+              onClick={() => setShowAllCcMembers((v) => !v)}
+            >
+              {showAllCcMembers ? "Show active only" : "Show all members"}
+            </button>
+          </div>
+        )}
+        <CcVoteTypesBySeatBar rows={ccChartRows} />
+        <p className="muted stats-note">Constitutional / Unconstitutional / Abstain votes by committee seat.</p>
       </Section>
 
       {/* CC Votes Cast vs Eligible */}
-      <Section title="Constitutional Committee — Votes Cast vs Eligible" wide>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={s.ccAttendance} margin={{top:4,right:16,bottom:4,left:8}}>
+      <Section title="Constitutional Committee — Votes Cast" wide>
+        {hasInactiveCcMembers && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.5rem" }}>
+            <button
+              className="stats-filter-btn active"
+              onClick={() => setShowAllCcMembers((v) => !v)}
+            >
+              {showAllCcMembers ? "Show active only" : "Show all members"}
+            </button>
+          </div>
+        )}
+        <ResponsiveContainer width="100%" height={Math.max(320, ccChartRows.length * 30 + 56)}>
+          <BarChart data={ccChartRows} layout="vertical" margin={{top:4,right:16,bottom:4,left:8}}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis dataKey="name" tick={{fill:C.muted,fontSize:10}} />
-            <YAxis tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+            <XAxis type="number" tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+            <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:10}} width={150} />
             <Tooltip {...TooltipStyle} />
             <Legend wrapperStyle={{fontSize:12,color:C.muted}} />
-            <Bar dataKey="eligible"      name="Eligible"       fill={C.muted}   opacity={0.4} radius={[4,4,0,0]} />
-            <Bar dataKey="cast"          name="Voted"          fill={C.yes}     radius={[4,4,0,0]} />
-            <Bar dataKey="withRationale" name="With Rationale" fill={C.abstain} radius={[4,4,0,0]} />
+            <Bar dataKey="eligible"      name="Eligible" fill={C.muted} opacity={0.4} radius={[0,3,3,0]} />
+            <Bar dataKey="cast"          name="Voted"    fill={C.yes} radius={[0,3,3,0]} />
           </BarChart>
         </ResponsiveContainer>
       </Section>
 
-      {/* ── SPO section ───────────────────────────────────────────────────────── */}
-      <Section title="SPO Delegation Status" wide>
-        <div className="stats-donut-row">
-          <ResponsiveContainer width={200} height={200}>
-            <PieChart>
-              <Pie
-                activeIndex={activeDelegation}
-                activeShape={renderActiveShape}
-                data={s.byDelegation}
-                cx="50%" cy="50%"
-                innerRadius={52} outerRadius={76}
-                dataKey="value"
-                onMouseEnter={(_,i) => setActiveDelegation(i)}
-              >
-                {s.byDelegation.map((entry,i) => <Cell key={i} fill={entry.color} />)}
-              </Pie>
-              <Tooltip {...TooltipStyle} />
-            </PieChart>
-          </ResponsiveContainer>
-          <ul className="stats-donut-legend">
-            {s.byDelegation.map((t,i) => (
-              <li key={i} className={`stats-legend-row${i===activeDelegation?" active":""}`} onMouseEnter={()=>setActiveDelegation(i)}>
-                <span className="stats-legend-dot" style={{background:t.color}} />
-                <span className="stats-legend-name">{t.name}</span>
-                <strong>{t.value}</strong>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="muted stats-note">{fmt(s.spos.length)} SPOs total · {fmtAda(s.totalSpoAda)} combined voting power.</p>
-      </Section>
-
-      <p className="muted stats-footer">
-        Snapshot generated: {raw.generatedAt ? new Date(raw.generatedAt).toLocaleString() : "—"} ·{" "}
-        {raw.partial ? "⚠ Partial data" : `${fmt(s.proposals.length)} proposals fully indexed`} ·{" "}
-        Auto-refreshes every 3 minutes server-side.
-      </p>
     </main>
   );
 }
