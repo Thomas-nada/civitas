@@ -1,5 +1,6 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BrowserWallet, Transaction } from "@meshsdk/core";
+import { useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Transaction } from "@meshsdk/core";
+import { WalletContext } from "../App";
 
 const scoreWeights = {
   attendance: 0.45,
@@ -248,26 +249,20 @@ export default function DashboardPage({ actorType }) {
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const typePickerRef = useRef(null);
-  const [includeActiveActions, setIncludeActiveActions] = useState(false);
+  const [includeActiveActions, setIncludeActiveActions] = useState(true);
   const [includeAttendance, setIncludeAttendance] = useState(true);
-  const [includeTransparency, setIncludeTransparency] = useState(true);
-  const [includeAlignment, setIncludeAlignment] = useState(false);
-  const [includeResponsiveness, setIncludeResponsiveness] = useState(false);
+  const [includeTransparency, setIncludeTransparency] = useState(!isCommittee);
+  const [includeAlignment, setIncludeAlignment] = useState(isCommittee);
+  const [includeResponsiveness, setIncludeResponsiveness] = useState(isCommittee);
   const [includePreviousCommitteeMembers, setIncludePreviousCommitteeMembers] = useState(false);
   const [detailVoteView, setDetailVoteView] = useState("voted");
   const [voteRationaleText, setVoteRationaleText] = useState({});
   const [voteRationaleSections, setVoteRationaleSections] = useState({});
   const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
   const [voteRationaleError, setVoteRationaleError] = useState({});
-  const [wallets, setWallets] = useState([]);
-  const [walletApi, setWalletApi] = useState(null);
-  const [walletName, setWalletName] = useState("");
-  const [walletRewardAddress, setWalletRewardAddress] = useState("");
-  const [walletNetworkId, setWalletNetworkId] = useState(null);
-  const [walletLovelace, setWalletLovelace] = useState("");
-  const [walletError, setWalletError] = useState("");
+  // Wallet state is global — read from WalletContext
+  const wallet = useContext(WalletContext);
   const [delegateNotice, setDelegateNotice] = useState("");
-  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [delegating, setDelegating] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileImageOpen, setProfileImageOpen] = useState(false);
@@ -366,69 +361,22 @@ export default function DashboardPage({ actorType }) {
     };
   }, [typeMenuOpen]);
 
-  useEffect(() => {
-    if (!isDrep) return;
-    const discovered = BrowserWallet.getInstalledWallets().map((wallet) => ({
-      key: wallet.id,
-      displayName: wallet.name || wallet.id
-    }));
-    setWallets(discovered);
-  }, [isDrep]);
-
-  async function connectWallet(walletKey) {
-    try {
-      setWalletError("");
-      setDelegateNotice("");
-      const api = await BrowserWallet.enable(walletKey);
-      setWalletApi(api);
-      const chosen = wallets.find((wallet) => wallet.key === walletKey);
-      setWalletName(chosen?.displayName || walletKey);
-      setWalletMenuOpen(false);
-      const rewardAddresses = (await api.getRewardAddresses()) || [];
-      const rewardAddress = rewardAddresses[0] || "";
-      setWalletRewardAddress(rewardAddress);
-      const [netId, lovelace] = await Promise.all([api.getNetworkId(), api.getLovelace()]);
-      setWalletNetworkId(netId);
-      setWalletLovelace(lovelace);
-    } catch (e) {
-      setWalletApi(null);
-      setWalletName("");
-      setWalletRewardAddress("");
-      setWalletNetworkId(null);
-      setWalletLovelace("");
-      setWalletError(e?.message || "Failed to connect wallet.");
-    }
-  }
-
-  function disconnectWallet() {
-    setWalletApi(null);
-    setWalletName("");
-    setWalletRewardAddress("");
-    setWalletNetworkId(null);
-    setWalletLovelace("");
-    setDelegateNotice("");
-    setWalletError("");
-    setWalletMenuOpen(false);
-  }
-
   async function prepareDelegation() {
     if (!selected) return;
-    if (!walletApi) {
-      setWalletMenuOpen(true);
-      setDelegateNotice("Connect your wallet first to submit delegation on-chain.");
+    if (!wallet?.walletApi) {
+      setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
       return;
     }
-    if (!walletRewardAddress) {
+    if (!wallet.walletRewardAddress) {
       setDelegateNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
       return;
     }
     try {
       setDelegating(true);
-      setWalletError("");
       setDelegateNotice("");
 
       const tx = new Transaction({
-        initiator: walletApi,
+        initiator: wallet.walletApi,
         verbose: false
       });
       tx.setNetwork("mainnet");
@@ -436,17 +384,16 @@ export default function DashboardPage({ actorType }) {
         {
           dRepId: selected.id
         },
-        walletRewardAddress
+        wallet.walletRewardAddress
       );
 
       const unsignedTx = await tx.build();
-      const signedTx = await walletApi.signTx(unsignedTx, true, true);
-      const txHash = await walletApi.submitTx(signedTx);
+      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
+      const txHash = await wallet.walletApi.submitTx(signedTx);
 
       setDelegateNotice(`Delegation submitted on-chain. Tx: ${txHash}`);
     } catch (e) {
       const message = e?.message || "Delegation transaction failed.";
-      setWalletError(message);
       setDelegateNotice(`Delegation failed: ${message}`);
     } finally {
       setDelegating(false);
@@ -771,12 +718,16 @@ export default function DashboardPage({ actorType }) {
             : 0;
 
         const wAttendance = includeAttendance ? scoreWeights.attendance : 0;
-        const wTransparency = includeTransparency ? scoreWeights.transparency : 0;
-        const wAlignment = includeAlignment ? scoreWeights.consistency : 0;
+        const wTransparency = !isCommittee && includeTransparency ? scoreWeights.transparency : 0;
+        const wAlignment = !isCommittee && includeAlignment ? scoreWeights.consistency : 0;
         const wResponsiveness = (isDrep || isSpo) && includeResponsiveness ? scoreWeights.responsiveness : 0;
-        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness;
-        const weighted =
-          attendance * wAttendance + transparency * wTransparency + consistencyMetric * wAlignment + responsiveness * wResponsiveness;
+        // CC-specific weights: attendance 45%, rationale quality 35%, responsiveness 10%, breadth 10%
+        const wRationaleQuality = isCommittee && includeAlignment ? 0.35 : 0;
+        const wCcResponsiveness = isCommittee && includeResponsiveness ? 0.1 : 0;
+        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness + wRationaleQuality + wCcResponsiveness;
+        const weighted = isCommittee
+          ? attendance * wAttendance + committeeQuality * wRationaleQuality + responsiveness * wCcResponsiveness
+          : attendance * wAttendance + transparency * wTransparency + consistencyMetric * wAlignment + responsiveness * wResponsiveness;
         const accountability = activeWeight > 0 ? weighted / activeWeight : 0;
 
         return {
@@ -890,7 +841,8 @@ export default function DashboardPage({ actorType }) {
   }, [rationaleModal?.open, profileImageOpen, useModalDetails, selectedId]);
 
   const selected = rows.find((r) => r.id === selectedId);
-  const showResponsivenessColumn = isDrep || isSpo;
+  const showResponsivenessColumn = isDrep || isSpo || isCommittee;
+  const showTransparencyColumn = !isCommittee;
   const transparencyLabel = "Transparency";
   const alignmentLabel = isCommittee ? "Rationale Quality" : "Alignment";
   const tableColSpan = isCommittee ? 8 : showResponsivenessColumn ? 7 : 6;
@@ -997,52 +949,6 @@ export default function DashboardPage({ actorType }) {
         <div>
           <h1>{isDrep ? "DRep Dashboard" : isSpo ? "Stake Pool Governance Dashboard" : "Constitutional Committee Dashboard"}</h1>
         </div>
-        {isDrep ? (
-          <div className="wallet-menu-wrap">
-            <button type="button" className="wallet-trigger" onClick={() => setWalletMenuOpen((v) => !v)}>
-              {walletApi
-                ? `Wallet: ${walletName} | ${networkLabel(walletNetworkId)} | ${formatAda(walletLovelace)}`
-                : "Connect Wallet"}
-            </button>
-            {walletMenuOpen ? (
-              <div className="wallet-popover panel">
-                {!walletApi ? (
-                  <>
-                    <p className="muted">Connect a CIP-30 wallet extension:</p>
-                    <div className="wallet-connect-list">
-                      {wallets.length === 0 ? (
-                        <p className="muted">No wallet extension detected.</p>
-                      ) : (
-                        wallets.map((wallet) => (
-                          <button key={wallet.key} type="button" onClick={() => connectWallet(wallet.key)}>
-                            {wallet.displayName}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="wallet-connected">
-                    <p>
-                      Connected: <strong>{walletName}</strong>
-                    </p>
-                    <p>
-                      Network: <strong>{networkLabel(walletNetworkId)}</strong>
-                    </p>
-                    <p>
-                      Balance: <strong>{formatAda(walletLovelace)}</strong>
-                    </p>
-                    <p className="mono">{walletRewardAddress || "Reward address not exposed by wallet."}</p>
-                    <button type="button" onClick={disconnectWallet}>
-                      Disconnect
-                    </button>
-                  </div>
-                )}
-                {walletError ? <p className="muted">Wallet error: {walletError}</p> : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </header>
 
       <section className="cards">
@@ -1084,115 +990,119 @@ export default function DashboardPage({ actorType }) {
         </article>
       </section>
 
-      <section className="controls dashboard-controls">
-        <label>
-          Search {actorLabel}
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or ID..." />
-        </label>
-        <label>
-          Minimum Attendance
-          <input type="range" min="0" max="100" value={minAttendance} onChange={(e) => setMinAttendance(Number(e.target.value))} />
-          <span>{minAttendance}%</span>
-        </label>
-        <label>
-          Sort By
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="accountability">Accountability Score</option>
-            <option value="attendance">Attendance</option>
-            <option value="consistency">{alignmentLabel}</option>
-            <option value="abstainRate">Abstain Rate</option>
-            <option value="transparencyScore">{transparencyLabel}</option>
-            {(isDrep || isSpo) ? <option value="votingPowerAda">Voting Power</option> : null}
-            <option value="name">Name</option>
-          </select>
-        </label>
-        <label>
-          Governance Action
-          <select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)}>
-            <option value="">All governance actions</option>
-            {actionOptions.map((opt) => (
-              <option key={opt.proposalId} value={opt.proposalId}>
-                {opt.actionName}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+      <div className="filter-block panel">
+        <section className="controls dashboard-controls">
+          <label>
+            Search {actorLabel}
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or ID..." />
+          </label>
+          <label>
+            Minimum Attendance
+            <input type="range" min="0" max="100" value={minAttendance} onChange={(e) => setMinAttendance(Number(e.target.value))} />
+            <span>{minAttendance}%</span>
+          </label>
+          <label>
+            Sort By
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="accountability">Accountability Score</option>
+              <option value="attendance">Attendance</option>
+              <option value="consistency">{alignmentLabel}</option>
+              <option value="abstainRate">Abstain Rate</option>
+              {showTransparencyColumn ? <option value="transparencyScore">{transparencyLabel}</option> : null}
+              {(isDrep || isSpo) ? <option value="votingPowerAda">Voting Power</option> : null}
+              <option value="name">Name</option>
+            </select>
+          </label>
+          <label>
+            Governance Action
+            <select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)}>
+              <option value="">All governance actions</option>
+              {actionOptions.map((opt) => (
+                <option key={opt.proposalId} value={opt.proposalId}>
+                  {opt.actionName}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
 
-      <section className="dashboard-type-row">
-        <div className="type-picker" ref={typePickerRef}>
-          <p>Governance Types</p>
-          <button type="button" className="type-trigger" onClick={() => setTypeMenuOpen((v) => !v)}>
-            {selectedTypes.length === 0 ? "All governance types" : `${selectedTypes.length} selected`}
-          </button>
-          {typeMenuOpen ? (
-            <div className="type-popover panel">
-              <div className="type-chip-list">
-                {typeOptions.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className={selectedTypes.includes(type) ? "type-chip active" : "type-chip"}
-                    onClick={() => toggleGovernanceType(type)}
-                  >
-                    {type}
+        <section className="dashboard-type-row">
+          <div className="type-picker" ref={typePickerRef}>
+            <p>Governance Types</p>
+            <button type="button" className="type-trigger" onClick={() => setTypeMenuOpen((v) => !v)}>
+              {selectedTypes.length === 0 ? "All governance types" : `${selectedTypes.length} selected`}
+            </button>
+            {typeMenuOpen ? (
+              <div className="type-popover panel">
+                <div className="type-chip-list">
+                  {typeOptions.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      className={selectedTypes.includes(type) ? "type-chip active" : "type-chip"}
+                      onClick={() => toggleGovernanceType(type)}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+                <div className="type-popover-actions">
+                  <button type="button" onClick={() => setSelectedTypes(typeOptions)}>
+                    Select all
                   </button>
-                ))}
+                  <button type="button" onClick={() => setSelectedTypes([])}>
+                    Clear
+                  </button>
+                  <button type="button" onClick={() => setTypeMenuOpen(false)}>
+                    Done
+                  </button>
+                </div>
               </div>
-              <div className="type-popover-actions">
-                <button type="button" onClick={() => setSelectedTypes(typeOptions)}>
-                  Select all
-                </button>
-                <button type="button" onClick={() => setSelectedTypes([])}>
-                  Clear
-                </button>
-                <button type="button" onClick={() => setTypeMenuOpen(false)}>
-                  Done
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
+            ) : null}
+          </div>
+        </section>
 
-      <section className="dashboard-toggle-row">
-        <label className="toggle dashboard-toggle">
-          Include Active Actions
-          <input type="checkbox" checked={includeActiveActions} onChange={(e) => setIncludeActiveActions(e.target.checked)} />
-        </label>
-        <label className="toggle dashboard-toggle">
-          Include Attendance In Score
-          <input type="checkbox" checked={includeAttendance} onChange={(e) => setIncludeAttendance(e.target.checked)} />
-        </label>
-        <label className="toggle dashboard-toggle">
-          Include Transparency In Score
-          <input
-            type="checkbox"
-            checked={includeTransparency}
-            onChange={(e) => setIncludeTransparency(e.target.checked)}
-          />
-        </label>
-        <label className="toggle dashboard-toggle">
-          {isCommittee ? "Include Rationale Quality In Score" : "Include Alignment In Score"}
-          <input type="checkbox" checked={includeAlignment} onChange={(e) => setIncludeAlignment(e.target.checked)} />
-        </label>
-        {(isDrep || isSpo) ? (
+        <section className="dashboard-toggle-row">
           <label className="toggle dashboard-toggle">
-            Include Responsiveness In Score
-            <input type="checkbox" checked={includeResponsiveness} onChange={(e) => setIncludeResponsiveness(e.target.checked)} />
+            Include Active Actions
+            <input type="checkbox" checked={includeActiveActions} onChange={(e) => setIncludeActiveActions(e.target.checked)} />
           </label>
-        ) : null}
-        {isCommittee ? (
           <label className="toggle dashboard-toggle">
-            Include Previous CC Members
-            <input
-              type="checkbox"
-              checked={includePreviousCommitteeMembers}
-              onChange={(e) => setIncludePreviousCommitteeMembers(e.target.checked)}
-            />
+            Include Attendance In Score
+            <input type="checkbox" checked={includeAttendance} onChange={(e) => setIncludeAttendance(e.target.checked)} />
           </label>
-        ) : null}
-      </section>
+          {!isCommittee ? (
+            <label className="toggle dashboard-toggle">
+              Include Transparency In Score
+              <input
+                type="checkbox"
+                checked={includeTransparency}
+                onChange={(e) => setIncludeTransparency(e.target.checked)}
+              />
+            </label>
+          ) : null}
+          <label className="toggle dashboard-toggle">
+            {isCommittee ? "Include Rationale Quality In Score" : "Include Alignment In Score"}
+            <input type="checkbox" checked={includeAlignment} onChange={(e) => setIncludeAlignment(e.target.checked)} />
+          </label>
+          {(isDrep || isSpo || isCommittee) ? (
+            <label className="toggle dashboard-toggle">
+              Include Responsiveness In Score
+              <input type="checkbox" checked={includeResponsiveness} onChange={(e) => setIncludeResponsiveness(e.target.checked)} />
+            </label>
+          ) : null}
+          {isCommittee ? (
+            <label className="toggle dashboard-toggle">
+              Include Previous CC Members
+              <input
+                type="checkbox"
+                checked={includePreviousCommitteeMembers}
+                onChange={(e) => setIncludePreviousCommitteeMembers(e.target.checked)}
+              />
+            </label>
+          ) : null}
+        </section>
+      </div>
 
       {error ? (
         <section className="status-row">
@@ -1215,7 +1125,7 @@ export default function DashboardPage({ actorType }) {
               <tr>
                 <th>{actorLabel}</th>
                 <th title={metricHelp.attendance}>Attendance</th>
-                <th title={metricHelp.transparency}>{transparencyLabel}</th>
+                {showTransparencyColumn ? <th title={metricHelp.transparency}>{transparencyLabel}</th> : null}
                 <th title={metricHelp.consistency}>{alignmentLabel}</th>
                 <th title={metricHelp.abstain}>Abstain</th>
         {showResponsivenessColumn ? <th title={metricHelp.responsiveness}>Responsiveness</th> : null}
@@ -1328,12 +1238,14 @@ export default function DashboardPage({ actorType }) {
                         {row.cast}/{row.totalEligibleVotes}
                       </div>
                     </td>
+                    {showTransparencyColumn ? (
                     <td>
                       <strong>{row.transparencyScore ?? 0}%</strong>
                       <div className="muted">
                         {row.transparencyCount ?? 0}/{row.transparencyTotal ?? 0}
                       </div>
                     </td>
+                    ) : null}
                     <td>
                       <strong>{row.consistency}%</strong>
                       <div className="muted">
@@ -1444,9 +1356,8 @@ export default function DashboardPage({ actorType }) {
                   {delegating ? "Submitting Delegation..." : "Delegate Voting Power To This DRep"}
                 </button>
               ) : null}
-              {isDrep && !walletApi ? <p className="muted">Connect wallet from top-right to enable delegation.</p> : null}
+              {isDrep && !wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
               {isDrep && delegateNotice ? <p className="muted">{delegateNotice}</p> : null}
-              {isDrep && walletError ? <p className="muted">Wallet error: {walletError}</p> : null}
               <p className="mono">
                 {isDrep ? (
                   <a
@@ -1492,12 +1403,14 @@ export default function DashboardPage({ actorType }) {
                 <p>
                   Attendance: <strong>{selected.attendance}%</strong> ({selected.cast}/{selected.totalEligibleVotes})
                 </p>
+              {showTransparencyColumn ? (
               <p>
                 {transparencyLabel}:{" "}
                 <strong>
                   {selected.transparencyScore ?? 0}% ({selected.transparencyCount ?? 0}/{selected.transparencyTotal ?? 0})
                 </strong>
               </p>
+              ) : null}
                 <p>
                   {alignmentLabel}:{" "}
                   <strong>
@@ -1510,7 +1423,7 @@ export default function DashboardPage({ actorType }) {
                     {selected.abstainRate}% ({selected.abstainCount ?? 0}/{selected.abstainTotal ?? 0})
                   </strong>
                 </p>
-                {(isDrep || isSpo) ? (
+                {(isDrep || isSpo || isCommittee) ? (
                   <p>
                     Avg response time: <strong>{formatResponseHours(selected.avgResponseHours)}</strong>
                   </p>
@@ -1577,7 +1490,7 @@ export default function DashboardPage({ actorType }) {
               </div>
               {isDrep ? (
                 <div className="meta drep-profile">
-                  <h3>DRep Profile</h3>
+                  <h3 className="detail-section-title">DRep Profile</h3>
                   {selected.profile?.email ? (
                     <p className="profile-row">
                       <span className="profile-label">Email</span>
@@ -1636,7 +1549,7 @@ export default function DashboardPage({ actorType }) {
                 </div>
               ) : null}
 
-              <h3>Governance Actions</h3>
+              <h3 className="detail-section-title">Governance Actions</h3>
               <p className="muted">Sorted by proposal submission time: newest first.</p>
               <div className="detail-mode-switch">
                 <button

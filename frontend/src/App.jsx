@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import LandingPage from "./pages/LandingPage";
-import DashboardPage from "./pages/DashboardPage";
-import GovernanceActionsPage from "./pages/GovernanceActionsPage";
-import GuidePage from "./pages/GuidePage";
-import AboutPage from "./pages/AboutPage";
-import NclPage from "./pages/NclPage";
+import { BrowserWallet } from "@meshsdk/core";
 import AppTopbar from "./components/AppTopbar";
+
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
+const GuidePage = lazy(() => import("./pages/GuidePage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const NclPage = lazy(() => import("./pages/NclPage"));
+const StatsPage = lazy(() => import("./pages/StatsPage"));
+
+// ── Global Wallet Context ──────────────────────────────────────────────────
+export const WalletContext = createContext(null);
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -176,8 +182,93 @@ export default function App() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
+  // ── Global Wallet State ──────────────────────────────────────────────────
+  const [wallets, setWallets] = useState([]);
+  const [walletApi, setWalletApi] = useState(null);
+  const [walletName, setWalletName] = useState("");
+  const [walletRewardAddress, setWalletRewardAddress] = useState("");
+  const [walletNetworkId, setWalletNetworkId] = useState(null);
+  const [walletLovelace, setWalletLovelace] = useState("");
+  const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
+  const [walletError, setWalletError] = useState("");
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+
+  // Discover installed wallets once on mount
+  useEffect(() => {
+    try {
+      const discovered = BrowserWallet.getInstalledWallets().map((w) => ({
+        key: w.id,
+        displayName: w.name || w.id
+      }));
+      setWallets(discovered);
+    } catch {
+      // Extension not present or blocked
+    }
+  }, []);
+
+  const connectWallet = useCallback(async (walletKey) => {
+    try {
+      setWalletError("");
+      const api = await BrowserWallet.enable(walletKey);
+      const found = wallets.find((w) => w.key === walletKey);
+      setWalletName(found?.displayName || walletKey);
+      setWalletMenuOpen(false);
+
+      const [rewardAddresses, netId, lovelace, drep] = await Promise.all([
+        api.getRewardAddresses(),
+        api.getNetworkId(),
+        api.getLovelace(),
+        api.getDRep().catch(() => null)
+      ]);
+
+      setWalletApi(api);
+      setWalletRewardAddress(rewardAddresses?.[0] || "");
+      setWalletNetworkId(netId);
+      setWalletLovelace(lovelace);
+      setWalletDrep(drep?.dRepIDCip105 ? drep : null);
+    } catch (e) {
+      setWalletApi(null);
+      setWalletName("");
+      setWalletRewardAddress("");
+      setWalletNetworkId(null);
+      setWalletLovelace("");
+      setWalletDrep(null);
+      setWalletError(e?.message || "Failed to connect wallet.");
+    }
+  }, [wallets]);
+
+  const disconnectWallet = useCallback(() => {
+    setWalletApi(null);
+    setWalletName("");
+    setWalletRewardAddress("");
+    setWalletNetworkId(null);
+    setWalletLovelace("");
+    setWalletDrep(null);
+    setWalletError("");
+    setWalletMenuOpen(false);
+  }, []);
+
+  const walletContextValue = useMemo(() => ({
+    wallets,
+    walletApi,
+    walletName,
+    walletRewardAddress,
+    walletNetworkId,
+    walletLovelace,
+    walletDrep,
+    walletError,
+    walletMenuOpen,
+    setWalletMenuOpen,
+    connectWallet,
+    disconnectWallet
+  }), [
+    wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
+    walletLovelace, walletDrep, walletError, walletMenuOpen,
+    connectWallet, disconnectWallet
+  ]);
+
   return (
-    <>
+    <WalletContext.Provider value={walletContextValue}>
       <BackgroundMotionClock />
       <ZoomCompensation />
       <div className="global-watermark" aria-hidden="true">
@@ -186,17 +277,20 @@ export default function App() {
       <ScrollToTopOnRouteChange />
       <AppTopbar theme={theme} onToggleTheme={toggleTheme} />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/actions" element={<GovernanceActionsPage />} />
-        <Route path="/ncl" element={<NclPage />} />
-        <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
-        <Route path="/spos" element={<DashboardPage actorType="spo" />} />
-        <Route path="/committee" element={<DashboardPage actorType="committee" />} />
-        <Route path="/guide" element={<GuidePage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/actions" element={<GovernanceActionsPage />} />
+          <Route path="/ncl" element={<NclPage />} />
+          <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
+          <Route path="/spos" element={<DashboardPage actorType="spo" />} />
+          <Route path="/committee" element={<DashboardPage actorType="committee" />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/guide" element={<GuidePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </WalletContext.Provider>
   );
 }

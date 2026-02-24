@@ -24,3 +24,6 @@ _tmp_*
 .DS_Store
 Thumbs.db
 .vscode/
+
+.claude/
+

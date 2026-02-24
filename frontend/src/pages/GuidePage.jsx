@@ -2,182 +2,534 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const toc = [
-  { id: "overview", label: "Overview" },
-  { id: "pages", label: "Pages and Use Cases" },
-  { id: "metrics", label: "Metrics and Scoring" },
-  { id: "power", label: "Voting Power and Thresholds" },
-  { id: "api", label: "API Reference" },
+  { id: "cardano-governance", label: "Cardano Governance" },
+  { id: "constitution", label: "The Constitution" },
+  { id: "dreps", label: "DReps" },
+  { id: "spos", label: "Stake Pool Operators" },
+  { id: "committee", label: "Constitutional Committee" },
+  { id: "governance-actions", label: "Governance Actions" },
+  { id: "ncl", label: "Net Change Limit" },
+  { id: "scoring", label: "How Scores Work" },
   { id: "history", label: "Snapshot History" },
-  { id: "limits", label: "Scope and Caveats" }
 ];
 
 export default function GuidePage() {
   const [history, setHistory] = useState([]);
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
-  const [activeSection, setActiveSection] = useState("overview");
+  const [activeSection, setActiveSection] = useState("cardano-governance");
 
   useEffect(() => {
     let cancelled = false;
-    const run = async () => {
-      try {
-        const res = await fetch("/api/snapshot-history");
-        const data = await res.json();
-        if (!res.ok || cancelled) return;
-        setHistory(Array.isArray(data?.history) ? data.history : []);
-      } catch {
-        // no-op for guide helper panel
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
+    fetch("/api/snapshot-history")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setHistory(Array.isArray(data?.history) ? data.history : []);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const visibleHistory = showAllSnapshots ? history : history.slice(0, 5);
 
   function renderSection() {
-    if (activeSection === "overview") {
-      return (
-        <section id="overview" className="wiki-section panel">
-          <h2>1. Overview</h2>
-          <p>Civitas provides governance intelligence for Cardano by turning proposal and vote data into role-specific oversight views.</p>
-          <p>The tool focuses on DReps, stake pools participating in governance, Constitutional Committee members, governance actions, and treasury oversight through NCL windows.</p>
-          <p>Snapshots are used to keep analysis stable and repeatable while sync continues in the background.</p>
-        </section>
-      );
+    switch (activeSection) {
+
+      case "cardano-governance":
+        return (
+          <section className="wiki-section panel">
+            <h2>How Cardano Governance Works</h2>
+            <p>
+              Cardano's governance model — introduced by the Conway era in 2024 — is one of the most
+              sophisticated on-chain governance systems in the blockchain industry. Instead of a small
+              team or foundation making all decisions, three independent bodies must agree before any
+              change to the protocol takes effect.
+            </p>
+
+            <h3 className="guide-subhead">The Foundation: A Written Constitution</h3>
+            <p>
+              Underpinning the entire system is the <strong>Cardano Constitution</strong> — a ratified,
+              on-chain document that defines the rules all governance participants must operate within.
+              It sets the boundaries for what can be proposed, what the Constitutional Committee must
+              enforce, and what the community agreed to when Conway-era governance was activated. Without
+              the constitution, there would be no shared reference point for what is and is not legitimate.
+            </p>
+
+            <h3 className="guide-subhead">The Three Pillars</h3>
+            <div className="guide-three-col">
+              <div className="guide-card">
+                <p className="guide-card-title">DReps</p>
+                <p>Delegated Representatives. Ada holders delegate their voting power to a DRep they trust.
+                DReps vote on most governance actions on behalf of their delegators.</p>
+              </div>
+              <div className="guide-card">
+                <p className="guide-card-title">SPOs</p>
+                <p>Stake Pool Operators. The people who run the nodes that secure Cardano's blockchain.
+                SPOs have voting rights on a specific subset of governance actions that affect the protocol directly.</p>
+              </div>
+              <div className="guide-card">
+                <p className="guide-card-title">Constitutional Committee</p>
+                <p>A small group of elected members who act as constitutional guardians. They can veto
+                any governance action they deem unconstitutional, regardless of how DReps and SPOs vote.</p>
+              </div>
+            </div>
+
+            <h3 className="guide-subhead">Why Three Bodies?</h3>
+            <p>
+              The three-body design prevents any single group from having unchecked control. DReps represent
+              the broader Ada-holding community. SPOs represent the infrastructure operators who run the
+              network. The Constitutional Committee protects the foundational rules that all three bodies
+              agreed to when Cardano's constitution was ratified.
+            </p>
+            <p>
+              A governance action typically needs supermajority support from both DReps and SPOs (where
+              applicable), <em>and</em> must not be vetoed by the Constitutional Committee. All three
+              checks must pass for a proposal to be enacted.
+            </p>
+
+            <h3 className="guide-subhead">The Role of Ada Holders</h3>
+            <p>
+              If you hold Ada, you are part of Cardano governance — even if indirectly. You delegate your
+              voting power to a DRep. If you do not actively choose one, your stake is effectively silent.
+              Choosing a DRep who votes and explains their reasoning is the single most impactful governance
+              decision most Ada holders will make.
+            </p>
+            <p>
+              Civitas exists to make it easy to evaluate those choices. Who is actually showing up? Who votes
+              with rationale? Who responds quickly? The data is all on-chain — we just make it readable.
+            </p>
+          </section>
+        );
+
+      case "constitution":
+        return (
+          <section className="wiki-section panel">
+            <h2>The Cardano Constitution</h2>
+            <p>
+              The Cardano Constitution is the foundational legal and governance document of the Cardano
+              blockchain. It was ratified by the community in late 2024 through a global series of
+              constitutional conventions and an on-chain vote, making it one of the most broadly
+              legitimised governance documents in the blockchain industry.
+            </p>
+
+            <h3 className="guide-subhead">What It Does</h3>
+            <p>
+              The constitution defines the rights and responsibilities of all Cardano participants,
+              the rules by which governance actions must be evaluated, and the guardrails that protect
+              the protocol from harmful changes. It is not just a philosophical statement — it contains
+              concrete, enforceable rules. Protocol parameters must stay within constitution-defined
+              ranges. Treasury withdrawals must comply with the Net Change Limit. The Constitutional
+              Committee exists specifically to enforce these rules on every governance action.
+            </p>
+            <p>
+              Critically, the constitution is itself subject to governance. It can be amended through
+              a Constitutional Amendment action, which requires DRep supermajority approval and CC
+              ratification. This means the community can evolve its own rules — but only through the
+              same deliberate, checked process that governs everything else.
+            </p>
+
+            <h3 className="guide-subhead">On-Chain Anchoring</h3>
+            <p>
+              The constitution is anchored on-chain via a content hash. The hash stored on the Cardano
+              ledger points to the canonical document, making it verifiable that the text has not been
+              altered since ratification. When the CC reviews a governance action for constitutionality,
+              they are evaluating it against this anchored text — not an informal understanding or
+              social consensus.
+            </p>
+
+            <h3 className="guide-subhead">The Interim Constitution</h3>
+            <p>
+              Before the full constitution was ratified, Cardano operated under an interim constitution
+              — a temporary document that allowed Conway-era governance to begin while the community
+              worked through the convention process. The interim constitution was replaced by the
+              ratified constitution once the on-chain vote concluded. Historical governance actions
+              submitted under the interim constitution were reviewed against its rules at the time.
+            </p>
+
+            <h3 className="guide-subhead">Why It Matters for This Tool</h3>
+            <p>
+              Every metric on Civitas is ultimately a measure of how well governance participants are
+              fulfilling their constitutional roles. A DRep who never votes is failing their delegators
+              as defined by the governance model the constitution establishes. A CC member who votes
+              without explanation is making constitutional judgements that the community cannot audit.
+              The constitution is the standard — Civitas measures performance against it.
+            </p>
+          </section>
+        );
+
+      case "dreps":
+        return (
+          <section className="wiki-section panel">
+            <h2>Delegated Representatives (DReps)</h2>
+            <p>
+              DReps are the primary voting actors in Cardano governance. Any Ada holder can register as a
+              DRep. When you delegate to a DRep, your Ada's proportional weight is added to their voting
+              power. DReps vote on the vast majority of governance actions, including treasury withdrawals,
+              protocol parameter changes, and hard forks.
+            </p>
+
+            <h3 className="guide-subhead">How DRep Voting Power Works</h3>
+            <p>
+              Voting power is denominated in lovelace (1 ada = 1,000,000 lovelace). A DRep's power equals
+              the total active stake delegated to them. Power is not fixed — it changes every epoch as
+              delegators join or leave. A DRep with 2% of total active voting power effectively controls
+              2% of the DRep vote on any proposal they vote on.
+            </p>
+            <p>
+              Two special "DReps" exist by default: <strong>Always Abstain</strong> and{" "}
+              <strong>Always No Confidence</strong>. Delegating to Always Abstain keeps your stake counted
+              for quorum but never casts a directional vote. Always No Confidence is a permanent no-confidence
+              signal. Both are excluded from active voting power calculations on this dashboard.
+            </p>
+
+            <h3 className="guide-subhead">What to Look For</h3>
+            <p>
+              A high attendance score means the DRep is actually voting — not just registered and collecting
+              delegation rewards while being absent. Transparency tells you whether they are explaining their
+              votes with a rationale. A DRep who votes but never explains why is harder to hold accountable
+              than one who publishes clear reasoning on every vote.
+            </p>
+            <p>
+              Alignment shows whether a DRep's yes/no votes tend to match final outcomes. A very high
+              alignment score can mean the DRep is thoughtful and reads proposals well — or it can mean
+              they are a late voter who waits to see which way the wind is blowing. Use it together with
+              the responsiveness column to distinguish the two.
+            </p>
+
+            <h3 className="guide-subhead">Term and Eligibility</h3>
+            <p>
+              DReps become eligible from the epoch they first register. Actions submitted before a DRep
+              registered are excluded from their attendance calculation — it would be unfair to count them
+              as absent for proposals they had no standing to vote on. This makes the attendance figure
+              an honest measure of participation since joining governance.
+            </p>
+
+          </section>
+        );
+
+      case "spos":
+        return (
+          <section className="wiki-section panel">
+            <h2>Stake Pool Operators (SPOs)</h2>
+            <p>
+              Stake pool operators run the nodes that produce blocks and secure the Cardano network. In
+              governance, SPOs have a focused but important role: they vote on a specific subset of
+              governance actions where their infrastructure expertise is most relevant.
+            </p>
+
+            <h3 className="guide-subhead">What SPOs Vote On</h3>
+            <p>
+              SPOs vote on <strong>hard fork initiations</strong>, <strong>protocol parameter changes</strong>,{" "}
+              <strong>motions of no confidence</strong>, and <strong>updates to the Constitutional Committee</strong>.
+              They do not vote on treasury withdrawals or constitutional amendments — those are reserved for
+              DReps and the Constitutional Committee. This design gives SPOs a meaningful check on changes
+              that directly affect the network's operation and governance structure, without giving them
+              authority over how treasury funds are spent.
+            </p>
+
+            <h3 className="guide-subhead">SPO Voting Power</h3>
+            <p>
+              SPO voting power is derived from the total active stake in their pool — not the stake the
+              operator personally holds, but all stake delegated to that pool by the community. This ties
+              governance influence directly to the trust the community places in each pool operator.
+            </p>
+            <p>
+              A large pool with low governance participation is a meaningful signal: the operator's
+              stake-weighted voice is being left unused. The SPO dashboard surface this directly through
+              attendance and the active voting power summary at the top of the page.
+            </p>
+
+            <h3 className="guide-subhead">Rationale and Accountability</h3>
+            <p>
+              SPOs are not required to publish rationale for their votes — but the best operators do.
+              Transparency scores on the SPO page reflect whether pools are attaching vote metadata or
+              rationale anchors. An SPO who consistently votes with clear reasoning is a more accountable
+              network participant than one who votes silently.
+            </p>
+
+          </section>
+        );
+
+      case "committee":
+        return (
+          <section className="wiki-section panel">
+            <h2>Constitutional Committee</h2>
+            <p>
+              The Constitutional Committee (CC) is Cardano's constitutional safeguard. Members are elected
+              through an off-chain election and then their credentials are ratified via a governance action.
+              They serve fixed terms. Their role is not to represent the majority —
+              it is to protect the constitution from being violated, even by a popular majority.
+            </p>
+
+            <h3 className="guide-subhead">How the CC Votes</h3>
+            <p>
+              CC members vote <strong>Constitutional</strong>, <strong>Unconstitutional</strong>, or{" "}
+              <strong>Abstain</strong> on every governance action. If a threshold of CC members rule an
+              action unconstitutional, it is blocked — regardless of DRep or SPO votes. This makes the CC
+              a hard constitutional brake on the system.
+            </p>
+            <p>
+              CC members do not vote "Yes" or "No" on policy — they vote on constitutionality. A CC member
+              who thinks a treasury withdrawal is bad governance policy but constitutional should still vote
+              Constitutional. Conflating these roles is one of the most common misunderstandings about the
+              CC's function.
+            </p>
+
+            <h3 className="guide-subhead">Threshold and Confidence</h3>
+            <p>
+              The CC has a quorum threshold. If the committee falls below the minimum active members — whether
+              through resignations, expired terms, or no-confidence votes — the entire governance system
+              enters a protected state where most governance actions cannot be ratified. This incentivises the
+              community to maintain an active, healthy CC at all times.
+            </p>
+
+            <h3 className="guide-subhead">What Civitas Measures for CC</h3>
+            <p>
+              CC scoring focuses on three things: <strong>Attendance</strong> (did they vote on every eligible
+              action?), <strong>Rationale Quality</strong> (when they declared an action constitutional or
+              unconstitutional, did they explain why with substance?), and <strong>Responsiveness</strong>{" "}
+              (how quickly did they vote after a proposal was submitted?).
+            </p>
+            <p>
+              Alignment (outcome matching) is excluded: a CC member's job is constitutional review, not
+              predicting majority outcomes.
+            </p>
+
+            <h3 className="guide-subhead">Terms and Eligibility</h3>
+            <p>
+              Each CC member has a seat start epoch and an expiration epoch. Civitas uses these term boundaries
+              to calculate eligibility accurately — a member cannot be marked absent for proposals that fell
+              outside their active term. Members with expired terms are shown with a distinct status indicator.
+            </p>
+
+          </section>
+        );
+
+      case "governance-actions":
+        return (
+          <section className="wiki-section panel">
+            <h2>Governance Actions</h2>
+            <p>
+              A governance action is a formal on-chain proposal to change something about Cardano. Anyone can
+              submit one by depositing 100,000 ada (refunded if ratified; kept if the proposal expires). Once
+              submitted, it enters a fixed 6-epoch voting window.
+            </p>
+
+            <h3 className="guide-subhead">Action Types</h3>
+            <div className="guide-types-list">
+              <div className="guide-type-row">
+                <span className="guide-type-label">Hard Fork Initiation</span>
+                <span className="guide-type-desc">Triggers an upgrade to a new protocol version. Requires DRep, SPO, and CC approval.</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">Protocol Parameter Change</span>
+                <span className="guide-type-desc">Modifies a protocol parameter such as block size, fees, or staking rewards. DRep and CC required; SPO for security-group params.</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">Treasury Withdrawal</span>
+                <span className="guide-type-desc">Moves Ada from the Cardano treasury to specified addresses. DRep and CC approval required. SPOs do not vote.</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">Info Action</span>
+                <span className="guide-type-desc">A non-binding signal poll with no on-chain effect. Used to gauge community sentiment before a binding proposal.</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">No Confidence</span>
+                <span className="guide-type-desc">A vote of no confidence in the current Constitutional Committee. If passed, triggers a CC election process.</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">New Constitutional Committee</span>
+                <span className="guide-type-desc">Proposes a new CC composition or threshold. Requires DRep and SPO approval; not reviewed by CC (conflict of interest).</span>
+              </div>
+              <div className="guide-type-row">
+                <span className="guide-type-label">Constitutional Amendment</span>
+                <span className="guide-type-desc">Changes the text of the Cardano constitution. Requires DRep and CC approval.</span>
+              </div>
+            </div>
+
+            <h3 className="guide-subhead">Lifecycle of a Proposal</h3>
+            <p>
+              After submission, a proposal is <strong>Open</strong> while voting is in progress. At the end
+              of the voting window it is either <strong>Ratified</strong> (thresholds met) or{" "}
+              <strong>Expired</strong> (thresholds not met). Ratified actions are then{" "}
+              <strong>Enacted</strong> in the following epoch. Actions can also be{" "}
+              <strong>Dropped</strong> if a competing action of the same type was already enacted first.
+            </p>
+            <p>
+              The Actions page shows per-proposal vote breakdowns for all three bodies, current threshold
+              requirements, and the live vote power progression so you can see exactly how close each proposal
+              is to passing or failing.
+            </p>
+
+          </section>
+        );
+
+      case "ncl":
+        return (
+          <section className="wiki-section panel">
+            <h2>Net Change Limit (NCL)</h2>
+            <p>
+              The Net Change Limit is a guardrail on Cardano treasury spending. It defines the maximum total
+              ada that can be withdrawn from the treasury within a given governance period — regardless of how
+              many individual withdrawal proposals pass.
+            </p>
+
+            <h3 className="guide-subhead">Why It Exists</h3>
+            <p>
+              Without an NCL, a series of individually approved treasury withdrawals could collectively drain
+              the treasury far beyond what the community would accept in aggregate. The NCL enforces a spending
+              ceiling at the constitutional level, making treasury stewardship a bounded, predictable process.
+            </p>
+            <p>
+              Even if every individual withdrawal proposal passes with full DRep and CC approval, the sum of
+              all enacted withdrawals within the period cannot exceed the NCL. This is enforced by the protocol
+              itself, not by social convention.
+            </p>
+
+            <h3 className="guide-subhead">What Civitas Tracks</h3>
+            <p>
+              The NCL page shows enacted treasury withdrawals for the current and previous NCL windows,
+              measured against the limit for each period. You can see how much of the period's budget has
+              been used, which proposals consumed it, and how much headroom remains.
+            </p>
+            <p>
+              This is one of the most direct ways to understand treasury health: not just whether individual
+              proposals passed, but what the cumulative draw on Cardano's shared funds has been.
+            </p>
+
+          </section>
+        );
+
+      case "scoring":
+        return (
+          <section className="wiki-section panel">
+            <h2>How Scores Work</h2>
+            <p>
+              Every actor on Civitas receives an <strong>Accountability Score</strong> — a weighted composite
+              of measurable, on-chain behaviors. The goal is not to produce a single "correct" ranking, but
+              to surface objective signals that let you form your own view.
+            </p>
+
+            <h3 className="guide-subhead">Attendance (45%)</h3>
+            <p>
+              The share of eligible proposals an actor actually voted on.{" "}
+              <code>cast votes ÷ eligible proposals</code>. Eligibility is role-aware and term-aware:
+              DReps are only eligible from their registration epoch, CC members only within their seat term,
+              SPOs only on actions requiring SPO participation. An actor cannot be penalised for proposals
+              they had no standing to vote on.
+            </p>
+
+            <h3 className="guide-subhead">Transparency (30%) — DReps and SPOs only</h3>
+            <p>
+              The share of cast votes accompanied by a rationale signal —{" "}
+              a metadata anchor, IPFS link, or other rationale reference.{" "}
+              <code>votes with rationale ÷ votes cast</code>. Voting without explanation is legal
+              but weakens democratic accountability. This metric rewards actors who communicate their reasoning.
+            </p>
+
+            <h3 className="guide-subhead">Alignment (15%) — DReps and SPOs only</h3>
+            <p>
+              On proposals with a final binary outcome (yes/no), alignment measures whether the actor's vote
+              matched the result. <code>matching votes ÷ comparable votes</code>. Abstain votes are excluded.
+              High alignment suggests either good policy judgement or late voting — pair with responsiveness
+              to tell them apart.
+            </p>
+
+            <h3 className="guide-subhead">Rationale Quality (35%) — CC only</h3>
+            <p>
+              For Constitutional Committee members, the substance of a rationale matters more than its mere
+              presence. A score from 0–100 is assigned to each vote's rationale based on whether a URL/IPFS
+              link is present, whether it resolves to an actual document, and the length and structure of the
+              rationale body. The per-vote scores are averaged across all eligible votes.
+            </p>
+
+            <h3 className="guide-subhead">Responsiveness (10%)</h3>
+            <p>
+              How quickly an actor votes after a proposal is submitted.{" "}
+              <code>average hours between proposal submission and vote</code>, normalized so that voting
+              on day 1 scores 100% and voting on day 30 (the end of the window) scores 0%.{" "}
+              A responsive actor is engaged and deliberate rather than waiting until the last moment.
+            </p>
+
+            <h3 className="guide-subhead">Toggling Metrics</h3>
+            <p>
+              Each metric can be toggled on or off in the dashboard. When you disable a metric, it is removed
+              from the denominator — the score is renormalized over active weights only. This lets you see
+              how rankings change when you prioritize different behaviors.
+            </p>
+
+            <h3 className="guide-subhead">A Score Is a Starting Point</h3>
+            <p>
+              A high score means an actor is active, communicative, and prompt — based on observable on-chain
+              data. It does not mean their votes are correct, that their policy positions match yours, or that
+              they are the right choice for your delegation. Read the individual vote history, check their
+              rationales, and use the score as a filter, not a verdict.
+            </p>
+          </section>
+        );
+
+      case "history":
+        return (
+          <section className="wiki-section panel">
+            <h2>Snapshot History</h2>
+            <p>
+              Civitas captures epoch-boundary snapshots of governance state. Each snapshot preserves the
+              complete set of proposals, votes, and actor metrics as they stood at that point in time.
+              Historical snapshots let you review how governance looked in a specific epoch without being
+              affected by subsequent changes.
+            </p>
+            <p>
+              Click any epoch link below to open that snapshot in the relevant dashboard.
+            </p>
+
+            <div className="wiki-history-box">
+              {history.length === 0 ? (
+                <p className="muted">No historical snapshots available yet.</p>
+              ) : (
+                <>
+                  {visibleHistory.map((item) => (
+                    <p key={item.key}>
+                      <span className="mono">Epoch {item.epoch ?? "?"}</span>{" "}-{" "}
+                      <Link className="inline-link" to={`/dreps?snapshot=${encodeURIComponent(item.key)}`}>DRep</Link>{" "}|{" "}
+                      <Link className="inline-link" to={`/spos?snapshot=${encodeURIComponent(item.key)}`}>SPO</Link>{" "}|{" "}
+                      <Link className="inline-link" to={`/committee?snapshot=${encodeURIComponent(item.key)}`}>Committee</Link>{" "}|{" "}
+                      <Link className="inline-link" to={`/actions?snapshot=${encodeURIComponent(item.key)}`}>Actions</Link>
+                    </p>
+                  ))}
+                  {history.length > 5 ? (
+                    <button type="button" className="mode-btn" onClick={() => setShowAllSnapshots((v) => !v)}>
+                      {showAllSnapshots ? "Collapse snapshot list" : `Show all ${history.length} snapshots`}
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </section>
+        );
+
+      default:
+        return null;
     }
-
-    if (activeSection === "pages") {
-      return (
-        <section id="pages" className="wiki-section panel">
-          <h2>2. Pages and Use Cases</h2>
-          <p><strong>DReps (`/dreps`)</strong>: voting behavior, attendance, transparency, alignment, abstain rate, responsiveness, and voting power shares.</p>
-          <p><strong>SPOs (`/spos`)</strong>: governance-role pool participation, rationale coverage, alignment, abstain posture, and governance voting power.</p>
-          <p><strong>Committee (`/committee`)</strong>: committee performance with term-aware eligibility and status-aware interpretation.</p>
-          <p><strong>Actions (`/actions`)</strong>: per-proposal status, role vote totals, threshold context, and metadata payload inspection.</p>
-          <p><strong>NCL (`/ncl`)</strong>: enacted treasury withdrawals tracked against current and previous NCL windows.</p>
-        </section>
-      );
-    }
-
-    if (activeSection === "metrics") {
-      return (
-        <section id="metrics" className="wiki-section panel">
-          <h2>3. Metrics and Scoring</h2>
-          <p><strong>Core principle</strong>: each actor is scored only against actions that are eligible for that role and active filter set (action filters, type filters, active-action toggle, snapshot scope).</p>
-          <p><strong>Attendance</strong>: <code>cast / eligible</code>. Eligibility is role-aware:
-            DRep excludes pre-participation actions, SPO includes only actions with SPO participation, Committee applies committee-specific eligibility and term windows.</p>
-          <p><strong>Transparency</strong>: <code>votes with rationale signal / cast</code>. Rationale signals come from vote metadata and resolved rationale references.</p>
-          <p><strong>Alignment</strong>: calculated only on proposals with final yes/no outcomes. Formula:
-            <code>matching yes/no votes / comparable yes/no votes</code>. Abstain votes are excluded from alignment math.</p>
-          <p><strong>Responsiveness</strong>: based on per-vote response latency:
-            <code>responseHours = votedAt - proposalSubmittedAt</code>, then normalized as
-            <code>max(0, 100 - (avgResponseHours / 720) * 100)</code> where 720h = 30 days.</p>
-          <p><strong>Abstain rate</strong>: <code>abstain votes / cast votes</code>. It is shown as a behavior metric but not directly added to accountability score.</p>
-          <p><strong>Accountability score</strong>: weighted average of enabled metric toggles:
-            Attendance <code>0.45</code>, Transparency <code>0.30</code>, Alignment <code>0.15</code>, Responsiveness <code>0.10</code>.
-            Disabled metrics are removed from denominator, so score is renormalized over active weights only.</p>
-          <p><strong>Interpretation notes</strong>: a high score can come from different behavior patterns; review the component columns (attendance/transparency/alignment/responsiveness/abstain) rather than relying on score alone.</p>
-        </section>
-      );
-    }
-
-    if (activeSection === "power") {
-      return (
-        <section id="power" className="wiki-section panel">
-          <h2>4. Voting Power and Thresholds</h2>
-          <p>DRep and SPO dashboards show total and active governance voting power and actor-level shares.</p>
-          <p>Active power excludes always-abstain delegated stake in the relevant role model.</p>
-          <p>The actions view combines threshold context with vote participation and power progression to show proposal decision pressure.</p>
-        </section>
-      );
-    }
-
-    if (activeSection === "api") {
-      return (
-        <section id="api" className="wiki-section panel">
-          <h2>5. API Reference</h2>
-          <p><code>GET /api/health</code>: service heartbeat.</p>
-          <p><code>GET /api/accountability?view=drep|spo|committee|actions</code>: scoped data payloads for dashboards.</p>
-          <p><code>GET /api/accountability?snapshot=epoch-XYZ.json</code>: load a historical snapshot.</p>
-          <p><code>GET /api/sync-status</code>: sync state, completion, and pending snapshot info.</p>
-          <p><code>POST /api/sync-now</code>: trigger immediate sync.</p>
-          <p><code>GET /api/snapshot-history</code>: list available ended-epoch snapshots.</p>
-          <p><code>POST /api/backfill-epoch-snapshots?force=true</code>: optional history backfill trigger.</p>
-          <p><code>GET /api/proposal-metadata?proposalId=&lt;id&gt;</code>: governance action metadata payload.</p>
-          <p><code>GET /api/vote-rationale?...params</code>: retrieve and parse rationale text for a specific vote context.</p>
-          <p><code>GET /api/ncl?period=current|previous</code>: NCL summary and withdrawals for selected window.</p>
-        </section>
-      );
-    }
-
-    if (activeSection === "history") {
-      return (
-        <section id="history" className="wiki-section panel">
-          <h2>6. Snapshot History</h2>
-          <p>Snapshot history allows time-scoped governance review without waiting on live upstream queries.</p>
-          <p>Use epoch links below to open dashboards against a specific snapshot state.</p>
-
-          <div className="wiki-history-box">
-            {history.length === 0 ? (
-              <p className="muted">No historical snapshots available yet.</p>
-            ) : (
-              <>
-                {visibleHistory.map((item) => (
-                  <p key={item.key}>
-                    <span className="mono">Epoch {item.epoch ?? "?"}</span>{" "}-{" "}
-                    <Link className="inline-link" to={`/dreps?snapshot=${encodeURIComponent(item.key)}`}>DRep</Link>{" "}|{" "}
-                    <Link className="inline-link" to={`/spos?snapshot=${encodeURIComponent(item.key)}`}>SPO</Link>{" "}|{" "}
-                    <Link className="inline-link" to={`/committee?snapshot=${encodeURIComponent(item.key)}`}>Committee</Link>{" "}|{" "}
-                    <Link className="inline-link" to={`/actions?snapshot=${encodeURIComponent(item.key)}`}>Actions</Link>
-                  </p>
-                ))}
-                {history.length > 5 ? (
-                  <button type="button" className="mode-btn" onClick={() => setShowAllSnapshots((v) => !v)}>
-                    {showAllSnapshots ? "Collapse snapshot list" : `Show all ${history.length} snapshots`}
-                  </button>
-                ) : null}
-              </>
-            )}
-          </div>
-        </section>
-      );
-    }
-
-    if (activeSection === "limits") {
-      return (
-        <section id="limits" className="wiki-section panel">
-          <h2>7. Scope and Caveats</h2>
-          <p>Metrics depend on available on-chain/off-chain rationale references and metadata quality.</p>
-          <p>Eligibility rules differ by role and action type, so participation metrics are role-scoped by design.</p>
-          <p>During sync, the latest complete snapshot remains in use until a newer complete snapshot is ready.</p>
-        </section>
-      );
-    }
-
-    return null;
   }
 
   return (
     <main className="shell wiki-guide-shell">
       <header className="hero wiki-header">
-        <h1>Civitas Governance Guide</h1>
-        <p>Reference documentation for data flows, interpretation models, and operational workflows across the platform.</p>
+        <h1>Governance Guide</h1>
+        <p>Everything you need to understand Cardano governance and how to use Civitas to follow it.</p>
       </header>
 
       <section className="wiki-layout">
         <aside className="wiki-sidebar panel">
           <h3>Contents</h3>
           <nav aria-label="Guide sections" className="wiki-nav">
-            {toc.map((item, index) => (
+            {toc.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 className={activeSection === item.id ? "active" : ""}
                 onClick={() => setActiveSection(item.id)}
               >
-                {index + 1}. {item.label}
+                {item.label}
               </button>
             ))}
           </nav>

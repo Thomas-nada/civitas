@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Transaction } from "@meshsdk/core";
+import blakejs from "blakejs";
+import { WalletContext } from "../App";
 
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -149,6 +152,17 @@ export default function GovernanceActionsPage() {
   const [proposalMetadataCache, setProposalMetadataCache] = useState({});
   const [proposalMetadataLoading, setProposalMetadataLoading] = useState(false);
   const [proposalMetadataError, setProposalMetadataError] = useState("");
+  // --- Voting state (wallet state is global via WalletContext) ---
+  const wallet = useContext(WalletContext);
+  const [voteChoice, setVoteChoice] = useState("");
+  const [voteModalOpen, setVoteModalOpen] = useState(false);
+  const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
+  const [voteSubmitting, setVoteSubmitting] = useState(false);
+  const [voteNotice, setVoteNotice] = useState("");
+  const [voteError, setVoteError] = useState("");
+  const [votedTxHash, setVotedTxHash] = useState("");
+  const [voteSyncStatus, setVoteSyncStatus] = useState(""); // "polling" | "synced" | "timeout"
+  const voteSyncPollRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
   const cacheKey = useMemo(
@@ -529,6 +543,126 @@ export default function GovernanceActionsPage() {
   const activeCount = rows.filter((row) => row.status === "Active").length;
   const enactedCount = rows.filter((row) => row.status === "Enacted").length;
 
+  // Reset vote UI when selected action changes
+  useEffect(() => {
+    setVoteChoice("");
+    setVoteModalOpen(false);
+    setVoteRationaleUrl("");
+    setVoteNotice("");
+    setVoteError("");
+    setVotedTxHash("");
+    setVoteSyncStatus("");
+    if (voteSyncPollRef.current) {
+      clearInterval(voteSyncPollRef.current);
+      voteSyncPollRef.current = null;
+    }
+  }, [selectedId]);
+
+  // Resolve IPFS URIs to HTTP gateway URLs
+  function resolveIpfsUrl(url) {
+    if (typeof url === "string" && url.startsWith("ipfs://")) {
+      return `https://ipfs.io/ipfs/${url.slice(7)}`;
+    }
+    return url;
+  }
+
+  // Start post-vote sync polling — polls /api/sync-status every 20s for up to 5 min
+  function startVoteSyncPolling(snapshotAtSubmit) {
+    let attempts = 0;
+    const maxAttempts = 15;
+    setVoteSyncStatus("polling");
+    if (voteSyncPollRef.current) clearInterval(voteSyncPollRef.current);
+    voteSyncPollRef.current = setInterval(async () => {
+      attempts += 1;
+      try {
+        const res = await fetch("/api/sync-status");
+        if (!res.ok) return;
+        const status = await res.json();
+        const latest = String(status?.lastCompletedAt || "");
+        if (latest && latest !== snapshotAtSubmit) {
+          setVoteSyncStatus("synced");
+          clearInterval(voteSyncPollRef.current);
+          voteSyncPollRef.current = null;
+          return;
+        }
+      } catch {
+        // ignore network errors during polling
+      }
+      if (attempts >= maxAttempts) {
+        setVoteSyncStatus("timeout");
+        clearInterval(voteSyncPollRef.current);
+        voteSyncPollRef.current = null;
+      }
+    }, 20_000);
+  }
+
+  async function submitVote() {
+    if (!selected || !wallet?.walletApi || !wallet?.walletDrep || !voteChoice) return;
+    try {
+      setVoteSubmitting(true);
+      setVoteModalOpen(false);
+      setVoteError("");
+      setVoteNotice("");
+      setVotedTxHash("");
+      setVoteSyncStatus("");
+
+      // 1. DRep credential already fetched at connect time — use from context
+      const drepIdCip105 = wallet.walletDrep.dRepIDCip105;
+
+      // 2. Warn if not mainnet
+      if (wallet.walletNetworkId !== 1) {
+        setVoteNotice("Warning: wallet is on testnet. Proceeding anyway...");
+      }
+
+      // 3. Optional rationale anchor (with IPFS resolution)
+      let anchor;
+      const rationaleUrlTrimmed = resolveIpfsUrl(voteRationaleUrl.trim());
+      if (rationaleUrlTrimmed) {
+        try {
+          setVoteNotice("Fetching rationale to compute anchor hash...");
+          const res = await fetch(rationaleUrlTrimmed);
+          const text = await res.text();
+          const bytes = new TextEncoder().encode(text);
+          const hashHex = blakejs.blake2bHex(bytes, null, 32);
+          // Store original URL (may be ipfs://) in anchor, HTTP URL used only for fetching
+          anchor = { url: voteRationaleUrl.trim() || rationaleUrlTrimmed, hash: hashHex };
+          setVoteNotice("");
+        } catch {
+          setVoteNotice("Could not fetch rationale URL — voting without anchor.");
+          anchor = undefined;
+        }
+      }
+
+      // 4. Build vote transaction
+      setVoteNotice("Building transaction...");
+      const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
+      tx.setNetwork("mainnet");
+      tx.txBuilder.vote(
+        { type: "DRep", drepId: drepIdCip105 },
+        { txHash: selected.txHash, txIndex: selected.certIndex ?? 0 },
+        { voteKind: voteChoice, ...(anchor ? { anchor } : {}) }
+      );
+
+      const unsignedTx = await tx.build();
+      setVoteNotice("Please sign the transaction in your wallet...");
+      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
+      setVoteNotice("Submitting to chain...");
+      const txHash = await wallet.walletApi.submitTx(signedTx);
+      setVotedTxHash(txHash);
+      setVoteNotice("");
+
+      // 5. Start polling for backend sync confirmation
+      const snapshotAtSubmit = String(latestSnapshotRef.current || "");
+      startVoteSyncPolling(snapshotAtSubmit);
+    } catch (e) {
+      const msg = e?.message || "Vote transaction failed.";
+      setVoteError(msg);
+      setVoteNotice("");
+    } finally {
+      setVoteSubmitting(false);
+    }
+  }
+
   useEffect(() => {
     if (!payloadModalOpen || !selected?.proposalId) return;
     const key = selected.proposalId;
@@ -712,7 +846,7 @@ export default function GovernanceActionsPage() {
                 ) : null}
               </div>
 
-              <h3>DRep Voting Power Breakdown</h3>
+              <h3 className="detail-section-title">DRep Voting Power Breakdown</h3>
               <div className="vote-list">
                 <article className="vote-item">
                   <h3>DRep Power (Active Stake Model)</h3>
@@ -747,16 +881,16 @@ export default function GovernanceActionsPage() {
                       Total active stake: <strong>{Math.round(selected.totalActiveStakeAda || 0).toLocaleString()} ada</strong>
                     </p>
                     <p>
-                      Yes ada: <strong>{Math.round(selected.drepYesPowerAda || 0).toLocaleString()} ada</strong>
+                      Yes: <strong>{Math.round(selected.drepYesPowerAda || 0).toLocaleString()} ada</strong>
                     </p>
                     <p>
-                      No ada: <strong>{Math.round(selected.drepNoPowerAda || 0).toLocaleString()} ada</strong>
+                      No: <strong>{Math.round(selected.drepNoPowerAda || 0).toLocaleString()} ada</strong>
                     </p>
                     <p>
-                      Not voted ada: <strong>{Math.round(selected.drepNotVotedPowerAda || 0).toLocaleString()} ada</strong>
+                      Not voted: <strong>{Math.round(selected.drepNotVotedPowerAda || 0).toLocaleString()} ada</strong>
                     </p>
                     <p>
-                      Abstain total ada: <strong>{Math.round(selected.drepAbstainPowerAda || 0).toLocaleString()} ada</strong>
+                      Abstain total: <strong>{Math.round(selected.drepAbstainPowerAda || 0).toLocaleString()} ada</strong>
                     </p>
                     <p>
                       Active abstain: <strong>{asPct(selected.drepAbstainActivePowerPct)}</strong> (
@@ -821,7 +955,61 @@ export default function GovernanceActionsPage() {
                 </article>
               </div>
 
-              <h3>Governance Payload</h3>
+              {selected.status === "Active" ? (
+                <div className="vote-cast-section">
+                  <h3 className="detail-section-title">Cast Your Vote</h3>
+
+                  {!wallet?.walletApi ? (
+                    <p className="muted">Connect your wallet in the top bar to vote on this action.</p>
+                  ) : !wallet.walletDrep ? (
+                    <p className="muted">Connected wallet has no DRep credential. Only registered DReps can vote on governance actions.</p>
+                  ) : (
+                    <>
+                      <div className="vote-choice-row">
+                        {["Yes", "No", "Abstain"].map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            className={`vote-choice-btn${voteChoice === choice ? " active" : ""}`}
+                            onClick={() => { setVoteChoice(choice); setVoteModalOpen(true); }}
+                            disabled={voteSubmitting}
+                          >
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                      {voteSubmitting ? <p className="vote-notice">{voteNotice || "Submitting vote..."}</p> : null}
+                    </>
+                  )}
+
+                  {voteError ? <p className="vote-error">{voteError}</p> : null}
+                  {!voteSubmitting && voteNotice && !votedTxHash ? <p className="vote-notice">{voteNotice}</p> : null}
+                  {votedTxHash ? (
+                    <div className="vote-submitted">
+                      <p className="vote-success">
+                        Vote submitted! Tx:{" "}
+                        <a
+                          className="ext-link"
+                          href={`https://cardanoscan.io/transaction/${votedTxHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {votedTxHash.slice(0, 16)}…
+                        </a>
+                      </p>
+                      {voteSyncStatus === "polling" ? (
+                        <p className="vote-notice">Waiting for snapshot to update…</p>
+                      ) : voteSyncStatus === "synced" ? (
+                        <p className="vote-success">✓ Vote confirmed in latest snapshot.</p>
+                      ) : voteSyncStatus === "timeout" ? (
+                        <p className="vote-notice">Snapshot not yet updated — your vote is on-chain. Refresh in a few minutes.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <h3 className="detail-section-title">Governance Payload</h3>
               <button type="button" className="mode-btn" onClick={() => setPayloadModalOpen(true)}>
                 Open governance payload
               </button>
@@ -829,6 +1017,53 @@ export default function GovernanceActionsPage() {
           )}
         </aside>
       </section>
+      {/* Vote confirmation modal */}
+      {voteModalOpen && selected && voteChoice && wallet?.walletDrep ? (
+        <div className="image-modal-backdrop" role="presentation" onClick={() => setVoteModalOpen(false)}>
+          <div className="image-modal vote-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="image-modal-close" onClick={() => setVoteModalOpen(false)}>
+              Cancel
+            </button>
+            <h3 className="rationale-modal-title">Confirm Your Vote</h3>
+            <div className="vote-confirm-body">
+              <p className="vote-confirm-action">{selected.actionName}</p>
+              <div className={`vote-confirm-badge vote-confirm-badge--${voteChoice.toLowerCase()}`}>
+                {voteChoice}
+              </div>
+              <p className="muted">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
+
+              <label className="vote-rationale-label">
+                Rationale URL (optional — CIP-100 / IPFS supported)
+                <input
+                  type="url"
+                  value={voteRationaleUrl}
+                  onChange={(e) => setVoteRationaleUrl(e.target.value)}
+                  placeholder="https://your-rationale.json  or  ipfs://Qm..."
+                  autoFocus
+                />
+              </label>
+
+              {wallet.walletNetworkId !== 1 ? (
+                <p className="vote-notice">⚠ Wallet is on testnet — vote will be submitted to testnet.</p>
+              ) : null}
+
+              <div className="vote-confirm-actions">
+                <button type="button" className="mode-btn" onClick={() => setVoteModalOpen(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={`vote-confirm-submit vote-confirm-submit--${voteChoice.toLowerCase()}`}
+                  onClick={submitVote}
+                >
+                  Submit {voteChoice} Vote On-Chain
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {payloadModalOpen && selected ? (
         <div className="image-modal-backdrop" role="presentation" onClick={() => setPayloadModalOpen(false)}>
           <div className="image-modal payload-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
