@@ -2300,6 +2300,11 @@ function snapshotIsComplete(payload) {
   const skipped = Number(payload.skippedProposalCount || 0);
   const voteFetchErrors = Number(payload.voteFetchErrorCount || 0);
   if (skipped > 0 || voteFetchErrors > 0) return false;
+  // Ensure proposalInfo is populated — if proposals exist but proposalInfo is
+  // empty the snapshot was built by old code and needs a full rebuild.
+  const proposalCount = Number(payload.proposalCount || 0);
+  const proposalInfoCount = Object.keys(payload.proposalInfo || {}).length;
+  if (proposalCount > 0 && proposalInfoCount < Math.floor(proposalCount * 0.5)) return false;
   return true;
 }
 
@@ -4015,7 +4020,9 @@ async function buildFullSnapshot() {
     if (!row.coldCredential && row.hotCredential && CC_COLD_OVERRIDES_BY_HOT[row.hotCredential]) {
       row.coldCredential = CC_COLD_OVERRIDES_BY_HOT[row.hotCredential];
     }
-    const coldHex = String(rosterMember?.cc_cold_hex || "").toLowerCase();
+    const coldHex =
+      String(rosterMember?.cc_cold_hex || "").toLowerCase() ||
+      bech32IdToHex(String(rosterMember?.cc_cold_id || "")).toLowerCase();
     row.hotHex = String(rosterMember?.cc_hot_hex || "").toLowerCase() || null;
     row.coldHex = coldHex || null;
     row.expirationEpoch = Number.isFinite(Number(rosterMember?.expiration_epoch)) ? Number(rosterMember.expiration_epoch) : null;
@@ -4429,17 +4436,44 @@ function startScheduler() {
   // check inside runSync misses a boundary due to API errors.
   const FULL_REBUILD_INTERVAL_MS = Number(process.env.FULL_REBUILD_INTERVAL_MS || 24 * 60 * 60 * 1000);
 
-  setTimeout(() => {
-    // Immediate full sync on startup so data is fresh on first request.
-    runSync({ forceFull: true });
+  // How many times to retry the startup full sync if it produces incomplete data.
+  const STARTUP_MAX_RETRIES = Number(process.env.STARTUP_MAX_RETRIES || 3);
 
-    // Fast delta poll: runs every DELTA_POLL_MS, cheaply picks up new votes.
+  // How long to wait between startup retry attempts (default: 30 seconds).
+  const STARTUP_RETRY_DELAY_MS = Number(process.env.STARTUP_RETRY_DELAY_MS || 30 * 1000);
+
+  // Wait for the current sync to finish before checking results.
+  async function waitForSync() {
+    while (syncState.syncing) {
+      await sleep(1000);
+    }
+  }
+
+  // Run the initial full sync with retries, then start ongoing polling.
+  // Delta polling is intentionally deferred until the first full sync
+  // completes so deltas always have a complete base to build on.
+  async function runStartupSync() {
+    for (let attempt = 1; attempt <= STARTUP_MAX_RETRIES; attempt++) {
+      runSync({ forceFull: true });
+      await waitForSync();
+
+      const served = pickBestSnapshotForApi(snapshot);
+      if (snapshotIsComplete(served)) break;
+
+      if (attempt < STARTUP_MAX_RETRIES) {
+        await sleep(STARTUP_RETRY_DELAY_MS);
+      }
+    }
+
+    // Start regular polling only after the initial full sync has settled.
     setInterval(() => runSync(), DELTA_POLL_MS);
 
     // Daily safety-net full rebuild (catches any drift / epoch rollover that
     // the epoch-change detection inside runSync might have missed).
     setInterval(() => runSync({ forceFull: true }), FULL_REBUILD_INTERVAL_MS);
-  }, SYNC_STARTUP_DELAY_MS);
+  }
+
+  setTimeout(runStartupSync, SYNC_STARTUP_DELAY_MS);
 }
 
 function serveStatic(req, res) {
