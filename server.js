@@ -1265,15 +1265,24 @@ function parseCommitteeMetadataNameMap(metadataEnvelope) {
 async function resolveCommitteeMemberNameFromKoiosVoteMeta(ccHotId) {
   if (!ccHotId) return "";
   const encoded = encodeURIComponent(ccHotId);
-  const voteRows = await koiosGet(`/vote_list?voter_role=eq.ConstitutionalCommittee&voter_id=eq.${encoded}&order=block_time.desc&limit=4`)
+  // Fetch more votes so members who haven't anchored recently are not missed.
+  const voteRows = await koiosGet(`/vote_list?voter_role=eq.ConstitutionalCommittee&voter_id=eq.${encoded}&order=block_time.desc&limit=50`)
     .catch(() => []);
   if (!Array.isArray(voteRows) || voteRows.length === 0) return "";
+  // Collect all unique anchor URLs from all votes before fetching, so we
+  // try every candidate without hammering the same URL twice.
+  const seenUrls = new Set();
+  const anchorUrls = [];
   for (const vote of voteRows) {
-    const anchorUrl = typeof vote?.meta_url === "string" ? vote.meta_url : "";
-    if (!anchorUrl) continue;
+    const anchorUrl = typeof vote?.meta_url === "string" ? vote.meta_url.trim() : "";
+    if (!anchorUrl || seenUrls.has(anchorUrl)) continue;
+    seenUrls.add(anchorUrl);
+    anchorUrls.push(anchorUrl);
+  }
+  for (const anchorUrl of anchorUrls) {
     const candidates = normalizeIpfsUrl(anchorUrl);
     for (const candidate of candidates) {
-      const payload = await fetchJsonWithTimeout(candidate, 3500);
+      const payload = await fetchJsonWithTimeout(candidate, 5000);
       const name = extractNameFromAnchorJson(payload);
       if (name) return name;
     }
@@ -4008,9 +4017,23 @@ async function buildFullSnapshot() {
       row.totalEligibleVotes = Math.max(row.votes.length, 1);
     }
 
-    const rosterMember = committeeRosterByHotHex.get(String(row.id || "").toLowerCase()) || null;
+    // Try the roster lookup with the raw ID first, then fall back to the hex
+    // conversion of a bech32 ID — Blockfrost returns cc_hot1… bech32 but the
+    // Koios roster map is keyed by the underlying hex.
+    const rowIdRaw = String(row.id || "").toLowerCase();
+    const rowIdHexFromBech32 = bech32IdToHex(String(row.id || "")).toLowerCase();
+    const rosterMember =
+      committeeRosterByHotHex.get(rowIdRaw) ||
+      (rowIdHexFromBech32 ? committeeRosterByHotHex.get(rowIdHexFromBech32) : null) ||
+      null;
     row.hotCredential = rosterMember?.cc_hot_id || null;
     row.coldCredential = rosterMember?.cc_cold_id || null;
+    // If row.id is itself a bech32 hot credential use it directly — this is
+    // the common case when Blockfrost returns the voter as cc_hot1… and the
+    // Koios roster lookup above still came up empty (e.g. key rotation).
+    if (!row.hotCredential && rowIdRaw.startsWith("cc_hot")) {
+      row.hotCredential = String(row.id).trim();
+    }
     if (!row.hotCredential && typeof row.koiosVoterId === "string" && row.koiosVoterId.startsWith("cc_hot1")) {
       row.hotCredential = row.koiosVoterId;
     }
