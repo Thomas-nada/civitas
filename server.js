@@ -4981,10 +4981,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && url.pathname === "/api/sync-now") {
     const promotePending = String(url.searchParams.get("promotePending") || "").toLowerCase() === "true";
+    const forceFull = String(url.searchParams.get("forceFull") || "").toLowerCase() === "true";
     if (promotePending) {
       promotePendingSnapshot();
     }
-    runSync();
+    runSync({ forceFull });
     json(res, 202, {
       accepted: true,
       syncing: syncState.syncing,
