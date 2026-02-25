@@ -651,6 +651,13 @@ export default function StatsPage() {
     const spos      = raw.spos || [];
     const special   = raw.specialDreps || {};
 
+    // Exclude virtual "Always Abstain" and "Always No Confidence" DReps from all
+    // statistics except the dedicated voting-power KPI cards (which read from `special`).
+    const realDreps = dreps.filter(d => {
+      const id = String(d.id || "").toLowerCase();
+      return !id.includes("always_abstain") && !id.includes("always_no_confidence");
+    });
+
     // ── Proposals ─────────────────────────────────────────────────────────────
     const typeMap = {}, outcomeMap = {};
     proposals.forEach(p => {
@@ -709,9 +716,9 @@ export default function StatsPage() {
     const currentEpoch = Number(raw.latestEpoch || 0) || null;
 
     // ── DReps ─────────────────────────────────────────────────────────────────
-    const activeDreps   = dreps.filter(d => d.active === true);
-    const retiredDreps  = dreps.filter(d => d.retired === true);
-    const totalDrepAda  = dreps.reduce((s,d) => s+(d.votingPowerAda||0), 0);
+    const activeDreps   = realDreps.filter(d => d.active === true);
+    const retiredDreps  = realDreps.filter(d => d.retired === true);
+    const totalDrepAda  = realDreps.reduce((s,d) => s+(d.votingPowerAda||0), 0);
     const abstainAda    = Number(special.alwaysAbstain?.votingPowerAda || 0);
     const noConfAda     = Number(special.alwaysNoConfidence?.votingPowerAda || 0);
 
@@ -723,7 +730,7 @@ export default function StatsPage() {
       { name: "25–49%",value: 0, color: "#fb923c"  },
       { name: "<25%",  value: 0, color: C.no       },
     ];
-    dreps.forEach(d => {
+    realDreps.forEach(d => {
       const a = pct((d.votes||[]).length, d.totalEligibleVotes||1);
       if (a === 100) attBuckets[0].value++;
       else if (a >= 75) attBuckets[1].value++;
@@ -739,7 +746,7 @@ export default function StatsPage() {
       { name: "Low (21–39)", value: 0, color: "#fb923c"  },
       { name: "None (≤20)",  value: 0, color: C.muted    },
     ];
-    dreps.forEach(d => {
+    realDreps.forEach(d => {
       const sc = d.transparencyScore || 0;
       if (sc >= 70) tsBuckets[0].value++;
       else if (sc >= 40) tsBuckets[1].value++;
@@ -755,7 +762,7 @@ export default function StatsPage() {
       { name: "> 7d",  value: 0, color: C.no      },
     ];
     const allRTs = [];
-    dreps.forEach(d => (d.votes||[]).forEach(v => {
+    realDreps.forEach(d => (d.votes||[]).forEach(v => {
       if (v.responseHours != null && v.responseHours >= 0) {
         allRTs.push(v.responseHours);
         const h = v.responseHours;
@@ -769,7 +776,7 @@ export default function StatsPage() {
     const medianRT = allRTs.length ? allRTs[Math.floor(allRTs.length/2)] : null;
 
     // Top 10 DReps by voting power
-    const top10Dreps = [...dreps].sort((a,b)=>(b.votingPowerAda||0)-(a.votingPowerAda||0)).slice(0,10)
+    const top10Dreps = [...realDreps].sort((a,b)=>(b.votingPowerAda||0)-(a.votingPowerAda||0)).slice(0,10)
       .map(d => ({ name: d.name || d.id.slice(0,14)+"…", size: d.votingPowerAda||0 }));
 
     // ── CC ────────────────────────────────────────────────────────────────────
@@ -899,7 +906,7 @@ export default function StatsPage() {
       return sortedPowers.length;
     };
 
-    const drepPowers = toSortedPower(dreps);
+    const drepPowers = toSortedPower(realDreps);
     const spoPowers = toSortedPower(spos);
 
     const tc = raw.thresholdContext || {};
@@ -932,7 +939,7 @@ export default function StatsPage() {
     return {
       proposals, byType, byOutcome, byEpoch,
       totalYes, totalNo, totalAbstain, votesByRole,
-      dreps, activeDreps, retiredDreps, totalDrepAda, abstainAda, noConfAda,
+      dreps: realDreps, activeDreps, retiredDreps, totalDrepAda, abstainAda, noConfAda,
       attBuckets, tsBuckets, rtBuckets, medianRT, top10Dreps,
       cc, activeCc, ccAttendance,
       spos, byDelegation, totalSpoAda, drepThresholdReachRows, drepNakamoto, spoNakamoto,
