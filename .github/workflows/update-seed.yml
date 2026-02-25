@@ -1,0 +1,78 @@
+name: Update Seed Snapshot
+
+on:
+  schedule:
+    # Cardano epochs are ~5 days. Run every 4 days to ensure the seed is
+    # never more than one epoch behind.
+    - cron: "0 3 */4 * *"
+  workflow_dispatch: # Allow manual trigger from the GitHub Actions UI
+
+jobs:
+  update-seed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Wait for Render to be ready
+        # Ping the health endpoint first so the instance is fully awake
+        # before we attempt to export the snapshot.
+        run: |
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://civitas-nglb.onrender.com/api/sync-status)
+            if [ "$STATUS" = "200" ]; then
+              echo "Render is ready (attempt $i)"
+              break
+            fi
+            echo "Waiting for Render... attempt $i (status $STATUS)"
+            sleep 30
+          done
+
+      - name: Download snapshot from Render
+        run: |
+          HTTP_STATUS=$(curl -s -o snapshot.seed.json -w "%{http_code}" \
+            --max-time 60 \
+            https://civitas-nglb.onrender.com/api/export-snapshot)
+          echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Export failed with status $HTTP_STATUS — aborting."
+            cat snapshot.seed.json
+            exit 1
+          fi
+          echo "Snapshot size: $(wc -c < snapshot.seed.json) bytes"
+
+      - name: Validate snapshot
+        run: |
+          # Ensure it is valid JSON and contains dreps
+          python3 -c "
+          import json, sys
+          with open('snapshot.seed.json') as f:
+              data = json.load(f)
+          dreps = data.get('dreps', [])
+          epoch = data.get('latestEpoch', 'unknown')
+          proposal_info = data.get('proposalInfo', {})
+          print(f'Epoch: {epoch}')
+          print(f'DReps: {len(dreps)}')
+          print(f'Proposals in proposalInfo: {len(proposal_info)}')
+          if len(dreps) == 0:
+              print('ERROR: No DReps found — snapshot looks empty.')
+              sys.exit(1)
+          print('Snapshot looks valid.')
+          "
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add snapshot.seed.json
+          if git diff --staged --quiet; then
+            echo "Snapshot unchanged — nothing to commit."
+          else
+            EPOCH=$(python3 -c "import json; d=json.load(open('snapshot.seed.json')); print(d.get('latestEpoch','?'))")
+            git commit -m "chore: update seed snapshot (epoch ${EPOCH})"
+            git push
+          fi

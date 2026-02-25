@@ -61,6 +61,7 @@ const SYNC_STARTUP_DELAY_MS = Number(process.env.SYNC_STARTUP_DELAY_MS || 3000);
 const SYNC_START_UTC_HOURS = parseUtcHourList(process.env.SYNC_START_UTC_HOURS, [11, 23]);
 const SNAPSHOT_EXPOSE_UTC_HOURS = parseUtcHourList(process.env.SNAPSHOT_EXPOSE_UTC_HOURS, [0, 12]);
 const SNAPSHOT_PATH = process.env.SNAPSHOT_PATH || path.join(__dirname, "snapshot.accountability.json");
+const SNAPSHOT_SEED_PATH = process.env.SNAPSHOT_SEED_PATH || path.join(__dirname, "snapshot.seed.json");
 const SNAPSHOT_SCHEMA_VERSION = Number(process.env.SNAPSHOT_SCHEMA_VERSION || 1);
 const SNAPSHOT_HISTORY_DIR = process.env.SNAPSHOT_HISTORY_DIR || path.join(__dirname, "snapshot_history");
 const NCL_SNAPSHOT_PATH = process.env.NCL_SNAPSHOT_PATH || path.join(__dirname, "snapshot.ncl.json");
@@ -2230,6 +2231,21 @@ function loadSnapshotFromDisk() {
         ...latestHistory
       };
     }
+  }
+}
+
+// Load the committed seed snapshot when no live snapshot is available.
+// The seed is generated automatically every epoch by GitHub Actions so
+// cold starts (ephemeral Render filesystem) never begin from empty.
+function loadSeedSnapshot() {
+  if (!fs.existsSync(SNAPSHOT_SEED_PATH)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_SEED_PATH, "utf8"));
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return;
+    snapshot = { schemaVersion: SNAPSHOT_SCHEMA_VERSION, ...parsed };
+    console.log(`Loaded seed snapshot (epoch ${parsed.latestEpoch || "?"}, generated ${parsed.generatedAt || "unknown"})`);
+  } catch (error) {
+    console.warn(`Could not load seed snapshot: ${error.message}`);
   }
 }
 
@@ -4472,12 +4488,15 @@ function startScheduler() {
     }
   }
 
-  // Run the initial full sync with retries, then start ongoing polling.
-  // Delta polling is intentionally deferred until the first full sync
-  // completes so deltas always have a complete base to build on.
+  // Run the initial sync with retries, then start ongoing polling.
+  // If a complete seed/snapshot is already loaded we run a delta so startup
+  // is near-instant; otherwise we force a full rebuild to populate everything.
+  // Delta polling is deferred until the first sync completes so deltas always
+  // have a complete base to build on.
   async function runStartupSync() {
     for (let attempt = 1; attempt <= STARTUP_MAX_RETRIES; attempt++) {
-      runSync({ forceFull: true });
+      const base = pickBestSnapshotForApi(snapshot);
+      runSync({ forceFull: !snapshotIsComplete(base) });
       await waitForSync();
 
       const served = pickBestSnapshotForApi(snapshot);
@@ -4545,6 +4564,12 @@ function serveStatic(req, res) {
 }
 
 loadSnapshotFromDisk();
+// If the live snapshot is absent or incomplete (ephemeral filesystem after
+// a cold start) fall back to the committed seed so the first delta sync has
+// a complete base and startup is near-instant.
+if (!snapshotIsComplete(snapshot)) {
+  loadSeedSnapshot();
+}
 loadVoteTxTimeCache();
 loadVoteTxRationaleCache();
 loadSpoProfileCache();
@@ -5034,6 +5059,22 @@ const server = http.createServer(async (req, res) => {
       json(res, 500, { error: error.message || "Failed to resolve vote rationale." });
       return;
     }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/export-snapshot") {
+    const served = pickBestSnapshotForApi(snapshot);
+    if (!snapshotIsComplete(served)) {
+      json(res, 503, { error: "Snapshot not ready — sync still in progress." });
+      return;
+    }
+    const body = JSON.stringify(served);
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+      "Cache-Control": "no-store"
+    });
+    res.end(body);
+    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync-now") {
