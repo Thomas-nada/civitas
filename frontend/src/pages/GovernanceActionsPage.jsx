@@ -7,6 +7,23 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
+// Cardano Shelley epoch start: epoch 208 began ~July 29, 2020 21:44:51 UTC
+const SHELLEY_EPOCH_START_UNIX = 1596059091;
+const EPOCH_DURATION_SECONDS = 432000; // 5 days
+
+function epochToApproxDate(epoch) {
+  if (!epoch || epoch <= 0) return null;
+  const unixSeconds = SHELLEY_EPOCH_START_UNIX + (epoch - 208) * EPOCH_DURATION_SECONDS;
+  return new Date(unixSeconds * 1000);
+}
+
+function formatEpochDate(epoch) {
+  if (!epoch || epoch <= 0) return null;
+  const date = epochToApproxDate(epoch);
+  if (!date) return null;
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 function asPct(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
   return `${round(Number(value))}%`;
@@ -436,6 +453,7 @@ export default function GovernanceActionsPage() {
         status,
         submittedAt: info?.submittedAt || null,
         submittedAtUnix: Number(info?.submittedAtUnix || 0),
+        submittedEpoch: info?.submittedEpoch || null,
         depositAda: Number(info?.depositAda || 0),
         thresholdInfo: info?.thresholdInfo || {},
         voteStats,
@@ -788,7 +806,10 @@ export default function GovernanceActionsPage() {
                     <td>{row.actionName}</td>
                     <td>{row.governanceType}</td>
                     <td>{row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}</td>
-                    <td>{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : "Unknown"}</td>
+                    <td>
+                      {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
+                      {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
+                    </td>
                     <td>
                       {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
                     </td>
@@ -814,23 +835,38 @@ export default function GovernanceActionsPage() {
                   Status: {selected.status ? <span className={`pill ${statusPillClass(selected.status)}`}>{selected.status}</span> : ""}
                 </p>
                 <p>
-                  Submitted: <strong>{selected.submittedAt ? new Date(selected.submittedAt).toLocaleString() : "Unknown"}</strong>
+                  Submitted:{" "}
+                  <strong>
+                    {selected.submittedEpoch ? `Epoch ${selected.submittedEpoch}` : ""}
+                    {selected.submittedEpoch && selected.submittedAt ? " · " : ""}
+                    {selected.submittedAt ? new Date(selected.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : (!selected.submittedEpoch ? "Unknown" : "")}
+                  </strong>
                 </p>
+                {selected.expirationEpoch ? (
+                  <p>
+                    Expires:{" "}
+                    <strong>
+                      Epoch {selected.expirationEpoch}
+                      {formatEpochDate(selected.expirationEpoch) ? ` · ~${formatEpochDate(selected.expirationEpoch)}` : ""}
+                    </strong>
+                  </p>
+                ) : null}
                 <p>
                   Deposit: <strong>{Number(selected.depositAda || 0).toLocaleString()} ada</strong>
                 </p>
                 <p>
                   Required DRep threshold: <strong>{asPct(selected.thresholdInfo?.drepRequiredPct)}</strong>
                 </p>
-                <p>
-                  Required SPO threshold: <strong>{asPct(selected.thresholdInfo?.poolRequiredPct)}</strong>
-                </p>
-                <p>
-                  Threshold profile: <strong>{selected.thresholdInfo?.thresholdLabel || "N/A"}</strong>
-                </p>
-                <p>
-                  Vote model: <strong>{selected.modelSource === "nomos-koios" ? "Nomos/Koios" : "Local fallback"}</strong>
-                </p>
+                {selected.thresholdInfo?.ccRequiredPct != null ? (
+                  <p>
+                    Required CC threshold: <strong>{asPct(selected.thresholdInfo.ccRequiredPct)}</strong>
+                  </p>
+                ) : null}
+                {selected.thresholdInfo?.poolRequiredPct != null ? (
+                  <p>
+                    Required SPO threshold: <strong>{asPct(selected.thresholdInfo.poolRequiredPct)}</strong>
+                  </p>
+                ) : null}
                 {selected.thresholdInfo?.parameterGroup ? (
                   <p>
                     Parameter group: <strong>{selected.thresholdInfo.parameterGroup}</strong>
@@ -849,7 +885,6 @@ export default function GovernanceActionsPage() {
               <h3 className="detail-section-title">DRep Voting Power Breakdown</h3>
               <div className="vote-list">
                 <article className="vote-item">
-                  <h3>DRep Power (Active Stake Model)</h3>
                   <p>
                     Threshold progress: <strong>{asPct(selected.drepYesPowerPct)}</strong>
                     {selected.drepRequiredPct !== null ? (

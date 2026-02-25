@@ -1260,8 +1260,14 @@ export default function DashboardPage({ actorType }) {
                     </td>
                     {showResponsivenessColumn ? (
                       <td>
-                        <strong>{row.responsiveness ?? 0}%</strong>
-                        <div className="muted">{formatResponseHours(row.avgResponseHours)}</div>
+                        {row.avgResponseHours === null ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          <>
+                            <strong>{row.responsiveness ?? 0}%</strong>
+                            <div className="muted">{formatResponseHours(row.avgResponseHours)}</div>
+                          </>
+                        )}
                       </td>
                     ) : null}
                     {isCommittee ? (
@@ -1441,11 +1447,7 @@ export default function DashboardPage({ actorType }) {
                     Committee status:{" "}
                     <strong>{String(selected.status || "expired").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
                   </p>
-                ) : (
-                  <p>
-                    SPO governance voter: <strong>{selected.name || "N/A"}</strong>
-                  </p>
-                )}
+                ) : null}
                 {isSpo ? (
                   <>
                     <p>

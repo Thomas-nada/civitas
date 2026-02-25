@@ -1508,9 +1508,13 @@ function inferParameterGroup(governanceDescription) {
 
 function resolveThresholdInfo(governanceType, governanceDescription, thresholdContext) {
   const type = String(governanceType || "").toLowerCase();
+  // CC threshold: 2/3 of committee members must vote Constitutional
+  // Currently 7 members, so 5/7 ≈ 66.67% required
+  const CC_THRESHOLD = 66.67;
   const info = {
     drepRequiredPct: null,
     poolRequiredPct: null,
+    ccRequiredPct: null,
     parameterGroup: null,
     thresholdLabel: ""
   };
@@ -1518,40 +1522,51 @@ function resolveThresholdInfo(governanceType, governanceDescription, thresholdCo
   if (type === "hard_fork_initiation") {
     info.drepRequiredPct = thresholdContext?.drep?.hardForkInitiation ?? null;
     info.poolRequiredPct = thresholdContext?.pool?.hardForkInitiation ?? null;
+    info.ccRequiredPct = CC_THRESHOLD;
     info.thresholdLabel = "Hard-fork thresholds";
     return info;
   }
   if (type === "new_committee") {
+    // CC does not vote on proposals that change the committee itself
     info.drepRequiredPct = thresholdContext?.drep?.committeeNormal ?? null;
     info.poolRequiredPct = thresholdContext?.pool?.committeeNormal ?? null;
-    info.thresholdLabel = "Committee normal thresholds";
+    info.ccRequiredPct = null;
+    info.thresholdLabel = "Committee election thresholds";
     return info;
   }
   if (type === "new_constitution") {
+    // SPO vote is NOT required for constitution changes
     info.drepRequiredPct = thresholdContext?.drep?.updateToConstitution ?? null;
-    info.poolRequiredPct = thresholdContext?.pool?.committeeNormal ?? null;
+    info.poolRequiredPct = null;
+    info.ccRequiredPct = CC_THRESHOLD;
     info.thresholdLabel = "Constitution update thresholds";
     return info;
   }
   if (type === "treasury_withdrawals") {
+    // SPO vote is NOT required for treasury withdrawals
     info.drepRequiredPct = thresholdContext?.drep?.treasuryWithdrawal ?? null;
-    info.poolRequiredPct = thresholdContext?.pool?.committeeNormal ?? null;
+    info.poolRequiredPct = null;
+    info.ccRequiredPct = CC_THRESHOLD;
     info.thresholdLabel = "Treasury withdrawal thresholds";
     return info;
   }
   if (type === "no_confidence") {
+    // CC does not vote on no-confidence motions against themselves
     info.drepRequiredPct = thresholdContext?.drep?.motionNoConfidence ?? null;
     info.poolRequiredPct = thresholdContext?.pool?.motionNoConfidence ?? null;
+    info.ccRequiredPct = null;
     info.thresholdLabel = "No-confidence thresholds";
     return info;
   }
   if (type === "parameter_change") {
     const group = inferParameterGroup(governanceDescription);
     info.parameterGroup = group;
+    info.ccRequiredPct = CC_THRESHOLD;
     if (group === "Network") info.drepRequiredPct = thresholdContext?.drep?.networkGroup ?? null;
     if (group === "Economic") info.drepRequiredPct = thresholdContext?.drep?.economicGroup ?? null;
     if (group === "Technical") info.drepRequiredPct = thresholdContext?.drep?.technicalGroup ?? null;
     if (group === "Governance") info.drepRequiredPct = thresholdContext?.drep?.govGroup ?? null;
+    // SPO only votes on security-group parameter changes
     if (group === "Governance") info.poolRequiredPct = thresholdContext?.pool?.securityGroup ?? null;
     info.thresholdLabel = group ? `Parameter change (${group}) thresholds` : "Parameter change thresholds";
     return info;
