@@ -1521,26 +1521,37 @@ function buildThresholdContext(epochParams) {
 function inferParameterGroup(governanceDescription) {
   const updateObject = governanceDescription?.contents?.[1];
   if (!updateObject || typeof updateObject !== "object") return null;
+  // Use the first changed parameter key to determine the primary DRep group.
   const key = Object.keys(updateObject)[0] || "";
   if (!key) return null;
   const k = key.toLowerCase();
+  // Network group: block/tx size limits, execution unit limits, value size, collateral.
+  // Must check maxblock/maxtx BEFORE the broad "ex" Technical check below so that
+  // maxBlockExecutionUnits and maxTxExecutionUnits land in Network, not Technical.
   if (
-    k.includes("maxblock") ||
-    k.includes("maxtx") ||
-    k.includes("maxval") ||
-    k.includes("collateral") ||
+    k.startsWith("maxblock") ||
+    k.startsWith("maxtx") ||
+    k.includes("maxvaluesize") ||
+    k.includes("maxcollateral") ||
     k.includes("refscript")
   ) {
     return "Network";
   }
+  // Economic group: fees, deposits, UTxO cost, treasury, monetary policy.
   if (
     k.includes("minfee") ||
-    k.includes("deposit") ||
-    k.includes("cost") ||
-    k.includes("coinsperutxo")
+    k.includes("keydeposit") ||
+    k.includes("pooldeposit") ||
+    k.includes("coinsperutxo") ||
+    k.includes("treasury") ||
+    k.includes("monetaryexpansion") ||
+    k.includes("poolpledge") ||
+    k.includes("poolretire") ||
+    k.includes("poolmargin")
   ) {
     return "Economic";
   }
+  // Technical group: cost models, script execution prices.
   if (
     k.includes("costmodel") ||
     k.includes("pricemem") ||
@@ -1549,6 +1560,7 @@ function inferParameterGroup(governanceDescription) {
   ) {
     return "Technical";
   }
+  // Governance group: committee size/terms, DRep thresholds, governance action params.
   if (
     k.includes("committee") ||
     k.includes("govaction") ||
@@ -1557,6 +1569,38 @@ function inferParameterGroup(governanceDescription) {
     return "Governance";
   }
   return null;
+}
+
+/**
+ * Returns true if ANY parameter being changed in this proposal belongs to
+ * the Conway "security group" — i.e. requires SPO approval in addition to
+ * DRep approval.  Security-group parameters are those whose misconfiguration
+ * could directly threaten network liveness.
+ * Ref: CIP-1694 / Conway ledger spec pvt_p_p_security_group.
+ */
+function requiresSecurityGroupVote(governanceDescription) {
+  try {
+    const updateObject = governanceDescription?.contents?.[1];
+    if (!updateObject || typeof updateObject !== "object") return false;
+    return Object.keys(updateObject).some((key) => {
+      const k = key.toLowerCase();
+      return (
+        k.startsWith("maxblockbody") ||       // maxBlockBodySize
+        k.startsWith("maxblockheader") ||      // maxBlockHeaderSize
+        k.startsWith("maxtxsize") ||           // maxTxSize
+        k.startsWith("maxvaluesize") ||        // maxValueSize
+        k.startsWith("maxblockexecution") ||   // maxBlockExecutionUnits
+        k.startsWith("maxtxexecution") ||      // maxTxExecutionUnits
+        k.startsWith("maxcollateral") ||       // maxCollateralInputs
+        k.startsWith("minfee") ||              // minFeeA, minFeeB, minFeeRefScriptCostPerByte
+        k.startsWith("coinsperutxo") ||        // coinsPerUTxOByte
+        k.startsWith("txfeeperbyte") ||        // alternative field name for minFeeA
+        k.startsWith("txfeefixed")             // alternative field name for minFeeB
+      );
+    });
+  } catch (e) {
+    return false;
+  }
 }
 
 function resolveThresholdInfo(governanceType, governanceDescription, thresholdContext) {
@@ -1621,8 +1665,12 @@ function resolveThresholdInfo(governanceType, governanceDescription, thresholdCo
     if (group === "Economic") info.drepRequiredPct = thresholdContext?.drep?.economicGroup ?? null;
     if (group === "Technical") info.drepRequiredPct = thresholdContext?.drep?.technicalGroup ?? null;
     if (group === "Governance") info.drepRequiredPct = thresholdContext?.drep?.govGroup ?? null;
-    // SPO only votes on security-group parameter changes
-    if (group === "Governance") info.poolRequiredPct = thresholdContext?.pool?.securityGroup ?? null;
+    // SPO votes are required only for Conway security-group parameters
+    // (network liveness params like max sizes, execution limits, fee coefficients).
+    // Governance-group changes (e.g. committeeMinSize) do NOT require SPO votes.
+    if (requiresSecurityGroupVote(governanceDescription)) {
+      info.poolRequiredPct = thresholdContext?.pool?.securityGroup ?? null;
+    }
     info.thresholdLabel = group ? `Parameter change (${group}) thresholds` : "Parameter change thresholds";
     return info;
   }
