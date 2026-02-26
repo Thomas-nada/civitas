@@ -1440,6 +1440,26 @@ function round2(value) {
 }
 
 /**
+ * Recompute thresholdInfo for every proposal in a snapshot using the
+ * current resolveThresholdInfo() logic and the snapshot's own thresholdContext.
+ * This ensures threshold data is never stale due to code changes — called at
+ * startup and inside publishSnapshot so every save reflects current rules.
+ */
+function refreshAllThresholdInfo(snapshotObj) {
+  const pi = snapshotObj?.proposalInfo;
+  const tc = snapshotObj?.thresholdContext;
+  if (!pi || typeof pi !== "object" || !tc) return;
+  for (const info of Object.values(pi)) {
+    if (!info || typeof info !== "object") continue;
+    info.thresholdInfo = resolveThresholdInfo(
+      info.governanceType,
+      info.governanceDescription,
+      tc
+    );
+  }
+}
+
+/**
  * Backfill votedAtUnix / votedAt / responseHours for votes that were saved
  * with null timestamps but whose voteTxHash is already present in the
  * voteTxTimeCache.  This repairs votes that were persisted in a snapshot
@@ -1540,7 +1560,9 @@ function inferParameterGroup(governanceDescription) {
 }
 
 function resolveThresholdInfo(governanceType, governanceDescription, thresholdContext) {
-  const type = String(governanceType || "").toLowerCase();
+  // Normalise: handle both Blockfrost snake_case ("treasury_withdrawals") and
+  // the human-readable titleCase stored in the snapshot ("Treasury withdrawals").
+  const type = String(governanceType || "").toLowerCase().replace(/\s+/g, "_");
   // CC threshold: 2/3 of committee members must vote Constitutional
   // Currently 7 members, so 5/7 ≈ 66.67% required
   const CC_THRESHOLD = 66.67;
@@ -4419,6 +4441,9 @@ async function buildFullSnapshot() {
 function publishSnapshot(payload) {
   if (!payload || typeof payload !== "object") return;
   snapshot = payload;
+  // Always recompute thresholds so code changes take effect without a
+  // manual snapshot wipe.
+  refreshAllThresholdInfo(snapshot);
   saveSnapshotToDisk(snapshot);
   warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
   backfillEpochSnapshotsFromCurrent(false);
@@ -4631,6 +4656,9 @@ loadVoteTxTimeCache();
 backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
 backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
 backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
+// Recompute threshold info using current code so stale snapshots are fixed
+// immediately on startup without waiting for the next sync.
+refreshAllThresholdInfo(snapshot);
 loadVoteTxRationaleCache();
 loadSpoProfileCache();
 loadNclCacheFromDisk();
