@@ -1439,6 +1439,39 @@ function round2(value) {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Backfill votedAtUnix / votedAt / responseHours for votes that were saved
+ * with null timestamps but whose voteTxHash is already present in the
+ * voteTxTimeCache.  This repairs votes that were persisted in a snapshot
+ * before the tx-time cache was populated, and runs cheaply on every delta
+ * sync so historical data converges without requiring a full rebuild.
+ *
+ * @param {Array|Iterable} actors  - array/iterable of actor objects (each has a .votes array)
+ * @param {Object} proposalInfoObj - keyed by proposalId, each entry has .submittedAtUnix
+ */
+function backfillVoteTimestampsFromCache(actors, proposalInfoObj) {
+  const pi = proposalInfoObj && typeof proposalInfoObj === "object" ? proposalInfoObj : {};
+  let patched = 0;
+  for (const actor of (actors || [])) {
+    for (const vote of (actor.votes || [])) {
+      // Skip if already populated.
+      if (vote.votedAtUnix && Number(vote.votedAtUnix) > 0) continue;
+      if (!vote.voteTxHash) continue;
+      const cached = voteTxTimeCache[vote.voteTxHash];
+      if (!cached || Number(cached) <= 0) continue;
+      const votedAt = Number(cached);
+      vote.votedAtUnix = votedAt;
+      vote.votedAt = new Date(votedAt * 1000).toISOString();
+      const submittedAt = Number(pi[vote.proposalId]?.submittedAtUnix || 0);
+      if (submittedAt > 0 && votedAt >= submittedAt) {
+        vote.responseHours = (votedAt - submittedAt) / 3600;
+      }
+      patched++;
+    }
+  }
+  return patched;
+}
+
 function buildThresholdContext(epochParams) {
   if (!epochParams || typeof epochParams !== "object") return {};
   return {
@@ -2961,6 +2994,12 @@ async function buildDeltaSnapshot(base) {
   const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
   const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
   const proposalInfo = { ...(base.proposalInfo || {}) };
+
+  // Backfill any votes that were persisted with null votedAtUnix but whose
+  // tx hash is now in the cache.  This is a no-op once all votes are patched.
+  backfillVoteTimestampsFromCache(drepById.values(), proposalInfo);
+  backfillVoteTimestampsFromCache(spoById.values(), proposalInfo);
+  backfillVoteTimestampsFromCache(ccById.values(), proposalInfo);
 
   // Fetch current full proposal list (paginated, same as full sync).
   const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
@@ -4586,6 +4625,12 @@ if (!snapshotIsComplete(snapshot)) {
   loadSeedSnapshot();
 }
 loadVoteTxTimeCache();
+// Now that the tx-time cache is loaded, backfill any votes in the snapshot
+// that were saved before their timestamps were cached.  This repairs data
+// on ephemeral deployments that start from the seed snapshot.
+backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
+backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
+backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
 loadVoteTxRationaleCache();
 loadSpoProfileCache();
 loadNclCacheFromDisk();
