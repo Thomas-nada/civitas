@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Transaction } from "@meshsdk/core";
-import { WalletContext } from "../App";
+import { WalletContext } from "../context/WalletContext";
 
 const scoreWeights = {
   attendance: 0.45,
@@ -9,29 +9,8 @@ const scoreWeights = {
   responsiveness: 0.1
 };
 
-const metricHelp = {
-  attendance: "Votes cast divided by eligible actions in the active filter window.",
-  transparency: "DRep: profile metadata quality proxy. Committee/SPO: vote rationale coverage.",
-  consistency: "Optional. DRep/SPO: share of yes/no votes that match finalized yes/no outcomes. Committee: rationale quality (length-weighted, excluding summary).",
-  abstain: "Share of cast votes marked abstain.",
-  score: "Weighted average of enabled metrics. Defaults to Attendance + Transparency."
-};
-
 function round(v) {
   return Math.round(v * 10) / 10;
-}
-
-function formatAda(lovelace) {
-  const amount = Number(lovelace || 0) / 1_000_000;
-  if (!Number.isFinite(amount)) return "N/A";
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} ada`;
-}
-
-function networkLabel(networkId) {
-  if (networkId === 1) return "Mainnet";
-  if (networkId === 0) return "Testnet";
-  if (networkId === null || networkId === undefined) return "Unknown";
-  return `Network ${networkId}`;
 }
 
 function formatResponseHours(hours) {
@@ -59,11 +38,141 @@ function hasVoteRationaleSignal(vote) {
   return Boolean(String(vote?.rationaleUrl || "").trim());
 }
 
+function MetricInfo({ text, label = "How calculated" }) {
+  const lines = String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return (
+    <span className="metric-info">
+      <button type="button" className="metric-info-trigger" aria-label={label} title={label}>i</button>
+      <div className="metric-info-pop" role="tooltip">
+        {lines.map((line, idx) => (
+          <p key={`${label}-${idx}`}>{line}</p>
+        ))}
+      </div>
+    </span>
+  );
+}
+
+function committeeQualityTooltip(row) {
+  const cast = Number(row?.cast || 0);
+  return [
+    "CC rationale quality score (0-100):",
+    "Per-vote score = Availability (0 or 25) + Structure (0-45) + Constitutional grounding (0-30).",
+    "Availability: URL valid and reachable; otherwise 0.",
+    "Structure: CIP-136 required fields, section checks, body-length band, and signature-name match.",
+    "Constitutional grounding: Article/Section citations + RelevantArticles references.",
+    `Displayed value is the average across ${cast} scoped vote${cast === 1 ? "" : "s"}.`
+  ].join("\n");
+}
+
+function attendanceTooltip(row) {
+  const cast = Number(row?.cast || 0);
+  const eligible = Number(row?.totalEligibleVotes || 0);
+  const pct = Number(row?.attendance || 0);
+  return [
+    "Attendance score:",
+    "Formula: cast / eligible * 100",
+    `Current: ${cast} / ${eligible} = ${pct}%`
+  ].join("\n");
+}
+
+function transparencyTooltip(row, isCommittee) {
+  const count = Number(row?.transparencyCount || 0);
+  const total = Number(row?.transparencyTotal || 0);
+  const pct = Number(row?.transparencyScore || 0);
+  return isCommittee
+    ? [
+      "Committee transparency:",
+      "Displayed from rationale-coverage counts in scoped votes.",
+      `Current: ${count} / ${total} = ${pct}%`
+    ].join("\n")
+    : [
+      "Transparency score:",
+      "Formula: votes with rationale signal / cast votes * 100",
+      `Current: ${count} / ${total} = ${pct}%`
+    ].join("\n");
+}
+
+function consistencyTooltip(row, isCommittee) {
+  if (isCommittee) return committeeQualityTooltip(row);
+  const matches = Number(row?.consistencyMatches || 0);
+  const total = Number(row?.consistencyTotal || 0);
+  const pct = Number(row?.consistency || 0);
+  return [
+    "Consistency score:",
+    "Formula: comparable votes matching outcome / comparable votes * 100",
+    `Current: ${matches} / ${total} = ${pct}%`
+  ].join("\n");
+}
+
+function abstainTooltip(row) {
+  const count = Number(row?.abstainCount || 0);
+  const total = Number(row?.abstainTotal || 0);
+  const pct = Number(row?.abstainRate || 0);
+  return [
+    "Abstain rate:",
+    "Formula: abstain votes / cast votes * 100",
+    `Current: ${count} / ${total} = ${pct}%`
+  ].join("\n");
+}
+
+function responsivenessTooltip(row) {
+  const avgHours = row?.avgResponseHours;
+  const pct = Number(row?.responsiveness || 0);
+  if (avgHours === null || avgHours === undefined) {
+    return [
+      "Responsiveness score:",
+      "Formula: max(0, 100 - (avgResponseHours / (24*30))*100)",
+      "Current: no response-time data in scoped votes."
+    ].join("\n");
+  }
+  return [
+    "Responsiveness score:",
+    "Formula: max(0, 100 - (avgResponseHours / (24*30))*100)",
+    `Current: avg ${round(Number(avgHours))}h => ${pct}%`
+  ].join("\n");
+}
+
+function accountabilityTooltip(row, isCommittee, includeAttendance, includeTransparency, includeAlignment, includeResponsiveness) {
+  if (isCommittee) {
+    return [
+      "Committee accountability score:",
+      "Weighted average of enabled metrics.",
+      "Weights: Attendance 45%, Rationale quality 35%, Responsiveness 10%.",
+      `Current score: ${Number(row?.accountability || 0)}%`
+    ].join("\n");
+  }
+  const enabled = [];
+  if (includeAttendance) enabled.push("Attendance 45%");
+  if (includeTransparency) enabled.push("Transparency 30%");
+  if (includeAlignment) enabled.push("Consistency 15%");
+  if (includeResponsiveness) enabled.push("Responsiveness 10%");
+  return [
+    "Accountability score:",
+    "Weighted average of enabled metrics.",
+    `Enabled weights: ${enabled.length > 0 ? enabled.join(", ") : "none"}.`,
+    `Current score: ${Number(row?.accountability || 0)}%`
+  ].join("\n");
+}
+
 function scoreCommitteeRationaleQuality(vote) {
+  const precomputed = Number(vote?.rationaleQualityScore);
+  if (Number.isFinite(precomputed) && precomputed >= 0) {
+    return Math.max(0, Math.min(100, precomputed));
+  }
   const url = String(vote?.rationaleUrl || "").trim();
   const hasSignal = hasVoteRationaleSignal(vote);
   const bodyLength = Math.max(0, Number(vote?.rationaleBodyLength || 0));
   const sectionCount = Math.max(0, Number(vote?.rationaleSectionCount || 0));
+  // Rounded, dataset-based body-length bands derived from current CC rationale distribution.
+  // Thresholds (chars): 2000, 3300, 4500, 5900.
+  const bodyLengthBand =
+    bodyLength >= 5900 ? 4 :
+    bodyLength >= 4500 ? 3 :
+    bodyLength >= 3300 ? 2 :
+    bodyLength >= 2000 ? 1 : 0;
   let score = 0;
   if (hasSignal) score += 35;
   if (url) {
@@ -72,7 +181,7 @@ function scoreCommitteeRationaleQuality(vote) {
     const hasCid = /\b(bafy[a-z0-9]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{20,})\b/i.test(url);
     if (hasCid) score += 10;
   }
-  if (bodyLength > 0) score += Math.min(35, (bodyLength / 3000) * 35);
+  score += bodyLengthBand * 8.75; // 0, 8.75, 17.5, 26.25, 35
   if (sectionCount > 0) score += Math.min(5, sectionCount);
   return Math.max(0, Math.min(100, score));
 }
@@ -828,6 +937,19 @@ export default function DashboardPage({ actorType }) {
   }, [selectedId]);
 
   useEffect(() => {
+    if (!selectedId) return undefined;
+    const onPointerDown = (event) => {
+      const node = detailPanelRef.current;
+      if (!node) return;
+      const target = event.target;
+      if (target instanceof Node && node.contains(target)) return;
+      setSelectedWithUrl("");
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectedId]);
+
+  useEffect(() => {
     const shouldLockScroll =
       Boolean(rationaleModal?.open) ||
       Boolean(profileImageOpen) ||
@@ -1124,14 +1246,14 @@ export default function DashboardPage({ actorType }) {
             <thead>
               <tr>
                 <th>{actorLabel}</th>
-                <th title={metricHelp.attendance}>Attendance</th>
-                {showTransparencyColumn ? <th title={metricHelp.transparency}>{transparencyLabel}</th> : null}
-                <th title={metricHelp.consistency}>{alignmentLabel}</th>
-                <th title={metricHelp.abstain}>Abstain</th>
-        {showResponsivenessColumn ? <th title={metricHelp.responsiveness}>Responsiveness</th> : null}
+                <th>Attendance</th>
+                {showTransparencyColumn ? <th>{transparencyLabel}</th> : null}
+                <th>{alignmentLabel}</th>
+                <th>Abstain</th>
+        {showResponsivenessColumn ? <th>Responsiveness</th> : null}
         {isCommittee ? <th>Term start</th> : null}
         {isCommittee ? <th>Term End</th> : null}
-                <th title={metricHelp.score}>Score</th>
+                <th>Score</th>
               </tr>
             </thead>
             <tbody>
@@ -1240,27 +1362,39 @@ export default function DashboardPage({ actorType }) {
                       )}
                     </td>
                     <td data-label="Attendance">
-                      <strong>{row.attendance}%</strong>
+                      <span className="metric-value-with-info">
+                        <strong>{row.attendance}%</strong>
+                        <MetricInfo text={attendanceTooltip(row)} label="Attendance calculation" />
+                      </span>
                       <div className="muted">
                         {row.cast}/{row.totalEligibleVotes}
                       </div>
                     </td>
                     {showTransparencyColumn ? (
                     <td data-label={transparencyLabel}>
-                      <strong>{row.transparencyScore ?? 0}%</strong>
+                      <span className="metric-value-with-info">
+                        <strong>{row.transparencyScore ?? 0}%</strong>
+                        <MetricInfo text={transparencyTooltip(row, isCommittee)} label="Transparency calculation" />
+                      </span>
                       <div className="muted">
                         {row.transparencyCount ?? 0}/{row.transparencyTotal ?? 0}
                       </div>
                     </td>
                     ) : null}
                     <td data-label={alignmentLabel}>
-                      <strong>{row.consistency}%</strong>
+                      <span className="metric-value-with-info">
+                        <strong>{row.consistency}%</strong>
+                        <MetricInfo text={consistencyTooltip(row, isCommittee)} label="Consistency calculation" />
+                      </span>
                       <div className="muted">
                         {isCommittee ? "" : `${row.consistencyMatches ?? 0}/${row.consistencyTotal ?? 0}`}
                       </div>
                     </td>
                     <td data-label="Abstain">
-                      <strong>{row.abstainRate}%</strong>
+                      <span className="metric-value-with-info">
+                        <strong>{row.abstainRate}%</strong>
+                        <MetricInfo text={abstainTooltip(row)} label="Abstain calculation" />
+                      </span>
                       <div className="muted">
                         {row.abstainCount ?? 0}/{row.abstainTotal ?? 0}
                       </div>
@@ -1271,7 +1405,10 @@ export default function DashboardPage({ actorType }) {
                           <span className="muted">—</span>
                         ) : (
                           <>
-                            <strong>{row.responsiveness ?? 0}%</strong>
+                            <span className="metric-value-with-info">
+                              <strong>{row.responsiveness ?? 0}%</strong>
+                              <MetricInfo text={responsivenessTooltip(row)} label="Responsiveness calculation" />
+                            </span>
                             <div className="muted">{formatResponseHours(row.avgResponseHours)}</div>
                           </>
                         )}
@@ -1298,15 +1435,21 @@ export default function DashboardPage({ actorType }) {
                       </td>
                     ) : null}
                     <td data-label="Score">
-                      <span className={`pill ${row.accountability >= 75 ? "good" : row.accountability >= 50 ? "mid" : "low"}`}>
-                        {row.accountability}
+                      <span className="metric-value-with-info">
+                        <span className={`pill ${row.accountability >= 75 ? "good" : row.accountability >= 50 ? "mid" : "low"}`}>
+                          {row.accountability}
+                        </span>
+                        <MetricInfo
+                          text={accountabilityTooltip(row, isCommittee, includeAttendance, includeTransparency, includeAlignment, includeResponsiveness)}
+                          label="Accountability calculation"
+                        />
                       </span>
                     </td>
                   </tr>
                   {row.id === selectedId && selected ? (
                     <tr className="action-expanded-row">
                       <td colSpan={tableColSpan}>
-                        <div className="detail panel action-inline-detail">
+                        <div ref={detailPanelRef} className="detail panel action-inline-detail">
                           {selected.name ? <h2>{selected.name}</h2> : (isSpo ? <h2>N/A</h2> : null)}
                           {isDrep && selected.profile?.imageUrl ? (
                             <button type="button" className="profile-image-inline-btn" onClick={() => setProfileImageOpen(true)}>
@@ -1363,31 +1506,45 @@ export default function DashboardPage({ actorType }) {
                           </p>
                           <div className="meta">
                             <p>
-                              Attendance: <strong>{selected.attendance}%</strong> ({selected.cast}/{selected.totalEligibleVotes})
+                              Attendance:{" "}
+                              <span className="metric-value-with-info">
+                                <strong>{selected.attendance}%</strong>
+                                <MetricInfo text={attendanceTooltip(selected)} label="Attendance calculation" />
+                              </span>{" "}
+                              ({selected.cast}/{selected.totalEligibleVotes})
                             </p>
                           {showTransparencyColumn ? (
                           <p>
                             {transparencyLabel}:{" "}
-                            <strong>
-                              {selected.transparencyScore ?? 0}% ({selected.transparencyCount ?? 0}/{selected.transparencyTotal ?? 0})
-                            </strong>
+                            <span className="metric-value-with-info">
+                              <strong>{selected.transparencyScore ?? 0}% ({selected.transparencyCount ?? 0}/{selected.transparencyTotal ?? 0})</strong>
+                              <MetricInfo text={transparencyTooltip(selected, isCommittee)} label="Transparency calculation" />
+                            </span>
                           </p>
                           ) : null}
                             <p>
                               {alignmentLabel}:{" "}
-                              <strong>
-                                {selected.consistency}% {isCommittee ? "" : `(${selected.consistencyMatches ?? 0}/${selected.consistencyTotal ?? 0})`}
-                              </strong>
+                              <span className="metric-value-with-info">
+                                <strong>
+                                  {selected.consistency}% {isCommittee ? "" : `(${selected.consistencyMatches ?? 0}/${selected.consistencyTotal ?? 0})`}
+                                </strong>
+                                <MetricInfo text={consistencyTooltip(selected, isCommittee)} label="Consistency calculation" />
+                              </span>
                             </p>
                             <p>
                               Abstain rate:{" "}
-                              <strong>
-                                {selected.abstainRate}% ({selected.abstainCount ?? 0}/{selected.abstainTotal ?? 0})
-                              </strong>
+                              <span className="metric-value-with-info">
+                                <strong>{selected.abstainRate}% ({selected.abstainCount ?? 0}/{selected.abstainTotal ?? 0})</strong>
+                                <MetricInfo text={abstainTooltip(selected)} label="Abstain calculation" />
+                              </span>
                             </p>
                             {(isDrep || isSpo || isCommittee) ? (
                               <p>
-                                Avg response time: <strong>{formatResponseHours(selected.avgResponseHours)}</strong>
+                                Avg response time:{" "}
+                                <span className="metric-value-with-info">
+                                  <strong>{formatResponseHours(selected.avgResponseHours)}</strong>
+                                  <MetricInfo text={responsivenessTooltip(selected)} label="Responsiveness calculation" />
+                                </span>
                               </p>
                             ) : null}
                             {isDrep ? (

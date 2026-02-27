@@ -385,7 +385,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
 
   // Default view is newest 10 governance actions, expandable to all
   const visible = useMemo(
-    () => (showAll ? filtered : filtered.slice(-DEFAULT_VISIBLE)),
+    () => (showAll && filtered.length > DEFAULT_VISIBLE ? filtered : filtered.slice(-DEFAULT_VISIBLE)),
     [filtered, showAll]
   );
 
@@ -402,11 +402,6 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
     return map;
   }, [allTypes]);
   const getTypeColor = (type) => typeColorMap[type] || C.muted;
-
-  // If the current filtered set is small, collapse back to default compact mode
-  useEffect(() => {
-    if (filtered.length <= DEFAULT_VISIBLE) setShowAll(false);
-  }, [filtered.length]);
 
   // Filter-scoped domain prevents the timeline from looking broken when filters change
   const [timelineMin, timelineMax] = useMemo(() => {
@@ -680,7 +675,6 @@ export default function StatsPage() {
   // Active slice index for interactive donuts
   const [activePropType, setActivePropType]       = useState(0);
   const [activePropOutcome, setActivePropOutcome] = useState(0);
-  const [activeDelegation, setActiveDelegation]   = useState(0);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/accountability?view=all`)

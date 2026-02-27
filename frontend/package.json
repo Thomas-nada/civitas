@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@meshsdk/core": "^1.9.0-beta.98",
+    "@meshsdk/core": "^1.9.0-beta.100",
     "blakejs": "^1.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -30,5 +30,10 @@
     "globals": "^16.5.0",
     "vite": "^7.3.1",
     "vite-plugin-node-polyfills": "^0.25.0"
+  },
+  "overrides": {
+    "rollup": "4.59.0",
+    "minimatch": "3.1.4",
+    "undici": "6.23.0"
   }
 }

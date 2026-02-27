@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { URL } = require("url");
 
 function loadDotEnv() {
@@ -75,6 +76,9 @@ const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(_
 const FRONTEND_DIST_PATH = process.env.FRONTEND_DIST_PATH || path.join(__dirname, "frontend", "dist");
 const BUG_REPORTS_PATH = process.env.BUG_REPORTS_PATH || path.join(__dirname, "reports", "bug_reports.ndjson");
 const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
+const OPERATIONS_API_TOKEN = String(
+  process.env.OPERATIONS_API_TOKEN || process.env.OPS_API_TOKEN || BUG_REPORTS_TOKEN || ""
+).trim();
 const SPECIAL_DREP_REFRESH_MS = Number(process.env.SPECIAL_DREP_REFRESH_MS || 15 * 60 * 1000);
 const SPECIAL_DREP_IDS = {
   alwaysAbstain: "drep_always_abstain",
@@ -385,19 +389,38 @@ function writeBugReportsAll(rows) {
   fs.writeFileSync(BUG_REPORTS_PATH, body ? `${body}\n` : "", "utf8");
 }
 
+let bugReportsQueue = Promise.resolve();
+function withBugReportsLock(task) {
+  const run = bugReportsQueue.then(() => task());
+  bugReportsQueue = run.catch(() => null);
+  return run;
+}
+
 function readAdminTokenFromRequest(req, url) {
   const headerToken = String(req.headers["x-bug-admin-token"] || "").trim();
   if (headerToken) return headerToken;
   const auth = String(req.headers.authorization || "").trim();
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
-  const queryToken = String(url.searchParams.get("token") || "").trim();
-  return queryToken;
+  return "";
+}
+
+function tokenEquals(provided, expected) {
+  const a = Buffer.from(String(provided || ""), "utf8");
+  const b = Buffer.from(String(expected || ""), "utf8");
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 function isBugReportsAuthorized(req, url) {
   if (!BUG_REPORTS_TOKEN) return false;
   const provided = readAdminTokenFromRequest(req, url);
-  return Boolean(provided) && provided === BUG_REPORTS_TOKEN;
+  return tokenEquals(provided, BUG_REPORTS_TOKEN);
+}
+
+function isOperationsAuthorized(req, url) {
+  if (!OPERATIONS_API_TOKEN) return false;
+  const provided = readAdminTokenFromRequest(req, url);
+  return tokenEquals(provided, OPERATIONS_API_TOKEN);
 }
 
 function titleCase(input) {
@@ -1121,11 +1144,18 @@ function extractRationaleSections(payload) {
 
 async function resolveVoteRationaleData(rationaleUrl) {
   const url = String(rationaleUrl || "").trim();
-  if (!url) return { text: "", sections: [] };
+  if (!url) return { text: "", sections: [], reachable: false, payload: null };
   if (voteRationaleCache.has(url)) {
     const cached = voteRationaleCache.get(url);
-    if (cached && typeof cached === "object") return cached;
-    return { text: String(cached || ""), sections: [] };
+    if (cached && typeof cached === "object") {
+      return {
+        text: String(cached.text || ""),
+        sections: Array.isArray(cached.sections) ? cached.sections : [],
+        reachable: cached.reachable === true,
+        payload: cached.payload && typeof cached.payload === "object" ? cached.payload : null
+      };
+    }
+    return { text: String(cached || ""), sections: [], reachable: false, payload: null };
   }
 
   const candidates = normalizeIpfsUrl(url);
@@ -1134,11 +1164,15 @@ async function resolveVoteRationaleData(rationaleUrl) {
   }
   let resolvedText = "";
   let resolvedSections = [];
+  let resolvedPayload = null;
+  let reachable = false;
   for (const candidate of candidates) {
     const raw = await fetchTextWithTimeout(candidate, 8000);
     if (!raw) continue;
+    reachable = true;
     try {
       const jsonPayload = JSON.parse(raw);
+      resolvedPayload = jsonPayload && typeof jsonPayload === "object" ? jsonPayload : null;
       resolvedSections = extractRationaleSections(jsonPayload);
       resolvedText = pickRationaleText(jsonPayload);
       if (!resolvedText && typeof raw === "string") resolvedText = cleanPlainText(raw);
@@ -1148,9 +1182,195 @@ async function resolveVoteRationaleData(rationaleUrl) {
     }
     if (resolvedText) break;
   }
-  const out = { text: resolvedText || "", sections: resolvedSections };
+  const out = {
+    text: resolvedText || "",
+    sections: resolvedSections,
+    reachable,
+    payload: resolvedPayload
+  };
   voteRationaleCache.set(url, out);
   return out;
+}
+
+function isValidRationaleUrlFormat(url) {
+  const v = String(url || "").trim();
+  return /^https?:\/\//i.test(v) || /^ipfs:\/\//i.test(v);
+}
+
+function extractBodyFieldText(body, key) {
+  if (!body || typeof body !== "object") return "";
+  return pickStringValue(body[key]);
+}
+
+function countDistinctConstitutionCitations(text) {
+  const source = String(text || "");
+  if (!source.trim()) return 0;
+  const refs = new Set();
+  const patterns = [
+    /\barticle\s+[ivxlcdm0-9]+(?:\s*,?\s*section\s+[0-9]+(?:\.[0-9]+)*)?/gi,
+    /\bart\.\s*[ivxlcdm0-9]+(?:\s*,?\s*sec\.\s*[0-9]+(?:\.[0-9]+)*)?/gi,
+    /\bsection\s+[0-9]+(?:\.[0-9]+)*/gi,
+    /\bsec\.\s*[0-9]+(?:\.[0-9]+)*/gi
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const normalized = String(match?.[0] || "").replace(/\s+/g, " ").trim().toLowerCase();
+      if (normalized) refs.add(normalized);
+    }
+  }
+  return refs.size;
+}
+
+function countRelevantArticlesReferences(payload) {
+  if (!payload || typeof payload !== "object") return 0;
+  const body = payload.body && typeof payload.body === "object" ? payload.body : payload;
+  const refs = Array.isArray(body.references) ? body.references : (Array.isArray(payload.references) ? payload.references : []);
+  let count = 0;
+  for (const ref of refs) {
+    if (!ref || typeof ref !== "object") continue;
+    const typeValue = String(ref["@type"] || ref.type || "").trim().toLowerCase();
+    if (typeValue === "relevantarticles") count += 1;
+  }
+  return count;
+}
+
+function collectSignatureStrings(value, output = []) {
+  if (!value || typeof value !== "object") return output;
+  const stack = [value];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") continue;
+    for (const [k, v] of Object.entries(current)) {
+      const key = String(k || "").toLowerCase();
+      if (key.includes("signature")) {
+        if (typeof v === "string" && v.trim()) output.push(v.trim());
+        if (Array.isArray(v)) {
+          for (const item of v) {
+            if (typeof item === "string" && item.trim()) output.push(item.trim());
+            else if (item && typeof item === "object") stack.push(item);
+          }
+        } else if (v && typeof v === "object") {
+          const picked = pickStringValue(v);
+          if (picked) output.push(picked);
+          stack.push(v);
+        }
+      } else if (v && typeof v === "object") {
+        stack.push(v);
+      }
+    }
+  }
+  return output;
+}
+
+function normalizeNameForMatch(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function computeCommitteeRationaleQualityFromSignals(signals) {
+  const availability = signals.urlValid && signals.urlReachable ? 25 : 0;
+  const structureBase =
+    (signals.hasSummary ? 7 : 0) +
+    (signals.hasRationaleStatement ? 7 : 0) +
+    (signals.summaryLengthValid ? 3 : 0) +
+    (signals.rationaleStatementLengthValid ? 3 : 0) +
+    (signals.hasPrecedentDiscussion ? 2 : 0) +
+    (signals.hasCounterargumentDiscussion ? 2 : 0) +
+    (signals.hasConclusion ? 2 : 0) +
+    Number(signals.bodyLengthBand || 0) +
+    (signals.signatureContainsMemberName ? 6 : 0);
+  const groundingBase =
+    (signals.distinctCitationCount >= 1 ? 6 : 0) +
+    (signals.distinctCitationCount >= 2 ? 6 : 0) +
+    (signals.relevantArticlesCount >= 1 ? 6 : 0) +
+    (signals.relevantArticlesCount >= 2 ? 6 : 0);
+  const structure = structureBase * 1.25;
+  const grounding = groundingBase * 1.25;
+  const total = Math.max(0, Math.min(100, availability + structure + grounding));
+  return Math.round(total * 10) / 10;
+}
+
+async function buildCommitteeRationaleSignals(vote, memberName) {
+  const url = String(vote?.rationaleUrl || "").trim();
+  const urlValid = isValidRationaleUrlFormat(url);
+  let resolved = { text: "", sections: [], reachable: false, payload: null };
+  if (urlValid) {
+    resolved = await resolveVoteRationaleData(url);
+  }
+  const payload = resolved.payload && typeof resolved.payload === "object" ? resolved.payload : null;
+  const body = payload && payload.body && typeof payload.body === "object" ? payload.body : payload;
+  const summary = extractBodyFieldText(body, "summary");
+  const rationaleStatement = extractBodyFieldText(body, "rationaleStatement");
+  const precedentDiscussion = extractBodyFieldText(body, "precedentDiscussion");
+  const counterargumentDiscussion = extractBodyFieldText(body, "counterargumentDiscussion");
+  const conclusion = extractBodyFieldText(body, "conclusion");
+  const totalBodyChars =
+    summary.length +
+    rationaleStatement.length +
+    precedentDiscussion.length +
+    counterargumentDiscussion.length +
+    conclusion.length;
+  const bodyLengthBand =
+    totalBodyChars >= 5900 ? 4 :
+    totalBodyChars >= 4500 ? 3 :
+    totalBodyChars >= 3300 ? 2 :
+    totalBodyChars >= 2000 ? 1 : 0;
+  const citationSource = [
+    summary,
+    rationaleStatement,
+    precedentDiscussion,
+    counterargumentDiscussion,
+    conclusion,
+    resolved.text
+  ].filter(Boolean).join("\n");
+  const distinctCitationCount = countDistinctConstitutionCitations(citationSource);
+  const relevantArticlesCount = countRelevantArticlesReferences(payload);
+  const signatureStrings = collectSignatureStrings(payload, []);
+  const normalizedMemberName = normalizeNameForMatch(memberName);
+  const signatureContainsMemberName =
+    normalizedMemberName.length > 0 &&
+    signatureStrings.some((sig) => normalizeNameForMatch(sig).includes(normalizedMemberName));
+
+  const signals = {
+    urlValid,
+    urlReachable: resolved.reachable === true,
+    hasSummary: summary.length > 0,
+    hasRationaleStatement: rationaleStatement.length > 0,
+    summaryLengthValid: summary.length > 0 && summary.length <= 300,
+    rationaleStatementLengthValid: rationaleStatement.length >= 400,
+    hasPrecedentDiscussion: precedentDiscussion.length > 0,
+    hasCounterargumentDiscussion: counterargumentDiscussion.length > 0,
+    hasConclusion: conclusion.length > 0,
+    totalBodyChars,
+    bodyLengthBand,
+    distinctCitationCount,
+    relevantArticlesCount,
+    signatureContainsMemberName
+  };
+  return {
+    rationaleQualityScore: computeCommitteeRationaleQualityFromSignals(signals),
+    rationaleScoringSignals: signals
+  };
+}
+
+async function enrichCommitteeVotesWithQualitySignals(committeeMembers) {
+  if (!Array.isArray(committeeMembers) || committeeMembers.length === 0) return;
+  const tasks = [];
+  for (const member of committeeMembers) {
+    for (const vote of Array.isArray(member?.votes) ? member.votes : []) {
+      tasks.push({ member, vote });
+    }
+  }
+  if (tasks.length === 0) return;
+  const concurrency = Math.max(1, Math.min(6, SYNC_CONCURRENCY));
+  await mapLimit(tasks, concurrency, async ({ member, vote }) => {
+    if (!vote || typeof vote !== "object") return;
+    const result = await buildCommitteeRationaleSignals(vote, member?.name || "");
+    vote.rationaleQualityScore = result.rationaleQualityScore;
+    vote.rationaleScoringSignals = result.rationaleScoringSignals;
+  });
 }
 
 function extractProposalNameAndRationale(proposalId, detail, metadataEnvelope) {
@@ -3607,6 +3827,7 @@ async function buildDeltaSnapshot(base) {
     return clean;
   });
   committeeMembers.sort((a, b) => b.votes.length - a.votes.length);
+  await enrichCommitteeVotesWithQualitySignals(committeeMembers);
 
   const spos = Array.from(spoById.values()).map((row) => {
     const { _dirty, ...clean } = row;
@@ -4627,6 +4848,7 @@ async function buildFullSnapshot() {
   });
 
   const specialDreps = await fetchSpecialDreps(true);
+  await enrichCommitteeVotesWithQualitySignals(committeeMembers);
 
   return {
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -5106,8 +5328,10 @@ const server = http.createServer(async (req, res) => {
         remoteAddress: trimTo(req.socket?.remoteAddress || "", 120)
       };
 
-      fs.mkdirSync(path.dirname(BUG_REPORTS_PATH), { recursive: true });
-      fs.appendFileSync(BUG_REPORTS_PATH, `${JSON.stringify(report)}\n`, "utf8");
+      await withBugReportsLock(() => {
+        fs.mkdirSync(path.dirname(BUG_REPORTS_PATH), { recursive: true });
+        fs.appendFileSync(BUG_REPORTS_PATH, `${JSON.stringify(report)}\n`, "utf8");
+      });
 
       json(res, 201, { ok: true, id: report.id });
       return;
@@ -5135,7 +5359,7 @@ const server = http.createServer(async (req, res) => {
     const limit = Number.isFinite(requestedLimit)
       ? Math.max(1, Math.min(1000, Math.trunc(requestedLimit)))
       : 200;
-    const reports = readBugReports(limit);
+    const reports = await withBugReportsLock(() => readBugReports(limit));
     json(res, 200, {
       ok: true,
       count: reports.length,
@@ -5165,25 +5389,25 @@ const server = http.createServer(async (req, res) => {
         json(res, 400, { error: "Unsupported action." });
         return;
       }
-      const rows = readBugReportsAll();
-      const idx = rows.findIndex((row) => String(row?.id || "") === id);
-      if (idx === -1) {
-        json(res, 404, { error: "Report not found." });
-        return;
-      }
+      const result = await withBugReportsLock(() => {
+        const rows = readBugReportsAll();
+        const idx = rows.findIndex((row) => String(row?.id || "") === id);
+        if (idx === -1) return { statusCode: 404, body: { error: "Report not found." } };
 
-      if (action === "remove") {
-        rows.splice(idx, 1);
-      } else if (action === "approve") {
-        rows[idx] = { ...rows[idx], status: "approved", updatedAt: new Date().toISOString() };
-      } else if (action === "archive") {
-        rows[idx] = { ...rows[idx], status: "archived", updatedAt: new Date().toISOString() };
-      } else if (action === "reopen") {
-        rows[idx] = { ...rows[idx], status: "open", updatedAt: new Date().toISOString() };
-      }
+        if (action === "remove") {
+          rows.splice(idx, 1);
+        } else if (action === "approve") {
+          rows[idx] = { ...rows[idx], status: "approved", updatedAt: new Date().toISOString() };
+        } else if (action === "archive") {
+          rows[idx] = { ...rows[idx], status: "archived", updatedAt: new Date().toISOString() };
+        } else if (action === "reopen") {
+          rows[idx] = { ...rows[idx], status: "open", updatedAt: new Date().toISOString() };
+        }
 
-      writeBugReportsAll(rows);
-      json(res, 200, { ok: true });
+        writeBugReportsAll(rows);
+        return { statusCode: 200, body: { ok: true } };
+      });
+      json(res, result.statusCode, result.body);
       return;
     } catch (error) {
       const msg = String(error?.message || "");
@@ -5197,6 +5421,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/backfill-epoch-snapshots") {
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
     const force = String(url.searchParams.get("force") || "").toLowerCase() === "true";
     const epochDetect = detectLatestEpochFromSnapshot(snapshot);
     backfillEpochSnapshotsFromCurrent(force);
@@ -5507,6 +5739,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync-now") {
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
     const promotePending = String(url.searchParams.get("promotePending") || "").toLowerCase() === "true";
     const forceFull = String(url.searchParams.get("forceFull") || "").toLowerCase() === "true";
     if (promotePending) {
@@ -5523,6 +5763,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/warm-rationales") {
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
     const wait = String(url.searchParams.get("wait") || "").toLowerCase() === "true";
     if (wait) {
       await warmDrepRationaleCacheFromSnapshot(snapshot);
@@ -5538,6 +5786,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/promote-pending-snapshot") {
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
     const before = Boolean(pendingSnapshot);
     promotePendingSnapshot();
     json(res, 200, {

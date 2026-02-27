@@ -144,6 +144,170 @@ Use this file to track bugs that are known but not necessarily fixed yet.
     - Switched actor vote merge to upsert-per-proposal so newer votes replace stale entries.
     - Recompute `proposalInfo[proposalId].voteStats` from actor maps during incremental sync so Actions tallies stay current.
 
+### BUG-007 - Operational sync/backfill endpoints are not admin-protected
+- Status: `fixed`
+- Priority: `high`
+- Reported by: `codex-audit`
+- Reported on: `2026-02-27`
+- Area: `backend`
+- Environment: `dev`
+- Description:
+  - Several high-impact operational endpoints can be called without admin authentication.
+  - Affected endpoints: `POST /api/backfill-epoch-snapshots`, `POST /api/sync-now`, `POST /api/warm-rationales`, `POST /api/promote-pending-snapshot`.
+- Expected:
+  - These endpoints should require admin authorization (token and/or allowlist) before executing.
+- Repro steps:
+  1. Call one of the endpoints above without auth headers.
+  2. Observe `200/202` accepted responses and job execution.
+  3. Confirm no admin check is enforced.
+- Notes:
+  - Risk: public trigger of expensive operations, sync churn, and potential denial-of-service/cost amplification.
+  - Local fix completed on `2026-02-27`:
+    - Added required admin auth checks to:
+      - `POST /api/backfill-epoch-snapshots`
+      - `POST /api/sync-now`
+      - `POST /api/warm-rationales`
+      - `POST /api/promote-pending-snapshot`
+    - Added `OPERATIONS_API_TOKEN` config (defaults to `BUG_REPORTS_TOKEN` when unset).
+
+### BUG-008 - Bug admin token accepted via query string
+- Status: `fixed`
+- Priority: `high`
+- Reported by: `codex-audit`
+- Reported on: `2026-02-27`
+- Area: `backend`
+- Environment: `dev`
+- Description:
+  - Bug admin auth currently accepts `?token=...` in URL query parameters.
+- Expected:
+  - Admin token should only be accepted via secure headers (`x-bug-admin-token` or `Authorization: Bearer`), never query params.
+- Repro steps:
+  1. Request `GET /api/bug-reports?token=<admin-token>`.
+  2. Observe successful auth.
+  3. Confirm query token path is enabled.
+- Notes:
+  - Risk: token leakage via logs, browser history, referrer headers, and shared links.
+  - Local fix completed on `2026-02-27`:
+    - Removed query-string token auth path.
+    - Bug admin auth now accepts header tokens only (`x-bug-admin-token` or `Authorization: Bearer`).
+
+### BUG-009 - Frontend lint/CI gate currently failing
+- Status: `fixed`
+- Priority: `medium`
+- Reported by: `codex-audit`
+- Reported on: `2026-02-27`
+- Area: `frontend`
+- Environment: `dev`
+- Description:
+  - `npm run lint` currently fails with multiple errors, preventing a clean quality gate.
+- Expected:
+  - Lint should pass cleanly so `npm run ci` can be enforced as a release gate.
+- Repro steps:
+  1. Run `npm run lint`.
+  2. Observe errors in `App.jsx`, `StatsPage.jsx`, `DashboardPage.jsx`, `GovernanceActionsPage.jsx`.
+  3. Confirm non-zero exit and CI failure.
+- Notes:
+  - Current audit run found `10 errors` and `18 warnings`.
+  - Local fix completed on `2026-02-27`:
+    - Cleared lint errors so `npm run lint` exits successfully.
+    - Confirmed `npm run ci` now passes (lint + build + smoke test).
+
+### BUG-010 - Frontend dependency audit includes unresolved high-severity vulnerabilities
+- Status: `fixed`
+- Priority: `medium`
+- Reported by: `codex-audit`
+- Reported on: `2026-02-27`
+- Area: `frontend`
+- Environment: `dev`
+- Description:
+  - `npm audit` for `frontend` reports unresolved vulnerabilities in the dependency graph.
+- Expected:
+  - Dependencies should be upgraded/pinned so known high/moderate vulnerabilities are remediated.
+- Repro steps:
+  1. Run `npm audit --json` in `frontend`.
+  2. Observe vulnerabilities including high severity findings.
+  3. Verify unresolved status in current lockfile tree.
+- Notes:
+  - Audit snapshot: `13` total findings (`2 high`, `5 moderate`, `6 low`).
+  - Local fix completed on `2026-02-27`:
+    - Upgraded `@meshsdk/core` to `1.9.0-beta.100`.
+    - Added overrides for `rollup`, `minimatch`, and `undici` to patched ranges.
+    - Post-fix `npm audit` result: `0 high`, `0 moderate`, remaining findings are `low` only.
+
+### BUG-011 - Bug report storage writes are not concurrency-safe
+- Status: `fixed`
+- Priority: `medium`
+- Reported by: `codex-audit`
+- Reported on: `2026-02-27`
+- Area: `backend`
+- Environment: `dev`
+- Description:
+  - Bug reports are persisted in NDJSON with read/modify/write flows and no locking.
+  - Concurrent admin actions can race and overwrite changes.
+- Expected:
+  - Storage layer should support atomic updates and safe concurrent writes.
+- Repro steps:
+  1. Trigger simultaneous admin actions (e.g., approve/archive/remove) on bug records.
+  2. Observe potential lost update behavior due to whole-file rewrite.
+  3. Confirm no lock/transaction mechanism is present.
+- Notes:
+  - Suggested direction: migrate to SQLite for transactional safety and queryability.
+  - Local fix completed on `2026-02-27`:
+    - Added in-process write serialization lock for bug-report append/update flows to prevent race overwrites.
+
+## Recommended Upgrades / Additions
+
+### UPG-001 - Protect operational endpoints with admin auth
+- Priority: `high`
+- Description:
+  - Require admin auth for sync/backfill/promotion/warm endpoints.
+  - Optionally restrict by IP allowlist in server deployment.
+
+### UPG-002 - Remove query-token auth for bug admin APIs
+- Priority: `high`
+- Description:
+  - Accept admin token only in headers, not URL query parameters.
+  - Reduces accidental token exposure in logs and browser history.
+
+### UPG-003 - Migrate bug report storage from NDJSON to SQLite
+- Priority: `medium`
+- Description:
+  - Add atomic state transitions (`open` -> `approved` -> `archived`) with transactions.
+  - Improves reliability and future extensibility.
+
+### UPG-004 - Make `npm run ci` mandatory pre-push / pre-release
+- Priority: `medium`
+- Description:
+  - Enforce lint/build/smoke checks before deployment.
+  - Prevents regressions from bypassing quality gates.
+
+### UPG-005 - Add E2E tests for critical flows
+- Priority: `medium`
+- Description:
+  - Add Playwright (or similar) coverage for:
+    - Actions expand/collapse behavior
+    - Bug report submit/admin actions
+    - Mobile layout checks on key pages
+
+### UPG-006 - Add rate limits for write/ops endpoints
+- Priority: `medium`
+- Description:
+  - Apply per-IP/per-window limits to:
+    - `POST /api/bug-report`
+    - operational admin endpoints
+
+### UPG-007 - Add sync observability metrics
+- Priority: `medium`
+- Description:
+  - Track sync durations, error rates, queue/lock state, and endpoint invocations.
+  - Use structured logs and lightweight metrics to speed debugging.
+
+### UPG-008 - Reduce frontend bundle size via code splitting
+- Priority: `medium`
+- Description:
+  - Introduce chunking strategy for heavier routes/modules.
+  - Target smaller initial payload and better mobile performance.
+
 ## Entry Template
 
 ### BUG-XXX - <short title>

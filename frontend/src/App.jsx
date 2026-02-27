@@ -1,7 +1,8 @@
-import { createContext, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { BrowserWallet } from "@meshsdk/core";
 import AppTopbar from "./components/AppTopbar";
+import { WalletContext } from "./context/WalletContext";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -11,9 +12,6 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
-
-// ── Global Wallet Context ──────────────────────────────────────────────────
-export const WalletContext = createContext(null);
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -138,16 +136,7 @@ function BackgroundMotionClock() {
 
 function RouteTransitionFade() {
   const location = useLocation();
-  const isFirstRender = useRef(true);
-  const [animationKey, setAnimationKey] = useState(0);
-
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    setAnimationKey((prev) => prev + 1);
-  }, [location.pathname, location.search]);
+  const animationKey = `${location.pathname}${location.search}`;
 
   return (
     <div
@@ -184,7 +173,16 @@ export default function App() {
   };
 
   // ── Global Wallet State ──────────────────────────────────────────────────
-  const [wallets, setWallets] = useState([]);
+  const [wallets] = useState(() => {
+    try {
+      return BrowserWallet.getInstalledWallets().map((w) => ({
+        key: w.id,
+        displayName: w.name || w.id
+      }));
+    } catch {
+      return [];
+    }
+  });
   const [walletApi, setWalletApi] = useState(null);
   const [walletName, setWalletName] = useState("");
   const [walletRewardAddress, setWalletRewardAddress] = useState("");
@@ -193,19 +191,6 @@ export default function App() {
   const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
   const [walletError, setWalletError] = useState("");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
-
-  // Discover installed wallets once on mount
-  useEffect(() => {
-    try {
-      const discovered = BrowserWallet.getInstalledWallets().map((w) => ({
-        key: w.id,
-        displayName: w.name || w.id
-      }));
-      setWallets(discovered);
-    } catch {
-      // Extension not present or blocked
-    }
-  }, []);
 
   const connectWallet = useCallback(async (walletKey) => {
     try {

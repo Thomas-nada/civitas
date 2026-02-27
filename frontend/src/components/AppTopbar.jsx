@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { WalletContext } from "../App";
+import { WalletContext } from "../context/WalletContext";
 
 function formatAda(lovelace) {
   const amount = Number(lovelace || 0) / 1_000_000;

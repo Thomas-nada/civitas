@@ -3,7 +3,7 @@ import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { WalletContext } from "../App";
+import { WalletContext } from "../context/WalletContext";
 
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -146,7 +146,7 @@ function VoteMixPie({ group, row }) {
       ? spoNotVotedPctModel
       : Math.max(0, 100 - spoYesPctDisplay - spoNoPctDisplay - spoAbstainPctDisplay);
 
-  const { yes, no, abstain, other, total } = voteSlices(stats);
+  const { yes, no, abstain, total } = voteSlices(stats);
   const ccCastCount = yes + no + abstain;
   const ccEligibleCount = Math.max(Number(row?.ccEligibleCount || 0), 0);
   const ccNotVotedCount = Math.max(ccEligibleCount - ccCastCount, 0);
@@ -372,6 +372,7 @@ export default function GovernanceActionsPage() {
   const [votedTxHash, setVotedTxHash] = useState("");
   const [voteSyncStatus, setVoteSyncStatus] = useState(""); // "polling" | "synced" | "timeout"
   const voteSyncPollRef = useRef(null);
+  const detailPanelRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
   const cacheKey = useMemo(
@@ -833,6 +834,25 @@ export default function GovernanceActionsPage() {
     }
   }, [rows, selectedId]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!detailPanelRef.current) return;
+    detailPanelRef.current.scrollTop = 0;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const onPointerDown = (event) => {
+      const node = detailPanelRef.current;
+      if (!node) return;
+      const target = event.target;
+      if (target instanceof Node && node.contains(target)) return;
+      setSelectedWithUrl("");
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectedId]);
+
   function setSelectedWithUrl(nextId) {
     setSelectedId(nextId);
     const url = new URL(window.location.href);
@@ -1123,7 +1143,7 @@ export default function GovernanceActionsPage() {
                       {isExpanded ? (
                         <tr className="action-expanded-row">
                           <td colSpan={5}>
-                            <div className="detail panel action-inline-detail">
+                            <div ref={detailPanelRef} className="detail panel action-inline-detail">
                               <h2>{row.actionName}</h2>
                               <p className="mono">{row.proposalId}</p>
                               <div className="meta action-inline-meta">
