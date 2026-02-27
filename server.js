@@ -79,6 +79,10 @@ const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
 const OPERATIONS_API_TOKEN = String(
   process.env.OPERATIONS_API_TOKEN || process.env.OPS_API_TOKEN || BUG_REPORTS_TOKEN || ""
 ).trim();
+const BUG_REPORT_RATE_LIMIT_MAX = Number(process.env.BUG_REPORT_RATE_LIMIT_MAX || 6);
+const BUG_REPORT_RATE_LIMIT_WINDOW_MS = Number(process.env.BUG_REPORT_RATE_LIMIT_WINDOW_MS || 60_000);
+const OPS_RATE_LIMIT_MAX = Number(process.env.OPS_RATE_LIMIT_MAX || 12);
+const OPS_RATE_LIMIT_WINDOW_MS = Number(process.env.OPS_RATE_LIMIT_WINDOW_MS || 60_000);
 const SPECIAL_DREP_REFRESH_MS = Number(process.env.SPECIAL_DREP_REFRESH_MS || 15 * 60 * 1000);
 const SPECIAL_DREP_IDS = {
   alwaysAbstain: "drep_always_abstain",
@@ -409,6 +413,61 @@ function tokenEquals(provided, expected) {
   const b = Buffer.from(String(expected || ""), "utf8");
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
+}
+
+const rateLimitBuckets = new Map();
+
+function asSafePositiveInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.trunc(n);
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").trim();
+  if (forwarded) {
+    const first = forwarded.split(",")[0].trim();
+    if (first) return first;
+  }
+  return String(req.socket?.remoteAddress || "unknown");
+}
+
+function cleanupRateLimitBuckets(nowMs) {
+  if (rateLimitBuckets.size < 2048) return;
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (!bucket || Number(bucket.resetAt || 0) <= nowMs) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}
+
+function consumeRateLimit({ scope, key, maxRequests, windowMs }) {
+  const nowMs = Date.now();
+  cleanupRateLimitBuckets(nowMs);
+  const safeMax = asSafePositiveInt(maxRequests, 1);
+  const safeWindow = asSafePositiveInt(windowMs, 60_000);
+  const bucketKey = `${scope}:${String(key || "unknown")}`;
+  const existing = rateLimitBuckets.get(bucketKey);
+  const current = existing && Number(existing.resetAt || 0) > nowMs
+    ? existing
+    : { count: 0, resetAt: nowMs + safeWindow };
+  if (current.count >= safeMax) {
+    const retryAfterSec = Math.max(1, Math.ceil((Number(current.resetAt || nowMs) - nowMs) / 1000));
+    return { ok: false, retryAfterSec };
+  }
+  current.count += 1;
+  rateLimitBuckets.set(bucketKey, current);
+  return { ok: true, retryAfterSec: 0 };
+}
+
+function enforceRateLimit(res, result, message) {
+  if (result.ok) return true;
+  res.setHeader("Retry-After", String(result.retryAfterSec));
+  json(res, 429, {
+    error: message || "Rate limit exceeded.",
+    retryAfterSec: result.retryAfterSec
+  });
+  return false;
 }
 
 function isBugReportsAuthorized(req, url) {
@@ -5291,6 +5350,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/bug-report") {
+    const bugReportLimit = consumeRateLimit({
+      scope: "bug-report",
+      key: getClientIp(req),
+      maxRequests: BUG_REPORT_RATE_LIMIT_MAX,
+      windowMs: BUG_REPORT_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, bugReportLimit, "Too many bug report submissions. Please try again shortly.")) {
+      return;
+    }
     try {
       const body = await readJsonBody(req);
       const title = trimTo(body?.title, 140);
@@ -5421,6 +5489,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/backfill-epoch-snapshots") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
     if (!OPERATIONS_API_TOKEN) {
       json(res, 503, { error: "Operations admin token is not configured." });
       return;
@@ -5739,6 +5816,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync-now") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
     if (!OPERATIONS_API_TOKEN) {
       json(res, 503, { error: "Operations admin token is not configured." });
       return;
@@ -5763,6 +5849,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/warm-rationales") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
     if (!OPERATIONS_API_TOKEN) {
       json(res, 503, { error: "Operations admin token is not configured." });
       return;
@@ -5786,6 +5881,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/promote-pending-snapshot") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
     if (!OPERATIONS_API_TOKEN) {
       json(res, 503, { error: "Operations admin token is not configured." });
       return;

@@ -269,12 +269,6 @@ Use this file to track bugs that are known but not necessarily fixed yet.
   - Accept admin token only in headers, not URL query parameters.
   - Reduces accidental token exposure in logs and browser history.
 
-### UPG-003 - Migrate bug report storage from NDJSON to SQLite
-- Priority: `medium`
-- Description:
-  - Add atomic state transitions (`open` -> `approved` -> `archived`) with transactions.
-  - Improves reliability and future extensibility.
-
 ### UPG-004 - Make `npm run ci` mandatory pre-push / pre-release
 - Priority: `medium`
 - Description:

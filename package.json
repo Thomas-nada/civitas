@@ -9,6 +9,10 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "lint": "npm --prefix frontend run lint",
     "test": "node scripts/smoke-check.mjs",
+    "test:e2e": "playwright test",
     "ci": "npm run lint && npm run build && npm run test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2"
   }
 }

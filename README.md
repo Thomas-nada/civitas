@@ -65,6 +65,12 @@ npm start
 
 Open: `http://127.0.0.1:8080`
 
+5. Run tests:
+```powershell
+npm test
+npm run test:e2e
+```
+
 ## API
 
 - `GET /api/health`
@@ -153,6 +159,14 @@ Snapshot/storage:
 - `SPECIAL_DREP_REFRESH_MS` (default `900000`)
 - `DREP_LIMIT` (default `0` = no cap)
 - `DREP_PARTICIPATION_START_EPOCH` (default `534`)
+
+Auth and endpoint protection:
+- `BUG_REPORTS_TOKEN` (admin token for bug-report admin APIs)
+- `OPERATIONS_API_TOKEN` (admin token for operations APIs; defaults to `BUG_REPORTS_TOKEN`)
+- `BUG_REPORT_RATE_LIMIT_MAX` (default `6` requests/window)
+- `BUG_REPORT_RATE_LIMIT_WINDOW_MS` (default `60000`)
+- `OPS_RATE_LIMIT_MAX` (default `12` requests/window)
+- `OPS_RATE_LIMIT_WINDOW_MS` (default `60000`)
 
 ## Repo notes
 

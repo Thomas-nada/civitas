@@ -131,6 +131,25 @@ body {
   transform: translate3d(var(--wm-x), var(--wm-y), 0) scale(var(--wm-scale));
 }
 
+body.landing-watermark-pulse .global-watermark-art {
+  animation: landing-watermark-pulse 4.4s ease-in-out infinite;
+}
+
+body.landing-watermark-pulse .global-watermark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 104px);
+  width: min(70vw, 980px);
+  height: min(70vw, 980px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(84, 228, 188, 0.24) 0%, rgba(84, 228, 188, 0.11) 36%, rgba(84, 228, 188, 0) 72%);
+  filter: blur(2px);
+  animation: landing-watermark-glow 4.4s ease-in-out infinite;
+}
+
 body::before,
 body::after {
   content: "";
@@ -300,8 +319,27 @@ a {
   width: 51px;
   height: 51px;
   flex: 0 0 auto;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   filter: drop-shadow(0 0 6px rgba(84, 228, 188, 0.22));
+}
+
+.brand-mark-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.brand-mark.is-alert {
+  filter: drop-shadow(0 0 8px rgba(255, 59, 48, 0.65)) drop-shadow(0 0 16px rgba(255, 59, 48, 0.28));
+  animation: brand-alert-pulse 1.35s ease-in-out infinite;
+}
+
+@keyframes brand-alert-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+  100% { transform: scale(1); }
 }
 
 .brand {
@@ -416,7 +454,7 @@ a {
 }
 
 .minimal-landing-shell {
-  min-height: calc(100vh - 170px);
+  min-height: 100vh;
   display: grid;
   place-items: center;
   margin-top: 0;
@@ -435,14 +473,6 @@ a {
   gap: 0;
 }
 
-.minimal-logo-mark {
-  width: clamp(320px, 52vw, 760px);
-  height: auto;
-  filter:
-    drop-shadow(0 0 16px rgba(84, 228, 188, 0.25))
-    drop-shadow(0 0 42px rgba(84, 228, 188, 0.14));
-}
-
 .minimal-slogan {
   margin: 4.2rem 0 0;
   color: var(--text-muted);
@@ -451,10 +481,58 @@ a {
   text-transform: uppercase;
 }
 
+.minimal-enter-btn {
+  margin-top: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.78rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(84, 228, 188, 0.45);
+  color: var(--mint);
+  background: rgba(84, 228, 188, 0.12);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 0 0 rgba(84, 228, 188, 0), 0 8px 18px rgba(0, 0, 0, 0.22);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.minimal-enter-btn:hover,
+.minimal-enter-btn:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(84, 228, 188, 0.75);
+  background: rgba(84, 228, 188, 0.2);
+  box-shadow: 0 0 0 3px rgba(84, 228, 188, 0.18), 0 12px 24px rgba(0, 0, 0, 0.25);
+  outline: none;
+}
+
 .minimal-hero-brand {
   margin: 12px 0 0;
   font-size: clamp(4.8rem, 14.4vw, 10.8rem);
   letter-spacing: 0.12em;
+}
+
+@keyframes landing-watermark-pulse {
+  0% {
+    opacity: var(--watermark-opacity);
+    filter: drop-shadow(var(--watermark-drop-shadow));
+  }
+  50% {
+    opacity: calc(var(--watermark-opacity) + 0.08);
+    filter: drop-shadow(var(--watermark-drop-shadow)) drop-shadow(0 0 16px rgba(84, 228, 188, 0.28));
+  }
+  100% {
+    opacity: var(--watermark-opacity);
+    filter: drop-shadow(var(--watermark-drop-shadow));
+  }
+}
+
+@keyframes landing-watermark-glow {
+  0% { opacity: 0.62; transform: translate(-50%, -50%) scale(0.98); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+  100% { opacity: 0.62; transform: translate(-50%, -50%) scale(0.98); }
 }
 
 .hero h1 {
@@ -1437,6 +1515,31 @@ tbody tr.active {
 .pill.low {
   background: rgba(255, 111, 125, 0.17);
   color: var(--rose);
+}
+
+.pill.warn {
+  margin-left: 0.35rem;
+  background: rgba(255, 163, 26, 0.27);
+  color: #ffe7c2;
+  border: 1px solid rgba(255, 195, 110, 0.45);
+}
+
+.expiring-soon-row {
+  box-shadow: inset 4px 0 0 rgba(255, 163, 26, 0.85);
+  background: rgba(255, 163, 26, 0.08) !important;
+}
+
+.expiring-inline-note {
+  margin-top: 0.18rem;
+  color: #ffcf93;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.expiring-warning-text {
+  margin: 0;
+  color: #ffd9ab;
+  font-weight: 600;
 }
 
 .drep-power-pill {

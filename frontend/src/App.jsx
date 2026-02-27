@@ -148,6 +148,8 @@ function RouteTransitionFade() {
 }
 
 export default function App() {
+  const location = useLocation();
+  const isLandingRoute = location.pathname === "/";
   const [theme, setTheme] = useState(() => {
     try {
       const stored = window.localStorage.getItem("civitas.theme");
@@ -261,7 +263,7 @@ export default function App() {
         <div className="global-watermark-art" />
       </div>
       <ScrollToTopOnRouteChange />
-      <AppTopbar theme={theme} onToggleTheme={toggleTheme} />
+      {!isLandingRoute ? <AppTopbar theme={theme} onToggleTheme={toggleTheme} /> : null}
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
         <Routes>

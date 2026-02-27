@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 
@@ -14,10 +14,38 @@ function networkLabel(netId) {
   return "Unknown";
 }
 
+function BrandMark({ theme, alertActive }) {
+  const dark = theme !== "light";
+  const outerA = dark ? "#50c4ff" : "#1f7fc8";
+  const outerB = dark ? "#55f2c9" : "#129f8d";
+  const ring = dark ? "#ecfffc" : "#000000";
+  const glowCore = alertActive ? "#ff4d4d" : (dark ? "#caffea" : "#000000");
+  const glowMid = alertActive ? "#ff3b30" : (dark ? "#46ff9b" : "#12b886");
+  const glowOpacity = alertActive ? "0.95" : (dark ? "0.95" : "0.62");
+  const centerDot = alertActive ? "#ff1e1e" : (dark ? "#59ff9d" : "#0f8f73");
+
+  return (
+    <svg className="brand-mark-svg" viewBox="24 48 208 164" role="img" aria-hidden="true">
+      <defs>
+        <radialGradient id="topbarLaserGlow" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor={glowCore} stopOpacity={dark ? "1" : "0.35"} />
+          <stop offset="45%" stopColor={glowMid} stopOpacity={glowOpacity} />
+          <stop offset="100%" stopColor={glowMid} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <path d="M38 160c24 24 54 36 90 36 39 0 68-15 90-41" fill="none" stroke={outerA} strokeWidth="12" strokeLinecap="round" />
+      <path d="M38 106c24-31 53-46 89-46 38 0 68 15 91 44" fill="none" stroke={outerB} strokeWidth="12" strokeLinecap="round" />
+      <circle cx="128" cy="128" r="48" fill="none" stroke={ring} strokeWidth="10" />
+      <circle cx="128" cy="128" r="22" fill="none" stroke={ring} strokeWidth="10" />
+      <circle cx="128" cy="128" r="18" fill="url(#topbarLaserGlow)" />
+      <circle cx="128" cy="128" r="5" fill={centerDot} />
+    </svg>
+  );
+}
+
 export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   const location = useLocation();
   const isLanding = location.pathname === "/";
-  const logoSrc = theme === "light" ? "/civitas-logo-light.svg" : "/civitas-logo.svg";
   const wallet = useContext(WalletContext);
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [bugSubmitting, setBugSubmitting] = useState(false);
@@ -30,6 +58,63 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
     steps: "",
     contact: ""
   });
+  const [hasNewBugSignal, setHasNewBugSignal] = useState(false);
+  const [latestBugId, setLatestBugId] = useState("");
+
+  useEffect(() => {
+    let stop = false;
+
+    async function pollBugSignal() {
+      let token = "";
+      let seenId = "";
+      try {
+        token = String(sessionStorage.getItem("civitas.bugs.token") || "").trim();
+        seenId = String(sessionStorage.getItem("civitas.bugs.lastSeenId") || "").trim();
+      } catch {
+        token = "";
+        seenId = "";
+      }
+      if (!token) {
+        if (!stop) setHasNewBugSignal(false);
+        return;
+      }
+      try {
+        const res = await fetch("/api/bug-reports?limit=1", {
+          headers: { "x-bug-admin-token": token }
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const newestId = String(data?.reports?.[0]?.id || "").trim();
+        if (!newestId || stop) return;
+        setLatestBugId(newestId);
+        if (!seenId) {
+          setHasNewBugSignal(true);
+          return;
+        }
+        setHasNewBugSignal(newestId !== seenId);
+      } catch {
+        // Ignore background signal errors.
+      }
+    }
+
+    pollBugSignal();
+    const id = setInterval(pollBugSignal, 20_000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname !== "/bugs") return;
+    if (!latestBugId) return;
+    try {
+      sessionStorage.setItem("civitas.bugs.lastSeenId", latestBugId);
+    } catch {
+      // Ignore storage failures.
+    }
+    setHasNewBugSignal(false);
+  }, [location.pathname, latestBugId]);
 
   function updateBugField(key, value) {
     setBugForm((prev) => ({ ...prev, [key]: value }));
@@ -64,6 +149,11 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to submit bug report.");
+      const submittedId = String(data?.id || "").trim();
+      if (submittedId) {
+        setLatestBugId(submittedId);
+        setHasNewBugSignal(true);
+      }
       setBugNotice("Bug report submitted. Thank you.");
       setBugForm({
         category: "ui",
@@ -89,7 +179,9 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
             {!isLanding ? (
               <Link to="/" className="brand-home-link" aria-label="Go to Civitas home">
                 <div className="brand-lockup" aria-label="Civitas">
-                  <img className="brand-mark" src={logoSrc} alt="Civitas logo" />
+                  <span className={`brand-mark${hasNewBugSignal ? " is-alert" : ""}`} title={hasNewBugSignal ? "New bug report signal" : "Civitas logo"}>
+                    <BrandMark theme={theme} alertActive={hasNewBugSignal} />
+                  </span>
                   <div className="brand-text">
                     <p className="brand">Civitas</p>
                   </div>

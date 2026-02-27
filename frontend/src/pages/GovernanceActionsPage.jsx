@@ -12,11 +12,19 @@ function round(value) {
 // Cardano Shelley epoch start: epoch 208 began ~July 29, 2020 21:44:51 UTC
 const SHELLEY_EPOCH_START_UNIX = 1596059091;
 const EPOCH_DURATION_SECONDS = 432000; // 5 days
+const EXPIRING_SOON_EPOCHS = 1; // one epoch ~= 5 days
 
 function epochToApproxDate(epoch) {
   if (!epoch || epoch <= 0) return null;
   const unixSeconds = SHELLEY_EPOCH_START_UNIX + (epoch - 208) * EPOCH_DURATION_SECONDS;
   return new Date(unixSeconds * 1000);
+}
+
+function approxCurrentEpochFromNow() {
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const delta = nowUnix - SHELLEY_EPOCH_START_UNIX;
+  if (!Number.isFinite(delta) || delta < 0) return null;
+  return 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
 }
 
 function formatEpochDate(epoch) {
@@ -626,6 +634,12 @@ export default function GovernanceActionsPage() {
     return { byProposal };
   }, [payload, proposalInfo]);
 
+  const referenceEpoch = useMemo(() => {
+    const snapshotEpoch = Number(payload?.latestEpoch || 0);
+    if (Number.isFinite(snapshotEpoch) && snapshotEpoch > 0) return snapshotEpoch;
+    return approxCurrentEpochFromNow();
+  }, [payload?.latestEpoch]);
+
   const rows = useMemo(() => {
     const committeeMembers = Array.isArray(payload?.committeeMembers) ? payload.committeeMembers : [];
     const committeeMinSize = Number(payload?.thresholdContext?.committeeMinSize || 0);
@@ -740,6 +754,15 @@ export default function GovernanceActionsPage() {
       const ccEligibleCount = ccEligibleCountFromEpoch > 0
         ? ccEligibleCountFromEpoch
         : (activeNowCommitteeCount > 0 ? activeNowCommitteeCount : committeeMinSize);
+      const expirationEpoch = Number(info?.expirationEpoch || 0) || null;
+      const epochsUntilExpiration = expirationEpoch && referenceEpoch
+        ? (expirationEpoch - referenceEpoch)
+        : null;
+      const isExpiringSoon =
+        status === "Active" &&
+        Number.isFinite(epochsUntilExpiration) &&
+        epochsUntilExpiration >= 0 &&
+        epochsUntilExpiration <= EXPIRING_SOON_EPOCHS;
 
       return {
         proposalId,
@@ -757,7 +780,9 @@ export default function GovernanceActionsPage() {
         txHash: info?.txHash || null,
         returnAddress: info?.returnAddress || "",
         certIndex: info?.certIndex,
-        expirationEpoch: info?.expirationEpoch,
+        expirationEpoch,
+        epochsUntilExpiration,
+        isExpiringSoon,
         ratifiedEpoch: info?.ratifiedEpoch,
         enactedEpoch: info?.enactedEpoch,
         droppedEpoch: info?.droppedEpoch,
@@ -822,7 +847,7 @@ export default function GovernanceActionsPage() {
         if (sortBy === "deposit") return b.depositAda - a.depositAda;
         return a.actionName.localeCompare(b.actionName);
       });
-  }, [proposalInfo, fallbackVoteStats, drepPowerStats, spoPowerStats, query, typeFilter, statusFilter, sortBy]);
+  }, [proposalInfo, fallbackVoteStats, drepPowerStats, spoPowerStats, query, typeFilter, statusFilter, sortBy, referenceEpoch]);
 
   useEffect(() => {
     if (!rows.length) {
@@ -877,6 +902,7 @@ export default function GovernanceActionsPage() {
 
   const activeCount = rows.filter((row) => row.status === "Active").length;
   const enactedCount = rows.filter((row) => row.status === "Enacted").length;
+  const expiringSoonCount = rows.filter((row) => row.isExpiringSoon).length;
 
   // Reset vote UI when selected action changes
   useEffect(() => {
@@ -1043,6 +1069,10 @@ export default function GovernanceActionsPage() {
           <p>Enacted</p>
           <strong>{enactedCount}</strong>
         </article>
+        <article className="card">
+          <p>Expiring Soon (&lt;= 5d)</p>
+          <strong>{expiringSoonCount}</strong>
+        </article>
       </section>
 
       <section className="controls">
@@ -1117,7 +1147,7 @@ export default function GovernanceActionsPage() {
                   return (
                     <Fragment key={row.proposalId}>
                       <tr
-                        className={isExpanded ? "active" : ""}
+                        className={`${isExpanded ? "active" : ""}${row.isExpiringSoon ? " expiring-soon-row" : ""}`}
                         onClick={() => setSelectedWithUrl(isExpanded ? "" : row.proposalId)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -1131,10 +1161,18 @@ export default function GovernanceActionsPage() {
                       >
                         <td data-label="Action">{row.actionName}</td>
                         <td data-label="Type">{row.governanceType}</td>
-                        <td data-label="Status">{row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}</td>
+                        <td data-label="Status">
+                          {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
+                          {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} ep</span> : null}
+                        </td>
                         <td data-label="Submitted">
                           {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
                           {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
+                          {row.isExpiringSoon && row.expirationEpoch ? (
+                            <div className="expiring-inline-note">
+                              Expires by epoch {row.expirationEpoch}
+                            </div>
+                          ) : null}
                         </td>
                         <td data-label="Yes / No (active)">
                           {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
@@ -1152,6 +1190,7 @@ export default function GovernanceActionsPage() {
                                 </p>
                                 <p>
                                   Status: {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
+                                  {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} epoch(s)</span> : null}
                                 </p>
                                 <p>
                                   Submitted:{" "}
@@ -1168,6 +1207,11 @@ export default function GovernanceActionsPage() {
                                       Epoch {row.expirationEpoch}
                                       {formatEpochDate(row.expirationEpoch) ? ` · ~${formatEpochDate(row.expirationEpoch)}` : ""}
                                     </strong>
+                                  </p>
+                                ) : null}
+                                {row.isExpiringSoon ? (
+                                  <p className="expiring-warning-text">
+                                    Expiry alert: this action is inside the expiring-soon window.
                                   </p>
                                 ) : null}
                                 <p>
