@@ -1,6 +1,8 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { WalletContext } from "../App";
 
 function round(value) {
@@ -34,6 +36,28 @@ function toNum(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function toFiniteOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function isAlwaysAbstainSpo(spo) {
+  const status = String(spo?.delegationStatus || "").toLowerCase();
+  const literal = String(spo?.delegatedDrepLiteralRaw || spo?.delegatedDrepLiteral || "").toLowerCase();
+  return status.includes("always abstain") || literal.includes("always_abstain");
+}
+
+function isAlwaysNoConfidenceSpo(spo) {
+  const status = String(spo?.delegationStatus || "").toLowerCase();
+  const literal = String(spo?.delegatedDrepLiteralRaw || spo?.delegatedDrepLiteral || "").toLowerCase();
+  return status.includes("always no confidence") || literal.includes("always_no_confidence");
+}
+
+function isHardForkAction(governanceType) {
+  const t = String(governanceType || "").toLowerCase();
+  return t.includes("hard fork") || t.includes("hardfork");
+}
+
 function isNoConfidenceAction(governanceType) {
   const t = String(governanceType || "").toLowerCase();
   return t.includes("no confidence") || t.includes("noconfidence");
@@ -58,6 +82,175 @@ function statusPillClass(status) {
   if (s === "enacted" || s === "ratified") return "good";
   if (s === "dropped") return "low";
   return "mid";
+}
+
+function voteSlices(stats) {
+  const yes = Number(stats?.yes || 0);
+  const no = Number(stats?.no || 0);
+  const abstain = Number(stats?.abstain || 0);
+  const other = Number(stats?.noConfidence || 0) + Number(stats?.other || 0);
+  const total = yes + no + abstain + other;
+  return { yes, no, abstain, other, total };
+}
+
+function eligibleVoteGroups(row) {
+  const groups = [];
+  const drepEligible = Number(row?.drepRequiredPct || 0) > 0 || Number(row?.voteStats?.drep?.total || 0) > 0;
+  const ccEligible = row?.thresholdInfo?.ccRequiredPct != null || Number(row?.voteStats?.constitutional_committee?.total || 0) > 0;
+  const spoEligible = row?.thresholdInfo?.poolRequiredPct != null || Number(row?.voteStats?.stake_pool?.total || 0) > 0;
+  if (drepEligible) groups.push({ key: "drep", label: "DRep", stats: row?.voteStats?.drep || {} });
+  if (ccEligible) groups.push({ key: "cc", label: "CC", stats: row?.voteStats?.constitutional_committee || {} });
+  if (spoEligible) groups.push({ key: "spo", label: "SPO", stats: row?.voteStats?.stake_pool || {} });
+  return groups;
+}
+
+function formatAdaCompact(value) {
+  return `${Math.round(Number(value || 0)).toLocaleString()} ada`;
+}
+
+function formatAdaShort(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 1_000_000_000) return `${round(n / 1_000_000_000)}B`;
+  if (n >= 1_000_000) return `${round(n / 1_000_000)}M`;
+  if (n >= 1_000) return `${round(n / 1_000)}K`;
+  return `${Math.round(n)}`;
+}
+
+function VoteMixPie({ group, row }) {
+  const { key, label, stats } = group;
+  const isCommittee = key === "cc";
+  const isSpo = key === "spo";
+  const isDrep = key === "drep";
+  const asActivePct = (value, base) => (base > 0 ? (Number(value || 0) / base) * 100 : 0);
+
+  const drepActiveBaseAda = Number(row?.totalActiveStakeAda || 0);
+  const drepYesAda = Number(row?.drepYesPowerAda || 0);
+  const drepNoAda = Number(row?.drepNoPowerAda || 0);
+  const drepAbstainAda = Number(row?.drepAbstainActivePowerAda || 0);
+  const drepNotVotedAda = Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepAbstainAda, 0);
+  const drepYesPct = asActivePct(drepYesAda, drepActiveBaseAda);
+  const drepNoPct = asActivePct(drepNoAda, drepActiveBaseAda);
+  const drepAbstainPct = asActivePct(drepAbstainAda, drepActiveBaseAda);
+  const drepNotVotedPct = Math.max(0, 100 - drepYesPct - drepNoPct - drepAbstainPct);
+
+  const spoYesPctModel = toFiniteOrNull(row?.spoYesPct);
+  const spoNoPctModel = toFiniteOrNull(row?.spoNoPct);
+  const spoAbstainPctModel = toFiniteOrNull(row?.spoAbstainPct);
+  const spoNotVotedPctModel = toFiniteOrNull(row?.spoNotVotedPct);
+  const spoYesPctDisplay = spoYesPctModel ?? 0;
+  const spoNoPctDisplay = spoNoPctModel ?? 0;
+  const spoAbstainPctDisplay = spoAbstainPctModel ?? 0;
+  const spoNotVotedPctDisplay =
+    spoNotVotedPctModel !== null
+      ? spoNotVotedPctModel
+      : Math.max(0, 100 - spoYesPctDisplay - spoNoPctDisplay - spoAbstainPctDisplay);
+
+  const { yes, no, abstain, other, total } = voteSlices(stats);
+  const ccCastCount = yes + no + abstain;
+  const ccEligibleCount = Math.max(Number(row?.ccEligibleCount || 0), 0);
+  const ccNotVotedCount = Math.max(ccEligibleCount - ccCastCount, 0);
+  const ccDenominator = ccEligibleCount > 0 ? ccEligibleCount : total;
+  const defaultYesPct = total > 0 ? (yes / total) * 100 : 0;
+  const defaultNoPct = total > 0 ? (no / total) * 100 : 0;
+  const defaultAbstainPct = total > 0 ? (abstain / total) * 100 : 0;
+  const defaultOtherPct = Math.max(0, 100 - defaultYesPct - defaultNoPct - defaultAbstainPct);
+  const ccYesPct = ccDenominator > 0 ? (yes / ccDenominator) * 100 : 0;
+  const ccNoPct = ccDenominator > 0 ? (no / ccDenominator) * 100 : 0;
+  const ccAbstainPct = ccDenominator > 0 ? (abstain / ccDenominator) * 100 : 0;
+  const ccNotVotedPct = ccDenominator > 0 ? (ccNotVotedCount / ccDenominator) * 100 : 0;
+
+  const pieYesPct = isCommittee ? ccYesPct : (isDrep ? drepYesPct : defaultYesPct);
+  const pieNoPct = isCommittee ? ccNoPct : (isDrep ? drepNoPct : defaultNoPct);
+  const pieAbstainPct = isCommittee ? ccAbstainPct : (isDrep ? drepAbstainPct : defaultAbstainPct);
+  const pieOtherPct = isCommittee ? ccNotVotedPct : (isDrep ? drepNotVotedPct : defaultOtherPct);
+  const thresholdPct = isDrep
+    ? toFiniteOrNull(row?.drepRequiredPct)
+    : (isSpo
+      ? toFiniteOrNull(row?.spoRequiredPct)
+      : (isCommittee ? toFiniteOrNull(row?.thresholdInfo?.ccRequiredPct) : null));
+  const thresholdAngle = thresholdPct !== null
+    ? Math.max(0, Math.min(100, thresholdPct)) * 3.6
+    : null;
+  const centerValue = isDrep ? formatAdaShort(drepActiveBaseAda) : (isCommittee ? ccCastCount : total);
+  const bg = `conic-gradient(#54e4bc 0 ${pieYesPct}%, #ff6f7d ${pieYesPct}% ${pieYesPct + pieNoPct}%, #ffc766 ${pieYesPct + pieNoPct}% ${pieYesPct + pieNoPct + pieAbstainPct}%, #7c8fa8 ${pieYesPct + pieNoPct + pieAbstainPct}% ${pieYesPct + pieNoPct + pieAbstainPct + pieOtherPct}%)`;
+  return (
+    <article className="action-vote-pie-card">
+      <p className="action-vote-pie-title">{label}</p>
+      <div className="action-vote-pie-body">
+        <div className="action-vote-pie" style={{ background: bg }}>
+          {thresholdAngle !== null ? (
+            <div
+              aria-hidden="true"
+              className="action-vote-pie-threshold"
+              style={{ "--threshold-angle": `${thresholdAngle}deg` }}
+            />
+          ) : null}
+          <span>{centerValue}</span>
+        </div>
+        <div className="action-vote-pie-meta">
+          {isCommittee ? (
+            <>
+              <p><span className="vote-label vote-label-yes">Constitutional</span> <strong>{yes}</strong></p>
+              <p><span className="vote-label vote-label-no">Unconstitutional</span> <strong>{no}</strong></p>
+              <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{abstain}</strong></p>
+              <p><span className="vote-label vote-label-not-voted">Not voted</span> <strong>{ccNotVotedCount}</strong></p>
+            </>
+          ) : isSpo ? (
+            <>
+              <p>
+                <span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(spoYesPctDisplay)}</strong>{" "}
+                ({formatAdaCompact(row?.spoYesAda)})
+              </p>
+              <p>
+                <span className="vote-label vote-label-no">No</span> <strong>{asPct(spoNoPctDisplay)}</strong>{" "}
+                ({formatAdaCompact(row?.spoNoAda)})
+              </p>
+              <p>
+                <span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(spoAbstainPctDisplay)}</strong>{" "}
+                ({formatAdaCompact(row?.spoAbstainAda)})
+              </p>
+            </>
+          ) : (
+            <>
+              <p><span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
+              <p><span className="vote-label vote-label-no">No</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
+              <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
+            </>
+          )}
+        </div>
+      </div>
+      <details className="action-vote-calc">
+        <summary>Expandable full calculation</summary>
+        {isCommittee ? (
+          <p>
+            Constitutional: <strong>{yes}</strong> | Unconstitutional: <strong>{no}</strong> | Abstain: <strong>{abstain}</strong> | Not voted: <strong>{ccNotVotedCount}</strong> | Eligible: <strong>{ccDenominator}</strong>
+          </p>
+        ) : isSpo ? (
+          <>
+            <p>Yes: <strong>{asPct(spoYesPctDisplay)}</strong> ({formatAdaCompact(row?.spoYesAda)})</p>
+            <p>No: <strong>{asPct(spoNoPctDisplay)}</strong> ({formatAdaCompact(row?.spoNoAda)})</p>
+            <p>Abstain: <strong>{asPct(spoAbstainPctDisplay)}</strong> ({formatAdaCompact(row?.spoAbstainAda)})</p>
+            <p>
+              Not voted: <strong>{asPct(spoNotVotedPctDisplay)}</strong>{" "}
+              ({formatAdaCompact(row?.spoNotVotedAda)})
+            </p>
+            {row?.spoRequiredPct !== null ? (
+              <p>Threshold progress: <strong>{asPct(spoYesPctDisplay)}</strong> / <strong>{asPct(row?.spoRequiredPct)}</strong></p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <p>Yes: <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
+            <p>No: <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
+            <p>Abstain: <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
+            <p>Not voted: <strong>{asPct(drepNotVotedPct)}</strong> ({formatAdaCompact(drepNotVotedAda)})</p>
+            <p>Total active stake: <strong>{formatAdaCompact(drepActiveBaseAda)}</strong></p>
+          </>
+        )}
+      </details>
+    </article>
+  );
 }
 
 function roleTotalVotes(voteStats) {
@@ -165,7 +358,6 @@ export default function GovernanceActionsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [selectedId, setSelectedId] = useState(initialSelectedProposal);
-  const [payloadModalOpen, setPayloadModalOpen] = useState(false);
   const [proposalMetadataCache, setProposalMetadataCache] = useState({});
   const [proposalMetadataLoading, setProposalMetadataLoading] = useState(false);
   const [proposalMetadataError, setProposalMetadataError] = useState("");
@@ -392,12 +584,62 @@ export default function GovernanceActionsPage() {
     return map;
   }, [payload]);
 
+  const spoPowerStats = useMemo(() => {
+    const byProposal = new Map();
+    const spos = payload?.spos || [];
+    const proposalIds = Object.keys(proposalInfo || {});
+    function ensure(proposalId) {
+      if (!byProposal.has(proposalId)) {
+        byProposal.set(proposalId, {
+          activeYesPowerAda: 0,
+          activeNoPowerAda: 0,
+          activeAbstainPowerAda: 0,
+          passiveAlwaysAbstainPowerAda: 0,
+          passiveAlwaysNoConfidencePowerAda: 0,
+          passiveNoVotePowerAda: 0
+        });
+      }
+      return byProposal.get(proposalId);
+    }
+    for (const spo of spos) {
+      const vp = Number(spo?.votingPowerAda || 0);
+      const votesByProposal = new Map((spo?.votes || []).map((vote) => [String(vote?.proposalId || ""), vote]));
+      const spoAlwaysAbstain = isAlwaysAbstainSpo(spo);
+      const spoAlwaysNoConfidence = isAlwaysNoConfidenceSpo(spo);
+      for (const proposalId of proposalIds) {
+        const vote = votesByProposal.get(proposalId);
+        const stats = ensure(proposalId);
+        if (!vote) {
+          if (spoAlwaysAbstain) stats.passiveAlwaysAbstainPowerAda += vp;
+          else if (spoAlwaysNoConfidence) stats.passiveAlwaysNoConfidencePowerAda += vp;
+          else stats.passiveNoVotePowerAda += vp;
+          continue;
+        }
+        const v = String(vote.vote || "").toLowerCase();
+        if (v === "yes") stats.activeYesPowerAda += vp;
+        else if (v === "no") stats.activeNoPowerAda += vp;
+        else if (v === "abstain") stats.activeAbstainPowerAda += vp;
+        else stats.passiveNoVotePowerAda += vp;
+      }
+    }
+    return { byProposal };
+  }, [payload, proposalInfo]);
+
   const rows = useMemo(() => {
+    const committeeMembers = Array.isArray(payload?.committeeMembers) ? payload.committeeMembers : [];
+    const committeeMinSize = Number(payload?.thresholdContext?.committeeMinSize || 0);
     const list = Object.entries(proposalInfo).map(([proposalId, info]) => {
       const status = deriveStatus(info);
       const voteStats = info?.voteStats || fallbackVoteStats.get(proposalId) || {};
       const nomosDrep = info?.nomosModel?.drep || null;
-      const nomosSpo = info?.nomosModel?.spo || null;
+      const spoStats = spoPowerStats.byProposal.get(proposalId) || {
+        activeYesPowerAda: 0,
+        activeNoPowerAda: 0,
+        activeAbstainPowerAda: 0,
+        passiveAlwaysAbstainPowerAda: 0,
+        passiveAlwaysNoConfidencePowerAda: 0,
+        passiveNoVotePowerAda: 0
+      };
       const powerStats = drepPowerStats.byProposal.get(proposalId) || {
         yesPowerAda: 0,
         noPowerAda: 0,
@@ -433,7 +675,46 @@ export default function GovernanceActionsPage() {
       const spoRequiredPct = toNum(info?.thresholdInfo?.poolRequiredPct);
       const drepYesPct = useNomos ? toNum(nomosDrep?.yesPct) : (totalActiveStakeAda > 0 ? (yesTotalAda / totalActiveStakeAda) * 100 : null);
       const drepNoPct = useNomos ? toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? (noTotalAda / totalActiveStakeAda) * 100 : null);
-      const spoYesPct = nomosSpo ? toNum(nomosSpo.yesPct) : null;
+      const localSpoActiveYesAda = Number(spoStats.activeYesPowerAda || 0);
+      const localSpoActiveNoAda = Number(spoStats.activeNoPowerAda || 0);
+      const localSpoActiveAbstainAda = Number(spoStats.activeAbstainPowerAda || 0);
+      const localSpoPassiveAlwaysAbstainAda = Number(spoStats.passiveAlwaysAbstainPowerAda || 0);
+      const localSpoPassiveAlwaysNoConfidenceAda = Number(spoStats.passiveAlwaysNoConfidencePowerAda || 0);
+      const localSpoPassiveNoVoteAda = Number(spoStats.passiveNoVotePowerAda || 0);
+      const localSpoEffectiveTotalAda =
+        localSpoActiveYesAda +
+        localSpoActiveNoAda +
+        localSpoActiveAbstainAda +
+        localSpoPassiveAlwaysAbstainAda +
+        localSpoPassiveAlwaysNoConfidenceAda +
+        localSpoPassiveNoVoteAda;
+      const localSpoIsNoConfidence = isNoConfidenceAction(info?.governanceType);
+      const localSpoIsHardFork = isHardForkAction(info?.governanceType);
+
+      let localSpoYesAda = 0;
+      let localSpoNoAda = 0;
+      let localSpoAbstainAda = 0;
+      let localSpoNotVotedAda = 0;
+
+      if (localSpoIsHardFork) {
+        localSpoYesAda = localSpoActiveYesAda;
+        localSpoAbstainAda = localSpoActiveAbstainAda;
+        localSpoNotVotedAda = localSpoPassiveNoVoteAda + localSpoPassiveAlwaysNoConfidenceAda + localSpoPassiveAlwaysAbstainAda;
+        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
+      } else if (localSpoIsNoConfidence) {
+        localSpoYesAda = localSpoActiveYesAda + localSpoPassiveAlwaysNoConfidenceAda;
+        localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
+        localSpoNotVotedAda = localSpoPassiveNoVoteAda;
+        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
+      } else {
+        localSpoYesAda = localSpoActiveYesAda;
+        localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
+        localSpoNotVotedAda = localSpoPassiveNoVoteAda;
+        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
+      }
+
+      const localSpoOutcomeDenAda = Math.max(localSpoEffectiveTotalAda - localSpoAbstainAda, 0);
+      const spoYesPct = localSpoOutcomeDenAda > 0 ? (localSpoYesAda / localSpoOutcomeDenAda) * 100 : null;
       const drepThresholdMet = drepRequiredPct > 0 && drepYesPct !== null ? drepYesPct >= drepRequiredPct : null;
       const spoThresholdMet = spoRequiredPct > 0 && spoYesPct !== null ? spoYesPct >= spoRequiredPct : null;
       const passingNow =
@@ -443,7 +724,21 @@ export default function GovernanceActionsPage() {
             ? false
             : drepThresholdMet === true
               ? (spoThresholdMet === null ? true : spoThresholdMet)
-              : null;
+            : null;
+      const submittedEpoch = Number(info?.submittedEpoch || 0);
+      const activeNowCommitteeCount = committeeMembers.filter((member) => String(member?.status || "").toLowerCase() === "active").length;
+      const ccEligibleCountFromEpoch = submittedEpoch > 0
+        ? committeeMembers.filter((member) => {
+            const start = Number(member?.seatStartEpoch || 0);
+            const end = Number(member?.expirationEpoch || 0);
+            if (start > 0 && submittedEpoch < start) return false;
+            if (end > 0 && submittedEpoch > end) return false;
+            return true;
+          }).length
+        : 0;
+      const ccEligibleCount = ccEligibleCountFromEpoch > 0
+        ? ccEligibleCountFromEpoch
+        : (activeNowCommitteeCount > 0 ? activeNowCommitteeCount : committeeMinSize);
 
       return {
         proposalId,
@@ -490,18 +785,20 @@ export default function GovernanceActionsPage() {
         drepTurnoutPowerPct: useNomos ? toNum(nomosDrep?.yesPct) + toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? ((yesTotalAda + noTotalAda) / totalActiveStakeAda) * 100 : null),
         hasAutoAbstainPower: useNomos ? toNum(nomosDrep?.alwaysAbstainLovelace) > 0 : Number(drepPowerStats.alwaysAbstainPowerAda || 0) > 0,
         spoYesPct,
-        spoNoPct: nomosSpo ? toNum(nomosSpo.noPct) : null,
-        spoAbstainPct: nomosSpo ? toNum(nomosSpo.abstainPct) : null,
-        spoNotVotedPct: nomosSpo ? toNum(nomosSpo.notVotedPct) : null,
-        spoYesAda: nomosSpo ? toNum(nomosSpo.yesLovelace) / 1_000_000 : null,
-        spoNoAda: nomosSpo ? toNum(nomosSpo.noLovelace) / 1_000_000 : null,
-        spoAbstainAda: nomosSpo ? toNum(nomosSpo.abstainLovelace) / 1_000_000 : null,
-        spoNotVotedAda: nomosSpo ? toNum(nomosSpo.notVotedLovelace) / 1_000_000 : null,
+        spoNoPct: localSpoOutcomeDenAda > 0 ? (localSpoNoAda / localSpoOutcomeDenAda) * 100 : null,
+        spoAbstainPct: localSpoEffectiveTotalAda > 0 ? (localSpoAbstainAda / localSpoEffectiveTotalAda) * 100 : null,
+        spoNotVotedPct: localSpoEffectiveTotalAda > 0 ? (localSpoNotVotedAda / localSpoEffectiveTotalAda) * 100 : null,
+        spoYesAda: localSpoYesAda,
+        spoNoAda: localSpoNoAda,
+        spoAbstainAda: localSpoAbstainAda,
+        spoNotVotedAda: localSpoNotVotedAda,
+        spoAlwaysAbstainAda: localSpoPassiveAlwaysAbstainAda,
         drepRequiredPct: drepRequiredPct > 0 ? drepRequiredPct : null,
         spoRequiredPct: spoRequiredPct > 0 ? spoRequiredPct : null,
         drepThresholdMet,
         spoThresholdMet,
-        passingNow
+        passingNow,
+        ccEligibleCount
       };
     });
 
@@ -524,7 +821,7 @@ export default function GovernanceActionsPage() {
         if (sortBy === "deposit") return b.depositAda - a.depositAda;
         return a.actionName.localeCompare(b.actionName);
       });
-  }, [proposalInfo, fallbackVoteStats, drepPowerStats, query, typeFilter, statusFilter, sortBy]);
+  }, [proposalInfo, fallbackVoteStats, drepPowerStats, spoPowerStats, query, typeFilter, statusFilter, sortBy]);
 
   useEffect(() => {
     if (!rows.length) {
@@ -682,7 +979,7 @@ export default function GovernanceActionsPage() {
   }
 
   useEffect(() => {
-    if (!payloadModalOpen || !selected?.proposalId) return;
+    if (!selected?.proposalId) return;
     const key = selected.proposalId;
     if (proposalMetadataCache[key]) return;
     let cancelled = false;
@@ -705,7 +1002,7 @@ export default function GovernanceActionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [payloadModalOpen, selected?.proposalId, proposalMetadataCache]);
+  }, [selected?.proposalId, proposalMetadataCache]);
 
   return (
     <main className="shell">
@@ -775,9 +1072,9 @@ export default function GovernanceActionsPage() {
         </div>
       </section>
 
-      <section className="layout">
-        <div className="panel">
-          <table>
+      <section className="layout layout-modal">
+        <div className="panel table-panel">
+          <table className="mobile-cards-table">
             <thead>
               <tr>
                 <th>Action</th>
@@ -795,262 +1092,211 @@ export default function GovernanceActionsPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => (
-                  <tr
-                    key={row.proposalId}
-                    className={row.proposalId === selectedId ? "active" : ""}
-                    onClick={() => setSelectedWithUrl(row.proposalId)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <td>{row.actionName}</td>
-                    <td>{row.governanceType}</td>
-                    <td>{row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}</td>
-                    <td>
-                      {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
-                      {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
-                    </td>
-                    <td>
-                      {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
-                    </td>
-                  </tr>
-                ))
+                rows.map((row) => {
+                  const isExpanded = row.proposalId === selectedId;
+                  return (
+                    <Fragment key={row.proposalId}>
+                      <tr
+                        className={isExpanded ? "active" : ""}
+                        onClick={() => setSelectedWithUrl(isExpanded ? "" : row.proposalId)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedWithUrl(isExpanded ? "" : row.proposalId);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded ? "true" : "false"}
+                      >
+                        <td data-label="Action">{row.actionName}</td>
+                        <td data-label="Type">{row.governanceType}</td>
+                        <td data-label="Status">{row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}</td>
+                        <td data-label="Submitted">
+                          {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
+                          {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
+                        </td>
+                        <td data-label="Yes / No (active)">
+                          {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="action-expanded-row">
+                          <td colSpan={5}>
+                            <div className="detail panel action-inline-detail">
+                              <h2>{row.actionName}</h2>
+                              <p className="mono">{row.proposalId}</p>
+                              <div className="meta action-inline-meta">
+                                <p>
+                                  Type: <strong>{row.governanceType}</strong>
+                                </p>
+                                <p>
+                                  Status: {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
+                                </p>
+                                <p>
+                                  Submitted:{" "}
+                                  <strong>
+                                    {row.submittedEpoch ? `Epoch ${row.submittedEpoch}` : ""}
+                                    {row.submittedEpoch && row.submittedAt ? " · " : ""}
+                                    {row.submittedAt ? new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : (!row.submittedEpoch ? "Unknown" : "")}
+                                  </strong>
+                                </p>
+                                {row.expirationEpoch ? (
+                                  <p>
+                                    Expires:{" "}
+                                    <strong>
+                                      Epoch {row.expirationEpoch}
+                                      {formatEpochDate(row.expirationEpoch) ? ` · ~${formatEpochDate(row.expirationEpoch)}` : ""}
+                                    </strong>
+                                  </p>
+                                ) : null}
+                                <p>
+                                  Deposit: <strong>{Number(row.depositAda || 0).toLocaleString()} ada</strong>
+                                </p>
+                                <p>
+                                  Required DRep threshold: <strong>{asPct(row.thresholdInfo?.drepRequiredPct)}</strong>
+                                </p>
+                                {row.thresholdInfo?.ccRequiredPct != null ? (
+                                  <p>
+                                    Required CC threshold: <strong>{asPct(row.thresholdInfo.ccRequiredPct)}</strong>
+                                  </p>
+                                ) : null}
+                                {row.thresholdInfo?.poolRequiredPct != null ? (
+                                  <p>
+                                    Required SPO threshold: <strong>{asPct(row.thresholdInfo.poolRequiredPct)}</strong>
+                                  </p>
+                                ) : null}
+                                {row.thresholdInfo?.parameterGroup ? (
+                                  <p>
+                                    Parameter group: <strong>{row.thresholdInfo.parameterGroup}</strong>
+                                  </p>
+                                ) : null}
+                                {row.txHash ? (
+                                  <p>
+                                    Tx:{" "}
+                                    <a className="ext-link" href={`https://cardanoscan.io/transaction/${row.txHash}`} target="_blank" rel="noreferrer">
+                                      {row.txHash}
+                                    </a>
+                                  </p>
+                                  ) : null}
+                              </div>
+
+                              <section className="action-vote-pies">
+                                {eligibleVoteGroups(row).map((group) => (
+                                  <VoteMixPie key={`${row.proposalId}-${group.key}`} group={group} row={row} />
+                                ))}
+                              </section>
+
+                              {row.status === "Active" ? (
+                                <div className="vote-cast-section">
+                                  <h3 className="detail-section-title">Cast Your Vote</h3>
+
+                                  {!wallet?.walletApi ? (
+                                    <p className="muted">Connect your wallet in the top bar to vote on this action.</p>
+                                  ) : !wallet.walletDrep ? (
+                                    <p className="muted">Connected wallet has no DRep credential. Only registered DReps can vote on governance actions.</p>
+                                  ) : (
+                                    <>
+                                      <div className="vote-choice-row">
+                                        {["Yes", "No", "Abstain"].map((choice) => (
+                                          <button
+                                            key={choice}
+                                            type="button"
+                                            className={`vote-choice-btn${voteChoice === choice ? " active" : ""}`}
+                                            onClick={() => { setVoteChoice(choice); setVoteModalOpen(true); }}
+                                            disabled={voteSubmitting}
+                                          >
+                                            {choice}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      {voteSubmitting ? <p className="vote-notice">{voteNotice || "Submitting vote..."}</p> : null}
+                                    </>
+                                  )}
+
+                                  {voteError ? <p className="vote-error">{voteError}</p> : null}
+                                  {!voteSubmitting && voteNotice && !votedTxHash ? <p className="vote-notice">{voteNotice}</p> : null}
+                                  {votedTxHash ? (
+                                    <div className="vote-submitted">
+                                      <p className="vote-success">
+                                        Vote submitted! Tx:{" "}
+                                        <a
+                                          className="ext-link"
+                                          href={`https://cardanoscan.io/transaction/${votedTxHash}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          {votedTxHash.slice(0, 16)}…
+                                        </a>
+                                      </p>
+                                      {voteSyncStatus === "polling" ? (
+                                        <p className="vote-notice">Waiting for snapshot to update…</p>
+                                      ) : voteSyncStatus === "synced" ? (
+                                        <p className="vote-success">✓ Vote confirmed in latest snapshot.</p>
+                                      ) : voteSyncStatus === "timeout" ? (
+                                        <p className="vote-notice">Snapshot not yet updated — your vote is on-chain. Refresh in a few minutes.</p>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+
+                              <section className="action-payload-details">
+                                <h3 className="detail-section-title">Governance Payload</h3>
+                                {proposalMetadataLoading ? <p className="muted">Loading metadata...</p> : null}
+                                {proposalMetadataError ? <p className="muted">Metadata error: {proposalMetadataError}</p> : null}
+                                {payloadDoc.metadataUrl ? (
+                                  <section className="rationale-section">
+                                    <h4>Metadata URL</h4>
+                                    <a className="ext-link" href={payloadDoc.metadataUrl} target="_blank" rel="noreferrer">
+                                      {payloadDoc.metadataUrl}
+                                    </a>
+                                    {payloadDoc.metadataHash ? <p className="mono">{payloadDoc.metadataHash}</p> : null}
+                                  </section>
+                                ) : null}
+                                {payloadDoc.sections.map((section) => (
+                                  <section className="rationale-section" key={`${row.proposalId}-${section.key}`}>
+                                    <h4>{section.title}</h4>
+                                    {section.type === "json" ? (
+                                      <pre className="json-pre payload-pretty">{JSON.stringify(section.content, null, 2)}</pre>
+                                    ) : (
+                                      <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
+                                        {section.content}
+                                      </ReactMarkdown>
+                                    )}
+                                  </section>
+                                ))}
+                                {payloadDoc.references.length > 0 ? (
+                                  <section className="rationale-section">
+                                    <h4>References</h4>
+                                    <div className="vote-list">
+                                      {payloadDoc.references.map((ref) => (
+                                        <article className="vote-item" key={`${row.proposalId}-${ref.uri}`}>
+                                          <p className="mono">{ref.type}</p>
+                                          <a className="ext-link" href={ref.uri} target="_blank" rel="noreferrer">
+                                            {ref.label}
+                                          </a>
+                                        </article>
+                                      ))}
+                                    </div>
+                                  </section>
+                                ) : null}
+                                <details className="payload-raw">
+                                  <summary>Raw JSON</summary>
+                                  <pre className="json-pre payload-pretty">{JSON.stringify(payloadDoc.raw || {}, null, 2)}</pre>
+                                </details>
+                              </section>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-
-        <aside className="detail panel">
-          {!selected ? (
-            <p className="muted">Select a governance action to inspect details.</p>
-          ) : (
-            <>
-              <h2>{selected.actionName}</h2>
-              <p className="mono">{selected.proposalId}</p>
-              <div className="meta">
-                <p>
-                  Type: <strong>{selected.governanceType}</strong>
-                </p>
-                <p>
-                  Status: {selected.status ? <span className={`pill ${statusPillClass(selected.status)}`}>{selected.status}</span> : ""}
-                </p>
-                <p>
-                  Submitted:{" "}
-                  <strong>
-                    {selected.submittedEpoch ? `Epoch ${selected.submittedEpoch}` : ""}
-                    {selected.submittedEpoch && selected.submittedAt ? " · " : ""}
-                    {selected.submittedAt ? new Date(selected.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : (!selected.submittedEpoch ? "Unknown" : "")}
-                  </strong>
-                </p>
-                {selected.expirationEpoch ? (
-                  <p>
-                    Expires:{" "}
-                    <strong>
-                      Epoch {selected.expirationEpoch}
-                      {formatEpochDate(selected.expirationEpoch) ? ` · ~${formatEpochDate(selected.expirationEpoch)}` : ""}
-                    </strong>
-                  </p>
-                ) : null}
-                <p>
-                  Deposit: <strong>{Number(selected.depositAda || 0).toLocaleString()} ada</strong>
-                </p>
-                <p>
-                  Required DRep threshold: <strong>{asPct(selected.thresholdInfo?.drepRequiredPct)}</strong>
-                </p>
-                {selected.thresholdInfo?.ccRequiredPct != null ? (
-                  <p>
-                    Required CC threshold: <strong>{asPct(selected.thresholdInfo.ccRequiredPct)}</strong>
-                  </p>
-                ) : null}
-                {selected.thresholdInfo?.poolRequiredPct != null ? (
-                  <p>
-                    Required SPO threshold: <strong>{asPct(selected.thresholdInfo.poolRequiredPct)}</strong>
-                  </p>
-                ) : null}
-                {selected.thresholdInfo?.parameterGroup ? (
-                  <p>
-                    Parameter group: <strong>{selected.thresholdInfo.parameterGroup}</strong>
-                  </p>
-                ) : null}
-                {selected.txHash ? (
-                  <p>
-                    Tx:{" "}
-                    <a className="ext-link" href={`https://cardanoscan.io/transaction/${selected.txHash}`} target="_blank" rel="noreferrer">
-                      {selected.txHash}
-                    </a>
-                  </p>
-                ) : null}
-              </div>
-
-              <h3 className="detail-section-title">DRep Voting Power Breakdown</h3>
-              <div className="vote-list">
-                <article className="vote-item">
-                  <p>
-                    Threshold progress: <strong>{asPct(selected.drepYesPowerPct)}</strong>
-                    {selected.drepRequiredPct !== null ? (
-                      <>
-                        {" "}
-                        / <strong>{asPct(selected.drepRequiredPct)}</strong> (
-                        <strong>{selected.drepThresholdMet ? "met" : "not met"}</strong>)
-                      </>
-                    ) : null}
-                  </p>
-                  <p>
-                    Yes (of active stake): <strong>{asPct(selected.drepYesPowerPct)}</strong>
-                  </p>
-                  <p>
-                    No (of active stake): <strong>{asPct(selected.drepNoPowerPct)}</strong>
-                  </p>
-                  <p>
-                    Not voted (of active stake): <strong>{asPct(selected.drepNotVotedPowerPct)}</strong>
-                  </p>
-                  <p>
-                    Abstain (of delegated): <strong>{asPct(selected.drepAbstainPowerPct)}</strong>
-                  </p>
-                  <details>
-                    <summary>Show full calculation details</summary>
-                    <p>
-                      Total delegated stake: <strong>{Math.round(selected.totalDelegatedStakeAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      Total active stake: <strong>{Math.round(selected.totalActiveStakeAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      Yes: <strong>{Math.round(selected.drepYesPowerAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      No: <strong>{Math.round(selected.drepNoPowerAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      Not voted: <strong>{Math.round(selected.drepNotVotedPowerAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      Abstain total: <strong>{Math.round(selected.drepAbstainPowerAda || 0).toLocaleString()} ada</strong>
-                    </p>
-                    <p>
-                      Active abstain: <strong>{asPct(selected.drepAbstainActivePowerPct)}</strong> (
-                      {Math.round(selected.drepAbstainActivePowerAda || 0).toLocaleString()} ada)
-                    </p>
-                    <p>
-                      Automated abstain: <strong>{asPct(selected.drepAbstainAutoPowerPct)}</strong> (
-                      {Math.round(selected.drepAbstainAutoPowerAda || 0).toLocaleString()} ada)
-                    </p>
-                    <p>
-                      Automated no confidence: <strong>{asPct(selected.drepNoConfidenceAutoPowerPct)}</strong> (
-                      {Math.round(selected.drepNoConfidenceAutoPowerAda || 0).toLocaleString()} ada)
-                    </p>
-                    <p>
-                      No confidence (total): <strong>{asPct(selected.drepNoConfidencePowerPct)}</strong> (
-                      {Math.round(selected.drepNoConfidencePowerAda || 0).toLocaleString()} ada)
-                    </p>
-                    {!selected.hasAutoAbstainPower ? <p className="muted">Automated abstain DRep power detected: none in current snapshot.</p> : null}
-                    <p>For non-`NoConfidence` actions, auto no confidence is counted as No. For `NoConfidence`, it is counted as Yes.</p>
-                  </details>
-                </article>
-                <article className="vote-item">
-                  <h3>Constitutional Committee (Vote Count)</h3>
-                  <p>
-                    Constitutional: <strong>{selected.voteStats?.constitutional_committee?.yes || 0}</strong> | Unconstitutional:{" "}
-                    <strong>{selected.voteStats?.constitutional_committee?.no || 0}</strong> | Abstain:{" "}
-                    <strong>{selected.voteStats?.constitutional_committee?.abstain || 0}</strong> | Total:{" "}
-                    <strong>{selected.voteStats?.constitutional_committee?.total || 0}</strong>
-                  </p>
-                </article>
-                <article className="vote-item">
-                  <h3>Stake Pools</h3>
-                  {selected.spoRequiredPct !== null ? (
-                    <p>
-                      Threshold progress: <strong>{asPct(selected.spoYesPct)}</strong> / <strong>{asPct(selected.spoRequiredPct)}</strong> (
-                      <strong>{selected.spoThresholdMet ? "met" : "not met"}</strong>)
-                    </p>
-                  ) : null}
-                  {selected.spoYesPct === null ? (
-                    <p>
-                      Yes: <strong>{selected.voteStats?.stake_pool?.yes || 0}</strong> | No:{" "}
-                      <strong>{selected.voteStats?.stake_pool?.no || 0}</strong> | Abstain:{" "}
-                      <strong>{selected.voteStats?.stake_pool?.abstain || 0}</strong> | Total:{" "}
-                      <strong>{selected.voteStats?.stake_pool?.total || 0}</strong>
-                    </p>
-                  ) : (
-                    <>
-                      <p>
-                        Yes: <strong>{asPct(selected.spoYesPct)}</strong> ({Math.round(selected.spoYesAda || 0).toLocaleString()} ada)
-                      </p>
-                      <p>
-                        No: <strong>{asPct(selected.spoNoPct)}</strong> ({Math.round(selected.spoNoAda || 0).toLocaleString()} ada)
-                      </p>
-                      <p>
-                        Not voted: <strong>{asPct(selected.spoNotVotedPct)}</strong> ({Math.round(selected.spoNotVotedAda || 0).toLocaleString()} ada)
-                      </p>
-                      <p>
-                        Abstain: <strong>{asPct(selected.spoAbstainPct)}</strong> ({Math.round(selected.spoAbstainAda || 0).toLocaleString()} ada)
-                      </p>
-                    </>
-                  )}
-                </article>
-              </div>
-
-              {selected.status === "Active" ? (
-                <div className="vote-cast-section">
-                  <h3 className="detail-section-title">Cast Your Vote</h3>
-
-                  {!wallet?.walletApi ? (
-                    <p className="muted">Connect your wallet in the top bar to vote on this action.</p>
-                  ) : !wallet.walletDrep ? (
-                    <p className="muted">Connected wallet has no DRep credential. Only registered DReps can vote on governance actions.</p>
-                  ) : (
-                    <>
-                      <div className="vote-choice-row">
-                        {["Yes", "No", "Abstain"].map((choice) => (
-                          <button
-                            key={choice}
-                            type="button"
-                            className={`vote-choice-btn${voteChoice === choice ? " active" : ""}`}
-                            onClick={() => { setVoteChoice(choice); setVoteModalOpen(true); }}
-                            disabled={voteSubmitting}
-                          >
-                            {choice}
-                          </button>
-                        ))}
-                      </div>
-                      {voteSubmitting ? <p className="vote-notice">{voteNotice || "Submitting vote..."}</p> : null}
-                    </>
-                  )}
-
-                  {voteError ? <p className="vote-error">{voteError}</p> : null}
-                  {!voteSubmitting && voteNotice && !votedTxHash ? <p className="vote-notice">{voteNotice}</p> : null}
-                  {votedTxHash ? (
-                    <div className="vote-submitted">
-                      <p className="vote-success">
-                        Vote submitted! Tx:{" "}
-                        <a
-                          className="ext-link"
-                          href={`https://cardanoscan.io/transaction/${votedTxHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {votedTxHash.slice(0, 16)}…
-                        </a>
-                      </p>
-                      {voteSyncStatus === "polling" ? (
-                        <p className="vote-notice">Waiting for snapshot to update…</p>
-                      ) : voteSyncStatus === "synced" ? (
-                        <p className="vote-success">✓ Vote confirmed in latest snapshot.</p>
-                      ) : voteSyncStatus === "timeout" ? (
-                        <p className="vote-notice">Snapshot not yet updated — your vote is on-chain. Refresh in a few minutes.</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <h3 className="detail-section-title">Governance Payload</h3>
-              <button type="button" className="mode-btn" onClick={() => setPayloadModalOpen(true)}>
-                Open governance payload
-              </button>
-            </>
-          )}
-        </aside>
       </section>
       {/* Vote confirmation modal */}
       {voteModalOpen && selected && voteChoice && wallet?.walletDrep ? (
@@ -1099,59 +1345,6 @@ export default function GovernanceActionsPage() {
         </div>
       ) : null}
 
-      {payloadModalOpen && selected ? (
-        <div className="image-modal-backdrop" role="presentation" onClick={() => setPayloadModalOpen(false)}>
-          <div className="image-modal payload-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="image-modal-close" onClick={() => setPayloadModalOpen(false)}>
-              Close
-            </button>
-            <h3 className="rationale-modal-title">{payloadDoc.title || "Governance Payload"}</h3>
-            <p className="mono">{selected.proposalId}</p>
-            <div className="rationale-modal-content">
-              {proposalMetadataLoading ? <p className="muted">Loading metadata...</p> : null}
-              {proposalMetadataError ? <p className="muted">Metadata error: {proposalMetadataError}</p> : null}
-              {payloadDoc.metadataUrl ? (
-                <section className="rationale-section">
-                  <h4>Metadata URL</h4>
-                  <a className="ext-link" href={payloadDoc.metadataUrl} target="_blank" rel="noreferrer">
-                    {payloadDoc.metadataUrl}
-                  </a>
-                  {payloadDoc.metadataHash ? <p className="mono">{payloadDoc.metadataHash}</p> : null}
-                </section>
-              ) : null}
-              {payloadDoc.sections.map((section) => (
-                <section className="rationale-section" key={`${selected.proposalId}-${section.key}`}>
-                  <h4>{section.title}</h4>
-                  {section.type === "json" ? (
-                    <pre className="json-pre payload-pretty">{JSON.stringify(section.content, null, 2)}</pre>
-                  ) : (
-                    <p className="payload-text">{section.content}</p>
-                  )}
-                </section>
-              ))}
-              {payloadDoc.references.length > 0 ? (
-                <section className="rationale-section">
-                  <h4>References</h4>
-                  <div className="vote-list">
-                    {payloadDoc.references.map((ref) => (
-                      <article className="vote-item" key={`${selected.proposalId}-${ref.uri}`}>
-                        <p className="mono">{ref.type}</p>
-                        <a className="ext-link" href={ref.uri} target="_blank" rel="noreferrer">
-                          {ref.label}
-                        </a>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              <details className="payload-raw">
-                <summary>Raw JSON</summary>
-                <pre className="json-pre payload-pretty">{JSON.stringify(payloadDoc.raw || {}, null, 2)}</pre>
-              </details>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }

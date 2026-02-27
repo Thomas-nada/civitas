@@ -1,4 +1,4 @@
-import { useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Transaction } from "@meshsdk/core";
 import { WalletContext } from "../App";
 
@@ -1118,9 +1118,9 @@ export default function DashboardPage({ actorType }) {
         </section>
       ) : null}
 
-      <section className={`layout dashboard-layout ${useModalDetails ? "layout-modal" : ""}`}>
+      <section className="layout dashboard-layout layout-modal">
         <div className="panel table-panel">
-          <table>
+          <table className="mobile-cards-table">
             <thead>
               <tr>
                 <th>{actorLabel}</th>
@@ -1143,14 +1143,21 @@ export default function DashboardPage({ actorType }) {
                 </tr>
               ) : (
                 pagedRows.map((row) => (
+                  <Fragment key={row.id}>
                   <tr
-                    key={row.id}
                     className={row.id === selectedId ? "active" : ""}
-                    onClick={() => setSelectedWithUrl(row.id)}
+                    onClick={() => setSelectedWithUrl(row.id === selectedId ? "" : row.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedWithUrl(row.id === selectedId ? "" : row.id);
+                      }
+                    }}
                     role="button"
                     tabIndex={0}
+                    aria-expanded={row.id === selectedId ? "true" : "false"}
                   >
-                    <td>
+                    <td data-label={actorLabel}>
                       {isDrep ? (
                         <>
                           <div className="drep-row-block">
@@ -1232,34 +1239,34 @@ export default function DashboardPage({ actorType }) {
                         </>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Attendance">
                       <strong>{row.attendance}%</strong>
                       <div className="muted">
                         {row.cast}/{row.totalEligibleVotes}
                       </div>
                     </td>
                     {showTransparencyColumn ? (
-                    <td>
+                    <td data-label={transparencyLabel}>
                       <strong>{row.transparencyScore ?? 0}%</strong>
                       <div className="muted">
                         {row.transparencyCount ?? 0}/{row.transparencyTotal ?? 0}
                       </div>
                     </td>
                     ) : null}
-                    <td>
+                    <td data-label={alignmentLabel}>
                       <strong>{row.consistency}%</strong>
                       <div className="muted">
                         {isCommittee ? "" : `${row.consistencyMatches ?? 0}/${row.consistencyTotal ?? 0}`}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Abstain">
                       <strong>{row.abstainRate}%</strong>
                       <div className="muted">
                         {row.abstainCount ?? 0}/{row.abstainTotal ?? 0}
                       </div>
                     </td>
                     {showResponsivenessColumn ? (
-                      <td>
+                      <td data-label="Responsiveness">
                         {row.avgResponseHours === null ? (
                           <span className="muted">—</span>
                         ) : (
@@ -1271,7 +1278,7 @@ export default function DashboardPage({ actorType }) {
                       </td>
                     ) : null}
                     {isCommittee ? (
-                      <td>
+                      <td data-label="Term start">
                         {row.seatStartEpoch ? (
                           <>
                             Epoch {row.seatStartEpoch}
@@ -1282,7 +1289,7 @@ export default function DashboardPage({ actorType }) {
                       </td>
                     ) : null}
                     {isCommittee ? (
-                      <td>
+                      <td data-label="Term end">
                         {row.expirationEpoch ? (
                           <>Epoch {row.expirationEpoch}</>
                         ) : (
@@ -1290,12 +1297,282 @@ export default function DashboardPage({ actorType }) {
                         )}
                       </td>
                     ) : null}
-                    <td>
+                    <td data-label="Score">
                       <span className={`pill ${row.accountability >= 75 ? "good" : row.accountability >= 50 ? "mid" : "low"}`}>
                         {row.accountability}
                       </span>
                     </td>
                   </tr>
+                  {row.id === selectedId && selected ? (
+                    <tr className="action-expanded-row">
+                      <td colSpan={tableColSpan}>
+                        <div className="detail panel action-inline-detail">
+                          {selected.name ? <h2>{selected.name}</h2> : (isSpo ? <h2>N/A</h2> : null)}
+                          {isDrep && selected.profile?.imageUrl ? (
+                            <button type="button" className="profile-image-inline-btn" onClick={() => setProfileImageOpen(true)}>
+                              <img className="profile-image" src={selected.profile.imageUrl} alt={`${selected.name || selected.id} profile`} />
+                            </button>
+                          ) : null}
+                          {isDrep ? (
+                            <button type="button" className="delegate-cta" onClick={prepareDelegation} disabled={delegating}>
+                              {delegating ? "Submitting Delegation..." : "Delegate Voting Power To This DRep"}
+                            </button>
+                          ) : null}
+                          {isDrep && !wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
+                          {isDrep && delegateNotice ? <p className="muted">{delegateNotice}</p> : null}
+                          <p className="mono">
+                            {isDrep ? (
+                              <a
+                                className="ext-link"
+                                href={`https://cardanoscan.io/drep/${encodeURIComponent(selected.id)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {selected.id}
+                              </a>
+                            ) : isCommittee ? (
+                              <span>
+                                {selected.hotCredential ? (
+                                  <>
+                                    Hot:{" "}
+                                    <a className="ext-link" href={cardanoscanCredentialLink(selected.hotCredential)} target="_blank" rel="noreferrer">
+                                      {selected.hotCredential}
+                                    </a>{" "}
+                                  </>
+                                ) : null}
+                                {selected.coldCredential ? (
+                                  <>
+                                    Cold:{" "}
+                                    <a className="ext-link" href={cardanoscanCredentialLink(selected.coldCredential)} target="_blank" rel="noreferrer">
+                                      {selected.coldCredential}
+                                    </a>
+                                  </>
+                                ) : null}
+                                {!selected.hotCredential && !selected.coldCredential ? selected.id : null}
+                              </span>
+                            ) : (
+                              <a
+                                className="ext-link"
+                                href={`https://cardanoscan.io/pool/${encodeURIComponent(selected.id)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {selected.id}
+                              </a>
+                            )}
+                          </p>
+                          <div className="meta">
+                            <p>
+                              Attendance: <strong>{selected.attendance}%</strong> ({selected.cast}/{selected.totalEligibleVotes})
+                            </p>
+                          {showTransparencyColumn ? (
+                          <p>
+                            {transparencyLabel}:{" "}
+                            <strong>
+                              {selected.transparencyScore ?? 0}% ({selected.transparencyCount ?? 0}/{selected.transparencyTotal ?? 0})
+                            </strong>
+                          </p>
+                          ) : null}
+                            <p>
+                              {alignmentLabel}:{" "}
+                              <strong>
+                                {selected.consistency}% {isCommittee ? "" : `(${selected.consistencyMatches ?? 0}/${selected.consistencyTotal ?? 0})`}
+                              </strong>
+                            </p>
+                            <p>
+                              Abstain rate:{" "}
+                              <strong>
+                                {selected.abstainRate}% ({selected.abstainCount ?? 0}/{selected.abstainTotal ?? 0})
+                              </strong>
+                            </p>
+                            {(isDrep || isSpo || isCommittee) ? (
+                              <p>
+                                Avg response time: <strong>{formatResponseHours(selected.avgResponseHours)}</strong>
+                              </p>
+                            ) : null}
+                            {isDrep ? (
+                              <p>
+                                Voting power:{" "}
+                                <strong className="drep-power-lines">
+                                  <span className="drep-power-amount">{Number(selected.votingPowerAda || 0).toLocaleString()} ada</span>
+                                  <span className="drep-power-shares">{formatDrepPowerShares(selected)}</span>
+                                </strong>
+                              </p>
+                            ) : isCommittee ? (
+                              <p>
+                                Committee status:{" "}
+                                <strong>{String(selected.status || "expired").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
+                              </p>
+                            ) : null}
+                            {isSpo ? (
+                              <>
+                                <p>
+                                  Pool status: <strong>{String(selected.status || "registered").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
+                                </p>
+                                {isSpoAlwaysAbstainStatus(selected.delegationStatus) ? (
+                                  <>
+                                    <p>
+                                      Delegation posture: <strong>{selected.delegationStatus}</strong>
+                                    </p>
+                                    <p>
+                                      Delegated DRep literal: <strong>{selected.delegatedDrepLiteralRaw || "None"}</strong>
+                                    </p>
+                                  </>
+                                ) : null}
+                                {selected.homepage ? (
+                                  <p>
+                                    Homepage:{" "}
+                                    <a className="ext-link" href={selected.homepage} target="_blank" rel="noreferrer">
+                                      {selected.homepage}
+                                    </a>
+                                  </p>
+                                ) : null}
+                              </>
+                            ) : null}
+                            {isCommittee ? (
+                              <>
+                                <p>
+                                  Term started:{" "}
+                                  <strong>
+                                    {selected.seatStartEpoch ? `Epoch ${selected.seatStartEpoch}` : "Unknown"}
+                                  </strong>
+                                </p>
+                                <p>
+                                  Term expiry:{" "}
+                                  <strong>
+                                    {selected.expirationEpoch ? `Epoch ${selected.expirationEpoch}` : "Unknown"}
+                                  </strong>
+                                </p>
+                              </>
+                            ) : null}
+                          </div>
+                          {isDrep ? (
+                            <div className="meta drep-profile">
+                              <h3 className="detail-section-title">DRep Profile</h3>
+                              {selected.profile?.email ? (
+                                <p className="profile-row">
+                                  <span className="profile-label">Email</span>
+                                  <a className="ext-link" href={`mailto:${selected.profile.email}`}>
+                                    {selected.profile.email}
+                                  </a>
+                                </p>
+                              ) : null}
+                              {selected.profile?.bio ? (
+                                <div className="profile-block">
+                                  <h4>Bio</h4>
+                                  {splitProfileText(selected.profile.bio).map((line, idx) => (
+                                    <p key={`bio-${selected.id}-${idx}`}>{line}</p>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {selected.profile?.motivations ? (
+                                <div className="profile-block">
+                                  <h4>Motivations</h4>
+                                  {splitProfileText(selected.profile.motivations).map((line, idx) => (
+                                    <p key={`mot-${selected.id}-${idx}`}>{line}</p>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {selected.profile?.objectives ? (
+                                <div className="profile-block">
+                                  <h4>Objectives</h4>
+                                  {splitProfileText(selected.profile.objectives).map((line, idx) => (
+                                    <p key={`obj-${selected.id}-${idx}`}>{line}</p>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {selected.profile?.qualifications ? (
+                                <div className="profile-block">
+                                  <h4>Qualifications</h4>
+                                  {splitProfileText(selected.profile.qualifications).map((line, idx) => (
+                                    <p key={`qual-${selected.id}-${idx}`}>{line}</p>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {Array.isArray(selected.profile?.references) && selected.profile.references.length > 0 ? (
+                                <>
+                                  <h4 className="profile-links-title">Links</h4>
+                                  <div className="vote-list profile-links">
+                                    {selected.profile.references.slice(0, 8).map((ref) => (
+                                      <article className="vote-item profile-link-item" key={`${selected.id}-${ref.uri}`}>
+                                        <a className="ext-link profile-link-anchor" href={ref.uri} target="_blank" rel="noreferrer">
+                                          <span className={`link-chip link-chip-${linkTypeFromRef(ref)}`}>{linkIcon(linkTypeFromRef(ref))}</span>
+                                          <span>{ref.label || ref.uri}</span>
+                                        </a>
+                                      </article>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <h3 className="detail-section-title">Governance Actions</h3>
+                          <p className="muted">Sorted by proposal submission time: newest first.</p>
+                          <div className="detail-mode-switch">
+                            <button
+                              type="button"
+                              className={detailVoteView === "voted" ? "mode-btn active" : "mode-btn"}
+                              onClick={() => setDetailVoteView("voted")}
+                            >
+                              Voted
+                            </button>
+                            <button
+                              type="button"
+                              className={detailVoteView === "missed" ? "mode-btn active" : "mode-btn"}
+                              onClick={() => setDetailVoteView("missed")}
+                            >
+                              Missed
+                            </button>
+                            <button
+                              type="button"
+                              className={detailVoteView === "all" ? "mode-btn active" : "mode-btn"}
+                              onClick={() => setDetailVoteView("all")}
+                            >
+                              All Actions
+                            </button>
+                          </div>
+                          <div className="vote-list">
+                            {detailActions.length === 0 ? (
+                              <p className="muted">No governance actions in this view.</p>
+                            ) : (
+                              detailActions.map((item) => {
+                              return (
+                                <article className="vote-item" key={`${selected.id}-${item.proposalId}`}>
+                                  <h3>{item.actionName}</h3>
+                                  <p className="mono">
+                                    {item.governanceType} | {item.proposalId}
+                                  </p>
+                                  <p>
+                                    Submitted:{" "}
+                                    <strong>{item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "Unknown"}</strong>
+                                  </p>
+                                  <p>
+                                    Vote: <strong>{formatVoteLabelForActor(item.vote ? item.vote.vote : "", actorType)}</strong> | Final outcome:{" "}
+                                    <strong>{item.vote ? item.vote.outcome : item.outcome}</strong>
+                                  </p>
+                                  {isDrep ? (
+                                    <p>
+                                      Response time: <strong>{formatResponseHours(item.vote?.responseHours ?? null)}</strong>
+                                    </p>
+                                  ) : null}
+                                  {item.vote && (!isSpo || item.vote.hasRationale === true || String(item.vote.rationaleUrl || "").trim()) ? (
+                                    <>
+                                      <button type="button" className="mode-btn" onClick={() => openVoteRationaleModal(item)}>
+                                        Open vote rationale
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </article>
+                              );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -1338,283 +1615,6 @@ export default function DashboardPage({ actorType }) {
           ) : null}
         </div>
 
-        <aside
-          ref={detailPanelRef}
-          className={`detail panel ${useModalDetails ? "detail-modal-shell" : ""} ${useModalDetails && selected ? "open" : ""}`}
-        >
-          {!selected ? (
-            <p className="muted">Select a row to inspect voting behavior.</p>
-          ) : (
-            <>
-              {useModalDetails ? (
-                <button type="button" className="image-modal-close" onClick={() => setSelectedWithUrl("")}>
-                  Close
-                </button>
-              ) : null}
-              {selected.name ? <h2>{selected.name}</h2> : (isSpo ? <h2>N/A</h2> : null)}
-              {isDrep && selected.profile?.imageUrl ? (
-                <button type="button" className="profile-image-inline-btn" onClick={() => setProfileImageOpen(true)}>
-                  <img className="profile-image" src={selected.profile.imageUrl} alt={`${selected.name || selected.id} profile`} />
-                </button>
-              ) : null}
-              {isDrep ? (
-                <button type="button" className="delegate-cta" onClick={prepareDelegation} disabled={delegating}>
-                  {delegating ? "Submitting Delegation..." : "Delegate Voting Power To This DRep"}
-                </button>
-              ) : null}
-              {isDrep && !wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
-              {isDrep && delegateNotice ? <p className="muted">{delegateNotice}</p> : null}
-              <p className="mono">
-                {isDrep ? (
-                  <a
-                    className="ext-link"
-                    href={`https://cardanoscan.io/drep/${encodeURIComponent(selected.id)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {selected.id}
-                  </a>
-                ) : isCommittee ? (
-                  <span>
-                    {selected.hotCredential ? (
-                      <>
-                        Hot:{" "}
-                        <a className="ext-link" href={cardanoscanCredentialLink(selected.hotCredential)} target="_blank" rel="noreferrer">
-                          {selected.hotCredential}
-                        </a>{" "}
-                      </>
-                    ) : null}
-                    {selected.coldCredential ? (
-                      <>
-                        Cold:{" "}
-                        <a className="ext-link" href={cardanoscanCredentialLink(selected.coldCredential)} target="_blank" rel="noreferrer">
-                          {selected.coldCredential}
-                        </a>
-                      </>
-                    ) : null}
-                    {!selected.hotCredential && !selected.coldCredential ? selected.id : null}
-                  </span>
-                ) : (
-                  <a
-                    className="ext-link"
-                    href={`https://cardanoscan.io/pool/${encodeURIComponent(selected.id)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {selected.id}
-                  </a>
-                )}
-              </p>
-              <div className="meta">
-                <p>
-                  Attendance: <strong>{selected.attendance}%</strong> ({selected.cast}/{selected.totalEligibleVotes})
-                </p>
-              {showTransparencyColumn ? (
-              <p>
-                {transparencyLabel}:{" "}
-                <strong>
-                  {selected.transparencyScore ?? 0}% ({selected.transparencyCount ?? 0}/{selected.transparencyTotal ?? 0})
-                </strong>
-              </p>
-              ) : null}
-                <p>
-                  {alignmentLabel}:{" "}
-                  <strong>
-                    {selected.consistency}% {isCommittee ? "" : `(${selected.consistencyMatches ?? 0}/${selected.consistencyTotal ?? 0})`}
-                  </strong>
-                </p>
-                <p>
-                  Abstain rate:{" "}
-                  <strong>
-                    {selected.abstainRate}% ({selected.abstainCount ?? 0}/{selected.abstainTotal ?? 0})
-                  </strong>
-                </p>
-                {(isDrep || isSpo || isCommittee) ? (
-                  <p>
-                    Avg response time: <strong>{formatResponseHours(selected.avgResponseHours)}</strong>
-                  </p>
-                ) : null}
-                {isDrep ? (
-                  <p>
-                    Voting power:{" "}
-                    <strong className="drep-power-lines">
-                      <span className="drep-power-amount">{Number(selected.votingPowerAda || 0).toLocaleString()} ada</span>
-                      <span className="drep-power-shares">{formatDrepPowerShares(selected)}</span>
-                    </strong>
-                  </p>
-                ) : isCommittee ? (
-                  <p>
-                    Committee status:{" "}
-                    <strong>{String(selected.status || "expired").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
-                  </p>
-                ) : null}
-                {isSpo ? (
-                  <>
-                    <p>
-                      Pool status: <strong>{String(selected.status || "registered").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
-                    </p>
-                    {isSpoAlwaysAbstainStatus(selected.delegationStatus) ? (
-                      <>
-                        <p>
-                          Delegation posture: <strong>{selected.delegationStatus}</strong>
-                        </p>
-                        <p>
-                          Delegated DRep literal: <strong>{selected.delegatedDrepLiteralRaw || "None"}</strong>
-                        </p>
-                      </>
-                    ) : null}
-                    {selected.homepage ? (
-                      <p>
-                        Homepage:{" "}
-                        <a className="ext-link" href={selected.homepage} target="_blank" rel="noreferrer">
-                          {selected.homepage}
-                        </a>
-                      </p>
-                    ) : null}
-                  </>
-                ) : null}
-                {isCommittee ? (
-                  <>
-                    <p>
-                      Term started:{" "}
-                      <strong>
-                        {selected.seatStartEpoch ? `Epoch ${selected.seatStartEpoch}` : "Unknown"}
-                      </strong>
-                    </p>
-                    <p>
-                      Term expiry:{" "}
-                      <strong>
-                        {selected.expirationEpoch ? `Epoch ${selected.expirationEpoch}` : "Unknown"}
-                      </strong>
-                    </p>
-                  </>
-                ) : null}
-              </div>
-              {isDrep ? (
-                <div className="meta drep-profile">
-                  <h3 className="detail-section-title">DRep Profile</h3>
-                  {selected.profile?.email ? (
-                    <p className="profile-row">
-                      <span className="profile-label">Email</span>
-                      <a className="ext-link" href={`mailto:${selected.profile.email}`}>
-                        {selected.profile.email}
-                      </a>
-                    </p>
-                  ) : null}
-                  {selected.profile?.bio ? (
-                    <div className="profile-block">
-                      <h4>Bio</h4>
-                      {splitProfileText(selected.profile.bio).map((line, idx) => (
-                        <p key={`bio-${selected.id}-${idx}`}>{line}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                  {selected.profile?.motivations ? (
-                    <div className="profile-block">
-                      <h4>Motivations</h4>
-                      {splitProfileText(selected.profile.motivations).map((line, idx) => (
-                        <p key={`mot-${selected.id}-${idx}`}>{line}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                  {selected.profile?.objectives ? (
-                    <div className="profile-block">
-                      <h4>Objectives</h4>
-                      {splitProfileText(selected.profile.objectives).map((line, idx) => (
-                        <p key={`obj-${selected.id}-${idx}`}>{line}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                  {selected.profile?.qualifications ? (
-                    <div className="profile-block">
-                      <h4>Qualifications</h4>
-                      {splitProfileText(selected.profile.qualifications).map((line, idx) => (
-                        <p key={`qual-${selected.id}-${idx}`}>{line}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                  {Array.isArray(selected.profile?.references) && selected.profile.references.length > 0 ? (
-                    <>
-                      <h4 className="profile-links-title">Links</h4>
-                      <div className="vote-list profile-links">
-                        {selected.profile.references.slice(0, 8).map((ref) => (
-                          <article className="vote-item profile-link-item" key={`${selected.id}-${ref.uri}`}>
-                            <a className="ext-link profile-link-anchor" href={ref.uri} target="_blank" rel="noreferrer">
-                              <span className={`link-chip link-chip-${linkTypeFromRef(ref)}`}>{linkIcon(linkTypeFromRef(ref))}</span>
-                              <span>{ref.label || ref.uri}</span>
-                            </a>
-                          </article>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <h3 className="detail-section-title">Governance Actions</h3>
-              <p className="muted">Sorted by proposal submission time: newest first.</p>
-              <div className="detail-mode-switch">
-                <button
-                  type="button"
-                  className={detailVoteView === "voted" ? "mode-btn active" : "mode-btn"}
-                  onClick={() => setDetailVoteView("voted")}
-                >
-                  Voted
-                </button>
-                <button
-                  type="button"
-                  className={detailVoteView === "missed" ? "mode-btn active" : "mode-btn"}
-                  onClick={() => setDetailVoteView("missed")}
-                >
-                  Missed
-                </button>
-                <button
-                  type="button"
-                  className={detailVoteView === "all" ? "mode-btn active" : "mode-btn"}
-                  onClick={() => setDetailVoteView("all")}
-                >
-                  All Actions
-                </button>
-              </div>
-              <div className="vote-list">
-                {detailActions.length === 0 ? (
-                  <p className="muted">No governance actions in this view.</p>
-                ) : (
-                  detailActions.map((item) => {
-                  return (
-                    <article className="vote-item" key={`${selected.id}-${item.proposalId}`}>
-                      <h3>{item.actionName}</h3>
-                      <p className="mono">
-                        {item.governanceType} | {item.proposalId}
-                      </p>
-                      <p>
-                        Submitted:{" "}
-                        <strong>{item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "Unknown"}</strong>
-                      </p>
-                      <p>
-                        Vote: <strong>{formatVoteLabelForActor(item.vote ? item.vote.vote : "", actorType)}</strong> | Final outcome:{" "}
-                        <strong>{item.vote ? item.vote.outcome : item.outcome}</strong>
-                      </p>
-                      {isDrep ? (
-                        <p>
-                          Response time: <strong>{formatResponseHours(item.vote?.responseHours ?? null)}</strong>
-                        </p>
-                      ) : null}
-                      {item.vote && (!isSpo || item.vote.hasRationale === true || String(item.vote.rationaleUrl || "").trim()) ? (
-                        <>
-                          <button type="button" className="mode-btn" onClick={() => openVoteRationaleModal(item)}>
-                            Open vote rationale
-                          </button>
-                        </>
-                      ) : null}
-                    </article>
-                  );
-                  })
-                )}
-              </div>
-            </>
-          )}
-        </aside>
       </section>
       {useModalDetails && selected ? (
         <div className="detail-backdrop" role="presentation" onClick={() => setSelectedWithUrl("")} />

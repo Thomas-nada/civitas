@@ -73,6 +73,8 @@ const VOTE_TX_RATIONALE_MAX_DURATION_MS = Number(process.env.VOTE_TX_RATIONALE_M
 const VOTE_TX_RATIONALE_CACHE_PATH = process.env.VOTE_TX_RATIONALE_CACHE_PATH || path.join(__dirname, "cache.voteTxRationales.json");
 const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(__dirname, "cache.spoProfiles.json");
 const FRONTEND_DIST_PATH = process.env.FRONTEND_DIST_PATH || path.join(__dirname, "frontend", "dist");
+const BUG_REPORTS_PATH = process.env.BUG_REPORTS_PATH || path.join(__dirname, "reports", "bug_reports.ndjson");
+const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
 const SPECIAL_DREP_REFRESH_MS = Number(process.env.SPECIAL_DREP_REFRESH_MS || 15 * 60 * 1000);
 const SPECIAL_DREP_IDS = {
   alwaysAbstain: "drep_always_abstain",
@@ -292,10 +294,110 @@ function json(res, status, data) {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type"
   });
   res.end(JSON.stringify(data));
+}
+
+function trimTo(input, maxLen) {
+  const value = String(input || "").replace(/\r/g, "").trim();
+  if (!value) return "";
+  return value.length > maxLen ? value.slice(0, maxLen) : value;
+}
+
+function readJsonBody(req, maxBytes = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(new Error("Payload too large."));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      try {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        if (!raw.trim()) {
+          resolve({});
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          reject(new Error("Invalid JSON payload."));
+          return;
+        }
+        resolve(parsed);
+      } catch {
+        reject(new Error("Invalid JSON payload."));
+      }
+    });
+    req.on("error", () => reject(new Error("Failed to read request body.")));
+  });
+}
+
+function readBugReports(limit = 200) {
+  if (!fs.existsSync(BUG_REPORTS_PATH)) return [];
+  const raw = fs.readFileSync(BUG_REPORTS_PATH, "utf8");
+  const lines = raw.split(/\r?\n/).filter(Boolean);
+  const parsed = [];
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const row = JSON.parse(lines[i]);
+      if (row && typeof row === "object") {
+        if (!row.status) row.status = "open";
+        parsed.push(row);
+      }
+    } catch {
+      // Ignore malformed lines.
+    }
+  }
+  return parsed.slice(0, limit);
+}
+
+function readBugReportsAll() {
+  if (!fs.existsSync(BUG_REPORTS_PATH)) return [];
+  const raw = fs.readFileSync(BUG_REPORTS_PATH, "utf8");
+  const lines = raw.split(/\r?\n/).filter(Boolean);
+  const out = [];
+  for (const line of lines) {
+    try {
+      const row = JSON.parse(line);
+      if (row && typeof row === "object") {
+        if (!row.status) row.status = "open";
+        out.push(row);
+      }
+    } catch {
+      // Ignore malformed lines.
+    }
+  }
+  return out;
+}
+
+function writeBugReportsAll(rows) {
+  fs.mkdirSync(path.dirname(BUG_REPORTS_PATH), { recursive: true });
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const body = safeRows.map((row) => JSON.stringify(row)).join("\n");
+  fs.writeFileSync(BUG_REPORTS_PATH, body ? `${body}\n` : "", "utf8");
+}
+
+function readAdminTokenFromRequest(req, url) {
+  const headerToken = String(req.headers["x-bug-admin-token"] || "").trim();
+  if (headerToken) return headerToken;
+  const auth = String(req.headers.authorization || "").trim();
+  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
+  const queryToken = String(url.searchParams.get("token") || "").trim();
+  return queryToken;
+}
+
+function isBugReportsAuthorized(req, url) {
+  if (!BUG_REPORTS_TOKEN) return false;
+  const provided = readAdminTokenFromRequest(req, url);
+  return Boolean(provided) && provided === BUG_REPORTS_TOKEN;
 }
 
 function titleCase(input) {
@@ -1714,6 +1816,70 @@ function tallyVotesByRole(votes) {
   }
 
   return byRole;
+}
+
+function addVoteToRoleBucket(bucket, voteValue) {
+  const v = String(voteValue || "").toLowerCase();
+  if (v === "yes") bucket.yes += 1;
+  else if (v === "no") bucket.no += 1;
+  else if (v === "abstain") bucket.abstain += 1;
+  else if (v.includes("no_confidence")) bucket.noConfidence += 1;
+  else bucket.other += 1;
+  bucket.total += 1;
+}
+
+function buildProposalVoteStatsFromActorMaps(proposalId, drepById, ccById, spoById) {
+  const base = () => ({
+    yes: 0,
+    no: 0,
+    abstain: 0,
+    noConfidence: 0,
+    other: 0,
+    total: 0
+  });
+
+  const byRole = {
+    drep: base(),
+    constitutional_committee: base(),
+    stake_pool: base(),
+    other: base()
+  };
+
+  for (const drep of drepById.values()) {
+    const vote = (drep?.votes || []).find((v) => String(v?.proposalId || "") === proposalId);
+    if (vote) addVoteToRoleBucket(byRole.drep, vote.vote);
+  }
+  for (const member of ccById.values()) {
+    const vote = (member?.votes || []).find((v) => String(v?.proposalId || "") === proposalId);
+    if (vote) addVoteToRoleBucket(byRole.constitutional_committee, vote.vote);
+  }
+  for (const pool of spoById.values()) {
+    const vote = (pool?.votes || []).find((v) => String(v?.proposalId || "") === proposalId);
+    if (vote) addVoteToRoleBucket(byRole.stake_pool, vote.vote);
+  }
+
+  return byRole;
+}
+
+function upsertActorVoteByProposal(votes, nextVote) {
+  if (!Array.isArray(votes) || !nextVote || !nextVote.proposalId) return;
+  const idx = votes.findIndex((v) => String(v?.proposalId || "") === String(nextVote.proposalId));
+  if (idx < 0) {
+    votes.push(nextVote);
+    return;
+  }
+  const existing = votes[idx] || {};
+  const existingTs = Number(existing.votedAtUnix || 0);
+  const nextTs = Number(nextVote.votedAtUnix || 0);
+  if (nextTs > existingTs) {
+    votes[idx] = nextVote;
+    return;
+  }
+  if (nextTs === existingTs) {
+    const existingHash = String(existing.voteTxHash || "").toLowerCase();
+    const nextHash = String(nextVote.voteTxHash || "").toLowerCase();
+    if (nextHash && nextHash !== existingHash) votes[idx] = nextVote;
+  }
 }
 
 function toInt(value) {
@@ -3198,14 +3364,12 @@ async function buildDeltaSnapshot(base) {
         const drep = drepById.get(drepId);
         drep._dirty = true;
         drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        if (!drep.votes.some((v) => v.proposalId === row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
-          drep.votes.push({ proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        upsertActorVoteByProposal(drep.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
       for (const vote of committeeVotes) {
@@ -3216,15 +3380,13 @@ async function buildDeltaSnapshot(base) {
         const member = ccById.get(memberId);
         member._dirty = true;
         member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        if (!member.votes.some((v) => v.proposalId === row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
-          if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
-          member.votes.push({ proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0), rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0), voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
+        upsertActorVoteByProposal(member.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0), rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0), voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
       for (const vote of spoVotes) {
@@ -3235,18 +3397,16 @@ async function buildDeltaSnapshot(base) {
         const pool = spoById.get(poolId);
         pool._dirty = true;
         pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        if (!pool.votes.some((v) => v.proposalId === row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const txHash = String(vote.tx_hash || "").toLowerCase();
-          const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
-          const cgovVote = lookupCgovSpoVoteRationale(cgovSpoLookup, vote);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
-          const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-          const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
-          pool.votes.push({ proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cachedHasRationale || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const txHash = String(vote.tx_hash || "").toLowerCase();
+        const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
+        const cgovVote = lookupCgovSpoVoteRationale(cgovSpoLookup, vote);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
+        const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        upsertActorVoteByProposal(pool.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cachedHasRationale || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
       syncState.processedProposals += 1;
@@ -3287,14 +3447,18 @@ async function buildDeltaSnapshot(base) {
         const query = `/governance/proposals/${safeId}/votes?count=${PROPOSAL_VOTES_PAGE_SIZE}&page=${page}&order=desc`;
         const chunk = await blockfrostGet(query).catch(() => []);
         if (!Array.isArray(chunk) || chunk.length === 0) break;
+        let knownInPage = 0;
+        let unseenInPage = 0;
         for (const vote of chunk) {
           const txh = String(vote.tx_hash || "").toLowerCase();
           if (watermark.has(txh)) {
-            hitWatermark = true;
-            break;
+            knownInPage += 1;
+            continue;
           }
           newVotes.push(vote);
+          unseenInPage += 1;
         }
+        if (knownInPage > 0 && unseenInPage === 0) hitWatermark = true;
         if (chunk.length < PROPOSAL_VOTES_PAGE_SIZE) break;
         page += 1;
       }
@@ -3348,10 +3512,8 @@ async function buildDeltaSnapshot(base) {
         drep._dirty = true;
         drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
         newlyActiveDrepIds.add(drepId);
-        if (!drep.votes.some((v) => v.proposalId === proposal.id)) {
-          const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-          drep.votes.push({ proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
+        upsertActorVoteByProposal(drep.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
       for (const vote of committeeVotes) {
@@ -3363,11 +3525,9 @@ async function buildDeltaSnapshot(base) {
         const member = ccById.get(memberId);
         member._dirty = true;
         member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
-        if (!member.votes.some((v) => v.proposalId === proposal.id)) {
-          const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-          if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
-          member.votes.push({ proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", rationaleBodyLength: 0, rationaleSectionCount: 0, voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
+        if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
+        upsertActorVoteByProposal(member.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", rationaleBodyLength: 0, rationaleSectionCount: 0, voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
       for (const vote of spoVotes) {
@@ -3379,14 +3539,19 @@ async function buildDeltaSnapshot(base) {
         const pool = spoById.get(poolId);
         pool._dirty = true;
         pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
-        if (!pool.votes.some((v) => v.proposalId === proposal.id)) {
-          const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-          const txHash = String(vote.tx_hash || "").toLowerCase();
-          const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
-          const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
-          const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-          pool.votes.push({ proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup) || cachedHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-        }
+        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
+        const txHash = String(vote.tx_hash || "").toLowerCase();
+        const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
+        const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
+        const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
+        upsertActorVoteByProposal(pool.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup) || cachedHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
+      }
+
+      if (proposalInfo[proposal.id]) {
+        proposalInfo[proposal.id] = {
+          ...proposalInfo[proposal.id],
+          voteStats: buildProposalVoteStatsFromActorMaps(proposal.id, drepById, ccById, spoById)
+        };
       }
 
       syncState.processedProposals += 1;
@@ -4745,7 +4910,7 @@ const server = http.createServer(async (req, res) => {
       : "all";
     const includeDreps = view === "all" || view === "drep" || view === "actions";
     const includeCommittee = view === "all" || view === "committee";
-    const includeSpos = view === "all" || view === "spo";
+    const includeSpos = view === "all" || view === "spo" || view === "actions";
     const compactDashboardView = view === "drep" || view === "spo" || view === "committee";
     const compactActionsView = view === "actions";
     const historical = requestedSnapshot ? readSnapshotFromHistory(requestedSnapshot) : null;
@@ -4840,7 +5005,7 @@ const server = http.createServer(async (req, res) => {
     }
     const drepsRaw = includeDreps ? (Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : []) : [];
     const dreps = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(drepsRaw) : drepsRaw;
-    const compactSpos = compactDashboardView ? compactActorsForDashboard(spos) : spos;
+    const compactSpos = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(spos) : spos;
     const proposalInfoRaw = sourceSnapshot?.proposalInfo || {};
     const proposalInfo = compactDashboardView ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
 
@@ -4901,6 +5066,134 @@ const server = http.createServer(async (req, res) => {
       ...summary
     });
     return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bug-report") {
+    try {
+      const body = await readJsonBody(req);
+      const title = trimTo(body?.title, 140);
+      const description = trimTo(body?.description, 4000);
+      const page = trimTo(body?.page, 400);
+      const category = trimTo(body?.category, 80) || "other";
+      const expected = trimTo(body?.expected, 2000);
+      const steps = trimTo(body?.steps, 2000);
+      const contact = trimTo(body?.contact, 200);
+      const userAgent = trimTo(body?.userAgent, 500);
+      const viewport = trimTo(body?.viewport, 80);
+
+      if (title.length < 3) {
+        json(res, 400, { error: "Title must be at least 3 characters." });
+        return;
+      }
+      if (description.length < 10) {
+        json(res, 400, { error: "Description must be at least 10 characters." });
+        return;
+      }
+
+      const report = {
+        id: `bug_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        status: "open",
+        title,
+        description,
+        category,
+        page,
+        expected,
+        steps,
+        contact,
+        userAgent,
+        viewport,
+        remoteAddress: trimTo(req.socket?.remoteAddress || "", 120)
+      };
+
+      fs.mkdirSync(path.dirname(BUG_REPORTS_PATH), { recursive: true });
+      fs.appendFileSync(BUG_REPORTS_PATH, `${JSON.stringify(report)}\n`, "utf8");
+
+      json(res, 201, { ok: true, id: report.id });
+      return;
+    } catch (error) {
+      const msg = String(error?.message || "");
+      if (msg === "Payload too large." || msg === "Invalid JSON payload.") {
+        json(res, 400, { error: msg });
+        return;
+      }
+      json(res, 500, { error: "Failed to submit bug report." });
+      return;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/bug-reports") {
+    if (!BUG_REPORTS_TOKEN) {
+      json(res, 503, { error: "Bug reports admin token is not configured." });
+      return;
+    }
+    if (!isBugReportsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    const requestedLimit = Number(url.searchParams.get("limit") || 200);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(1000, Math.trunc(requestedLimit)))
+      : 200;
+    const reports = readBugReports(limit);
+    json(res, 200, {
+      ok: true,
+      count: reports.length,
+      reports
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bug-reports/action") {
+    if (!BUG_REPORTS_TOKEN) {
+      json(res, 503, { error: "Bug reports admin token is not configured." });
+      return;
+    }
+    if (!isBugReportsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    try {
+      const body = await readJsonBody(req, 16 * 1024);
+      const id = trimTo(body?.id, 120);
+      const action = trimTo(body?.action, 32).toLowerCase();
+      if (!id) {
+        json(res, 400, { error: "Missing report id." });
+        return;
+      }
+      if (!["approve", "archive", "reopen", "remove"].includes(action)) {
+        json(res, 400, { error: "Unsupported action." });
+        return;
+      }
+      const rows = readBugReportsAll();
+      const idx = rows.findIndex((row) => String(row?.id || "") === id);
+      if (idx === -1) {
+        json(res, 404, { error: "Report not found." });
+        return;
+      }
+
+      if (action === "remove") {
+        rows.splice(idx, 1);
+      } else if (action === "approve") {
+        rows[idx] = { ...rows[idx], status: "approved", updatedAt: new Date().toISOString() };
+      } else if (action === "archive") {
+        rows[idx] = { ...rows[idx], status: "archived", updatedAt: new Date().toISOString() };
+      } else if (action === "reopen") {
+        rows[idx] = { ...rows[idx], status: "open", updatedAt: new Date().toISOString() };
+      }
+
+      writeBugReportsAll(rows);
+      json(res, 200, { ok: true });
+      return;
+    } catch (error) {
+      const msg = String(error?.message || "");
+      if (msg === "Payload too large." || msg === "Invalid JSON payload.") {
+        json(res, 400, { error: msg });
+        return;
+      }
+      json(res, 500, { error: "Failed to update bug report." });
+      return;
+    }
   }
 
   if (req.method === "POST" && url.pathname === "/api/backfill-epoch-snapshots") {

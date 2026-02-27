@@ -10,6 +10,7 @@ const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
+const BugsPage = lazy(() => import("./pages/BugsPage"));
 
 // ── Global Wallet Context ──────────────────────────────────────────────────
 export const WalletContext = createContext(null);
@@ -286,6 +287,7 @@ export default function App() {
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />
           <Route path="/committee" element={<DashboardPage actorType="committee" />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/bugs" element={<BugsPage />} />
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

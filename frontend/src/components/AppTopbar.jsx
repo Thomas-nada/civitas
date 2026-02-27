@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { WalletContext } from "../App";
 
@@ -19,8 +19,69 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   const isLanding = location.pathname === "/";
   const logoSrc = theme === "light" ? "/civitas-logo-light.svg" : "/civitas-logo.svg";
   const wallet = useContext(WalletContext);
+  const [bugModalOpen, setBugModalOpen] = useState(false);
+  const [bugSubmitting, setBugSubmitting] = useState(false);
+  const [bugNotice, setBugNotice] = useState("");
+  const [bugForm, setBugForm] = useState({
+    category: "ui",
+    title: "",
+    description: "",
+    expected: "",
+    steps: "",
+    contact: ""
+  });
+
+  function updateBugField(key, value) {
+    setBugForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function submitBugReport(event) {
+    event.preventDefault();
+    if (bugSubmitting) return;
+    setBugNotice("");
+    const title = String(bugForm.title || "").trim();
+    const description = String(bugForm.description || "").trim();
+    if (title.length < 3) {
+      setBugNotice("Title must be at least 3 characters.");
+      return;
+    }
+    if (description.length < 10) {
+      setBugNotice("Description must be at least 10 characters.");
+      return;
+    }
+    try {
+      setBugSubmitting(true);
+      const payload = {
+        ...bugForm,
+        page: `${location.pathname}${location.search || ""}`,
+        userAgent: navigator.userAgent || "",
+        viewport: `${window.innerWidth}x${window.innerHeight}`
+      };
+      const res = await fetch("/api/bug-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to submit bug report.");
+      setBugNotice("Bug report submitted. Thank you.");
+      setBugForm({
+        category: "ui",
+        title: "",
+        description: "",
+        expected: "",
+        steps: "",
+        contact: ""
+      });
+    } catch (error) {
+      setBugNotice(error?.message || "Failed to submit bug report.");
+    } finally {
+      setBugSubmitting(false);
+    }
+  }
 
   return (
+    <>
     <header className="topbar">
       <div className="topbar-inner shell">
         <div className={`topbar-row-main${isLanding ? " is-landing" : ""}`}>
@@ -76,6 +137,20 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
             >
               {theme === "dark" ? "Light mode" : "Dark mode"}
             </button>
+            {!isLanding ? (
+              <button
+                type="button"
+                className="theme-toggle-btn"
+                onClick={() => {
+                  setBugNotice("");
+                  setBugModalOpen(true);
+                }}
+                aria-label="Report a bug"
+                title="Report a bug"
+              >
+                Report Bug
+              </button>
+            ) : null}
 
             {/* Global Wallet Button — hidden on landing page */}
             {!isLanding && wallet ? (
@@ -157,5 +232,90 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
         </div>
       </div>
     </header>
+    {bugModalOpen ? (
+      <div className="image-modal-backdrop" role="presentation" onClick={() => setBugModalOpen(false)}>
+        <div className="image-modal bug-report-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="image-modal-close" onClick={() => setBugModalOpen(false)}>
+            Close
+          </button>
+          <h3 className="rationale-modal-title">Report a Bug</h3>
+          <form className="bug-report-form" onSubmit={submitBugReport}>
+            <label>
+              Category
+              <select value={bugForm.category} onChange={(e) => updateBugField("category", e.target.value)}>
+                <option value="ui">UI / UX</option>
+                <option value="data">Data issue</option>
+                <option value="performance">Performance</option>
+                <option value="mobile">Mobile</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              Title
+              <input
+                type="text"
+                value={bugForm.title}
+                onChange={(e) => updateBugField("title", e.target.value)}
+                placeholder="Short summary"
+                maxLength={140}
+                required
+              />
+            </label>
+            <label>
+              Description
+              <textarea
+                value={bugForm.description}
+                onChange={(e) => updateBugField("description", e.target.value)}
+                placeholder="What happened?"
+                rows={4}
+                maxLength={4000}
+                required
+              />
+            </label>
+            <label>
+              Expected (optional)
+              <textarea
+                value={bugForm.expected}
+                onChange={(e) => updateBugField("expected", e.target.value)}
+                placeholder="What should have happened?"
+                rows={2}
+                maxLength={2000}
+              />
+            </label>
+            <label>
+              Steps (optional)
+              <textarea
+                value={bugForm.steps}
+                onChange={(e) => updateBugField("steps", e.target.value)}
+                placeholder="How can we reproduce it?"
+                rows={3}
+                maxLength={2000}
+              />
+            </label>
+            <label>
+              Contact (optional)
+              <input
+                type="text"
+                value={bugForm.contact}
+                onChange={(e) => updateBugField("contact", e.target.value)}
+                placeholder="Email or handle"
+                maxLength={200}
+              />
+            </label>
+            <p className="mono">Page: {location.pathname}{location.search || ""}</p>
+            {bugNotice ? <p className="muted">{bugNotice}</p> : null}
+            <div className="vote-confirm-actions">
+              <button type="button" className="mode-btn" onClick={() => setBugModalOpen(false)} disabled={bugSubmitting}>
+                Cancel
+              </button>
+              <button type="submit" className="mode-btn active" disabled={bugSubmitting}>
+                {bugSubmitting ? "Submitting..." : "Submit Bug Report"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

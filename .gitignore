@@ -25,5 +25,8 @@ _tmp_*
 Thumbs.db
 .vscode/
 
+# Local scripts, generated reports, and one-off tools (not for GitHub)
+local/
+
 .claude/
 

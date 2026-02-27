@@ -23,6 +23,21 @@ const C = {
 
 const TYPE_PALETTE = ["#54e4bc","#ffc766","#ff6f7d","#7eb8ff","#c084fc","#fb923c","#34d399","#f472b6"];
 
+const S = {
+  axis: 11,
+  axisSmall: 10,
+  legend: 12,
+  tooltip: 12,
+  title: 12,
+  label: 10,
+  filter: 11,
+  filterLabel: 10,
+  timelineTick: 10,
+  timelineChip: 10,
+  timelineInline: 9,
+  timelinePill: 8
+};
+
 const CC_TERM_OVERRIDES_BY_HOT = {
   cc_hot1qvr7p6ms588athsgfd0uez5m9rlhwu3g9dt7wcxkjtr4hhsq6ytv2: { seatStartEpoch: 507, expirationEpoch: 596 },
   cc_hot1qv7fa08xua5s7qscy9zct3asaa5a3hvtdc8sxexetcv3unq7cfkq5: { seatStartEpoch: 507, expirationEpoch: 580 },
@@ -108,7 +123,7 @@ function getCommitteeEligibilityWindow(actor, proposalInfo) {
 
 // ── Tooltip skin ──────────────────────────────────────────────────────────────
 const TooltipStyle = {
-  contentStyle: { background: "#1a2530", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 13, color: "#e8f0f4" },
+  contentStyle: { background: "#1a2530", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: S.tooltip, color: "#e8f0f4" },
   itemStyle:    { color: "#e8f0f4" },
   cursor:       { fill: "rgba(84,228,188,0.07)" },
 };
@@ -118,9 +133,9 @@ function renderActiveShape(props) {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
   return (
     <g>
-      <text x={cx} y={cy - 12} textAnchor="middle" fill={C.text} fontSize={13} fontWeight={600}>{payload.name}</text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill={C.muted} fontSize={12}>{fmt(value)}</text>
-      <text x={cx} y={cy + 28} textAnchor="middle" fill={C.muted} fontSize={11}>{(percent * 100).toFixed(1)}%</text>
+      <text x={cx} y={cy - 12} textAnchor="middle" fill={C.text} fontSize={S.title} fontWeight={600}>{payload.name}</text>
+      <text x={cx} y={cy + 10} textAnchor="middle" fill={C.muted} fontSize={S.legend}>{fmt(value)}</text>
+      <text x={cx} y={cy + 28} textAnchor="middle" fill={C.muted} fontSize={S.axis}>{(percent * 100).toFixed(1)}%</text>
       <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
       <Sector cx={cx} cy={cy} innerRadius={outerRadius + 12} outerRadius={outerRadius + 16} startAngle={startAngle} endAngle={endAngle} fill={fill} />
     </g>
@@ -148,7 +163,7 @@ function Section({ title, children, wide, half }) {
 }
 
 // ── CC Membership Gantt (epoch-based) ─────────────────────────────────────────
-function CcMembershipTimeline({ cc, epochMin, epochMax }) {
+function CcMembershipTimeline({ cc, epochMin, epochMax, currentEpoch }) {
   const [tooltip, setTooltip] = useState(null);
   const svgRef = useRef(null);
 
@@ -190,9 +205,10 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
     <div style={{ position: "relative", overflowX: "auto" }}>
       <svg
         ref={svgRef}
-        width="100%"
+        width={800}
+        height={svgH}
         viewBox={`0 0 800 ${svgH}`}
-        style={{ display: "block", minWidth: 540 }}
+        style={{ display: "block", minWidth: 800, maxWidth: "none" }}
       >
         {/* Background rows */}
         {sorted.map((m, i) => (
@@ -210,18 +226,36 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
           return (
             <g key={ep}>
               <line x1={x} y1={0} x2={x} y2={totalRows * ROW_H} stroke={C.line} strokeWidth={1} />
-              <text x={x} y={totalRows * ROW_H + 16} textAnchor="middle" fill={C.muted} fontSize={10}>{ep}</text>
+              <text x={x} y={totalRows * ROW_H + 16} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>{ep}</text>
             </g>
           );
         })}
 
-        {/* "Now" marker (current epoch ≈ epochMax) */}
+        {/* "Now" marker */}
         {(() => {
-          const x = epochToX(epochMax, 800);
+          const baseCurrentEpoch = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
+            ? Number(currentEpoch)
+            : epochMax;
+          const nowEpoch = Math.min(Math.max(baseCurrentEpoch, epochMin), epochMax);
+          const x = epochToX(nowEpoch, 800);
+          const label = `Current epoch ${nowEpoch}`;
+          const labelW = Math.max(84, Math.round(label.length * 5.4) + 10);
+          const labelX = Math.min(Math.max(x - labelW / 2, 2), 800 - labelW - 2);
+          const labelY = totalRows * ROW_H + 30;
           return (
             <g>
               <line x1={x} y1={0} x2={x} y2={totalRows * ROW_H} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
-              <text x={x + 4} y={12} fill={C.yes} fontSize={9} opacity={0.7}>now</text>
+              <rect
+                x={labelX}
+                y={labelY - 9}
+                width={labelW}
+                height={12}
+                rx={3}
+                fill="rgba(9, 14, 16, 0.9)"
+                stroke={C.yes}
+                strokeOpacity={0.45}
+              />
+              <text x={labelX + 5} y={labelY} fill={C.yes} fontSize={S.timelineInline} opacity={0.9}>{label}</text>
             </g>
           );
         })()}
@@ -255,7 +289,7 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
               <text
                 x={PAD_LEFT - 8} y={i * ROW_H + ROW_H / 2 + 4}
                 textAnchor="end" fill={m.status === "active" ? C.text : C.muted}
-                fontSize={10} fontWeight={m.status === "active" ? 600 : 400}
+                fontSize={S.timelineTick} fontWeight={m.status === "active" ? 600 : 400}
               >
                 {name.length > 22 ? name.slice(0, 21) + "…" : name}
               </text>
@@ -273,7 +307,7 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
               {x2 - x1 > 40 && (
                 <text
                   x={(x1 + x2) / 2} y={y + BAR_H / 2 + 4}
-                  textAnchor="middle" fill="#000" fontSize={8} fontWeight={700}
+                  textAnchor="middle" fill="#000" fontSize={S.timelinePill} fontWeight={700}
                   opacity={0.7}
                 >
                   {m.status}
@@ -284,7 +318,7 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
         })}
 
         {/* X-axis label */}
-        <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={10}>Epoch</text>
+        <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>Epoch</text>
       </svg>
 
       {/* Tooltip */}
@@ -298,7 +332,7 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
             border: "1px solid rgba(255,255,255,0.15)",
             borderRadius: 8,
             padding: "6px 10px",
-            fontSize: 12,
+            fontSize: S.tooltip,
             color: C.text,
             pointerEvents: "none",
             whiteSpace: "nowrap",
@@ -312,7 +346,7 @@ function CcMembershipTimeline({ cc, epochMin, epochMax }) {
       )}
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: "1.2rem", marginTop: "0.75rem", fontSize: 12, color: C.muted }}>
+      <div style={{ display: "flex", gap: "1.2rem", marginTop: "0.75rem", fontSize: S.legend, color: C.muted }}>
         {[["active", C.active], ["retired", C.retired], ["expired", C.expired]].map(([label, color]) => (
           <span key={label} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
             <span style={{ display: "inline-block", width: 12, height: 10, background: color, borderRadius: 2, opacity: label === "active" ? 0.85 : 0.45 }} />
@@ -411,9 +445,9 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
   return (
     <div>
       {/* Filters */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginBottom: "0.8rem", fontSize: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginBottom: "0.8rem", fontSize: S.legend }}>
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Type:</span>
+          <span style={{ color: C.muted, fontSize: S.filter, textTransform: "uppercase", letterSpacing: "0.05em" }}>Type:</span>
           <button
             className={`stats-filter-btn${!filterType ? " active" : ""}`}
             onClick={() => setFilterType(null)}
@@ -431,7 +465,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
           ))}
         </div>
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Outcome:</span>
+          <span style={{ color: C.muted, fontSize: S.filter, textTransform: "uppercase", letterSpacing: "0.05em" }}>Outcome:</span>
           <button
             className={`stats-filter-btn${!filterOutcome ? " active" : ""}`}
             onClick={() => setFilterOutcome(null)}
@@ -448,7 +482,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
             </button>
           ))}
         </div>
-        <span style={{ color: C.muted, fontSize: 11, marginLeft: "auto", alignSelf: "center" }}>
+        <span style={{ color: C.muted, fontSize: S.filter, marginLeft: "auto", alignSelf: "center" }}>
           showing {visible.length} / {filtered.length} filtered · {filtered.length} / {proposals.filter(p=>p.submittedEpoch).length} total
         </span>
         {filtered.length > DEFAULT_VISIBLE && (
@@ -466,9 +500,10 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
       <div style={{ position: "relative", overflowX: "auto" }}>
         <svg
           ref={svgRef}
-          width="100%"
+          width={800}
+          height={svgH}
           viewBox={`0 0 800 ${svgH}`}
-          style={{ display: "block", minWidth: 540 }}
+          style={{ display: "block", minWidth: 800, maxWidth: "none" }}
         >
           {/* Tick lines */}
           {ticks.map(ep => {
@@ -476,7 +511,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
             return (
               <g key={ep}>
                 <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.line} strokeWidth={1} />
-                <text x={x} y={visible.length * (ROW_H + GAP) + 14} textAnchor="middle" fill={C.muted} fontSize={10}>{ep}</text>
+                <text x={x} y={visible.length * (ROW_H + GAP) + 14} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>{ep}</text>
               </g>
             );
           })}
@@ -488,12 +523,24 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
               : epochMax;
             const nowEpoch = Math.min(Math.max(baseCurrentEpoch, timelineMin), timelineMax);
             const x = epochToX(nowEpoch, 800);
+            const label = `Current epoch ${nowEpoch}`;
+            const labelW = Math.max(84, Math.round(label.length * 5.4) + 10);
+            const labelX = Math.min(Math.max(x - labelW / 2, 2), 800 - labelW - 2);
+            const labelY = visible.length * (ROW_H + GAP) + 28;
             return (
               <g>
                 <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.5} />
-                <text x={Math.min(x + 4, 760)} y={12} fill={C.yes} fontSize={9} opacity={0.75}>
-                  Current epoch {nowEpoch}
-                </text>
+                <rect
+                  x={labelX}
+                  y={labelY - 9}
+                  width={labelW}
+                  height={12}
+                  rx={3}
+                  fill="rgba(9, 14, 16, 0.9)"
+                  stroke={C.yes}
+                  strokeOpacity={0.45}
+                />
+                <text x={labelX + 5} y={labelY} fill={C.yes} fontSize={S.timelineInline} opacity={0.9}>{label}</text>
               </g>
             );
           })()}
@@ -534,7 +581,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
           })}
 
           {/* X-axis label */}
-          <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={10}>Epoch</text>
+          <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>Epoch</text>
         </svg>
 
         {/* Tooltip */}
@@ -548,7 +595,7 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
               border: "1px solid rgba(255,255,255,0.15)",
               borderRadius: 8,
               padding: "6px 10px",
-              fontSize: 12,
+              fontSize: S.tooltip,
               color: C.text,
               pointerEvents: "none",
               whiteSpace: "nowrap",
@@ -569,15 +616,15 @@ function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch
       </div>
 
       {/* Type legend */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginTop: "0.75rem", fontSize: 11, color: C.muted }}>
-        <span style={{ alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>Type:</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginTop: "0.75rem", fontSize: S.filter, color: C.muted }}>
+        <span style={{ alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: S.filterLabel }}>Type:</span>
         {allTypes.map(t => (
           <span key={t} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
             <span style={{ display: "inline-block", width: 24, height: 8, background: getTypeColor(t), borderRadius: 2, opacity: 0.7 }} />
             {shortType(t)}
           </span>
         ))}
-        <span style={{ marginLeft: "1rem", alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>Outcome notch:</span>
+        <span style={{ marginLeft: "1rem", alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: S.filterLabel }}>Outcome notch:</span>
         {[["Enacted/Ratified", C.yes], ["Dropped/Expired", C.no], ["Pending", C.abstain]].map(([label, color]) => (
           <span key={label} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
             <span style={{ display: "inline-block", width: 4, height: 8, background: color, borderRadius: 2 }} />
@@ -611,10 +658,10 @@ function CcVoteTypesBySeatBar({ rows }) {
         barGap={3}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-        <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: 10 }} width={150} />
+        <XAxis type="number" tick={{ fill: C.muted, fontSize: S.axis }} allowDecimals={false} />
+        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: S.axisSmall }} width={150} />
         <Tooltip {...TooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
+        <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
         <Bar dataKey="Constitutional" fill={C.yes} radius={[0, 3, 3, 0]} />
         <Bar dataKey="Unconstitutional" fill={C.no} radius={[0, 3, 3, 0]} />
         <Bar dataKey="Abstain" fill={C.abstain} radius={[0, 3, 3, 0]} />
@@ -712,8 +759,8 @@ export default function StatsPage() {
     const ccEpochMin = Math.min(...ccEpochs, ...proposals.map(p=>p.submittedEpoch||9999).filter(v=>v<9999));
     const ccEpochMax = Math.max(...ccExpEpochs, ...proposals.map(p=>p.expirationEpoch||0), ...proposals.map(p=>p.enactedEpoch||0), ...proposals.map(p=>p.ratifiedEpoch||0));
     const epochMin = Math.max(ccEpochMin, 500);
-    const epochMax = Math.max(ccEpochMax, epochMin + 10);
     const currentEpoch = Number(raw.latestEpoch || 0) || null;
+    const epochMax = Math.max(ccEpochMax, Number(currentEpoch || 0), epochMin + 10);
 
     // ── DReps ─────────────────────────────────────────────────────────────────
     const activeDreps   = realDreps.filter(d => d.active === true);
@@ -979,10 +1026,10 @@ export default function StatsPage() {
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={s.byEpoch} margin={{top:4,right:16,bottom:4,left:8}}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis dataKey="epoch" tick={{fill:C.muted,fontSize:11}} />
-            <YAxis tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+            <XAxis dataKey="epoch" tick={{fill:C.muted,fontSize:S.axis}} />
+            <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
             <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:12,color:C.muted}} />
+            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
             <Bar dataKey="yes"     name="Passed"  stackId="a" fill={C.yes}     radius={[0,0,0,0]} />
             <Bar dataKey="no"      name="Failed"  stackId="a" fill={C.no}      radius={[0,0,0,0]} />
             <Bar dataKey="pending" name="Pending" stackId="a" fill={C.abstain} radius={[4,4,0,0]} />
@@ -1068,10 +1115,10 @@ export default function StatsPage() {
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={s.votesByRole} layout="vertical" margin={{top:4,right:32,bottom:4,left:80}}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-            <XAxis type="number" tick={{fill:C.muted,fontSize:11}} />
-            <YAxis type="category" dataKey="role" tick={{fill:C.text,fontSize:12}} width={75} />
+            <XAxis type="number" tick={{fill:C.muted,fontSize:S.axis}} />
+            <YAxis type="category" dataKey="role" tick={{fill:C.text,fontSize:S.axis}} width={75} />
             <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:12,color:C.muted}} />
+            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
             <Bar dataKey="yes"     name="Yes"     fill={C.yes}     radius={[0,2,2,0]} />
             <Bar dataKey="no"      name="No"      fill={C.no}      radius={[0,2,2,0]} />
             <Bar dataKey="abstain" name="Abstain" fill={C.abstain} radius={[0,2,2,0]} />
@@ -1083,13 +1130,13 @@ export default function StatsPage() {
         <ResponsiveContainer width="100%" height={Math.max(240, s.drepThresholdReachRows.length * 34 + 44)}>
           <BarChart data={s.drepThresholdReachRows} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-            <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
-            <YAxis type="category" dataKey="threshold" tick={{ fill: C.text, fontSize: 10 }} width={170} />
+            <XAxis type="number" tick={{ fill: C.muted, fontSize: S.axis }} allowDecimals={false} />
+            <YAxis type="category" dataKey="threshold" tick={{ fill: C.text, fontSize: S.axisSmall }} width={170} />
             <Tooltip
               {...TooltipStyle}
               formatter={(v, _name, item) => [`${v}`, `Top DReps needed (${Number(item?.payload?.requiredPct || 0).toFixed(1)}%)`]}
             />
-            <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
+            <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
             <Bar dataKey="topDrepsNeeded" name="Top DReps Needed" fill="#7eb8ff" radius={[0, 3, 3, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -1105,8 +1152,8 @@ export default function StatsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={s.attBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}} />
-              <YAxis tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axis}} />
+              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
               <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} DReps`,"Count"]} />
               <Bar dataKey="value" name="DReps" radius={[4,4,0,0]}>
                 {s.attBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
@@ -1120,8 +1167,8 @@ export default function StatsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={s.tsBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:10}} />
-              <YAxis tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axisSmall}} />
+              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
               <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} DReps`,"Count"]} />
               <Bar dataKey="value" name="DReps" radius={[4,4,0,0]}>
                 {s.tsBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
@@ -1137,8 +1184,8 @@ export default function StatsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={s.rtBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}} />
-              <YAxis tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
+              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axis}} />
+              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
               <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} votes`,"Count"]} />
               <Bar dataKey="value" name="Votes" radius={[4,4,0,0]}>
                 {s.rtBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
@@ -1155,8 +1202,8 @@ export default function StatsPage() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={s.top10Dreps} layout="vertical" margin={{top:4,right:60,bottom:4,left:8}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-              <XAxis type="number" tick={{fill:C.muted,fontSize:10}} tickFormatter={v=>fmtAda(v)} />
-              <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:10}} width={90} />
+              <XAxis type="number" tick={{fill:C.muted,fontSize:S.axisSmall}} tickFormatter={v=>fmtAda(v)} />
+              <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:S.axisSmall}} width={90} />
               <Tooltip {...TooltipStyle} formatter={(v)=>[fmtAda(v),"Voting Power"]} />
               <Bar dataKey="size" name="Voting Power" fill={C.yes} radius={[0,4,4,0]} />
             </BarChart>
@@ -1172,6 +1219,7 @@ export default function StatsPage() {
           cc={s.cc}
           epochMin={s.epochMin}
           epochMax={s.epochMax}
+          currentEpoch={s.currentEpoch}
         />
       </Section>
 
@@ -1206,10 +1254,10 @@ export default function StatsPage() {
         <ResponsiveContainer width="100%" height={Math.max(320, ccChartRows.length * 30 + 56)}>
           <BarChart data={ccChartRows} layout="vertical" margin={{top:4,right:16,bottom:4,left:8}}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis type="number" tick={{fill:C.muted,fontSize:11}} allowDecimals={false} />
-            <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:10}} width={150} />
+            <XAxis type="number" tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
+            <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:S.axisSmall}} width={150} />
             <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:12,color:C.muted}} />
+            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
             <Bar dataKey="eligible"      name="Eligible" fill={C.muted} opacity={0.4} radius={[0,3,3,0]} />
             <Bar dataKey="cast"          name="Voted"    fill={C.yes} radius={[0,3,3,0]} />
           </BarChart>
