@@ -286,8 +286,8 @@ export default function GuidePage() {
             <p>
               CC scoring focuses on three things: <strong>Attendance</strong> (did they vote on every eligible
               action?), <strong>Rationale Quality</strong> (when they declared an action constitutional or
-              unconstitutional, did they explain why with substance?), and <strong>Responsiveness</strong>{" "}
-              (how quickly did they vote after a proposal was submitted?).
+              unconstitutional, did they publish a reachable, structured, constitution-grounded rationale?),
+              and <strong>Responsiveness</strong> (how quickly did they vote after a proposal was submitted?).
             </p>
             <p>
               Alignment (outcome matching) is excluded: a CC member's job is constitutional review, not
@@ -426,27 +426,37 @@ export default function GuidePage() {
               but weakens democratic accountability. This metric rewards actors who communicate their reasoning.
             </p>
 
-            <h3 className="guide-subhead">Alignment (15%) — DReps and SPOs only</h3>
+            <h3 className="guide-subhead">Consistency (15%) — DReps and SPOs only</h3>
             <p>
-              On proposals with a final binary outcome (yes/no), alignment measures whether the actor's vote
+              On proposals with a final binary outcome (yes/no), consistency measures whether the actor's vote
               matched the result. <code>matching votes ÷ comparable votes</code>. Abstain votes are excluded.
-              High alignment suggests either good policy judgement or late voting — pair with responsiveness
+              High consistency can mean either strong policy judgement or late voting — pair with responsiveness
               to tell them apart.
             </p>
 
             <h3 className="guide-subhead">Rationale Quality (35%) — CC only</h3>
             <p>
-              For Constitutional Committee members, the substance of a rationale matters more than its mere
-              presence. A score from 0–100 is assigned to each vote's rationale based on whether a URL/IPFS
-              link is present, whether it resolves to an actual document, and the length and structure of the
-              rationale body. The per-vote scores are averaged across all eligible votes.
+              For Constitutional Committee members, each vote gets a 0–100 rationale score:
+              <br />
+              <strong>Availability (0 or 25):</strong> full points only if the rationale URL is valid
+              (<code>http(s)</code> or <code>ipfs://</code>) <em>and</em> reachable.
+              <br />
+              <strong>Structure (0–45):</strong> CIP-136-style fields and checks:
+              summary present, rationaleStatement present, summary length ≤ 300 chars, rationaleStatement length ≥ 400 chars,
+              optional sections (precedent/counterargument/conclusion), total body length band, and signature containing the member name.
+              <br />
+              <strong>Constitutional grounding (0–30):</strong> distinct constitution citations in text plus
+              <code>RelevantArticles</code> references.
+              <br />
+              Total body-length band thresholds are: 2000 / 3300 / 4500 / 5900 chars.
+              The displayed member value is the average across scoped CC votes.
             </p>
 
             <h3 className="guide-subhead">Responsiveness (10%)</h3>
             <p>
               How quickly an actor votes after a proposal is submitted.{" "}
-              <code>average hours between proposal submission and vote</code>, normalized so that voting
-              on day 1 scores 100% and voting on day 30 (the end of the window) scores 0%.{" "}
+              <code>average hours between proposal submission and vote</code>, normalized by:
+              <code>max(0, 100 - (avgHours / (24*30))*100)</code>.{" "}
               A responsive actor is engaged and deliberate rather than waiting until the last moment.
             </p>
 
