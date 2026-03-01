@@ -13,6 +13,9 @@ function round(value) {
 const SHELLEY_EPOCH_START_UNIX = 1596059091;
 const EPOCH_DURATION_SECONDS = 432000; // 5 days
 const EXPIRING_SOON_EPOCHS = 1; // one epoch ~= 5 days
+const SPO_FORMULA_TRANSITION_EPOCH = 534;
+const SPO_FORMULA_TRANSITION_GOV_ACTION =
+  "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
 
 function epochToApproxDate(epoch) {
   if (!epoch || epoch <= 0) return null;
@@ -69,6 +72,12 @@ function isHardForkAction(governanceType) {
 function isNoConfidenceAction(governanceType) {
   const t = String(governanceType || "").toLowerCase();
   return t.includes("no confidence") || t.includes("noconfidence");
+}
+
+function shouldUseNewSpoFormula(proposalId, submittedEpoch) {
+  if (String(proposalId || "") === SPO_FORMULA_TRANSITION_GOV_ACTION) return true;
+  const epoch = Number(submittedEpoch);
+  return Number.isFinite(epoch) && epoch >= SPO_FORMULA_TRANSITION_EPOCH;
 }
 
 function deriveStatus(info) {
@@ -137,22 +146,24 @@ function VoteMixPie({ group, row }) {
   const drepNoAda = Number(row?.drepNoPowerAda || 0);
   const drepAbstainAda = Number(row?.drepAbstainActivePowerAda || 0);
   const drepNotVotedAda = Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepAbstainAda, 0);
-  const drepYesPct = asActivePct(drepYesAda, drepActiveBaseAda);
-  const drepNoPct = asActivePct(drepNoAda, drepActiveBaseAda);
+  const drepOutcomeBaseAda = Math.max(drepActiveBaseAda - drepAbstainAda, 0);
+  const drepYesPct = asActivePct(drepYesAda, drepOutcomeBaseAda);
+  const drepNoPct = asActivePct(drepNoAda, drepOutcomeBaseAda);
   const drepAbstainPct = asActivePct(drepAbstainAda, drepActiveBaseAda);
-  const drepNotVotedPct = Math.max(0, 100 - drepYesPct - drepNoPct - drepAbstainPct);
+  const drepNotVotedPct = asActivePct(drepNotVotedAda, drepOutcomeBaseAda);
 
-  const spoYesPctModel = toFiniteOrNull(row?.spoYesPct);
-  const spoNoPctModel = toFiniteOrNull(row?.spoNoPct);
-  const spoAbstainPctModel = toFiniteOrNull(row?.spoAbstainPct);
-  const spoNotVotedPctModel = toFiniteOrNull(row?.spoNotVotedPct);
-  const spoYesPctDisplay = spoYesPctModel ?? 0;
-  const spoNoPctDisplay = spoNoPctModel ?? 0;
-  const spoAbstainPctDisplay = spoAbstainPctModel ?? 0;
-  const spoNotVotedPctDisplay =
-    spoNotVotedPctModel !== null
-      ? spoNotVotedPctModel
-      : Math.max(0, 100 - spoYesPctDisplay - spoNoPctDisplay - spoAbstainPctDisplay);
+  // SPO distribution model aligned with cgov/Nomos ledger buckets:
+  // - spoNoAda already includes not-voted where the formula requires it.
+  // - Pie intentionally excludes abstain and shows only Yes/No(outcome).
+  const spoYesAda = Number(row?.spoYesAda || 0);
+  const spoNoWithNotVotedAda = Number(row?.spoNoAda || 0);
+  const spoAbstainAda = Number(row?.spoAbstainAda || 0);
+  const spoNotVotedAda = Number(row?.spoNotVotedAda || 0);
+  const spoOutcomeTotalAda = Math.max(spoYesAda + spoNoWithNotVotedAda, 0);
+  const spoYesPctDisplay = spoOutcomeTotalAda > 0 ? (spoYesAda / spoOutcomeTotalAda) * 100 : 0;
+  const spoNoPctDisplay = spoOutcomeTotalAda > 0 ? (spoNoWithNotVotedAda / spoOutcomeTotalAda) * 100 : 0;
+  const spoYesPctPie = spoYesPctDisplay;
+  const spoNoPctPie = spoNoPctDisplay;
 
   const { yes, no, abstain, total } = voteSlices(stats);
   const ccCastCount = yes + no + abstain;
@@ -168,10 +179,18 @@ function VoteMixPie({ group, row }) {
   const ccAbstainPct = ccDenominator > 0 ? (abstain / ccDenominator) * 100 : 0;
   const ccNotVotedPct = ccDenominator > 0 ? (ccNotVotedCount / ccDenominator) * 100 : 0;
 
-  const pieYesPct = isCommittee ? ccYesPct : (isDrep ? drepYesPct : defaultYesPct);
-  const pieNoPct = isCommittee ? ccNoPct : (isDrep ? drepNoPct : defaultNoPct);
-  const pieAbstainPct = isCommittee ? ccAbstainPct : (isDrep ? drepAbstainPct : defaultAbstainPct);
-  const pieOtherPct = isCommittee ? ccNotVotedPct : (isDrep ? drepNotVotedPct : defaultOtherPct);
+  const pieYesPct = isCommittee
+    ? ccYesPct
+    : (isDrep ? drepYesPct : (isSpo ? spoYesPctPie : defaultYesPct));
+  const pieNoPct = isCommittee
+    ? ccNoPct
+    : (isDrep ? drepNoPct : (isSpo ? spoNoPctPie : defaultNoPct));
+  const pieAbstainPct = isCommittee
+    ? ccAbstainPct
+    : (isDrep ? 0 : (isSpo ? 0 : defaultAbstainPct));
+  const pieOtherPct = isCommittee
+    ? ccNotVotedPct
+    : (isDrep ? drepNotVotedPct : (isSpo ? 0 : defaultOtherPct));
   const thresholdPct = isDrep
     ? toFiniteOrNull(row?.drepRequiredPct)
     : (isSpo
@@ -180,7 +199,9 @@ function VoteMixPie({ group, row }) {
   const thresholdAngle = thresholdPct !== null
     ? Math.max(0, Math.min(100, thresholdPct)) * 3.6
     : null;
-  const centerValue = isDrep ? formatAdaShort(drepActiveBaseAda) : (isCommittee ? ccCastCount : total);
+  const centerValue = isDrep
+    ? formatAdaShort(drepActiveBaseAda)
+    : (isCommittee ? ccCastCount : (isSpo ? formatAdaShort(spoOutcomeTotalAda) : total));
   const bg = `conic-gradient(#54e4bc 0 ${pieYesPct}%, #ff6f7d ${pieYesPct}% ${pieYesPct + pieNoPct}%, #ffc766 ${pieYesPct + pieNoPct}% ${pieYesPct + pieNoPct + pieAbstainPct}%, #7c8fa8 ${pieYesPct + pieNoPct + pieAbstainPct}% ${pieYesPct + pieNoPct + pieAbstainPct + pieOtherPct}%)`;
   return (
     <article className="action-vote-pie-card">
@@ -208,15 +229,16 @@ function VoteMixPie({ group, row }) {
             <>
               <p>
                 <span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(spoYesPctDisplay)}</strong>{" "}
-                ({formatAdaCompact(row?.spoYesAda)})
+                ({formatAdaCompact(spoYesAda)})
               </p>
               <p>
                 <span className="vote-label vote-label-no">No</span> <strong>{asPct(spoNoPctDisplay)}</strong>{" "}
-                ({formatAdaCompact(row?.spoNoAda)})
+                ({formatAdaCompact(spoNoWithNotVotedAda)})
+                {" "}includes not voted: <strong>{formatAdaCompact(spoNotVotedAda)}</strong>
               </p>
               <p>
-                <span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(spoAbstainPctDisplay)}</strong>{" "}
-                ({formatAdaCompact(row?.spoAbstainAda)})
+                <span className="vote-label vote-label-abstain">Abstain (active + always)</span>{" "}
+                <strong>{formatAdaCompact(spoAbstainAda)}</strong>
               </p>
             </>
           ) : (
@@ -236,15 +258,13 @@ function VoteMixPie({ group, row }) {
           </p>
         ) : isSpo ? (
           <>
-            <p>Yes: <strong>{asPct(spoYesPctDisplay)}</strong> ({formatAdaCompact(row?.spoYesAda)})</p>
-            <p>No: <strong>{asPct(spoNoPctDisplay)}</strong> ({formatAdaCompact(row?.spoNoAda)})</p>
-            <p>Abstain: <strong>{asPct(spoAbstainPctDisplay)}</strong> ({formatAdaCompact(row?.spoAbstainAda)})</p>
+            <p>Yes: <strong>{asPct(spoYesPctDisplay)}</strong> ({formatAdaCompact(spoYesAda)})</p>
             <p>
-              Not voted: <strong>{asPct(spoNotVotedPctDisplay)}</strong>{" "}
-              ({formatAdaCompact(row?.spoNotVotedAda)})
+              No: <strong>{asPct(spoNoPctDisplay)}</strong> ({formatAdaCompact(spoNoWithNotVotedAda)}) | Not voted in No: <strong>{formatAdaCompact(spoNotVotedAda)}</strong>
             </p>
+            <p>Abstain (active + always): <strong>{formatAdaCompact(spoAbstainAda)}</strong></p>
             {row?.spoRequiredPct !== null ? (
-              <p>Threshold progress: <strong>{asPct(spoYesPctDisplay)}</strong> / <strong>{asPct(row?.spoRequiredPct)}</strong></p>
+              <p>Threshold progress: <strong>{asPct(row?.spoYesPct)}</strong> / <strong>{asPct(row?.spoRequiredPct)}</strong></p>
             ) : null}
           </>
         ) : (
@@ -367,6 +387,7 @@ export default function GovernanceActionsPage() {
   const [sortBy, setSortBy] = useState("newest");
   const [selectedId, setSelectedId] = useState(initialSelectedProposal);
   const [proposalMetadataCache, setProposalMetadataCache] = useState({});
+  const [proposalVotingSummaryCache, setProposalVotingSummaryCache] = useState({});
   const [proposalMetadataLoading, setProposalMetadataLoading] = useState(false);
   const [proposalMetadataError, setProposalMetadataError] = useState("");
   // --- Voting state (wallet state is global via WalletContext) ---
@@ -646,7 +667,9 @@ export default function GovernanceActionsPage() {
     const list = Object.entries(proposalInfo).map(([proposalId, info]) => {
       const status = deriveStatus(info);
       const voteStats = info?.voteStats || fallbackVoteStats.get(proposalId) || {};
-      const nomosDrep = info?.nomosModel?.drep || null;
+      const liveNomosModel = proposalVotingSummaryCache[proposalId]?.nomosModel || info?.nomosModel || null;
+      const nomosDrep = liveNomosModel?.drep || null;
+      const nomosSpo = liveNomosModel?.spo || null;
       const spoStats = spoPowerStats.byProposal.get(proposalId) || {
         activeYesPowerAda: 0,
         activeNoPowerAda: 0,
@@ -684,52 +707,85 @@ export default function GovernanceActionsPage() {
       const nomosNotVotedAda = toNum(nomosDrep?.notVotedLovelace) / 1_000_000;
       const nomosDelegatedAda = (toNum(nomosDrep?.derivedTotalLovelace) || 0) / 1_000_000;
       const nomosActiveAda = nomosYesAda + nomosNoAda;
+      const nomosSpoYesAda = toNum(nomosSpo?.yesLovelace) / 1_000_000;
+      const nomosSpoNoAda = toNum(nomosSpo?.noLovelace) / 1_000_000;
+      const nomosSpoAbstainAda = toNum(nomosSpo?.abstainLovelace) / 1_000_000;
+      const nomosSpoNotVotedAda = toNum(nomosSpo?.notVotedLovelace) / 1_000_000;
+      const nomosSpoEffectiveTotalAda = toNum(nomosSpo?.effectiveTotalLovelace) / 1_000_000;
+      const nomosSpoActiveAbstainAda = toNum(nomosSpo?.activeAbstainLovelace) / 1_000_000;
+      const nomosSpoAlwaysAbstainAda = toNum(nomosSpo?.alwaysAbstainLovelace) / 1_000_000;
 
       const useNomos = Boolean(nomosDrep);
       const drepRequiredPct = toNum(info?.thresholdInfo?.drepRequiredPct);
       const spoRequiredPct = toNum(info?.thresholdInfo?.poolRequiredPct);
       const drepYesPct = useNomos ? toNum(nomosDrep?.yesPct) : (totalActiveStakeAda > 0 ? (yesTotalAda / totalActiveStakeAda) * 100 : null);
       const drepNoPct = useNomos ? toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? (noTotalAda / totalActiveStakeAda) * 100 : null);
+      const useNomosSpo = Boolean(nomosSpo);
       const localSpoActiveYesAda = Number(spoStats.activeYesPowerAda || 0);
       const localSpoActiveNoAda = Number(spoStats.activeNoPowerAda || 0);
       const localSpoActiveAbstainAda = Number(spoStats.activeAbstainPowerAda || 0);
       const localSpoPassiveAlwaysAbstainAda = Number(spoStats.passiveAlwaysAbstainPowerAda || 0);
       const localSpoPassiveAlwaysNoConfidenceAda = Number(spoStats.passiveAlwaysNoConfidencePowerAda || 0);
       const localSpoPassiveNoVoteAda = Number(spoStats.passiveNoVotePowerAda || 0);
-      const localSpoEffectiveTotalAda =
+      const localSpoBreakdownSumAda =
         localSpoActiveYesAda +
         localSpoActiveNoAda +
         localSpoActiveAbstainAda +
         localSpoPassiveAlwaysAbstainAda +
         localSpoPassiveAlwaysNoConfidenceAda +
         localSpoPassiveNoVoteAda;
+      const localSpoEffectiveTotalAda = Math.max(localSpoBreakdownSumAda, 0);
       const localSpoIsNoConfidence = isNoConfidenceAction(info?.governanceType);
       const localSpoIsHardFork = isHardForkAction(info?.governanceType);
+      const localUseNewSpoFormula = shouldUseNewSpoFormula(proposalId, info?.submittedEpoch);
 
       let localSpoYesAda = 0;
       let localSpoNoAda = 0;
       let localSpoAbstainAda = 0;
-      let localSpoNotVotedAda = 0;
+      let localSpoNotVotedAda = Math.max(localSpoPassiveNoVoteAda, 0);
+      let localSpoOutcomeDenAda = 0;
 
-      if (localSpoIsHardFork) {
-        localSpoYesAda = localSpoActiveYesAda;
-        localSpoAbstainAda = localSpoActiveAbstainAda;
-        localSpoNotVotedAda = localSpoPassiveNoVoteAda + localSpoPassiveAlwaysNoConfidenceAda + localSpoPassiveAlwaysAbstainAda;
-        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
-      } else if (localSpoIsNoConfidence) {
-        localSpoYesAda = localSpoActiveYesAda + localSpoPassiveAlwaysNoConfidenceAda;
-        localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
-        localSpoNotVotedAda = localSpoPassiveNoVoteAda;
-        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
+      if (localUseNewSpoFormula) {
+        let localSpoNotVotedCalcAda = localSpoNotVotedAda;
+        if (localSpoIsHardFork) {
+          localSpoYesAda = localSpoActiveYesAda;
+          localSpoAbstainAda = localSpoActiveAbstainAda;
+          localSpoNotVotedCalcAda = localSpoNotVotedAda + localSpoPassiveAlwaysNoConfidenceAda + localSpoPassiveAlwaysAbstainAda;
+        } else if (localSpoIsNoConfidence) {
+          localSpoYesAda = localSpoActiveYesAda + localSpoPassiveAlwaysNoConfidenceAda;
+          localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
+        } else {
+          localSpoYesAda = localSpoActiveYesAda;
+          localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
+        }
+        localSpoNoAda = localSpoActiveNoAda + Math.max(localSpoNotVotedCalcAda, 0);
+        localSpoOutcomeDenAda = Math.max(localSpoEffectiveTotalAda - localSpoAbstainAda, 0);
       } else {
         localSpoYesAda = localSpoActiveYesAda;
+        localSpoNoAda = localSpoActiveNoAda + localSpoPassiveAlwaysNoConfidenceAda;
         localSpoAbstainAda = localSpoActiveAbstainAda + localSpoPassiveAlwaysAbstainAda;
-        localSpoNotVotedAda = localSpoPassiveNoVoteAda;
-        localSpoNoAda = localSpoActiveNoAda + localSpoNotVotedAda;
+        localSpoOutcomeDenAda = Math.max(localSpoActiveYesAda + localSpoActiveNoAda + localSpoPassiveAlwaysNoConfidenceAda, 0);
       }
 
-      const localSpoOutcomeDenAda = Math.max(localSpoEffectiveTotalAda - localSpoAbstainAda, 0);
-      const spoYesPct = localSpoOutcomeDenAda > 0 ? (localSpoYesAda / localSpoOutcomeDenAda) * 100 : null;
+      const spoYesAda = useNomosSpo ? nomosSpoYesAda : localSpoYesAda;
+      const spoNoAda = useNomosSpo ? nomosSpoNoAda : localSpoNoAda;
+      const spoAlwaysAbstainAda = useNomosSpo ? nomosSpoAlwaysAbstainAda : localSpoPassiveAlwaysAbstainAda;
+      const spoAbstainAda = useNomosSpo
+        ? (nomosSpoActiveAbstainAda + nomosSpoAlwaysAbstainAda)
+        : localSpoAbstainAda;
+      const spoNotVotedAda = useNomosSpo ? nomosSpoNotVotedAda : localSpoNotVotedAda;
+      const spoEffectiveTotalAda = useNomosSpo ? nomosSpoEffectiveTotalAda : localSpoEffectiveTotalAda;
+      const spoOutcomeDenAda = useNomosSpo ? Math.max(spoYesAda + spoNoAda, 0) : localSpoOutcomeDenAda;
+      const spoYesPct = useNomosSpo
+        ? toNum(nomosSpo?.yesPct)
+        : (spoOutcomeDenAda > 0 ? (spoYesAda / spoOutcomeDenAda) * 100 : null);
+      const spoNoPct = useNomosSpo
+        ? toNum(nomosSpo?.noPct)
+        : (spoOutcomeDenAda > 0 ? (spoNoAda / spoOutcomeDenAda) * 100 : null);
+      const spoAbstainPct = useNomosSpo
+        ? toNum(nomosSpo?.abstainPct)
+        : (spoEffectiveTotalAda > 0 ? (spoAbstainAda / spoEffectiveTotalAda) * 100 : null);
+      const spoNotVotedPct = spoEffectiveTotalAda > 0 ? (spoNotVotedAda / spoEffectiveTotalAda) * 100 : null;
       const drepThresholdMet = drepRequiredPct > 0 && drepYesPct !== null ? drepYesPct >= drepRequiredPct : null;
       const spoThresholdMet = spoRequiredPct > 0 && spoYesPct !== null ? spoYesPct >= spoRequiredPct : null;
       const passingNow =
@@ -788,7 +844,7 @@ export default function GovernanceActionsPage() {
         droppedEpoch: info?.droppedEpoch,
         expiredEpoch: info?.expiredEpoch,
         governanceDescription: info?.governanceDescription || null,
-        modelSource: useNomos ? "nomos-koios" : "local-fallback",
+        modelSource: (useNomos || useNomosSpo) ? "nomos-koios" : "local-fallback",
         totalDelegatedStakeAda: useNomos ? nomosDelegatedAda : totalDelegatedStakeAda,
         totalActiveStakeAda: useNomos ? nomosActiveAda : totalActiveStakeAda,
         drepPowerVotedAda: powerStats.votedPowerAda,
@@ -811,14 +867,14 @@ export default function GovernanceActionsPage() {
         drepTurnoutPowerPct: useNomos ? toNum(nomosDrep?.yesPct) + toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? ((yesTotalAda + noTotalAda) / totalActiveStakeAda) * 100 : null),
         hasAutoAbstainPower: useNomos ? toNum(nomosDrep?.alwaysAbstainLovelace) > 0 : Number(drepPowerStats.alwaysAbstainPowerAda || 0) > 0,
         spoYesPct,
-        spoNoPct: localSpoOutcomeDenAda > 0 ? (localSpoNoAda / localSpoOutcomeDenAda) * 100 : null,
-        spoAbstainPct: localSpoEffectiveTotalAda > 0 ? (localSpoAbstainAda / localSpoEffectiveTotalAda) * 100 : null,
-        spoNotVotedPct: localSpoEffectiveTotalAda > 0 ? (localSpoNotVotedAda / localSpoEffectiveTotalAda) * 100 : null,
-        spoYesAda: localSpoYesAda,
-        spoNoAda: localSpoNoAda,
-        spoAbstainAda: localSpoAbstainAda,
-        spoNotVotedAda: localSpoNotVotedAda,
-        spoAlwaysAbstainAda: localSpoPassiveAlwaysAbstainAda,
+        spoNoPct,
+        spoAbstainPct,
+        spoNotVotedPct,
+        spoYesAda,
+        spoNoAda,
+        spoAbstainAda,
+        spoNotVotedAda,
+        spoAlwaysAbstainAda,
         drepRequiredPct: drepRequiredPct > 0 ? drepRequiredPct : null,
         spoRequiredPct: spoRequiredPct > 0 ? spoRequiredPct : null,
         drepThresholdMet,
@@ -847,7 +903,7 @@ export default function GovernanceActionsPage() {
         if (sortBy === "deposit") return b.depositAda - a.depositAda;
         return a.actionName.localeCompare(b.actionName);
       });
-  }, [proposalInfo, fallbackVoteStats, drepPowerStats, spoPowerStats, query, typeFilter, statusFilter, sortBy, referenceEpoch]);
+  }, [proposalInfo, proposalVotingSummaryCache, fallbackVoteStats, drepPowerStats, spoPowerStats, query, typeFilter, statusFilter, sortBy, referenceEpoch]);
 
   useEffect(() => {
     if (!rows.length) {
@@ -1049,6 +1105,30 @@ export default function GovernanceActionsPage() {
       cancelled = true;
     };
   }, [selected?.proposalId, proposalMetadataCache]);
+
+  useEffect(() => {
+    if (!selected?.proposalId) return;
+    const key = selected.proposalId;
+    if (proposalVotingSummaryCache[key]) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/proposal-voting-summary?proposalId=${encodeURIComponent(key)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        if (cancelled) return;
+        if (data?.nomosModel && typeof data.nomosModel === "object") {
+          setProposalVotingSummaryCache((prev) => ({ ...prev, [key]: data }));
+        }
+      } catch {
+        // Keep existing snapshot data if Koios summary fetch fails.
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.proposalId, proposalVotingSummaryCache]);
 
   return (
     <main className="shell">

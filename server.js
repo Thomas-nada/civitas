@@ -256,6 +256,8 @@ let spoProfileCache = {
 let spoProfileDirty = false;
 let spoProfileRefreshPromise = null;
 const spoProfileRefreshQueue = new Set();
+let spoDelegationWarmPromise = null;
+let spoDelegationWarmAt = 0;
 const NCL_PERIODS = {
   current: {
     key: "current",
@@ -603,17 +605,24 @@ function compactProposalInfoForDashboard(proposalInfo) {
 
 function compactVotesForDashboard(votes) {
   const source = Array.isArray(votes) ? votes : [];
-  return source.map((vote) => ({
-    proposalId: vote?.proposalId || "",
-    vote: vote?.vote || "",
-    outcome: vote?.outcome || "",
-    voteTxHash: vote?.voteTxHash || "",
-    hasRationale: vote?.hasRationale ?? null,
-    rationaleUrl: vote?.rationaleUrl || "",
-    rationaleBodyLength: Number(vote?.rationaleBodyLength || 0),
-    rationaleSectionCount: Number(vote?.rationaleSectionCount || 0),
-    responseHours: typeof vote?.responseHours === "number" ? vote.responseHours : null
-  }));
+  return source.map((vote) => {
+    const txHash = String(vote?.voteTxHash || "").trim().toLowerCase();
+    const cachedVotedAt = txHash ? Number(voteTxTimeCache?.[txHash] || 0) : 0;
+    const votedAtUnix = Number(vote?.votedAtUnix || 0) || cachedVotedAt || null;
+    return {
+      proposalId: vote?.proposalId || "",
+      vote: vote?.vote || "",
+      outcome: vote?.outcome || "",
+      voteTxHash: txHash,
+      hasRationale: vote?.hasRationale ?? null,
+      rationaleUrl: vote?.rationaleUrl || "",
+      rationaleBodyLength: Number(vote?.rationaleBodyLength || 0),
+      rationaleSectionCount: Number(vote?.rationaleSectionCount || 0),
+      responseHours: typeof vote?.responseHours === "number" ? vote.responseHours : null,
+      votedAtUnix,
+      votedAt: vote?.votedAt || (votedAtUnix ? new Date(votedAtUnix * 1000).toISOString() : null)
+    };
+  });
 }
 
 function compactActorsForDashboard(rows) {
@@ -622,6 +631,57 @@ function compactActorsForDashboard(rows) {
     ...row,
     votes: compactVotesForDashboard(row?.votes)
   }));
+}
+
+async function hydrateVoteTimesForActors(rows, proposalInfo) {
+  if (!BLOCKFROST_API_KEY) return;
+  const source = Array.isArray(rows) ? rows : [];
+  if (source.length === 0) return;
+
+  const neededTxHashes = new Set();
+  for (const actor of source) {
+    for (const vote of Array.isArray(actor?.votes) ? actor.votes : []) {
+      const txHash = String(vote?.voteTxHash || "").trim().toLowerCase();
+      if (!txHash) continue;
+      const hasVotedAt = Number(vote?.votedAtUnix || 0) > 0;
+      const hasResponseHours = typeof vote?.responseHours === "number";
+      if (hasVotedAt || hasResponseHours) continue;
+      if (!voteTxTimeCache[txHash]) neededTxHashes.add(txHash);
+    }
+  }
+
+  const txHashesToFetch = Array.from(neededTxHashes).slice(0, VOTE_TX_TIME_MAX_LOOKUPS);
+  for (let start = 0; start < txHashesToFetch.length; start += SYNC_BATCH_SIZE) {
+    const batch = txHashesToFetch.slice(start, start + SYNC_BATCH_SIZE);
+    await mapLimit(batch, SYNC_CONCURRENCY, async (txHash) => {
+      try {
+        const tx = await blockfrostGet(`/txs/${txHash}`);
+        voteTxTimeCache[txHash] = Number(tx?.block_time || 0);
+      } catch {
+        voteTxTimeCache[txHash] = 0;
+      }
+    });
+  }
+  if (txHashesToFetch.length > 0) saveVoteTxTimeCache();
+
+  const proposal = proposalInfo && typeof proposalInfo === "object" ? proposalInfo : {};
+  for (const actor of source) {
+    for (const vote of Array.isArray(actor?.votes) ? actor.votes : []) {
+      const txHash = String(vote?.voteTxHash || "").trim().toLowerCase();
+      if (!txHash) continue;
+      const votedAtUnix = Number(vote?.votedAtUnix || 0) || Number(voteTxTimeCache[txHash] || 0);
+      if (votedAtUnix > 0) {
+        if (!vote.votedAtUnix) vote.votedAtUnix = votedAtUnix;
+        if (!vote.votedAt) vote.votedAt = new Date(votedAtUnix * 1000).toISOString();
+      }
+      if (typeof vote?.responseHours !== "number" && votedAtUnix > 0) {
+        const submittedAtUnix = Number(proposal?.[vote.proposalId]?.submittedAtUnix || 0);
+        if (submittedAtUnix > 0 && votedAtUnix >= submittedAtUnix) {
+          vote.responseHours = (votedAtUnix - submittedAtUnix) / 3600;
+        }
+      }
+    }
+  }
 }
 
 async function fetchKoiosPoolInfoByIds(poolIds) {
@@ -2198,13 +2258,20 @@ function fromLovelace(value) {
   return Math.round((Number(toBigInt(value)) / 1_000_000) * 100) / 100;
 }
 
+const SPO_FORMULA_TRANSITION_GOV_ACTION =
+  "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
+const SPO_FORMULA_TRANSITION_EPOCH = 534;
+
 function buildNomosModelFromKoiosSummary(summary) {
   if (!summary || typeof summary !== "object") return null;
 
   const proposalType = String(summary.proposal_type || "");
   const isNoConfidence = proposalType === "NoConfidence";
+  const proposalId = String(summary.proposal_id || "").trim();
   const epochNo = toInt(summary.epoch_no);
-  const useNewSpoFormula = epochNo >= 534;
+  const useNewSpoFormula =
+    proposalId === SPO_FORMULA_TRANSITION_GOV_ACTION ||
+    (Number.isFinite(epochNo) && epochNo >= SPO_FORMULA_TRANSITION_EPOCH);
   const isHardForkInitiation = proposalType === "HardForkInitiation";
 
   const drepActiveYes = toBigInt(summary.drep_active_yes_vote_power);
@@ -2246,14 +2313,15 @@ function buildNomosModelFromKoiosSummary(summary) {
   const spoNoVotePower = toBigInt(summary.pool_no_vote_power);
   const spoStoredTotal = toBigInt(summary.pool_total_vote_power);
   const hasKoiosNoVotePower = summary.pool_no_vote_power !== null && summary.pool_no_vote_power !== undefined;
+  const spoBreakdownSum =
+    spoActiveYes + spoActiveNo + spoActiveAbstain + spoAlwaysAbstain + spoAlwaysNoConfidence;
+  const spoEffectiveTotal = hasKoiosNoVotePower
+    ? spoActiveYes + spoNoVotePower + spoActiveAbstain + spoAlwaysAbstain
+    : (spoStoredTotal > spoBreakdownSum ? spoStoredTotal : spoBreakdownSum);
   const spoNotVotedFromKoiosRaw = hasKoiosNoVotePower
     ? spoNoVotePower - spoActiveNo - spoAlwaysNoConfidence
-    : spoStoredTotal - spoActiveYes - spoActiveNo - spoActiveAbstain - spoAlwaysAbstain - spoAlwaysNoConfidence;
+    : spoEffectiveTotal - spoActiveYes - spoActiveNo - spoActiveAbstain - spoAlwaysAbstain - spoAlwaysNoConfidence;
   const spoNotVoted = spoNotVotedFromKoiosRaw > 0n ? spoNotVotedFromKoiosRaw : 0n;
-  const spoEffectiveTotal =
-    hasKoiosNoVotePower
-      ? spoActiveYes + spoNoVotePower + spoActiveAbstain + spoAlwaysAbstain
-      : spoStoredTotal;
 
   let spoYesTotal = 0n;
   let spoNoTotal = 0n;
@@ -2502,24 +2570,56 @@ async function fetchBlockfrostPoolFallbackRows(limit = 400) {
     }
     if (!loaded) break;
     if (!Array.isArray(poolRows) || poolRows.length === 0) break;
+    const koiosInfoById = await fetchKoiosPoolInfoByIds(
+      poolRows.map((pool) => String(pool?.pool_id || "").trim()).filter(Boolean)
+    ).catch(() => new Map());
     for (const pool of poolRows) {
       const id = String(pool?.pool_id || "").trim();
       if (!id) continue;
+      const koiosPool = koiosInfoById.get(id) || null;
       const metadata = pool?.metadata && typeof pool.metadata === "object" ? pool.metadata : {};
+      const koiosMeta = parseMaybeJsonObject(koiosPool?.meta_json);
       const cached = spoProfileCache.byPool[id] || {};
-      const drepRaw = String(cached?.delegatedDrepLiteralRaw || cached?.drepId || "").trim();
+      const koiosDelegatedDrep = String(koiosPool?.reward_addr_delegated_drep || "").trim();
+      const drepRaw = String(koiosDelegatedDrep || cached?.delegatedDrepLiteralRaw || cached?.drepId || "").trim();
       const drepNorm = normalizeLiteral(drepRaw);
       const liveStakeAda = Number(pool?.live_stake || 0) / 1_000_000;
       const activeStakeAda = Number(pool?.active_stake || 0) / 1_000_000;
       const power = Number.isFinite(liveStakeAda) && liveStakeAda > 0 ? liveStakeAda : activeStakeAda;
+      const rewardAccount = String(koiosPool?.reward_addr || cached?.rewardAccount || "").trim();
+      const hasDelegationIdentity = Boolean(rewardAccount || drepRaw);
+      const delegationStatus = drepRaw
+        ? classifySpoDelegationStatus(drepNorm)
+        : (hasDelegationIdentity ? "Not delegated" : "Unknown");
+      const rowName = String(metadata?.ticker || metadata?.name || koiosMeta?.ticker || koiosMeta?.name || "").trim();
+      const rowHomepage = String(metadata?.homepage || metadata?.url || koiosMeta?.homepage || koiosPool?.meta_url || "").trim();
+      const nextProfile = {
+        ...cached,
+        rewardAccount,
+        drepId: drepRaw,
+        delegatedDrepLiteralRaw: drepRaw,
+        delegatedDrepLiteral: drepNorm,
+        delegationStatus,
+        fetchedAt: Date.now()
+      };
+      const profileChanged =
+        String(cached?.rewardAccount || "") !== String(nextProfile.rewardAccount || "") ||
+        String(cached?.drepId || "") !== String(nextProfile.drepId || "") ||
+        String(cached?.delegatedDrepLiteralRaw || "") !== String(nextProfile.delegatedDrepLiteralRaw || "") ||
+        String(cached?.delegatedDrepLiteral || "") !== String(nextProfile.delegatedDrepLiteral || "") ||
+        String(cached?.delegationStatus || "") !== String(nextProfile.delegationStatus || "");
+      if (profileChanged) {
+        spoProfileCache.byPool[id] = nextProfile;
+        spoProfileDirty = true;
+      }
       rows.push({
         id,
-        name: String(metadata?.ticker || metadata?.name || "").trim(),
-        homepage: String(metadata?.homepage || metadata?.url || "").trim(),
+        name: rowName,
+        homepage: rowHomepage,
         status: "registered",
         delegatedDrepLiteralRaw: drepRaw,
         delegatedDrepLiteral: drepNorm,
-        delegationStatus: drepRaw ? classifySpoDelegationStatus(drepNorm) : "Unknown",
+        delegationStatus,
         transparencyScore: null,
         consistency: 0,
         totalEligibleVotes: 0,
@@ -2532,6 +2632,7 @@ async function fetchBlockfrostPoolFallbackRows(limit = 400) {
     if (poolRows.length < pageSize) break;
     page += 1;
   }
+  if (spoProfileDirty) saveSpoProfileCache();
   queueSpoProfileRefresh(rows.map((row) => row.id));
   return rows;
 }
@@ -2545,9 +2646,7 @@ async function fetchSpoGovernanceFallbackRows(limit = 400) {
       (row) => String(row?.name || "").trim() || String(row?.homepage || "").trim() || Number(row?.votingPowerAda || 0) > 0
     );
     if (hasMetadata) {
-      if (boundedLimit > 0) return cachedRows;
-      // If caller requests uncapped roster, avoid reusing obviously truncated cache.
-      if (spoFallbackCache.rows.length >= 1000) return spoFallbackCache.rows;
+      return cachedRows;
     }
   }
   const rows = await fetchBlockfrostPoolFallbackRows(boundedLimit);
@@ -2555,6 +2654,16 @@ async function fetchSpoGovernanceFallbackRows(limit = 400) {
 
   spoFallbackCache = { fetchedAt: now, rows: finalRows };
   return finalRows;
+}
+
+function triggerSpoFallbackRefresh(limit = 0) {
+  if (spoFallbackRefreshPromise) return spoFallbackRefreshPromise;
+  spoFallbackRefreshPromise = fetchSpoGovernanceFallbackRows(limit)
+    .catch(() => [])
+    .finally(() => {
+      spoFallbackRefreshPromise = null;
+    });
+  return spoFallbackRefreshPromise;
 }
 
 function extractAmountFromActionNameLovelace(actionName) {
@@ -3138,6 +3247,84 @@ function classifySpoDelegationStatusFromDrepId(drepIdRaw) {
   if (drepId.includes("always_abstain")) return "Always abstain";
   if (drepId.includes("always_no_confidence") || drepId.includes("no_confidence")) return "Always no confidence";
   return "Delegated to DRep";
+}
+
+function mergeSpoDelegationFromProfile(rows) {
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const poolId = String(row?.id || "").trim();
+    if (!poolId) continue;
+    const profile = spoProfileCache.byPool[poolId];
+    if (!profile || typeof profile !== "object") continue;
+    const drepRaw = String(profile.delegatedDrepLiteralRaw || profile.drepId || "").trim();
+    const drepNorm = normalizeLiteral(drepRaw);
+    const status = String(profile.delegationStatus || "").trim();
+    if ((!row.delegatedDrepLiteralRaw || !row.delegatedDrepLiteral || !row.delegationStatus || row.delegationStatus === "Unknown") && (drepRaw || status)) {
+      row.delegatedDrepLiteralRaw = drepRaw;
+      row.delegatedDrepLiteral = drepNorm;
+      row.delegationStatus = status || (drepRaw ? classifySpoDelegationStatus(drepNorm) : "Not delegated");
+    }
+  }
+}
+
+async function warmSpoDelegationFromKoios(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  if (sourceRows.length === 0) return;
+  const poolIds = sourceRows.map((row) => String(row?.id || "").trim()).filter(Boolean);
+  if (poolIds.length === 0) return;
+
+  const byId = await fetchKoiosPoolInfoByIds(poolIds).catch(() => new Map());
+  if (!(byId instanceof Map) || byId.size === 0) return;
+
+  let changed = false;
+  const rowById = new Map(
+    sourceRows.map((row) => [String(row?.id || "").trim(), row]).filter(([id]) => Boolean(id))
+  );
+  for (const [poolId, info] of byId.entries()) {
+    const drepRaw = String(info?.reward_addr_delegated_drep || "").trim();
+    const drepNorm = normalizeLiteral(drepRaw);
+    const rewardAccount = String(info?.reward_addr || "").trim();
+    const status = drepRaw ? classifySpoDelegationStatus(drepNorm) : "Not delegated";
+    const cached = spoProfileCache.byPool[poolId] || {};
+    if (
+      String(cached.rewardAccount || "") !== rewardAccount ||
+      String(cached.drepId || "") !== drepRaw ||
+      String(cached.delegatedDrepLiteralRaw || "") !== drepRaw ||
+      String(cached.delegatedDrepLiteral || "") !== drepNorm ||
+      String(cached.delegationStatus || "") !== status
+    ) {
+      spoProfileCache.byPool[poolId] = {
+        ...cached,
+        rewardAccount,
+        drepId: drepRaw,
+        delegatedDrepLiteralRaw: drepRaw,
+        delegatedDrepLiteral: drepNorm,
+        delegationStatus: status,
+        fetchedAt: Date.now()
+      };
+      changed = true;
+    }
+    const row = rowById.get(poolId);
+    if (row) {
+      row.delegatedDrepLiteralRaw = drepRaw;
+      row.delegatedDrepLiteral = drepNorm;
+      row.delegationStatus = status;
+    }
+  }
+  if (changed) {
+    spoProfileDirty = true;
+    saveSpoProfileCache();
+  }
+  spoDelegationWarmAt = Date.now();
+}
+
+function triggerSpoDelegationWarm(rows) {
+  if (spoDelegationWarmPromise) return spoDelegationWarmPromise;
+  spoDelegationWarmPromise = warmSpoDelegationFromKoios(rows)
+    .catch(() => null)
+    .finally(() => {
+      spoDelegationWarmPromise = null;
+    });
+  return spoDelegationWarmPromise;
 }
 
 async function refreshSpoProfileForPool(poolId) {
@@ -5216,26 +5403,47 @@ const server = http.createServer(async (req, res) => {
       specialDreps = {};
     }
     let spos = includeSpos ? (Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : []) : [];
-    if (includeSpos && !isActionsView && !historical && spos.length === 0) {
+    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0) {
+      mergeSpoDelegationFromProfile(spos);
+    }
+    if (includeSpos && !historical && spos.length === 0) {
       const spoFallbackLimit = SPO_FALLBACK_LIMIT > 0 ? SPO_FALLBACK_LIMIT : 400;
       if (spoFallbackCache.rows.length > 0) {
         spos = spoFallbackCache.rows.slice(0, spoFallbackLimit);
       } else {
-        if (!spoFallbackRefreshPromise) {
-          spoFallbackRefreshPromise = fetchSpoGovernanceFallbackRows(spoFallbackLimit)
-            .catch(() => [])
-            .finally(() => {
-              spoFallbackRefreshPromise = null;
-            });
-        }
+        triggerSpoFallbackRefresh(spoFallbackLimit);
         const refreshed = await spoFallbackRefreshPromise.catch(() => []);
         if (Array.isArray(refreshed) && refreshed.length > 0) {
           spos = refreshed;
         }
       }
     }
-    if (includeSpos && !isActionsView && !historical && (!Array.isArray(spos) || spos.length === 0)) {
-      const roster = await fetchSpoGovernanceFallbackRows(SPO_FALLBACK_LIMIT).catch(() => []);
+    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0 && (view === "actions" || view === "spo")) {
+      let totalPower = 0;
+      let unknownPower = 0;
+      for (const row of spos) {
+        const power = Number(row?.votingPowerAda || 0);
+        if (!Number.isFinite(power) || power <= 0) continue;
+        totalPower += power;
+        if (String(row?.delegationStatus || "").trim() === "Unknown") unknownPower += power;
+      }
+      const unknownShare = totalPower > 0 ? unknownPower / totalPower : 0;
+      const staleWarm = Date.now() - Number(spoDelegationWarmAt || 0) > 30 * 60 * 1000;
+      if (unknownShare > 0.12 && staleWarm) {
+        const warmPromise = triggerSpoDelegationWarm(spos);
+        await Promise.race([warmPromise, sleep(8000)]);
+        mergeSpoDelegationFromProfile(spos);
+      }
+    }
+    if (includeSpos && !historical) {
+      const refreshAgeMs = Date.now() - Number(spoFallbackCache.fetchedAt || 0);
+      const refreshStale = spoFallbackCache.rows.length === 0 || refreshAgeMs > 15 * 60 * 1000;
+      const roster = SPO_FALLBACK_LIMIT > 0
+        ? spoFallbackCache.rows.slice(0, SPO_FALLBACK_LIMIT)
+        : spoFallbackCache.rows;
+      if (refreshStale) {
+        triggerSpoFallbackRefresh(SPO_FALLBACK_LIMIT);
+      }
       if (Array.isArray(roster) && roster.length > 0) {
         const rosterById = new Map(
           roster
@@ -5285,6 +5493,11 @@ const server = http.createServer(async (req, res) => {
       }
     }
     const drepsRaw = includeDreps ? (Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : []) : [];
+    // Hydrate vote timestamps only for Committee dashboard view.
+    // Running this for DRep/SPO/Actions causes large blocking latency.
+    if (view === "committee" && includeCommittee) {
+      await hydrateVoteTimesForActors(committeeMembersRaw, sourceSnapshot?.proposalInfo || {});
+    }
     const dreps = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(drepsRaw) : drepsRaw;
     const compactSpos = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(spos) : spos;
     const proposalInfoRaw = sourceSnapshot?.proposalInfo || {};
@@ -5551,6 +5764,30 @@ const server = http.createServer(async (req, res) => {
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal metadata." });
+      return;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/proposal-voting-summary") {
+    const proposalId = String(url.searchParams.get("proposalId") || "").trim();
+    if (!proposalId) {
+      json(res, 400, { error: "Missing proposalId." });
+      return;
+    }
+    try {
+      const byId = await fetchKoiosVotingSummariesByProposalIds([proposalId]);
+      const summary = byId.get(proposalId) || null;
+      const nomosModel = buildNomosModelFromKoiosSummary(summary);
+      json(res, 200, {
+        ok: true,
+        proposalId,
+        hasSummary: Boolean(summary),
+        koiosVotingSummary: summary,
+        nomosModel
+      });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Failed to fetch proposal voting summary." });
       return;
     }
   }

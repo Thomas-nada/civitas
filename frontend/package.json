@@ -12,6 +12,7 @@
   "dependencies": {
     "@meshsdk/core": "^1.9.0-beta.100",
     "blakejs": "^1.2.1",
+    "drep-accountability-dashboard": "file:..",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

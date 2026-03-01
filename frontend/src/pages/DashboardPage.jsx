@@ -121,6 +121,7 @@ function abstainTooltip(row) {
 function responsivenessTooltip(row) {
   const avgHours = row?.avgResponseHours;
   const pct = Number(row?.responsiveness || 0);
+  const sampleCount = Number(row?.responseSampleCount || 0);
   if (avgHours === null || avgHours === undefined) {
     return [
       "Responsiveness score:",
@@ -131,7 +132,7 @@ function responsivenessTooltip(row) {
   return [
     "Responsiveness score:",
     "Formula: max(0, 100 - (avgResponseHours / (24*30))*100)",
-    `Current: avg ${round(Number(avgHours))}h => ${pct}%`
+    `Current: avg ${round(Number(avgHours))}h over ${sampleCount} votes => ${pct}%`
   ].join("\n");
 }
 
@@ -334,6 +335,15 @@ function splitProfileText(input) {
     chunks.push(sentences.slice(i, i + 2).join(" "));
   }
   return chunks;
+}
+
+function resolveVoteResponseHours(vote, proposalInfo) {
+  if (typeof vote?.responseHours === "number") return vote.responseHours;
+  const votedAtUnix = Number(vote?.votedAtUnix || 0);
+  const submittedAtUnix = Number(proposalInfo?.[vote?.proposalId]?.submittedAtUnix || 0);
+  if (!Number.isFinite(votedAtUnix) || !Number.isFinite(submittedAtUnix)) return null;
+  if (votedAtUnix <= 0 || submittedAtUnix <= 0 || votedAtUnix < submittedAtUnix) return null;
+  return (votedAtUnix - submittedAtUnix) / 3600;
 }
 
 export default function DashboardPage({ actorType }) {
@@ -795,7 +805,7 @@ export default function DashboardPage({ actorType }) {
         const consistencyTotal = comparable.length;
         const consistency = consistencyTotal > 0 ? consistencyMatches / consistencyTotal * 100 : 0;
         const responseValues = scopedVotes
-          .map((v) => (typeof v.responseHours === "number" ? v.responseHours : null))
+          .map((v) => resolveVoteResponseHours(v, proposalInfo))
           .filter((v) => v !== null);
         const avgResponseHours =
           responseValues.length > 0 ? responseValues.reduce((s, v) => s + v, 0) / responseValues.length : null;
@@ -857,6 +867,7 @@ export default function DashboardPage({ actorType }) {
           abstainCount,
           abstainTotal,
           avgResponseHours: avgResponseHours === null ? null : round(avgResponseHours),
+          responseSampleCount: responseValues.length,
           responsiveness: round(responsiveness),
           accountability: round(accountability),
           votingPowerPct: vpPctTotal,
@@ -1401,17 +1412,11 @@ export default function DashboardPage({ actorType }) {
                     </td>
                     {showResponsivenessColumn ? (
                       <td data-label="Responsiveness">
-                        {row.avgResponseHours === null ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          <>
-                            <span className="metric-value-with-info">
-                              <strong>{row.responsiveness ?? 0}%</strong>
-                              <MetricInfo text={responsivenessTooltip(row)} label="Responsiveness calculation" />
-                            </span>
-                            <div className="muted">{formatResponseHours(row.avgResponseHours)}</div>
-                          </>
-                        )}
+                        <span className="metric-value-with-info">
+                          <strong>{row.responsiveness ?? 0}%</strong>
+                          <MetricInfo text={responsivenessTooltip(row)} label="Responsiveness calculation" />
+                        </span>
+                        <div className="muted">{formatResponseHours(row.avgResponseHours)}</div>
                       </td>
                     ) : null}
                     {isCommittee ? (
@@ -1710,7 +1715,7 @@ export default function DashboardPage({ actorType }) {
                                   </p>
                                   {isDrep ? (
                                     <p>
-                                      Response time: <strong>{formatResponseHours(item.vote?.responseHours ?? null)}</strong>
+                                      Response time: <strong>{formatResponseHours(resolveVoteResponseHours(item.vote, proposalInfo))}</strong>
                                     </p>
                                   ) : null}
                                   {item.vote && (!isSpo || item.vote.hasRationale === true || String(item.vote.rationaleUrl || "").trim()) ? (
