@@ -3063,6 +3063,14 @@ function saveSnapshotToDisk(payload) {
   fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(withSchema));
 }
 
+function saveSeedSnapshotToDisk(payload) {
+  const withSchema = {
+    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    ...payload
+  };
+  fs.writeFileSync(SNAPSHOT_SEED_PATH, JSON.stringify(withSchema));
+}
+
 async function enrichCommitteeRowsWithCgovRationale(rows, proposalInfo) {
   const committeeRows = Array.isArray(rows) ? rows : [];
   if (committeeRows.length === 0) return committeeRows;
@@ -5087,6 +5095,11 @@ async function buildFullSnapshot() {
       });
     }
   }
+  // Persist delegation labels into snapshots so cold starts do not need an
+  // API-time warm-up to recover Always Abstain / No Confidence buckets.
+  mergeSpoDelegationFromProfile(spos);
+  await warmSpoDelegationFromKoios(spos).catch(() => null);
+  mergeSpoDelegationFromProfile(spos);
   spos.sort((a, b) => {
     const voteDelta = Number((b?.votes || []).length) - Number((a?.votes || []).length);
     if (voteDelta !== 0) return voteDelta;
@@ -5126,6 +5139,7 @@ function publishSnapshot(payload) {
   // manual snapshot wipe.
   refreshAllThresholdInfo(snapshot);
   saveSnapshotToDisk(snapshot);
+  saveSeedSnapshotToDisk(snapshot);
   warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
   backfillEpochSnapshotsFromCurrent(false);
 }
