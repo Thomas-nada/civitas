@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line,
   PieChart, Pie, Cell, Sector,
 } from "recharts";
 
@@ -677,7 +678,7 @@ export default function StatsPage() {
   const [activePropOutcome, setActivePropOutcome] = useState(0);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/accountability?view=all`)
+    fetch(`${API_BASE}/api/accountability?view=stats`)
       .then(r => r.json())
       .then(d => { setRaw(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -856,6 +857,78 @@ export default function StatsPage() {
       proposalIds.map((proposalId) => [proposalId, Number(proposalInfo[proposalId]?.submittedEpoch || 0)])
     );
 
+    // ── Participation over time (cast / eligible per epoch) ─────────────────
+    const participationEpochMap = {};
+    const drepEligibleCountAtEpoch = (epoch) =>
+      realDreps.reduce((count, actor) => {
+        const activeEpoch = Number(actor?.activeEpoch || 0);
+        if (Number.isFinite(activeEpoch) && activeEpoch > 0 && epoch > 0 && epoch < activeEpoch) return count;
+        return count + 1;
+      }, 0);
+
+    const ccEligibleCountAtProposal = (proposalId, proposalEpoch) =>
+      cc.reduce((count, actor) => {
+        const eligibility = getCommitteeEligibilityWindow(actor, proposalInfo);
+        const startEpoch = Number(eligibility?.startEpoch || 0);
+        const hasStartEpoch = Boolean(eligibility?.hasStartEpoch);
+        const effectiveEndEpoch = Number(eligibility?.effectiveEndEpoch || 0);
+        const hasEffectiveEndEpoch = Boolean(eligibility?.hasEffectiveEndEpoch);
+        if (hasStartEpoch && proposalEpoch > 0 && proposalEpoch < startEpoch) return count;
+        if (hasEffectiveEndEpoch && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) return count;
+        if (hasEffectiveEndEpoch) {
+          const terminalEpoch = committeeProposalTerminalEpoch(proposalId);
+          if (terminalEpoch && terminalEpoch > effectiveEndEpoch) return count;
+        }
+        return count + 1;
+      }, 0);
+
+    proposals.forEach((proposal) => {
+      const proposalId = String(proposal?.proposalId || "");
+      const epoch = Number(proposal?.submittedEpoch || 0);
+      if (!Number.isFinite(epoch) || epoch <= 0) return;
+
+      if (!participationEpochMap[epoch]) {
+        participationEpochMap[epoch] = {
+          epoch,
+          drepCast: 0,
+          drepEligible: 0,
+          ccCast: 0,
+          ccEligible: 0,
+          spoCast: 0,
+          spoEligible: 0
+        };
+      }
+      const row = participationEpochMap[epoch];
+      const voteStats = proposal?.voteStats || {};
+      const drepEligible =
+        Number(proposal?.drepRequiredPct || 0) > 0 || Number(voteStats?.drep?.total || 0) > 0;
+      const spoEligible =
+        proposal?.thresholdInfo?.poolRequiredPct != null || Number(voteStats?.stake_pool?.total || 0) > 0;
+      const ccEligible = requiresCommitteeParticipation(proposalId);
+
+      if (drepEligible) {
+        row.drepCast += Number(voteStats?.drep?.total || 0);
+        row.drepEligible += drepEligibleCountAtEpoch(epoch);
+      }
+      if (ccEligible) {
+        row.ccCast += Number(voteStats?.constitutional_committee?.total || 0);
+        row.ccEligible += ccEligibleCountAtProposal(proposalId, epoch);
+      }
+      if (spoEligible) {
+        row.spoCast += Number(voteStats?.stake_pool?.total || 0);
+        row.spoEligible += spos.length;
+      }
+    });
+
+    const participationByEpoch = Object.values(participationEpochMap)
+      .sort((a, b) => a.epoch - b.epoch)
+      .map((row) => ({
+        epoch: row.epoch,
+        drepCast: row.drepCast,
+        ccCast: row.ccCast,
+        spoCast: row.spoCast,
+      }));
+
     const ccAttendance = cc.map((m) => {
       const eligibility = getCommitteeEligibilityWindow(m, proposalInfo);
       const startEpoch = Number(eligibility?.startEpoch || 0);
@@ -978,7 +1051,7 @@ export default function StatsPage() {
     const spoNakamoto = nakamotoCoefficient(spoPowers);
 
     return {
-      proposals, byType, byOutcome, byEpoch,
+      proposals, byType, byOutcome, byEpoch, participationByEpoch,
       totalYes, totalNo, totalAbstain, votesByRole,
       dreps: realDreps, activeDreps, retiredDreps, totalDrepAda, abstainAda, noConfAda,
       attBuckets, tsBuckets, rtBuckets, medianRT, top10Dreps,
@@ -1028,6 +1101,21 @@ export default function StatsPage() {
             <Bar dataKey="no"      name="Failed"  stackId="a" fill={C.no}      radius={[0,0,0,0]} />
             <Bar dataKey="pending" name="Pending" stackId="a" fill={C.abstain} radius={[4,4,0,0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </Section>
+
+      <Section title="Participation Over Time" wide>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={s.participationByEpoch} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+            <XAxis dataKey="epoch" tick={{ fill: C.muted, fontSize: S.axis }} />
+            <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: S.axis }} />
+            <Tooltip {...TooltipStyle} formatter={(value, name) => [fmt(Number(value || 0)), name || "Votes Cast"]} />
+            <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
+            <Line type="monotone" dataKey="drepCast" name="DRep Votes Cast" stroke={C.yes} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="ccCast" name="CC Votes Cast" stroke={C.no} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="spoCast" name="SPO Votes Cast" stroke="#7eb8ff" strokeWidth={2} dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       </Section>
 

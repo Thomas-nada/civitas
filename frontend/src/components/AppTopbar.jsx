@@ -1,6 +1,53 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
+
+const NAV_GROUPS = [
+  {
+    key: "governance",
+    label: "Governance",
+    links: [
+      { to: "/actions", label: "Governance Actions" },
+      { to: "/actions/submit", label: "Submit Governance Action" },
+      { to: "/constitution", label: "Read the Cardano Constitution" },
+      { to: "/ncl", label: "NCL" }
+    ]
+  },
+  {
+    key: "participants",
+    label: "Participants",
+    links: [
+      { to: "/dreps", label: "DReps" },
+      { to: "/spos", label: "SPOs" },
+      { to: "/committee", label: "Constitutional Committee" }
+    ]
+  },
+  {
+    key: "insights",
+    label: "Insights",
+    links: [
+      { to: "/stats", label: "Governance Stats" },
+      { to: "/guide", label: "Governance Guide" },
+      { to: "/about", label: "About Civitas" }
+    ]
+  }
+];
+
+function isPathMatch(pathname, target) {
+  if (!target) return false;
+  if (pathname === target) return true;
+  return pathname.startsWith(`${target}/`);
+}
+
+function getCurrentNavGroupKey(pathname) {
+  const cleanPath = String(pathname || "");
+  for (const group of NAV_GROUPS) {
+    if (group.links.some((link) => isPathMatch(cleanPath, link.to))) {
+      return group.key;
+    }
+  }
+  return NAV_GROUPS[0]?.key || "";
+}
 
 function formatAda(lovelace) {
   const amount = Number(lovelace || 0) / 1_000_000;
@@ -46,6 +93,11 @@ function BrandMark({ theme, alertActive }) {
 export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   const location = useLocation();
   const isLanding = location.pathname === "/";
+  const currentNavGroupKey = useMemo(
+    () => getCurrentNavGroupKey(location.pathname),
+    [location.pathname]
+  );
+  const [openNavGroupKey, setOpenNavGroupKey] = useState(currentNavGroupKey);
   const wallet = useContext(WalletContext);
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [bugSubmitting, setBugSubmitting] = useState(false);
@@ -60,6 +112,10 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   });
   const [hasNewBugSignal, setHasNewBugSignal] = useState(false);
   const [latestBugId, setLatestBugId] = useState("");
+
+  useEffect(() => {
+    setOpenNavGroupKey(currentNavGroupKey);
+  }, [currentNavGroupKey]);
 
   useEffect(() => {
     let stop = false;
@@ -192,34 +248,37 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
             )}
           </div>
 
-          <nav className="topnav topnav-row">
-            <NavLink to="/actions" className={({ isActive }) => (isActive ? "active" : "")}>
-              Actions
-            </NavLink>
-            <NavLink to="/actions/submit" className={({ isActive }) => (isActive ? "active" : "")}>
-              Submit
-            </NavLink>
-            <NavLink to="/dreps" className={({ isActive }) => (isActive ? "active" : "")}>
-              DReps
-            </NavLink>
-            <NavLink to="/spos" className={({ isActive }) => (isActive ? "active" : "")}>
-              SPOs
-            </NavLink>
-            <NavLink to="/committee" className={({ isActive }) => (isActive ? "active" : "")}>
-              Committee
-            </NavLink>
-            <NavLink to="/ncl" className={({ isActive }) => (isActive ? "active" : "")}>
-              NCL
-            </NavLink>
-            <NavLink to="/stats" className={({ isActive }) => (isActive ? "active" : "")}>
-              Stats
-            </NavLink>
-            <NavLink to="/guide" className={({ isActive }) => (isActive ? "active" : "")}>
-              Guide
-            </NavLink>
-            <NavLink to="/about" className={({ isActive }) => (isActive ? "active" : "")}>
-              About
-            </NavLink>
+          <nav className="topnav topnav-row" onMouseLeave={() => setOpenNavGroupKey(currentNavGroupKey)}>
+            {NAV_GROUPS.map((group) => (
+              <div
+                key={group.key}
+                className={`topnav-group${currentNavGroupKey === group.key ? " is-current" : ""}${openNavGroupKey === group.key ? " is-open" : ""}`}
+                onMouseEnter={() => setOpenNavGroupKey(group.key)}
+                onFocus={() => setOpenNavGroupKey(group.key)}
+              >
+                <button
+                  type="button"
+                  className="topnav-group-label"
+                  aria-haspopup="true"
+                  aria-expanded={openNavGroupKey === group.key || currentNavGroupKey === group.key ? "true" : "false"}
+                  onClick={() => setOpenNavGroupKey((prev) => (prev === group.key ? currentNavGroupKey : group.key))}
+                >
+                  {group.label}
+                </button>
+                <div className="topnav-group-links" role="menu" aria-label={`${group.label} links`}>
+                  {group.links.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) => (isActive ? "topnav-link active" : "topnav-link")}
+                      role="menuitem"
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            ))}
           </nav>
 
           <div className="topbar-controls">

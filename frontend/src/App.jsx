@@ -13,6 +13,7 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
+const ConstitutionPage = lazy(() => import("./pages/ConstitutionPage"));
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -276,6 +277,7 @@ export default function App() {
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />
           <Route path="/committee" element={<DashboardPage actorType="committee" />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/constitution" element={<ConstitutionPage />} />
           <Route path="/bugs" element={<BugsPage />} />
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/about" element={<AboutPage />} />

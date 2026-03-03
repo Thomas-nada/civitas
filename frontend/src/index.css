@@ -300,10 +300,11 @@ a {
 }
 
 .brand-lockup {
-  display: flex;
+  display: grid;
+  justify-items: center;
   align-items: center;
   align-self: center;
-  gap: 0.55rem;
+  gap: 0.2rem;
 }
 
 .brand-home-link {
@@ -315,13 +316,14 @@ a {
 
 .brand-text {
   display: grid;
-  gap: 0.12rem;
+  gap: 0;
   width: max-content;
+  justify-items: center;
 }
 
 .brand-mark {
-  width: 51px;
-  height: 51px;
+  width: 66px;
+  height: 66px;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -348,7 +350,7 @@ a {
 
 .brand {
   font-family: "Orbitron", "Space Grotesk", sans-serif;
-  font-size: clamp(0.98rem, 1.4vw, 1.2rem);
+  font-size: clamp(1.27rem, 1.82vw, 1.56rem);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -369,31 +371,90 @@ a {
 
 .topnav {
   display: flex;
-  align-items: center;
-  gap: 1.1rem;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1rem;
 }
 
 .topnav-row {
   justify-content: center;
   flex: 1 1 auto;
   width: auto;
+  flex-wrap: wrap;
+  position: relative;
 }
 
-.topnav a {
+.topnav-group {
+  position: relative;
+  min-width: 0;
+}
+
+.topnav-group-label {
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  opacity: 0.92;
+  border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
+  padding: 0.3rem 0.62rem;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.topnav-group-label:hover,
+.topnav-group:focus-within .topnav-group-label,
+.topnav-group.is-open .topnav-group-label,
+.topnav-group.is-current .topnav-group-label {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mint) 46%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft-2) 88%, transparent);
+}
+
+.topnav-group-links {
+  position: static;
+  min-width: 220px;
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.35rem;
+  padding: 0.38rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 94%, transparent);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: none;
+  width: 100%;
+  max-width: 340px;
+}
+
+.topnav-link {
   text-decoration: none;
   color: var(--text-muted);
-  font-size: 0.98rem;
+  font-size: 0.87rem;
   font-weight: 600;
-  line-height: 1;
-  transition: color 120ms ease;
+  line-height: 1.2;
+  padding: 0.34rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
-.topnav a:hover {
-  color: var(--mint);
+.topnav-link:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--line) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
 }
 
-.topnav a.active {
+.topnav-link.active {
   color: var(--mint);
+  border-color: color-mix(in srgb, var(--chip-active-soft-border) 92%, transparent);
+  background: color-mix(in srgb, var(--chip-active-soft-bg) 92%, transparent);
 }
 
 .topbar-cta {
@@ -782,6 +843,239 @@ a {
 .wiki-content {
   display: grid;
   gap: 0.85rem;
+}
+
+.constitution-shell {
+  margin-top: 1.2rem;
+}
+
+.constitution-header {
+  margin-bottom: 1rem;
+}
+
+.constitution-toolbar,
+.constitution-meta,
+.constitution-content {
+  padding: 0.9rem 1rem;
+}
+
+.constitution-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.constitution-version-switch {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.constitution-status {
+  margin: 0;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.constitution-status-verified {
+  color: var(--mint);
+}
+
+.constitution-status-loading {
+  color: var(--amber);
+}
+
+.constitution-status-error,
+.constitution-status-hash-mismatch {
+  color: var(--rose);
+}
+
+.constitution-meta {
+  margin-top: 0.8rem;
+}
+
+.constitution-meta p {
+  margin: 0.35rem 0;
+  line-height: 1.4;
+}
+
+.constitution-content {
+  margin-top: 0.8rem;
+}
+
+.constitution-layout {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.constitution-sidebar {
+  position: sticky;
+  top: 130px;
+  max-height: calc(100vh - 150px);
+  overflow: auto;
+  padding: 0.8rem;
+}
+
+.constitution-sidebar h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.constitution-search {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.65rem;
+}
+
+.constitution-search span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.constitution-search input {
+  width: 100%;
+  padding: 0.48rem 0.58rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+}
+
+.constitution-search-tools {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.constitution-search-tools p {
+  margin: 0;
+}
+
+.constitution-search-nav {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.constitution-toc {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.constitution-toc button {
+  appearance: none;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font: inherit;
+  text-align: left;
+  padding-top: 0.34rem;
+  padding-bottom: 0.34rem;
+}
+
+.constitution-toc button span {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.28;
+}
+
+.constitution-toc button:hover {
+  border-color: var(--line);
+  color: var(--mint);
+  background: var(--chip-active-soft-bg);
+}
+
+.constitution-toc button.active {
+  border-color: var(--chip-active-border);
+  color: var(--mint);
+  background: var(--chip-active-bg);
+}
+
+.constitution-toc button.has-hit span {
+  color: var(--text);
+}
+
+.constitution-toc button strong {
+  flex: 0 0 auto;
+  min-width: 1.4rem;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0.08rem 0.32rem;
+  background: var(--surface-soft-3);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+}
+
+.constitution-content-main {
+  margin-top: 0;
+}
+
+.constitution-section-block {
+  scroll-margin-top: 86px;
+}
+
+.constitution-section-block + .constitution-section-block {
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--line);
+}
+
+.constitution-markdown h1,
+.constitution-markdown h2,
+.constitution-markdown h3,
+.constitution-markdown h4 {
+  line-height: 1.2;
+  margin: 1rem 0 0.45rem;
+}
+
+.constitution-markdown h1 {
+  font-size: clamp(1.4rem, 2.8vw, 2rem);
+}
+
+.constitution-markdown h2 {
+  font-size: clamp(1.08rem, 2.1vw, 1.35rem);
+}
+
+.constitution-markdown h3 {
+  font-size: clamp(0.98rem, 1.6vw, 1.12rem);
+}
+
+.constitution-markdown h4 {
+  font-size: 0.95rem;
+}
+
+.constitution-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.95rem 0;
+}
+
+@media (max-width: 980px) {
+  .constitution-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .constitution-sidebar {
+    position: static;
+    max-height: none;
+  }
 }
 
 .wiki-section {
@@ -2339,26 +2633,60 @@ tbody tr.active {
   }
 
   .topnav {
-    gap: 0.45rem;
+    gap: 0.75rem;
     padding-bottom: 0.35rem;
     overflow-x: visible;
     flex-wrap: wrap;
     white-space: normal;
   }
 
-  .topnav a {
-    flex: 0 0 auto;
-    font-size: 0.84rem;
-    padding: 0.22rem 0.45rem;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--surface-soft);
-    white-space: nowrap;
+  .topnav-group {
+    width: 100%;
+    min-width: 0;
+    padding: 0.2rem 0 0.3rem;
+    justify-content: flex-start;
+    align-items: flex-start;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
   }
 
-  .topnav a.active {
-    background: var(--chip-active-soft-bg);
-    border-color: var(--chip-active-soft-border);
+  .topnav-group-label {
+    font-size: 0.66rem;
+    padding: 0.28rem 0.56rem;
+  }
+
+  .topnav-group-links {
+    position: static;
+    min-width: 0;
+    margin-top: 0.32rem;
+    padding: 0.36rem;
+    gap: 0.35rem;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+    background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    display: grid;
+  }
+
+  .topnav-link {
+    flex: 0 0 auto;
+    font-size: 0.84rem;
+    padding: 0.32rem 0.42rem;
+    border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-soft-2) 90%, transparent);
+    white-space: normal;
+    box-shadow: none;
+  }
+
+  .topnav-link.active {
+    border-color: color-mix(in srgb, var(--chip-active-soft-border) 95%, transparent);
+    background: color-mix(in srgb, var(--chip-active-soft-bg) 92%, transparent);
+    box-shadow: none;
   }
 
   .theme-toggle-btn {
@@ -2591,14 +2919,23 @@ tbody tr.active {
   }
 
   .topnav {
-    gap: 0.4rem;
+    gap: 0.62rem;
     overflow-x: visible;
     flex-wrap: wrap;
   }
 
-  .topnav a {
+  .topnav-group {
+    padding: 0.18rem 0 0.28rem;
+  }
+
+  .topnav-group-label {
+    font-size: 0.56rem;
+    padding: 0.24rem 0.5rem;
+  }
+
+  .topnav-link {
     font-size: 0.78rem;
-    padding: 0.2rem 0.42rem;
+    padding: 0.28rem 0.38rem;
   }
 
   .theme-toggle-btn,

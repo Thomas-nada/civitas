@@ -247,6 +247,11 @@ const cgovSpoRationaleLookupCache = new Map();
 const cgovCommitteeRationaleLookupCache = new Map();
 const cgovDrepRationaleLookupCache = new Map();
 const cgovProposalDetailCache = new Map();
+let committeeRationaleEnrichCache = { key: "", rows: null };
+let committeeRationaleEnrichPromise = null;
+let committeeRationaleEnrichPromiseKey = "";
+let committeeVoteTimeHydrationPromise = null;
+let committeeVoteTimeHydrationKey = "";
 let specialDrepsCache = {
   fetchedAt: 0,
   value: {}
@@ -868,6 +873,49 @@ async function hydrateVoteTimesForActors(rows, proposalInfo) {
       }
     }
   }
+}
+
+async function getCommitteeRowsWithCgovRationaleCached(rows, proposalInfo, cacheKey) {
+  const key = String(cacheKey || "").trim();
+  if (!key) return enrichCommitteeRowsWithCgovRationale(rows, proposalInfo);
+  if (committeeRationaleEnrichCache.key === key && Array.isArray(committeeRationaleEnrichCache.rows)) {
+    return committeeRationaleEnrichCache.rows;
+  }
+  if (committeeRationaleEnrichPromise && committeeRationaleEnrichPromiseKey === key) {
+    return committeeRationaleEnrichPromise;
+  }
+  const task = enrichCommitteeRowsWithCgovRationale(rows, proposalInfo)
+    .then((enrichedRows) => {
+      committeeRationaleEnrichCache = { key, rows: enrichedRows };
+      return enrichedRows;
+    })
+    .finally(() => {
+      if (committeeRationaleEnrichPromise === task) {
+        committeeRationaleEnrichPromise = null;
+        committeeRationaleEnrichPromiseKey = "";
+      }
+    });
+  committeeRationaleEnrichPromise = task;
+  committeeRationaleEnrichPromiseKey = key;
+  return task;
+}
+
+function triggerCommitteeVoteTimeHydration(rows, proposalInfo, cacheKey) {
+  const key = String(cacheKey || "").trim();
+  if (committeeVoteTimeHydrationPromise && committeeVoteTimeHydrationKey === key) {
+    return committeeVoteTimeHydrationPromise;
+  }
+  const task = hydrateVoteTimesForActors(rows, proposalInfo)
+    .catch(() => null)
+    .finally(() => {
+      if (committeeVoteTimeHydrationPromise === task) {
+        committeeVoteTimeHydrationPromise = null;
+        committeeVoteTimeHydrationKey = "";
+      }
+    });
+  committeeVoteTimeHydrationPromise = task;
+  committeeVoteTimeHydrationKey = key;
+  return task;
 }
 
 async function fetchKoiosPoolInfoByIds(poolIds) {
@@ -3268,15 +3316,21 @@ async function enrichCommitteeRowsWithCgovRationale(rows, proposalInfo) {
       if (proposalId) proposalIds.add(proposalId);
     }
   }
-  const lookupByProposal = new Map();
+  const lookupTasks = [];
   for (const proposalId of proposalIds) {
     const meta = infoById[proposalId];
     const txHash = String(meta?.txHash || "").trim();
     const certIndex = Number(meta?.certIndex);
     if (!txHash || !Number.isInteger(certIndex) || certIndex < 0) continue;
+    lookupTasks.push({ proposalId, txHash, certIndex });
+  }
+  if (lookupTasks.length === 0) return committeeRows;
+
+  const lookupByProposal = new Map();
+  await mapLimit(lookupTasks, 6, async ({ proposalId, txHash, certIndex }) => {
     const lookup = await fetchCgovCommitteeVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null);
     if (lookup instanceof Map && lookup.size > 0) lookupByProposal.set(proposalId, lookup);
-  }
+  });
   if (lookupByProposal.size === 0) return committeeRows;
   return committeeRows.map((row) => {
     const voterCredential = String(row?.hotCredential || row?.id || "").trim().toLowerCase();
@@ -5573,25 +5627,43 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/accountability") {
     const requestedSnapshot = String(url.searchParams.get("snapshot") || "").trim();
     const requestedView = String(url.searchParams.get("view") || "all").trim().toLowerCase();
-    const view = ["all", "drep", "spo", "committee", "actions"].includes(requestedView)
+    const view = ["all", "drep", "spo", "committee", "actions", "stats"].includes(requestedView)
       ? requestedView
       : "all";
-    const includeDreps = view === "all" || view === "drep" || view === "actions";
-    const includeCommittee = view === "all" || view === "committee";
-    const includeSpos = view === "all" || view === "spo" || view === "actions";
-    const compactDashboardView = view === "drep" || view === "spo" || view === "committee";
+    const includeDreps = view === "all" || view === "drep" || view === "actions" || view === "stats";
+    const includeCommittee = view === "all" || view === "committee" || view === "stats";
+    const includeSpos = view === "all" || view === "spo" || view === "actions" || view === "stats";
+    const compactDashboardView = view === "drep" || view === "spo" || view === "committee" || view === "stats";
     const compactActionsView = view === "actions";
     const historical = requestedSnapshot ? readSnapshotFromHistory(requestedSnapshot) : null;
     const sourceSnapshot = historical || pickBestSnapshotForApi(snapshot);
+    const sourceKey = [
+      requestedSnapshot || "latest",
+      sourceSnapshot?.generatedAt || "",
+      sourceSnapshot?.latestEpoch || 0,
+      sourceSnapshot?.processedProposalCount || 0
+    ].join(":");
     const isActionsView = view === "actions";
     let committeeMembersRaw = includeCommittee
       ? normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [])
       : [];
-    if (includeCommittee && !isActionsView && committeeMembersRaw.length > 0) {
-      committeeMembersRaw = await enrichCommitteeRowsWithCgovRationale(
+    if ((view === "committee" || view === "all") && !isActionsView && committeeMembersRaw.length > 0) {
+      const enrichTask = getCommitteeRowsWithCgovRationaleCached(
         committeeMembersRaw,
-        sourceSnapshot?.proposalInfo || {}
+        sourceSnapshot?.proposalInfo || {},
+        sourceKey
       );
+      if (view === "committee") {
+        const raceResult = await Promise.race([
+          enrichTask.then((rows) => ({ ready: true, rows })),
+          sleep(200).then(() => ({ ready: false, rows: null }))
+        ]);
+        if (raceResult.ready && Array.isArray(raceResult.rows)) {
+          committeeMembersRaw = raceResult.rows;
+        }
+      } else {
+        committeeMembersRaw = await enrichTask;
+      }
     }
     const committeeMembers = compactDashboardView ? compactActorsForDashboard(committeeMembersRaw) : committeeMembersRaw;
     const hasSpecialDreps = sourceSnapshot.specialDreps && Object.keys(sourceSnapshot.specialDreps).length > 0;
@@ -5696,12 +5768,41 @@ const server = http.createServer(async (req, res) => {
     // Hydrate vote timestamps only for Committee dashboard view.
     // Running this for DRep/SPO/Actions causes large blocking latency.
     if (view === "committee" && includeCommittee) {
-      await hydrateVoteTimesForActors(committeeMembersRaw, sourceSnapshot?.proposalInfo || {});
+      const hydrationTask = triggerCommitteeVoteTimeHydration(
+        committeeMembersRaw,
+        sourceSnapshot?.proposalInfo || {},
+        sourceKey
+      );
+      // Keep first paint fast; continue hydrating in background if it takes longer.
+      await Promise.race([hydrationTask, sleep(200)]);
     }
     const dreps = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(drepsRaw) : drepsRaw;
     const compactSpos = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(spos) : spos;
     const proposalInfoRaw = sourceSnapshot?.proposalInfo || {};
     const proposalInfo = compactDashboardView ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
+
+    if (view === "stats") {
+      json(res, 200, {
+        schemaVersion: sourceSnapshot?.schemaVersion || SNAPSHOT_SCHEMA_VERSION,
+        generatedAt: sourceSnapshot?.generatedAt || null,
+        latestEpoch: sourceSnapshot?.latestEpoch || null,
+        drepParticipationStartEpoch: sourceSnapshot?.drepParticipationStartEpoch || null,
+        thresholdContext: sourceSnapshot?.thresholdContext || {},
+        proposalInfo,
+        dreps,
+        committeeMembers,
+        specialDreps,
+        spos: compactSpos,
+        view,
+        snapshotKey: requestedSnapshot || "",
+        historical: Boolean(historical),
+        syncing: syncState.syncing,
+        lastSyncStartedAt: syncState.lastStartedAt,
+        lastSyncCompletedAt: syncState.lastCompletedAt,
+        lastSyncError: syncState.lastError
+      });
+      return;
+    }
 
     json(res, 200, {
       ...sourceSnapshot,
