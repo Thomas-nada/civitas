@@ -14,6 +14,8 @@ const NclPage = lazy(() => import("./pages/NclPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
 const ConstitutionPage = lazy(() => import("./pages/ConstitutionPage"));
+const VoterProfilePage = lazy(() => import("./pages/VoterProfilePage"));
+const ProposalDetailPage = lazy(() => import("./pages/ProposalDetailPage"));
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -271,11 +273,15 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/actions" element={<GovernanceActionsPage />} />
+          <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
           <Route path="/ncl" element={<NclPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
+          <Route path="/dreps/:actorId" element={<VoterProfilePage actorType="drep" />} />
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />
+          <Route path="/spos/:actorId" element={<VoterProfilePage actorType="spo" />} />
           <Route path="/committee" element={<DashboardPage actorType="committee" />} />
+          <Route path="/committee/:actorId" element={<VoterProfilePage actorType="committee" />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/constitution" element={<ConstitutionPage />} />
           <Route path="/bugs" element={<BugsPage />} />

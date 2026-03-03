@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
@@ -251,33 +251,6 @@ function VoteMixPie({ group, row }) {
           )}
         </div>
       </div>
-      <details className="action-vote-calc">
-        <summary>Expandable full calculation</summary>
-        {isCommittee ? (
-          <p>
-            Constitutional: <strong>{yes}</strong> | Unconstitutional: <strong>{no}</strong> | Abstain: <strong>{abstain}</strong> | Not voted: <strong>{ccNotVotedCount}</strong> | Eligible: <strong>{ccDenominator}</strong>
-          </p>
-        ) : isSpo ? (
-          <>
-            <p>Yes: <strong>{asPct(spoYesPctDisplay)}</strong> ({formatAdaCompact(spoYesAda)})</p>
-            <p>
-              No: <strong>{asPct(spoNoPctDisplay)}</strong> ({formatAdaCompact(spoNoWithNotVotedAda)}) | Not voted in No: <strong>{formatAdaCompact(spoNotVotedAda)}</strong>
-            </p>
-            <p>Abstain (active + always): <strong>{formatAdaCompact(spoAbstainAda)}</strong></p>
-            {row?.spoRequiredPct !== null ? (
-              <p>Threshold progress: <strong>{asPct(row?.spoYesPct)}</strong> / <strong>{asPct(row?.spoRequiredPct)}</strong></p>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <p>Yes: <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
-            <p>No: <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
-            <p>Abstain: <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
-            <p>Not voted: <strong>{asPct(drepNotVotedPct)}</strong> ({formatAdaCompact(drepNotVotedAda)})</p>
-            <p>Total active stake: <strong>{formatAdaCompact(drepActiveBaseAda)}</strong></p>
-          </>
-        )}
-      </details>
     </article>
   );
 }
@@ -376,6 +349,7 @@ function normalizeActionPayload(selected, liveMetadata) {
 }
 
 export default function GovernanceActionsPage() {
+  const navigate = useNavigate();
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const snapshotKey = queryParams.get("snapshot") || "";
   const initialSelectedProposal = queryParams.get("id") || "";
@@ -1227,221 +1201,41 @@ export default function GovernanceActionsPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => {
-                  const isExpanded = row.proposalId === selectedId;
-                  return (
-                    <Fragment key={row.proposalId}>
-                      <tr
-                        className={`${isExpanded ? "active" : ""}${row.isExpiringSoon ? " expiring-soon-row" : ""}`}
-                        onClick={() => setSelectedWithUrl(isExpanded ? "" : row.proposalId)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setSelectedWithUrl(isExpanded ? "" : row.proposalId);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        aria-expanded={isExpanded ? "true" : "false"}
-                      >
-                        <td data-label="Action">{row.actionName}</td>
-                        <td data-label="Type">{row.governanceType}</td>
-                        <td data-label="Status">
-                          {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
-                          {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} ep</span> : null}
-                        </td>
-                        <td data-label="Submitted">
-                          {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
-                          {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
-                          {row.isExpiringSoon && row.expirationEpoch ? (
-                            <div className="expiring-inline-note">
-                              Expires by epoch {row.expirationEpoch}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td data-label="Yes / No (active)">
-                          {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
-                        </td>
-                      </tr>
-                      {isExpanded ? (
-                        <tr className="action-expanded-row">
-                          <td colSpan={5}>
-                            <div ref={detailPanelRef} className="detail panel action-inline-detail">
-                              <h2>{row.actionName}</h2>
-                              <p className="mono">{row.proposalId}</p>
-                              <div className="meta action-inline-meta">
-                                <p>
-                                  Type: <strong>{row.governanceType}</strong>
-                                </p>
-                                <p>
-                                  Status: {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
-                                  {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} epoch(s)</span> : null}
-                                </p>
-                                <p>
-                                  Submitted:{" "}
-                                  <strong>
-                                    {row.submittedEpoch ? `Epoch ${row.submittedEpoch}` : ""}
-                                    {row.submittedEpoch && row.submittedAt ? " · " : ""}
-                                    {row.submittedAt ? new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : (!row.submittedEpoch ? "Unknown" : "")}
-                                  </strong>
-                                </p>
-                                {row.expirationEpoch ? (
-                                  <p>
-                                    Expires:{" "}
-                                    <strong>
-                                      Epoch {row.expirationEpoch}
-                                      {formatEpochDate(row.expirationEpoch) ? ` · ~${formatEpochDate(row.expirationEpoch)}` : ""}
-                                    </strong>
-                                  </p>
-                                ) : null}
-                                {row.isExpiringSoon ? (
-                                  <p className="expiring-warning-text">
-                                    Expiry alert: this action is inside the expiring-soon window.
-                                  </p>
-                                ) : null}
-                                <p>
-                                  Deposit: <strong>{Number(row.depositAda || 0).toLocaleString()} ada</strong>
-                                </p>
-                                <p>
-                                  Required DRep threshold: <strong>{asPct(row.thresholdInfo?.drepRequiredPct)}</strong>
-                                </p>
-                                {row.thresholdInfo?.ccRequiredPct != null ? (
-                                  <p>
-                                    Required CC threshold: <strong>{asPct(row.thresholdInfo.ccRequiredPct)}</strong>
-                                  </p>
-                                ) : null}
-                                {row.thresholdInfo?.poolRequiredPct != null ? (
-                                  <p>
-                                    Required SPO threshold: <strong>{asPct(row.thresholdInfo.poolRequiredPct)}</strong>
-                                  </p>
-                                ) : null}
-                                {row.thresholdInfo?.parameterGroup ? (
-                                  <p>
-                                    Parameter group: <strong>{row.thresholdInfo.parameterGroup}</strong>
-                                  </p>
-                                ) : null}
-                                {row.txHash ? (
-                                  <p>
-                                    Tx:{" "}
-                                    <a className="ext-link" href={`https://cardanoscan.io/transaction/${row.txHash}`} target="_blank" rel="noreferrer">
-                                      {row.txHash}
-                                    </a>
-                                  </p>
-                                  ) : null}
-                              </div>
-
-                              <section className="action-vote-pies">
-                                {eligibleVoteGroups(row).map((group) => (
-                                  <VoteMixPie key={`${row.proposalId}-${group.key}`} group={group} row={row} />
-                                ))}
-                              </section>
-
-                              {row.status === "Active" ? (
-                                <div className="vote-cast-section">
-                                  <h3 className="detail-section-title">Cast Your Vote</h3>
-
-                                  {!wallet?.walletApi ? (
-                                    <p className="muted">Connect your wallet in the top bar to vote on this action.</p>
-                                  ) : !wallet.walletDrep ? (
-                                    <p className="muted">Connected wallet has no DRep credential. Only registered DReps can vote on governance actions.</p>
-                                  ) : (
-                                    <>
-                                      <div className="vote-choice-row">
-                                        {["Yes", "No", "Abstain"].map((choice) => (
-                                          <button
-                                            key={choice}
-                                            type="button"
-                                            className={`vote-choice-btn${voteChoice === choice ? " active" : ""}`}
-                                            onClick={() => { setVoteChoice(choice); setVoteModalOpen(true); }}
-                                            disabled={voteSubmitting}
-                                          >
-                                            {choice}
-                                          </button>
-                                        ))}
-                                      </div>
-                                      {voteSubmitting ? <p className="vote-notice">{voteNotice || "Submitting vote..."}</p> : null}
-                                    </>
-                                  )}
-
-                                  {voteError ? <p className="vote-error">{voteError}</p> : null}
-                                  {!voteSubmitting && voteNotice && !votedTxHash ? <p className="vote-notice">{voteNotice}</p> : null}
-                                  {votedTxHash ? (
-                                    <div className="vote-submitted">
-                                      <p className="vote-success">
-                                        Vote submitted! Tx:{" "}
-                                        <a
-                                          className="ext-link"
-                                          href={`https://cardanoscan.io/transaction/${votedTxHash}`}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                        >
-                                          {votedTxHash.slice(0, 16)}…
-                                        </a>
-                                      </p>
-                                      {voteSyncStatus === "polling" ? (
-                                        <p className="vote-notice">Waiting for snapshot to update…</p>
-                                      ) : voteSyncStatus === "synced" ? (
-                                        <p className="vote-success">✓ Vote confirmed in latest snapshot.</p>
-                                      ) : voteSyncStatus === "timeout" ? (
-                                        <p className="vote-notice">Snapshot not yet updated — your vote is on-chain. Refresh in a few minutes.</p>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ) : null}
-
-                              <section className="action-payload-details">
-                                <h3 className="detail-section-title">Governance Payload</h3>
-                                {proposalMetadataLoading ? <p className="muted">Loading metadata...</p> : null}
-                                {proposalMetadataError ? <p className="muted">Metadata error: {proposalMetadataError}</p> : null}
-                                {payloadDoc.metadataUrl ? (
-                                  <section className="rationale-section">
-                                    <h4>Metadata URL</h4>
-                                    <a className="ext-link" href={payloadDoc.metadataUrl} target="_blank" rel="noreferrer">
-                                      {payloadDoc.metadataUrl}
-                                    </a>
-                                    {payloadDoc.metadataHash ? <p className="mono">{payloadDoc.metadataHash}</p> : null}
-                                  </section>
-                                ) : null}
-                                {payloadDoc.sections.map((section) => (
-                                  <section className="rationale-section" key={`${row.proposalId}-${section.key}`}>
-                                    <h4>{section.title}</h4>
-                                    {section.type === "json" ? (
-                                      <pre className="json-pre payload-pretty">{JSON.stringify(section.content, null, 2)}</pre>
-                                    ) : (
-                                      <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
-                                        {section.content}
-                                      </ReactMarkdown>
-                                    )}
-                                  </section>
-                                ))}
-                                {payloadDoc.references.length > 0 ? (
-                                  <section className="rationale-section">
-                                    <h4>References</h4>
-                                    <div className="vote-list">
-                                      {payloadDoc.references.map((ref) => (
-                                        <article className="vote-item" key={`${row.proposalId}-${ref.uri}`}>
-                                          <p className="mono">{ref.type}</p>
-                                          <a className="ext-link" href={ref.uri} target="_blank" rel="noreferrer">
-                                            {ref.label}
-                                          </a>
-                                        </article>
-                                      ))}
-                                    </div>
-                                  </section>
-                                ) : null}
-                                <details className="payload-raw">
-                                  <summary>Raw JSON</summary>
-                                  <pre className="json-pre payload-pretty">{JSON.stringify(payloadDoc.raw || {}, null, 2)}</pre>
-                                </details>
-                              </section>
-                            </div>
-                          </td>
-                        </tr>
+                rows.map((row) => (
+                  <tr
+                    key={row.proposalId}
+                    className={row.isExpiringSoon ? "expiring-soon-row" : ""}
+                    onClick={() => navigate(`/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open details for ${row.actionName}`}
+                  >
+                    <td data-label="Action">{row.actionName}</td>
+                    <td data-label="Type">{row.governanceType}</td>
+                    <td data-label="Status">
+                      {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
+                      {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} ep</span> : null}
+                    </td>
+                    <td data-label="Submitted">
+                      {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
+                      {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
+                      {row.isExpiringSoon && row.expirationEpoch ? (
+                        <div className="expiring-inline-note">
+                          Expires by epoch {row.expirationEpoch}
+                        </div>
                       ) : null}
-                    </Fragment>
-                  );
-                })
+                    </td>
+                    <td data-label="Yes / No (active)">
+                      {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

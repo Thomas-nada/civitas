@@ -964,6 +964,43 @@ a {
   gap: 0.4rem;
 }
 
+.proposal-vote-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.proposal-vote-filters > label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.proposal-vote-filters > label > span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.proposal-vote-filters input {
+  width: 100%;
+  padding: 0.48rem 0.58rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+}
+
+.proposal-vote-filters-search {
+  grid-column: span 1;
+}
+
+.proposal-vote-filters-count {
+  grid-column: 1 / -1;
+  margin: 0.1rem 0 0;
+}
+
 .constitution-toc {
   display: grid;
   gap: 0.28rem;
@@ -1075,6 +1112,10 @@ a {
   .constitution-sidebar {
     position: static;
     max-height: none;
+  }
+
+  .proposal-vote-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2885,6 +2926,10 @@ tbody tr.active {
 
   .stats-donut-legend {
     width: 100%;
+  }
+
+  .proposal-vote-filters {
+    grid-template-columns: 1fr;
   }
 
   th,

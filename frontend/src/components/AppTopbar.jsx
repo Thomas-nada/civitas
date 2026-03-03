@@ -49,6 +49,18 @@ function getCurrentNavGroupKey(pathname) {
   return NAV_GROUPS[0]?.key || "";
 }
 
+function getCurrentNavItemPath(pathname) {
+  const cleanPath = String(pathname || "");
+  let best = "";
+  for (const group of NAV_GROUPS) {
+    for (const link of group.links) {
+      if (!isPathMatch(cleanPath, link.to)) continue;
+      if (link.to.length > best.length) best = link.to;
+    }
+  }
+  return best;
+}
+
 function formatAda(lovelace) {
   const amount = Number(lovelace || 0) / 1_000_000;
   if (!Number.isFinite(amount)) return "N/A";
@@ -95,6 +107,10 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   const isLanding = location.pathname === "/";
   const currentNavGroupKey = useMemo(
     () => getCurrentNavGroupKey(location.pathname),
+    [location.pathname]
+  );
+  const currentNavItemPath = useMemo(
+    () => getCurrentNavItemPath(location.pathname),
     [location.pathname]
   );
   const [openNavGroupKey, setOpenNavGroupKey] = useState(currentNavGroupKey);
@@ -267,14 +283,14 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
                 </button>
                 <div className="topnav-group-links" role="menu" aria-label={`${group.label} links`}>
                   {group.links.map((item) => (
-                    <NavLink
+                    <Link
                       key={item.to}
                       to={item.to}
-                      className={({ isActive }) => (isActive ? "topnav-link active" : "topnav-link")}
+                      className={currentNavItemPath === item.to ? "topnav-link active" : "topnav-link"}
                       role="menuitem"
                     >
                       {item.label}
-                    </NavLink>
+                    </Link>
                   ))}
                 </div>
               </div>

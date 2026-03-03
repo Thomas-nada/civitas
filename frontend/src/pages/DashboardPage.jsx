@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Transaction } from "@meshsdk/core";
+import { useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 
 const scoreWeights = {
@@ -351,10 +352,11 @@ export default function DashboardPage({ actorType }) {
   const isDrep = actorType === "drep";
   const isSpo = actorType === "spo";
   const isCommittee = !isDrep && !isSpo;
+  const navigate = useNavigate();
   const actorLabel = isDrep ? "DRep" : isSpo ? "Stake Pool" : "Committee Member";
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const snapshotKey = queryParams.get("snapshot") || "";
-  const initialSelectedId = queryParams.get("id") || "";
+  const initialSelectedId = "";
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState(initialSelectedId);
@@ -950,6 +952,7 @@ export default function DashboardPage({ actorType }) {
   useEffect(() => {
     if (!selectedId) return undefined;
     const onPointerDown = (event) => {
+      if (profileImageOpen || rationaleModal?.open) return;
       const node = detailPanelRef.current;
       if (!node) return;
       const target = event.target;
@@ -958,7 +961,7 @@ export default function DashboardPage({ actorType }) {
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [selectedId]);
+  }, [selectedId, profileImageOpen, rationaleModal?.open]);
 
   useEffect(() => {
     const shouldLockScroll =
@@ -980,7 +983,15 @@ export default function DashboardPage({ actorType }) {
   const alignmentLabel = isCommittee ? "Rationale Quality" : "Alignment";
   const tableColSpan = isCommittee ? 8 : showResponsivenessColumn ? 7 : 6;
 
+  function actorProfilePath(actorId) {
+    const base = isDrep ? "/dreps" : isSpo ? "/spos" : "/committee";
+    const snapshotSuffix = snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : "";
+    return `${base}/${encodeURIComponent(actorId)}${snapshotSuffix}`;
+  }
+
   function setSelectedWithUrl(nextId) {
+    if (!nextId) setProfileImageOpen(false);
+    if (nextId !== selectedId) setProfileImageOpen(false);
     setSelectedId(nextId);
     const url = new URL(window.location.href);
     if (nextId) url.searchParams.set("id", nextId);
@@ -1278,17 +1289,16 @@ export default function DashboardPage({ actorType }) {
                 pagedRows.map((row) => (
                   <Fragment key={row.id}>
                   <tr
-                    className={row.id === selectedId ? "active" : ""}
-                    onClick={() => setSelectedWithUrl(row.id === selectedId ? "" : row.id)}
+                    onClick={() => navigate(actorProfilePath(row.id))}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setSelectedWithUrl(row.id === selectedId ? "" : row.id);
+                        navigate(actorProfilePath(row.id));
                       }
                     }}
                     role="button"
                     tabIndex={0}
-                    aria-expanded={row.id === selectedId ? "true" : "false"}
+                    aria-label={`Open profile for ${row.name || row.id}`}
                   >
                     <td data-label={actorLabel}>
                       {isDrep ? (
@@ -1451,7 +1461,7 @@ export default function DashboardPage({ actorType }) {
                       </span>
                     </td>
                   </tr>
-                  {row.id === selectedId && selected ? (
+                  {false ? (
                     <tr className="action-expanded-row">
                       <td colSpan={tableColSpan}>
                         <div ref={detailPanelRef} className="detail panel action-inline-detail">
@@ -1778,10 +1788,10 @@ export default function DashboardPage({ actorType }) {
         </div>
 
       </section>
-      {useModalDetails && selected ? (
+      {false ? (
         <div className="detail-backdrop" role="presentation" onClick={() => setSelectedWithUrl("")} />
       ) : null}
-      {isDrep && profileImageOpen && selected?.profile?.imageUrl ? (
+      {false ? (
         <div className="image-modal-backdrop" role="presentation" onClick={() => setProfileImageOpen(false)}>
           <div className="image-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="image-modal-close" onClick={() => setProfileImageOpen(false)}>
