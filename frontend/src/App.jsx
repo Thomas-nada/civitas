@@ -7,6 +7,7 @@ import { WalletContext } from "./context/WalletContext";
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
+const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
@@ -269,6 +270,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/actions" element={<GovernanceActionsPage />} />
+          <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
           <Route path="/ncl" element={<NclPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />

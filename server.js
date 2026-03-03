@@ -43,6 +43,7 @@ const KOIOS_MAX_RETRIES = Number(process.env.KOIOS_MAX_RETRIES || 4);
 const KOIOS_REQUEST_TIMEOUT_MS = Number(process.env.KOIOS_REQUEST_TIMEOUT_MS || 15000);
 const KOIOS_REQUEST_DELAY_MS = Number(process.env.KOIOS_REQUEST_DELAY_MS || 120);
 const CGOV_PROPOSAL_API_BASE = process.env.CGOV_PROPOSAL_API_BASE || "https://app.cgov.io/api/proposal";
+const GUARDRAILS_REFERENCE_PRESETS_JSON = process.env.GUARDRAILS_REFERENCE_PRESETS_JSON || "";
 const SPO_RATIONALE_USE_CGOV_FALLBACK = String(process.env.SPO_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const CC_RATIONALE_USE_CGOV_FALLBACK = String(process.env.CC_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const DREP_RATIONALE_USE_CGOV_FALLBACK = String(process.env.DREP_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
@@ -152,6 +153,11 @@ const CC_EPOCH_OVERRIDES_BY_NAME = {
   "input | output": { seatStartEpoch: 507, expirationEpoch: 580 },
   "input output": { seatStartEpoch: 507, expirationEpoch: 580 }
 };
+const GUARDRAILS_REFERENCE_PRESETS = (() => {
+  const parsed = parseMaybeJsonObject(GUARDRAILS_REFERENCE_PRESETS_JSON);
+  if (!parsed) return {};
+  return parsed;
+})();
 
 let bech32Codec = null;
 try {
@@ -623,6 +629,186 @@ function compactVotesForDashboard(votes) {
       votedAt: vote?.votedAt || (votedAtUnix ? new Date(votedAtUnix * 1000).toISOString() : null)
     };
   });
+}
+
+function detectBlockfrostNetworkFromBaseUrl() {
+  const base = String(BLOCKFROST_BASE_URL || "").toLowerCase();
+  if (base.includes("mainnet")) return "mainnet";
+  if (base.includes("preview")) return "preview";
+  if (base.includes("preprod")) return "preprod";
+  if (base.includes("testnet")) return "testnet";
+  return "unknown";
+}
+
+function extractTreasuryPolicyHashFromGovernanceDescription(desc) {
+  if (!desc || typeof desc !== "object") return "";
+  const tag = String(desc.tag || "").toLowerCase();
+  const contents = Array.isArray(desc.contents) ? desc.contents : [];
+  const isPolicyHash = (value) => /^[0-9a-f]{56}$/.test(String(value || "").trim().toLowerCase());
+
+  // Known shape A: { tag: "TreasuryWithdrawals", contents: [withdrawals, policyHash] }
+  const direct = String(contents[1] || "").trim().toLowerCase();
+  if (isPolicyHash(direct)) return direct;
+
+  // Known shape B (current Blockfrost): { contents: [ [withdrawals, policyHash] ] }
+  if (tag.includes("treasurywithdrawals") && Array.isArray(contents[0])) {
+    const nested = contents[0];
+    const nestedDirect = String(nested[1] || "").trim().toLowerCase();
+    if (isPolicyHash(nestedDirect)) return nestedDirect;
+  }
+
+  // Safe fallback: for TreasuryWithdrawals, last 56-char hex in traversal is typically
+  // the policy hash while earlier ones are withdrawal credential script hashes.
+  const stack = [desc];
+  let lastMatch = "";
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item);
+      continue;
+    }
+    if (current && typeof current === "object") {
+      for (const value of Object.values(current)) stack.push(value);
+      continue;
+    }
+    const s = String(current || "").trim().toLowerCase();
+    if (isPolicyHash(s)) {
+      if (!tag.includes("treasurywithdrawals")) return s;
+      lastMatch = s;
+    }
+  }
+  return lastMatch;
+}
+
+function extractConstitutionScriptHashFromGovernanceDescription(desc) {
+  if (!desc || typeof desc !== "object") return "";
+  const tag = String(desc.tag || "").toLowerCase();
+  const contents = Array.isArray(desc.contents) ? desc.contents : [];
+  const isPolicyHash = (value) => /^[0-9a-f]{56}$/.test(String(value || "").trim().toLowerCase());
+
+  // Known shape: { tag: "NewConstitution", contents: [prevGovAction, { anchor, script }] }
+  const second = contents[1];
+  if (second && typeof second === "object") {
+    const candidate = String(second.script || "").trim().toLowerCase();
+    if (isPolicyHash(candidate)) return candidate;
+  }
+
+  // Fallback: scan nested values and return first match for constitution action.
+  const stack = [desc];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item);
+      continue;
+    }
+    if (current && typeof current === "object") {
+      for (const value of Object.values(current)) stack.push(value);
+      continue;
+    }
+    const s = String(current || "").trim().toLowerCase();
+    if (!tag.includes("newconstitution")) continue;
+    if (isPolicyHash(s)) return s;
+  }
+  return "";
+}
+
+async function findLatestEnactedConstitutionGuardrails() {
+  const count = 100;
+  const maxPages = 8;
+  let page = 1;
+  let fallbackLatestAnyStatus = null;
+  while (page <= maxPages) {
+    const list = await blockfrostGet(`/governance/proposals?count=${count}&page=${page}&order=desc`);
+    if (!Array.isArray(list) || list.length === 0) break;
+    for (const row of list) {
+      const type = String(row?.governance_type || "").toLowerCase();
+      if (!type.includes("new_constitution")) continue;
+      const proposalId = String(row?.id || "").trim();
+      if (!proposalId) continue;
+      const detail = await blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null);
+      if (!detail || typeof detail !== "object") continue;
+      const policyHash = extractConstitutionScriptHashFromGovernanceDescription(detail.governance_description);
+      if (!policyHash) continue;
+      const enactedEpoch = detail?.enacted_epoch ?? row?.enacted_epoch;
+      const ratifiedEpoch = detail?.ratified_epoch ?? row?.ratified_epoch;
+      const status = enactedEpoch !== null && enactedEpoch !== undefined
+        ? "enacted"
+        : ratifiedEpoch !== null && ratifiedEpoch !== undefined
+          ? "ratified_not_enacted"
+          : "submitted";
+      const candidate = {
+        proposalId,
+        policyHash,
+        status,
+        enactedEpoch: enactedEpoch !== null && enactedEpoch !== undefined ? Number(enactedEpoch) : null,
+        ratifiedEpoch: ratifiedEpoch !== null && ratifiedEpoch !== undefined ? Number(ratifiedEpoch) : null,
+        txHash: String(detail.tx_hash || "").trim(),
+        certIndex: Number(detail.cert_index ?? 0)
+      };
+      if (!fallbackLatestAnyStatus) fallbackLatestAnyStatus = candidate;
+      if (status !== "enacted") continue;
+      return {
+        ...candidate
+      };
+    }
+    if (list.length < count) break;
+    page += 1;
+  }
+  return fallbackLatestAnyStatus;
+}
+
+async function findLatestEnactedTreasuryGuardrails() {
+  const count = 100;
+  const maxPages = 8;
+  let page = 1;
+  let fallbackLatestAnyStatus = null;
+  while (page <= maxPages) {
+    const list = await blockfrostGet(`/governance/proposals?count=${count}&page=${page}&order=desc`);
+    if (!Array.isArray(list) || list.length === 0) break;
+    for (const row of list) {
+      const type = String(row?.governance_type || "").toLowerCase();
+      if (!type.includes("treasury_withdrawals")) continue;
+      const proposalId = String(row?.id || "").trim();
+      if (!proposalId) continue;
+      const detail = await blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null);
+      if (!detail || typeof detail !== "object") continue;
+      const policyHash = extractTreasuryPolicyHashFromGovernanceDescription(detail.governance_description);
+      if (!policyHash) continue;
+      const enactedEpoch = detail?.enacted_epoch ?? row?.enacted_epoch;
+      const ratifiedEpoch = detail?.ratified_epoch ?? row?.ratified_epoch;
+      const status = enactedEpoch !== null && enactedEpoch !== undefined
+        ? "enacted"
+        : ratifiedEpoch !== null && ratifiedEpoch !== undefined
+          ? "ratified_not_enacted"
+          : "submitted";
+      const candidate = {
+        proposalId,
+        policyHash,
+        status,
+        enactedEpoch: enactedEpoch !== null && enactedEpoch !== undefined ? Number(enactedEpoch) : null,
+        ratifiedEpoch: ratifiedEpoch !== null && ratifiedEpoch !== undefined ? Number(ratifiedEpoch) : null,
+        txHash: String(detail.tx_hash || "").trim(),
+        certIndex: Number(detail.cert_index ?? 0)
+      };
+      if (!fallbackLatestAnyStatus) fallbackLatestAnyStatus = candidate;
+      if (status !== "enacted") continue;
+      return {
+        ...candidate
+      };
+    }
+    if (list.length < count) break;
+    page += 1;
+  }
+  return fallbackLatestAnyStatus;
+}
+
+async function findKoiosTreasuryPolicyHash(proposalId) {
+  const safe = encodeURIComponent(String(proposalId || "").trim());
+  if (!safe) return "";
+  const rows = await koiosGet(`/proposal_info?_proposal_id=eq.${safe}`).catch(() => []);
+  if (!Array.isArray(rows) || rows.length === 0) return "";
+  const detail = rows[0];
+  return extractTreasuryPolicyHashFromGovernanceDescription(detail?.governance_description || null);
 }
 
 function compactActorsForDashboard(rows) {
@@ -5778,6 +5964,113 @@ const server = http.createServer(async (req, res) => {
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal metadata." });
+      return;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/guardrails/latest") {
+    const requestedNetwork = String(url.searchParams.get("network") || "mainnet").trim().toLowerCase();
+    const supportedNetworks = new Set(["mainnet", "preview", "preprod", "testnet"]);
+    if (!supportedNetworks.has(requestedNetwork)) {
+      json(res, 400, { error: "Invalid network. Use mainnet, preview, preprod, or testnet." });
+      return;
+    }
+    if (!BLOCKFROST_API_KEY) {
+      json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
+      return;
+    }
+    const configuredNetwork = detectBlockfrostNetworkFromBaseUrl();
+    if (configuredNetwork !== "unknown" && configuredNetwork !== requestedNetwork) {
+      json(res, 400, {
+        error: `Server is configured for ${configuredNetwork}; requested ${requestedNetwork}.`,
+        configuredNetwork,
+        requestedNetwork
+      });
+      return;
+    }
+    try {
+      const latestConstitution = await findLatestEnactedConstitutionGuardrails();
+      const latestTreasury = await findLatestEnactedTreasuryGuardrails();
+      const latest = latestConstitution || latestTreasury;
+      if (!latest) {
+        json(res, 404, { error: "Could not find a constitution or treasury governance action with a guardrails policy hash." });
+        return;
+      }
+
+      const koiosPolicyHash = latestConstitution
+        ? ""
+        : await findKoiosTreasuryPolicyHash(latest.proposalId);
+      const koiosMatch = koiosPolicyHash ? koiosPolicyHash === latest.policyHash : null;
+      const presetRefRaw = GUARDRAILS_REFERENCE_PRESETS?.[requestedNetwork];
+      const presetReference = presetRefRaw && typeof presetRefRaw === "object" ? {
+        txHash: String(presetRefRaw.txHash || "").trim(),
+        txIndex: Number(presetRefRaw.txIndex ?? 0),
+        scriptSize: String(presetRefRaw.scriptSize || "").trim(),
+        scriptHash: String(presetRefRaw.scriptHash || latest.policyHash).trim().toLowerCase(),
+        version: String(presetRefRaw.version || "V3").trim()
+      } : null;
+
+      json(res, 200, {
+        ok: true,
+        network: requestedNetwork,
+        source: {
+          blockfrostBaseUrl: BLOCKFROST_BASE_URL,
+          koiosBaseUrl: KOIOS_BASE_URL
+        },
+        sourceActionType: latestConstitution ? "new_constitution" : "treasury_withdrawals",
+        latestEnactedConstitutionAction: latestConstitution,
+        latestEnactedTreasuryWithdrawal: latestTreasury,
+        policyHash: latest.policyHash,
+        koiosCrossCheck: {
+          policyHash: koiosPolicyHash || null,
+          match: koiosMatch
+        },
+        referencePreset: presetReference,
+        note: presetReference
+          ? "Reference script preset found for this network."
+          : "No reference script preset configured. Set GUARDRAILS_REFERENCE_PRESETS_JSON to auto-fill reference fields."
+      });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Failed to fetch latest guardrails policy." });
+      return;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/scripts/cbor") {
+    const scriptHash = String(url.searchParams.get("hash") || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{56}$/.test(scriptHash)) {
+      json(res, 400, { error: "Invalid script hash. Expected 56-char hex." });
+      return;
+    }
+    if (!BLOCKFROST_API_KEY) {
+      json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
+      return;
+    }
+    try {
+      const summary = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}`).catch(() => null);
+      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`);
+      const cbor = String(cborRow?.cbor || "").trim();
+      if (!cbor) {
+        json(res, 404, { error: "Script CBOR not found for this script hash." });
+        return;
+      }
+      const rawType = String(summary?.type || "").toLowerCase();
+      let version = "";
+      if (rawType.includes("v1")) version = "V1";
+      else if (rawType.includes("v2")) version = "V2";
+      else if (rawType.includes("v3")) version = "V3";
+      json(res, 200, {
+        ok: true,
+        hash: scriptHash,
+        type: summary?.type || "",
+        version,
+        serialisedSize: summary?.serialised_size ?? null,
+        cbor
+      });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Failed to fetch script CBOR." });
       return;
     }
   }

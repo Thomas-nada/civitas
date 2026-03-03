@@ -50,6 +50,8 @@
   --wm-scale: 1;
   --landing-aura-x: 0px;
   --landing-aura-y: 0px;
+  --select-menu-bg: #0d1416;
+  --select-menu-text: #e7fff9;
 }
 
 :root[data-theme="light"] {
@@ -87,6 +89,8 @@
   --watermark-opacity: 0.04;
   --watermark-drop-shadow: 0 0 14px rgba(14, 154, 132, 0.08);
   --watermark-logo-url: url("/civitas-logo-light.svg");
+  --select-menu-bg: #ffffff;
+  --select-menu-text: #0c2320;
 }
 
 *,
@@ -1125,6 +1129,20 @@ select {
   border-radius: 9px;
   padding: 0.56rem 0.65rem;
   font: inherit;
+}
+
+select {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] select {
+  color-scheme: light;
+}
+
+select option,
+select optgroup {
+  background-color: var(--select-menu-bg);
+  color: var(--select-menu-text);
 }
 
 select[multiple] {
@@ -3285,4 +3303,175 @@ tbody tr.active {
 .stats-page .recharts-tooltip-wrapper,
 .stats-page .recharts-default-tooltip {
   font-size: 12px;
+}
+
+/* Submit Governance Action */
+.submit-gov-shell {
+  max-width: 980px;
+}
+
+.submit-gov-panel {
+  padding: 1rem;
+}
+
+.submit-gov-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.submit-gov-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.submit-gov-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.submit-gov-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  cursor: help;
+  outline: none;
+}
+
+.submit-gov-tip:focus-visible {
+  box-shadow: 0 0 0 2px rgba(84, 228, 188, 0.28);
+}
+
+.submit-gov-tip-icon {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.submit-gov-tip-popover {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 260px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.submit-gov-tip:hover .submit-gov-tip-popover,
+.submit-gov-tip:focus .submit-gov-tip-popover,
+.submit-gov-tip:focus-visible .submit-gov-tip-popover {
+  opacity: 1;
+  visibility: visible;
+}
+
+.submit-gov-form input,
+.submit-gov-form select,
+.submit-gov-form textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.submit-gov-json {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.82rem;
+}
+
+.submit-gov-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.submit-gov-inline input,
+.submit-gov-inline select {
+  flex: 1 1 220px;
+}
+
+.submit-gov-checkbox {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.submit-gov-checkbox input {
+  width: auto;
+}
+
+.submit-gov-guided {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.submit-gov-guided legend {
+  padding: 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.submit-gov-preview {
+  opacity: 0.9;
+}
+
+.submit-gov-script {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.submit-gov-script legend {
+  padding: 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.submit-gov-script-note {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 800px) {
+  .submit-gov-panel {
+    padding: 0.7rem;
+  }
+  .submit-gov-tip-popover {
+    left: auto;
+    right: 0;
+    top: calc(100% + 8px);
+    transform: none;
+    width: min(260px, calc(100vw - 48px));
+  }
 }

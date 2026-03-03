@@ -196,6 +196,9 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
             <NavLink to="/actions" className={({ isActive }) => (isActive ? "active" : "")}>
               Actions
             </NavLink>
+            <NavLink to="/actions/submit" className={({ isActive }) => (isActive ? "active" : "")}>
+              Submit
+            </NavLink>
             <NavLink to="/dreps" className={({ isActive }) => (isActive ? "active" : "")}>
               DReps
             </NavLink>

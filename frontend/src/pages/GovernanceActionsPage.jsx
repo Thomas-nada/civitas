@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
@@ -1134,6 +1135,10 @@ export default function GovernanceActionsPage() {
     <main className="shell">
       <header className="hero">
         <h1>Governance Action Explorer</h1>
+        <p className="muted">
+          Need to submit a new proposal?{" "}
+          <Link to="/actions/submit">Open the submission page</Link>.
+        </p>
       </header>
 
       <section className="cards">
