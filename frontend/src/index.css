@@ -804,6 +804,29 @@ a {
   gap: 0.3rem;
 }
 
+.wiki-nav-group {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.wiki-nav-group:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.wiki-nav-title {
+  margin: 0.15rem 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .wiki-nav button {
   appearance: none;
   width: 100%;
@@ -1203,6 +1226,61 @@ a {
   margin-top: 1.1rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
+}
+
+.guide-wizard {
+  margin-top: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 0.75rem;
+}
+
+.guide-command-block {
+  margin: 0.55rem 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.guide-command-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-command-block pre {
+  margin: 0;
+  padding: 0.65rem;
+  overflow-x: auto;
+}
+
+.guide-stepper {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.guide-step-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.guide-step-dot.done {
+  background: color-mix(in srgb, var(--mint) 45%, var(--surface));
+}
+
+.guide-step-dot.active {
+  background: var(--mint);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mint) 35%, transparent);
 }
 
 .wiki-history-box {

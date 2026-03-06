@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import blakejs from "blakejs";
+import { applyCborEncoding, resolveScriptHash } from "@meshsdk/core";
 import {
   GOVERNANCE_ACTION_KINDS,
   createGovernanceAction,
@@ -66,6 +67,45 @@ function resolveIpfsUrl(url) {
 
 function asJson(value) {
   return JSON.stringify(value, null, 2);
+}
+
+function normalizeInlineScriptCbor(rawCbor, version, expectedPolicyHash = "") {
+  const cbor = String(rawCbor || "").trim().toLowerCase();
+  const expected = String(expectedPolicyHash || "").trim().toLowerCase();
+  const language = String(version || "V3").trim() || "V3";
+  if (!cbor) throw new Error("Inline script CBOR is empty.");
+
+  const tryHash = (candidate) => {
+    try {
+      return String(resolveScriptHash(candidate, language) || "").toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+
+  const rawHash = tryHash(cbor);
+  if (expected && rawHash === expected) {
+    return { scriptCbor: cbor, matchedHash: rawHash, transformed: false };
+  }
+
+  let encoded = "";
+  try {
+    encoded = String(applyCborEncoding(cbor) || "").toLowerCase();
+  } catch {
+    encoded = "";
+  }
+  const encodedHash = encoded ? tryHash(encoded) : "";
+  if (expected && encodedHash === expected) {
+    return { scriptCbor: encoded, matchedHash: encodedHash, transformed: true };
+  }
+
+  if (expected) {
+    throw new Error(
+      `Inline script hash mismatch for ${language}. Expected ${expected}, got raw=${rawHash || "invalid"} and encoded=${encodedHash || "invalid"}.`
+    );
+  }
+
+  return { scriptCbor: cbor, matchedHash: rawHash, transformed: false };
 }
 
 function toNonNegativeInt(raw, label) {
@@ -153,6 +193,7 @@ export default function SubmitGovernanceActionPage() {
   const [txHash, setTxHash] = useState("");
   const [guardrailsLoading, setGuardrailsLoading] = useState(false);
   const [inlineScriptLoading, setInlineScriptLoading] = useState(false);
+  const network = "mainnet";
   const [scriptMode, setScriptMode] = useState("none");
   const [scriptVersion, setScriptVersion] = useState("V3");
   const [scriptCbor, setScriptCbor] = useState("");
@@ -186,7 +227,7 @@ export default function SubmitGovernanceActionPage() {
   const [checklistState, setChecklistState] = useState({});
   const networkLabel = useMemo(() => {
     if (wallet?.walletNetworkId === 1) return "mainnet";
-    if (wallet?.walletNetworkId === 0) return "testnet (not supported for submissions)";
+    if (wallet?.walletNetworkId === 0) return "testnet";
     return "unknown";
   }, [wallet?.walletNetworkId]);
   const isGuardrailsAction = actionKind === "TreasuryWithdrawalsAction" || actionKind === "ParameterChangeAction";
@@ -210,7 +251,7 @@ export default function SubmitGovernanceActionPage() {
       const protocolParamUpdates = parseProtocolParamLines(parameterLines);
       const payload = { protocolParamUpdates };
       if (parentGovActionId) payload.govActionId = parentGovActionId;
-      if (String(parameterPolicyHash || "").trim()) payload.policyHash = String(parameterPolicyHash).trim();
+      if (String(parameterPolicyHash || "").trim()) payload.policyHash = { bytes: String(parameterPolicyHash).trim() };
       return payload;
     }
 
@@ -236,7 +277,7 @@ export default function SubmitGovernanceActionPage() {
       }
       if (Object.keys(withdrawals).length === 0) throw new Error("Add at least one treasury withdrawal.");
       const payload = { withdrawals };
-      if (String(treasuryPolicyHash || "").trim()) payload.policyHash = String(treasuryPolicyHash).trim();
+      if (String(treasuryPolicyHash || "").trim()) payload.policyHash = { bytes: String(treasuryPolicyHash).trim() };
       return payload;
     }
 
@@ -366,7 +407,7 @@ export default function SubmitGovernanceActionPage() {
       },
       rewardAddress: String(rewardAddress || "").trim(),
       deposit: String(deposit || DEFAULT_DEPOSIT).trim(),
-      network: "mainnet",
+      network: network,
       script: script || null
     };
   }, [
@@ -376,7 +417,7 @@ export default function SubmitGovernanceActionPage() {
     anchorHash,
     rewardAddress,
     deposit,
-    wallet?.walletNetworkId,
+    network,
     scriptMode,
     scriptVersion,
     scriptCbor,
@@ -442,7 +483,7 @@ export default function SubmitGovernanceActionPage() {
       setError("");
       setNotice("");
       setGuardrailsWarning("");
-      const selectedNetwork = "mainnet";
+      const selectedNetwork = network;
       const data = await fetchLatestGuardrails(selectedNetwork);
 
       const policyHash = String(data?.policyHash || "").trim().toLowerCase();
@@ -501,10 +542,16 @@ export default function SubmitGovernanceActionPage() {
       if (!res.ok) throw new Error(data.error || "Failed to fetch script CBOR.");
       const cbor = String(data?.cbor || "").trim();
       if (!cbor) throw new Error("Server returned empty script CBOR.");
+      const version = String(data?.version || scriptVersion || "V3").trim() || "V3";
+      const normalized = normalizeInlineScriptCbor(cbor, version, hash);
       setScriptMode("inline");
-      if (String(data?.version || "").trim()) setScriptVersion(String(data.version).trim());
-      setScriptCbor(cbor);
-      setNotice("Inline script loaded from policy hash. Script mode switched to Inline.");
+      setScriptVersion(version);
+      setScriptCbor(normalized.scriptCbor);
+      setNotice(
+        normalized.transformed
+          ? "Inline script loaded and CBOR-normalized to match policy hash. Script mode switched to Inline."
+          : "Inline script loaded from policy hash. Script mode switched to Inline."
+      );
     } catch (e) {
       setError(e?.message || "Failed to fetch inline script.");
     } finally {
@@ -539,9 +586,19 @@ export default function SubmitGovernanceActionPage() {
       let script;
       if (scriptMode === "inline") {
         if (!scriptCbor.trim()) throw new Error("Script CBOR is required for inline mode.");
+        let normalizedScriptCbor = scriptCbor.trim();
+        if (isGuardrailsAction) {
+          const policyHash = String(actionKind === "ParameterChangeAction" ? parameterPolicyHash : treasuryPolicyHash || "")
+            .trim()
+            .toLowerCase();
+          if (policyHash) {
+            const normalized = normalizeInlineScriptCbor(normalizedScriptCbor, scriptVersion, policyHash);
+            normalizedScriptCbor = normalized.scriptCbor;
+          }
+        }
         script = {
           version: scriptVersion,
-          scriptCbor: scriptCbor.trim()
+          scriptCbor: normalizedScriptCbor
         };
       }
       if (scriptMode === "reference") {
@@ -549,7 +606,7 @@ export default function SubmitGovernanceActionPage() {
           throw new Error("Reference script fields are required for reference mode.");
         }
         if (isGuardrailsAction) {
-          const selectedNetwork = "mainnet";
+          const selectedNetwork = network;
           const latest = await fetchLatestGuardrails(selectedNetwork);
           const latestHash = String(latest?.policyHash || "").trim().toLowerCase();
           const policyHash = String(actionKind === "ParameterChangeAction" ? parameterPolicyHash : treasuryPolicyHash || "").trim().toLowerCase();
@@ -586,7 +643,7 @@ export default function SubmitGovernanceActionPage() {
         anchor: { url: anchorUrl.trim(), hash: anchorHash.trim() },
         rewardAddress: rewardAddress.trim(),
         deposit: String(deposit || DEFAULT_DEPOSIT).trim(),
-        network: "mainnet",
+        network: network,
         script
       });
 
@@ -766,8 +823,8 @@ export default function SubmitGovernanceActionPage() {
             <input type="text" value={deposit} onChange={(e) => setDeposit(e.target.value)} required />
           </FieldWithHelp>
 
-          <FieldWithHelp label="Network" help="Civitas governance submissions use mainnet only.">
-            <input type="text" value="mainnet" readOnly />
+          <FieldWithHelp label="Network" help="Submission network is fixed for this deployment.">
+            <input type="text" value={network} readOnly />
           </FieldWithHelp>
 
           <fieldset className="submit-gov-script">
@@ -876,7 +933,7 @@ export default function SubmitGovernanceActionPage() {
         {txHash ? (
           <p className="vote-success">
             Submitted transaction:{" "}
-            <a className="ext-link" href={`https://cardanoscan.io/transaction/${txHash}`} target="_blank" rel="noreferrer">
+            <a className="ext-link" href={`https://${network === "mainnet" ? "" : network + "."}cardanoscan.io/transaction/${txHash}`} target="_blank" rel="noreferrer">
               {txHash}
             </a>
           </p>

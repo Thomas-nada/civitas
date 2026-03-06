@@ -27,7 +27,7 @@ const NAV_GROUPS = [
     label: "Insights",
     links: [
       { to: "/stats", label: "Governance Stats" },
-      { to: "/guide", label: "Governance Guide" },
+      { to: "/guide", label: "Governance Guides" },
       { to: "/about", label: "About Civitas" }
     ]
   }

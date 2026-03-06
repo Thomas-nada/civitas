@@ -48,6 +48,11 @@ const SPO_RATIONALE_USE_CGOV_FALLBACK = String(process.env.SPO_RATIONALE_USE_CGO
 const CC_RATIONALE_USE_CGOV_FALLBACK = String(process.env.CC_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const DREP_RATIONALE_USE_CGOV_FALLBACK = String(process.env.DREP_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const DREP_PARTICIPATION_START_EPOCH = Number(process.env.DREP_PARTICIPATION_START_EPOCH || 534);
+const GUARDRAILS_CACHE_TTL_MS = Number(process.env.GUARDRAILS_CACHE_TTL_MS || 120_000);
+const AUTO_START_SCHEDULER = String(process.env.AUTO_START_SCHEDULER || "false").toLowerCase() === "true";
+const SKIP_BOOT_HYDRATION = String(process.env.SKIP_BOOT_HYDRATION || "true").toLowerCase() === "true";
+const SNAPSHOT_REMOTE_URL = String(process.env.SNAPSHOT_REMOTE_URL || "").trim();
+const SNAPSHOT_REMOTE_TIMEOUT_MS = Number(process.env.SNAPSHOT_REMOTE_TIMEOUT_MS || 12000);
 
 const PROPOSAL_PAGE_SIZE = Number(process.env.PROPOSAL_PAGE_SIZE || 100);
 const PROPOSAL_MAX_PAGES = Number(process.env.PROPOSAL_MAX_PAGES || 1000);
@@ -203,8 +208,32 @@ const contentTypes = {
   ".ico": "image/x-icon"
 };
 
+const CONFIGURED_BLOCKFROST_NETWORK = detectBlockfrostNetworkFromBaseUrl();
+
+function getSnapshotNetwork(payload) {
+  return String(payload?.network || "").trim().toLowerCase();
+}
+
+function withSnapshotNetwork(payload) {
+  const fallback = getSnapshotNetwork(payload) || "unknown";
+  const network = CONFIGURED_BLOCKFROST_NETWORK === "unknown" ? fallback : CONFIGURED_BLOCKFROST_NETWORK;
+  return {
+    ...payload,
+    network
+  };
+}
+
+function snapshotMatchesConfiguredNetwork(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (CONFIGURED_BLOCKFROST_NETWORK === "unknown") return true;
+  const snapshotNetwork = getSnapshotNetwork(payload);
+  if (!snapshotNetwork) return true;
+  return snapshotNetwork === CONFIGURED_BLOCKFROST_NETWORK;
+}
+
 let snapshot = {
   schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+  network: CONFIGURED_BLOCKFROST_NETWORK === "unknown" ? "unknown" : CONFIGURED_BLOCKFROST_NETWORK,
   generatedAt: null,
   proposalCount: 0,
   scannedProposalCount: 0,
@@ -252,6 +281,7 @@ let committeeRationaleEnrichPromise = null;
 let committeeRationaleEnrichPromiseKey = "";
 let committeeVoteTimeHydrationPromise = null;
 let committeeVoteTimeHydrationKey = "";
+const guardrailsLatestCache = new Map();
 let specialDrepsCache = {
   fetchedAt: 0,
   value: {}
@@ -715,6 +745,66 @@ function extractConstitutionScriptHashFromGovernanceDescription(desc) {
     if (isPolicyHash(s)) return s;
   }
   return "";
+}
+
+// Query the ACTIVE constitution script hash directly from the ledger via Koios Ogmios.
+// This is the authoritative source — it's what the node actually enforces right now,
+// regardless of whether the constitution came from a NewConstitutionAction or genesis.
+async function fetchActiveConstitutionScriptHash() {
+  try {
+    const ogmiosUrl = `${KOIOS_BASE_URL}/ogmios`;
+    const headers = { "Content-Type": "application/json" };
+    if (KOIOS_API_KEY) headers.Authorization = `Bearer ${KOIOS_API_KEY}`;
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "queryLedgerState/constitution",
+      params: {}
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(ogmiosUrl, { method: "POST", headers, body, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) {
+      console.warn("[fetchActiveConstitutionScriptHash] Ogmios HTTP error:", response.status, response.statusText);
+      return null;
+    }
+    const data = await response.json();
+    console.log("[fetchActiveConstitutionScriptHash] Raw Ogmios response:", JSON.stringify(data));
+
+    const isHash = (v) => v && /^[0-9a-f]{56}$/i.test(String(v).trim());
+
+    // Try every known Ogmios response shape for queryLedgerState/constitution:
+    // Shape A (Ogmios v6 Conway): result.guardrails.hash
+    // Shape B (some proxies):     result.script.hash
+    // Shape C (nested):           result.guardrails.script.hash
+    // Shape D (direct string):    result.guardrails (the hash itself)
+    // Shape E (direct string):    result.script     (the hash itself)
+    const candidates = [
+      data?.result?.guardrails?.hash,
+      data?.result?.script?.hash,
+      data?.result?.guardrails?.script?.hash,
+      typeof data?.result?.guardrails === "string" ? data.result.guardrails : undefined,
+      typeof data?.result?.script === "string" ? data.result.script : undefined,
+    ];
+
+    for (const candidate of candidates) {
+      if (isHash(candidate)) {
+        const found = String(candidate).trim().toLowerCase();
+        console.log("[fetchActiveConstitutionScriptHash] Found hash:", found);
+        return found;
+      }
+    }
+
+    console.warn("[fetchActiveConstitutionScriptHash] Could not find a valid 56-char hex hash in response. result keys:", Object.keys(data?.result || {}));
+    return null;
+  } catch (err) {
+    console.warn("[fetchActiveConstitutionScriptHash] Exception:", err.message);
+    return null;
+  }
 }
 
 async function findLatestEnactedConstitutionGuardrails() {
@@ -2655,6 +2745,26 @@ function buildNomosModelFromKoiosSummary(summary) {
   };
 }
 
+async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "application/cbor") {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BLOCKFROST_REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
+      method: "POST",
+      headers: { project_id: BLOCKFROST_API_KEY, "Content-Type": contentType },
+      body: bodyBuffer,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  const text = await response.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  return { status: response.status, ok: response.ok, body: parsed };
+}
+
 async function blockfrostGet(endpointWithQuery) {
   for (let attempt = 0; attempt <= BLOCKFROST_MAX_RETRIES; attempt += 1) {
     const elapsed = Date.now() - lastRequestAt;
@@ -3112,30 +3222,32 @@ function loadSnapshotFromDisk() {
   if (!fs.existsSync(SNAPSHOT_PATH)) {
     const latestHistory = readLatestSnapshotFromHistory();
     if (latestHistory) {
-      snapshot = {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...latestHistory
-      };
+      });
     }
     return;
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8"));
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps)) {
-      snapshot = {
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps) && snapshotMatchesConfiguredNetwork(parsed)) {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...parsed
-      };
+      });
+    } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps)) {
+      syncState.lastError = `Snapshot network mismatch. Configured=${CONFIGURED_BLOCKFROST_NETWORK}, snapshot=${getSnapshotNetwork(parsed) || "missing"}. Rebuilding.`;
     }
     snapshot = pickBestSnapshotForApi(snapshot);
   } catch (error) {
     syncState.lastError = `Failed to read snapshot file: ${error.message}`;
     const latestHistory = readLatestSnapshotFromHistory();
     if (latestHistory) {
-      snapshot = {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...latestHistory
-      };
+      });
     }
   }
 }
@@ -3148,11 +3260,46 @@ function loadSeedSnapshot() {
   try {
     const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_SEED_PATH, "utf8"));
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return;
-    snapshot = { schemaVersion: SNAPSHOT_SCHEMA_VERSION, ...parsed };
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return;
+    snapshot = withSnapshotNetwork({ schemaVersion: SNAPSHOT_SCHEMA_VERSION, ...parsed });
     console.log(`Loaded seed snapshot (epoch ${parsed.latestEpoch || "?"}, generated ${parsed.generatedAt || "unknown"})`);
   } catch (error) {
     console.warn(`Could not load seed snapshot: ${error.message}`);
   }
+}
+
+async function fetchRemoteSnapshot(remoteUrl) {
+  const url = String(remoteUrl || "").trim();
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SNAPSHOT_REMOTE_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) return null;
+    const parsed = await response.json();
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return null;
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return null;
+    return withSnapshotNetwork({
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      ...parsed
+    });
+  } catch {
+    return null;
+  }
+}
+
+function applyRemoteSnapshot(remoteSnapshot) {
+  if (!remoteSnapshot || typeof remoteSnapshot !== "object") return false;
+  snapshot = remoteSnapshot;
+  refreshAllThresholdInfo(snapshot);
+  saveSnapshotToDisk(snapshot);
+  saveSeedSnapshotToDisk(snapshot);
+  return true;
 }
 
 function ensureSnapshotHistoryDir() {
@@ -3189,6 +3336,7 @@ function readSnapshotFromHistory(snapshotKey) {
   try {
     const parsed = JSON.parse(fs.readFileSync(fullPath, "utf8"));
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return null;
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return null;
     return parsed;
   } catch {
     return null;
@@ -3290,18 +3438,18 @@ function normalizeCommitteeMembersForApi(rows) {
 }
 
 function saveSnapshotToDisk(payload) {
-  const withSchema = {
+  const withSchema = withSnapshotNetwork({
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
     ...payload
-  };
+  });
   fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(withSchema));
 }
 
 function saveSeedSnapshotToDisk(payload) {
-  const withSchema = {
+  const withSchema = withSnapshotNetwork({
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
     ...payload
-  };
+  });
   fs.writeFileSync(SNAPSHOT_SEED_PATH, JSON.stringify(withSchema));
 }
 
@@ -3850,7 +3998,7 @@ async function backfillEpochSnapshotsFromCurrent(force = false) {
     for (const epoch of eligibleTargets) {
       const cutoffUnix = Number(endTimes.get(epoch) || 0);
       const drepPowerMap = await fetchDrepPowerForEpoch(epoch);
-      const scoped = buildEpochScopedSnapshot(snapshot, epoch, cutoffUnix, drepPowerMap);
+      const scoped = withSnapshotNetwork(buildEpochScopedSnapshot(snapshot, epoch, cutoffUnix, drepPowerMap));
       const filename = epochSnapshotFilename(epoch);
       const fullPath = path.join(SNAPSHOT_HISTORY_DIR, filename);
       fs.writeFileSync(fullPath, JSON.stringify(scoped));
@@ -3923,13 +4071,43 @@ async function fetchSpecialDreps(force = false) {
 async function buildDeltaSnapshot(base) {
   const latestEpoch = await fetchLatestChainEpoch().catch(() => null);
 
-  // Build lookup structures from the existing snapshot so we can do O(1) checks.
-  const existingProposalIds = new Set(Object.keys(base.proposalInfo || {}));
+  // Fetch current full proposal list (paginated, same as full sync).
+  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
+  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
+  const currentProposalIds = new Set(proposals.map((p) => String(p?.id || "").trim()).filter(Boolean));
+
+  syncState.totalProposals = proposalsAll.length;
+  syncState.scannedProposals = proposals.length;
+  syncState.processedProposals = 0;
+
+  // Build mutable maps of actors keyed by id for fast in-place updates.
+  const drepById = new Map((base.dreps || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const proposalInfo = { ...(base.proposalInfo || {}) };
+
+  // Canonicalize to the currently indexed proposal set. This prevents stale
+  // proposal IDs from older snapshots from persisting forever in delta mode.
+  for (const pid of Object.keys(proposalInfo)) {
+    if (!currentProposalIds.has(String(pid || "").trim())) delete proposalInfo[pid];
+  }
+  const pruneVotes = (mapObj) => {
+    for (const actor of mapObj.values()) {
+      actor.votes = (actor.votes || []).filter((vote) =>
+        currentProposalIds.has(String(vote?.proposalId || "").trim())
+      );
+    }
+  };
+  pruneVotes(drepById);
+  pruneVotes(spoById);
+  pruneVotes(ccById);
+
+  // Build lookup structures from the pruned snapshot so we can do O(1) checks.
+  const existingProposalIds = new Set(Object.keys(proposalInfo));
 
   // Per-proposal: set of vote tx hashes we already know about (watermark).
   const knownVoteTxHashByProposal = new Map(); // proposalId -> Set<txHash>
-  const actorRole = new Map(); // voteTxHash -> "drep"|"spo"|"committee"
-  for (const actor of [...(base.dreps || []), ...(base.spos || []), ...(base.committeeMembers || [])]) {
+  for (const actor of [...drepById.values(), ...spoById.values(), ...ccById.values()]) {
     for (const vote of (actor.votes || [])) {
       const pid = String(vote.proposalId || "");
       const txh = String(vote.voteTxHash || "").toLowerCase();
@@ -3939,25 +4117,11 @@ async function buildDeltaSnapshot(base) {
     }
   }
 
-  // Build mutable maps of actors keyed by id for fast in-place updates.
-  const drepById = new Map((base.dreps || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const proposalInfo = { ...(base.proposalInfo || {}) };
-
   // Backfill any votes that were persisted with null votedAtUnix but whose
   // tx hash is now in the cache.  This is a no-op once all votes are patched.
   backfillVoteTimestampsFromCache(drepById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(spoById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(ccById.values(), proposalInfo);
-
-  // Fetch current full proposal list (paginated, same as full sync).
-  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
-  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
-
-  syncState.totalProposals = proposalsAll.length;
-  syncState.scannedProposals = proposals.length;
-  syncState.processedProposals = 0;
 
   // Identify new proposals (not in existing snapshot) and known ones.
   const newProposals = proposals.filter((p) => !existingProposalIds.has(p.id));
@@ -5374,7 +5538,7 @@ async function buildFullSnapshot() {
 
 function publishSnapshot(payload) {
   if (!payload || typeof payload !== "object") return;
-  snapshot = payload;
+  snapshot = withSnapshotNetwork(payload);
   // Always recompute thresholds so code changes take effect without a
   // manual snapshot wipe.
   refreshAllThresholdInfo(snapshot);
@@ -5435,7 +5599,7 @@ async function runSync(options = {}) {
   syncState.lastError = null;
 
   try {
-    const base = pickBestSnapshotForApi(snapshot);
+    const base = snapshot;
     const baseEpoch = Number(base?.latestEpoch || 0);
     const lastEpoch = Number(syncState.lastEpochAtSync || 0);
 
@@ -5458,8 +5622,8 @@ async function runSync(options = {}) {
       fresh = await buildFullSnapshot();
     }
 
-    const candidate = pickBestSnapshotForApi(fresh);
-    const currentServed = pickBestSnapshotForApi(snapshot);
+    const candidate = fresh;
+    const currentServed = snapshot;
     const canPromoteNow = snapshotIsComplete(candidate) || !snapshotIsComplete(currentServed);
 
     // Always publish immediately (user preference: option 3).
@@ -5577,34 +5741,52 @@ function serveStatic(req, res) {
   });
 }
 
-loadSnapshotFromDisk();
-// If the live snapshot is absent or incomplete (ephemeral filesystem after
-// a cold start) fall back to the committed seed so the first delta sync has
-// a complete base and startup is near-instant.
-if (!snapshotIsComplete(snapshot)) {
-  loadSeedSnapshot();
+async function runStartupInitialization() {
+  if (SKIP_BOOT_HYDRATION) {
+    console.log("Boot hydration skipped (SKIP_BOOT_HYDRATION=true).");
+    if (SNAPSHOT_REMOTE_URL) {
+      fetchRemoteSnapshot(SNAPSHOT_REMOTE_URL)
+        .then((remoteSnapshot) => {
+          if (!remoteSnapshot) return;
+          if (applyRemoteSnapshot(remoteSnapshot)) {
+            console.log(
+              `Loaded remote snapshot from ${SNAPSHOT_REMOTE_URL} (epoch ${remoteSnapshot.latestEpoch || "?"}).`
+            );
+          }
+        })
+        .catch(() => null);
+    }
+    if (AUTO_START_SCHEDULER) {
+      startScheduler();
+    } else {
+      console.log("Auto scheduler startup disabled (AUTO_START_SCHEDULER=false).");
+    }
+    return;
+  }
+  // Fast startup path: load existing snapshot/caches for immediate UI responses,
+  // but skip expensive warmups/backfills that can block the event loop.
+  loadSnapshotFromDisk();
+  if (!snapshotIsComplete(snapshot)) {
+    loadSeedSnapshot();
+  }
+  loadVoteTxTimeCache();
+  loadVoteTxRationaleCache();
+  loadSpoProfileCache();
+  loadNclCacheFromDisk();
+  backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
+  backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
+  backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
+  refreshAllThresholdInfo(snapshot);
+  // Persist normalized startup snapshot once; avoid heavy history backfill here.
+  if (snapshot?.generatedAt) {
+    saveSnapshotToDisk(snapshot);
+  }
+  if (AUTO_START_SCHEDULER) {
+    startScheduler();
+  } else {
+    console.log("Auto scheduler startup disabled (AUTO_START_SCHEDULER=false).");
+  }
 }
-loadVoteTxTimeCache();
-// Now that the tx-time cache is loaded, backfill any votes in the snapshot
-// that were saved before their timestamps were cached.  This repairs data
-// on ephemeral deployments that start from the seed snapshot.
-backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
-backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
-backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
-// Recompute threshold info using current code so stale snapshots are fixed
-// immediately on startup without waiting for the next sync.
-refreshAllThresholdInfo(snapshot);
-loadVoteTxRationaleCache();
-loadSpoProfileCache();
-loadNclCacheFromDisk();
-warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
-if (snapshot?.generatedAt && listSnapshotHistoryFiles().length === 0) {
-  saveSnapshotToDisk(snapshot);
-}
-if (snapshot?.generatedAt && Number(snapshot?.latestEpoch || 0) >= EPOCH_SNAPSHOT_START_EPOCH) {
-  backfillEpochSnapshotsFromCurrent(false);
-}
-startScheduler();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -5630,13 +5812,48 @@ const server = http.createServer(async (req, res) => {
     const view = ["all", "drep", "spo", "committee", "actions", "stats"].includes(requestedView)
       ? requestedView
       : "all";
-    const includeDreps = view === "all" || view === "drep" || view === "actions" || view === "stats";
+    const includeDreps = view === "all" || view === "drep" || view === "stats";
     const includeCommittee = view === "all" || view === "committee" || view === "stats";
-    const includeSpos = view === "all" || view === "spo" || view === "actions" || view === "stats";
+    const includeSpos = view === "all" || view === "spo" || view === "stats";
+    const allowSpoEnrichment = view === "all" || view === "spo" || view === "stats";
     const compactDashboardView = view === "drep" || view === "spo" || view === "committee" || view === "stats";
     const compactActionsView = view === "actions";
     const historical = requestedSnapshot ? readSnapshotFromHistory(requestedSnapshot) : null;
-    const sourceSnapshot = historical || pickBestSnapshotForApi(snapshot);
+    const sourceSnapshot = historical || snapshot;
+    if (view === "actions") {
+      const proposalInfo = compactProposalInfoForDashboard(sourceSnapshot?.proposalInfo || {});
+      const drepsRaw = Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : [];
+      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || []);
+      const sposRaw = Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : [];
+      const hasSpecialDreps = sourceSnapshot?.specialDreps && Object.keys(sourceSnapshot.specialDreps).length > 0;
+      const specialDreps = hasSpecialDreps ? sourceSnapshot.specialDreps : (specialDrepsCache.value || {});
+      json(res, 200, {
+        schemaVersion: sourceSnapshot?.schemaVersion || SNAPSHOT_SCHEMA_VERSION,
+        network: sourceSnapshot?.network || CONFIGURED_BLOCKFROST_NETWORK,
+        generatedAt: sourceSnapshot?.generatedAt || null,
+        latestEpoch: sourceSnapshot?.latestEpoch || null,
+        drepParticipationStartEpoch: sourceSnapshot?.drepParticipationStartEpoch || null,
+        thresholdContext: sourceSnapshot?.thresholdContext || {},
+        proposalInfo,
+        dreps: compactActorsForDashboard(drepsRaw),
+        committeeMembers: compactActorsForDashboard(committeeRaw),
+        specialDreps,
+        spos: compactActorsForDashboard(sposRaw),
+        view,
+        snapshotKey: requestedSnapshot || "",
+        historical: Boolean(historical),
+        syncing: syncState.syncing,
+        lastSyncStartedAt: syncState.lastStartedAt,
+        lastSyncCompletedAt: syncState.lastCompletedAt,
+        lastSyncError: syncState.lastError,
+        syncTotalProposals: syncState.totalProposals,
+        syncScannedProposals: syncState.scannedProposals,
+        syncProcessedProposals: syncState.processedProposals,
+        pendingSnapshotReady: Boolean(pendingSnapshot),
+        pendingSnapshotBuiltAt
+      });
+      return;
+    }
     const sourceKey = [
       requestedSnapshot || "latest",
       sourceSnapshot?.generatedAt || "",
@@ -5675,10 +5892,10 @@ const server = http.createServer(async (req, res) => {
       specialDreps = {};
     }
     let spos = includeSpos ? (Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : []) : [];
-    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0) {
+    if (includeSpos && allowSpoEnrichment && !historical && Array.isArray(spos) && spos.length > 0) {
       mergeSpoDelegationFromProfile(spos);
     }
-    if (includeSpos && !historical && spos.length === 0) {
+    if (includeSpos && allowSpoEnrichment && !historical && spos.length === 0) {
       const spoFallbackLimit = SPO_FALLBACK_LIMIT > 0 ? SPO_FALLBACK_LIMIT : 400;
       if (spoFallbackCache.rows.length > 0) {
         spos = spoFallbackCache.rows.slice(0, spoFallbackLimit);
@@ -5690,7 +5907,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
-    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0 && (view === "actions" || view === "spo")) {
+    if (includeSpos && allowSpoEnrichment && !historical && Array.isArray(spos) && spos.length > 0 && view === "spo") {
       let totalPower = 0;
       let unknownPower = 0;
       for (const row of spos) {
@@ -5707,7 +5924,7 @@ const server = http.createServer(async (req, res) => {
         mergeSpoDelegationFromProfile(spos);
       }
     }
-    if (includeSpos && !historical) {
+    if (includeSpos && allowSpoEnrichment && !historical) {
       const refreshAgeMs = Date.now() - Number(spoFallbackCache.fetchedAt || 0);
       const refreshStale = spoFallbackCache.rows.length === 0 || refreshAgeMs > 15 * 60 * 1000;
       const roster = SPO_FALLBACK_LIMIT > 0
@@ -5779,7 +5996,7 @@ const server = http.createServer(async (req, res) => {
     const dreps = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(drepsRaw) : drepsRaw;
     const compactSpos = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(spos) : spos;
     const proposalInfoRaw = sourceSnapshot?.proposalInfo || {};
-    const proposalInfo = compactDashboardView ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
+    const proposalInfo = (compactDashboardView || compactActionsView) ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
 
     if (view === "stats") {
       json(res, 200, {
@@ -6090,28 +6307,76 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const latestConstitution = await findLatestEnactedConstitutionGuardrails();
-      const latestTreasury = await findLatestEnactedTreasuryGuardrails();
-      const latest = latestConstitution || latestTreasury;
-      if (!latest) {
-        json(res, 404, { error: "Could not find a constitution or treasury governance action with a guardrails policy hash." });
+      const cacheKey = requestedNetwork;
+      const cached = guardrailsLatestCache.get(cacheKey);
+      if (cached && (Date.now() - Number(cached.cachedAt || 0)) < GUARDRAILS_CACHE_TTL_MS) {
+        json(res, 200, cached.payload);
         return;
       }
 
-      const koiosPolicyHash = latestConstitution
-        ? ""
-        : await findKoiosTreasuryPolicyHash(latest.proposalId);
-      const koiosMatch = koiosPolicyHash ? koiosPolicyHash === latest.policyHash : null;
+      // Primary: query the ledger directly via Ogmios — this is always authoritative.
+      // On preview/preprod, the genesis constitution has no on-chain NewConstitutionAction,
+      // so proposal scanning would return the wrong (un-enacted) hash.
+      const ogmiosScriptHash = await fetchActiveConstitutionScriptHash();
       const presetRefRaw = GUARDRAILS_REFERENCE_PRESETS?.[requestedNetwork];
+
+      // Fast path: if Ogmios gives us the active hash, return immediately without
+      // scanning many governance proposals from Blockfrost.
+      if (ogmiosScriptHash) {
+        const presetReference = presetRefRaw && typeof presetRefRaw === "object" ? {
+          txHash: String(presetRefRaw.txHash || "").trim(),
+          txIndex: Number(presetRefRaw.txIndex ?? 0),
+          scriptSize: String(presetRefRaw.scriptSize || "").trim(),
+          scriptHash: String(presetRefRaw.scriptHash || ogmiosScriptHash).trim().toLowerCase(),
+          version: String(presetRefRaw.version || "V3").trim()
+        } : null;
+        const payload = {
+          ok: true,
+          network: requestedNetwork,
+          source: {
+            blockfrostBaseUrl: BLOCKFROST_BASE_URL,
+            koiosBaseUrl: KOIOS_BASE_URL
+          },
+          sourceActionType: "ogmios_ledger_state",
+          latestEnactedConstitutionAction: null,
+          latestEnactedTreasuryWithdrawal: null,
+          policyHash: ogmiosScriptHash,
+          koiosCrossCheck: {
+            policyHash: ogmiosScriptHash,
+            match: true
+          },
+          referencePreset: presetReference,
+          note: presetReference
+            ? "Reference script preset found for this network."
+            : "No reference script preset configured. Set GUARDRAILS_REFERENCE_PRESETS_JSON to auto-fill reference fields."
+        };
+        guardrailsLatestCache.set(cacheKey, { cachedAt: Date.now(), payload });
+        json(res, 200, payload);
+        return;
+      }
+
+      // Slow fallback: only run proposal scans when Ogmios is unavailable.
+      const latestConstitution = await findLatestEnactedConstitutionGuardrails();
+      const latestTreasury = await findLatestEnactedTreasuryGuardrails();
+      const latest = latestConstitution || latestTreasury;
+      const authorativePolicyHash = latest?.policyHash || null;
+
+      if (!authorativePolicyHash) {
+        json(res, 404, { error: "Could not determine active guardrails policy hash from ledger or governance proposals." });
+        return;
+      }
+
+      const koiosPolicyHash = latestConstitution ? "" : await findKoiosTreasuryPolicyHash(latest?.proposalId);
+      const koiosMatch = koiosPolicyHash ? koiosPolicyHash === latest?.policyHash : null;
       const presetReference = presetRefRaw && typeof presetRefRaw === "object" ? {
         txHash: String(presetRefRaw.txHash || "").trim(),
         txIndex: Number(presetRefRaw.txIndex ?? 0),
         scriptSize: String(presetRefRaw.scriptSize || "").trim(),
-        scriptHash: String(presetRefRaw.scriptHash || latest.policyHash).trim().toLowerCase(),
+        scriptHash: String(presetRefRaw.scriptHash || authorativePolicyHash).trim().toLowerCase(),
         version: String(presetRefRaw.version || "V3").trim()
       } : null;
 
-      json(res, 200, {
+      const payload = {
         ok: true,
         network: requestedNetwork,
         source: {
@@ -6121,7 +6386,7 @@ const server = http.createServer(async (req, res) => {
         sourceActionType: latestConstitution ? "new_constitution" : "treasury_withdrawals",
         latestEnactedConstitutionAction: latestConstitution,
         latestEnactedTreasuryWithdrawal: latestTreasury,
-        policyHash: latest.policyHash,
+        policyHash: authorativePolicyHash,
         koiosCrossCheck: {
           policyHash: koiosPolicyHash || null,
           match: koiosMatch
@@ -6130,7 +6395,9 @@ const server = http.createServer(async (req, res) => {
         note: presetReference
           ? "Reference script preset found for this network."
           : "No reference script preset configured. Set GUARDRAILS_REFERENCE_PRESETS_JSON to auto-fill reference fields."
-      });
+      };
+      guardrailsLatestCache.set(cacheKey, { cachedAt: Date.now(), payload });
+      json(res, 200, payload);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch latest guardrails policy." });
@@ -6150,7 +6417,16 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const summary = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}`).catch(() => null);
-      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`);
+      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`).catch((err) => {
+        const msg = String(err?.message || "");
+        if (msg.includes("404")) {
+          json(res, 404, { error: `Script not found in Blockfrost for hash ${scriptHash}. It may not be indexed on this network.` });
+        } else {
+          json(res, 500, { error: msg || "Failed to fetch script CBOR." });
+        }
+        return null;
+      });
+      if (cborRow === null) return;
       const cbor = String(cborRow?.cbor || "").trim();
       if (!cbor) {
         json(res, 404, { error: "Script CBOR not found for this script hash." });
@@ -6172,6 +6448,65 @@ const server = http.createServer(async (req, res) => {
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch script CBOR." });
+      return;
+    }
+  }
+
+  // POST /api/evaluate  — evaluates a tx via Koios/Ogmios without submitting it.
+  // Body JSON: { txCbor: "<hex>" }
+  // Uses Ogmios evaluateTransaction which has full Conway-era governance support.
+  if (req.method === "POST" && url.pathname === "/api/evaluate") {
+    let body;
+    try {
+      const raw = await new Promise((resolve, reject) => {
+        let data = "";
+        req.on("data", chunk => { data += chunk; });
+        req.on("end", () => resolve(data));
+        req.on("error", reject);
+      });
+      body = JSON.parse(raw);
+    } catch {
+      json(res, 400, { error: "Invalid JSON body." });
+      return;
+    }
+    const txCborHex = String(body?.txCbor || "").trim();
+    if (!txCborHex || !/^[0-9a-fA-F]+$/.test(txCborHex)) {
+      json(res, 400, { error: "Missing or invalid txCbor (expected hex string)." });
+      return;
+    }
+    try {
+      // Use Koios Ogmios proxy — full Conway/Plutus V3 support
+      const ogmiosUrl = `${KOIOS_BASE_URL}/ogmios`;
+      const headers = { "Content-Type": "application/json" };
+      if (KOIOS_API_KEY) headers.Authorization = `Bearer ${KOIOS_API_KEY}`;
+      const ogmiosBody = JSON.stringify({
+        jsonrpc: "2.0",
+        method: "evaluateTransaction",
+        params: { transaction: { cbor: txCborHex } }
+      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      let ogmiosRes;
+      try {
+        ogmiosRes = await fetch(ogmiosUrl, { method: "POST", headers, body: ogmiosBody, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      const ogmiosText = await ogmiosRes.text();
+      let ogmiosData;
+      try { ogmiosData = JSON.parse(ogmiosText); } catch { ogmiosData = { raw: ogmiosText }; }
+      // Ogmios returns result.EvaluationResult on success, result.EvaluationFailure on script failure
+      const isFailure = ogmiosData?.result?.EvaluationFailure !== undefined;
+      const isSuccess = ogmiosData?.result?.EvaluationResult !== undefined;
+      json(res, ogmiosRes.ok && !isFailure ? 200 : 400, {
+        ok: ogmiosRes.ok && !isFailure,
+        isSuccess,
+        isFailure,
+        evaluation: ogmiosData
+      });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Evaluation request failed." });
       return;
     }
   }
@@ -6562,6 +6897,30 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Server running at http://${HOST}:${PORT}`);
+let listenRetryCount = 0;
+const LISTEN_MAX_RETRIES = Number(process.env.LISTEN_MAX_RETRIES || 20);
+const LISTEN_RETRY_DELAY_MS = Number(process.env.LISTEN_RETRY_DELAY_MS || 1000);
+
+function bindServer() {
+  server.listen(PORT, HOST, () => {
+    listenRetryCount = 0;
+    console.log(`Server running at http://${HOST}:${PORT}`);
+    // Do heavy snapshot/cache initialization after the socket is bound so
+    // local UI loads don't fail with ERR_CONNECTION_REFUSED during startup.
+    setTimeout(runStartupInitialization, 0);
+  });
+}
+
+server.on("error", (error) => {
+  if (error?.code === "EADDRINUSE" && listenRetryCount < LISTEN_MAX_RETRIES) {
+    listenRetryCount += 1;
+    console.warn(
+      `Port ${PORT} is in use. Retry ${listenRetryCount}/${LISTEN_MAX_RETRIES} in ${LISTEN_RETRY_DELAY_MS}ms...`
+    );
+    setTimeout(bindServer, LISTEN_RETRY_DELAY_MS);
+    return;
+  }
+  throw error;
 });
+
+bindServer();

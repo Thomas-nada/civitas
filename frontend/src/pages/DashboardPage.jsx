@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Transaction } from "@meshsdk/core";
+import { Transaction, resolveStakeKeyHash } from "@meshsdk/core";
+import { hexToBech32 } from "@meshsdk/core-cst";
 import { useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 
@@ -37,6 +38,12 @@ function formatVoteLabelForActor(voteValue, actorType) {
 function hasVoteRationaleSignal(vote) {
   if (vote?.hasRationale === true) return true;
   return Boolean(String(vote?.rationaleUrl || "").trim());
+}
+
+function deriveDrepIdFromRewardAddress(rewardAddress) {
+  const stakeKeyHash = String(resolveStakeKeyHash(String(rewardAddress || "")) || "").trim();
+  if (!stakeKeyHash) return "";
+  return String(hexToBech32("drep", stakeKeyHash) || "").trim();
 }
 
 function MetricInfo({ text, label = "How calculated" }) {
@@ -385,6 +392,13 @@ export default function DashboardPage({ actorType }) {
   const wallet = useContext(WalletContext);
   const [delegateNotice, setDelegateNotice] = useState("");
   const [delegating, setDelegating] = useState(false);
+  const [registeringDrep, setRegisteringDrep] = useState(false);
+  const [registerDrepNotice, setRegisterDrepNotice] = useState("");
+  const [showDrepRegistrationForm, setShowDrepRegistrationForm] = useState(false);
+  const [registerDrepId, setRegisterDrepId] = useState("");
+  const [registerDrepDeposit, setRegisterDrepDeposit] = useState("500000000");
+  const [registerDrepAnchorUrl, setRegisterDrepAnchorUrl] = useState("");
+  const [registerDrepAnchorHash, setRegisterDrepAnchorHash] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileImageOpen, setProfileImageOpen] = useState(false);
   const [rationaleModal, setRationaleModal] = useState({ open: false, key: "", title: "", proposalId: "" });
@@ -392,10 +406,6 @@ export default function DashboardPage({ actorType }) {
   const syncPollBusyRef = useRef(false);
   const detailPanelRef = useRef(null);
   const useModalDetails = false;
-  const cacheKey = useMemo(
-    () => `civitas.accountability.${actorType}.${snapshotKey || "latest"}`,
-    [actorType, snapshotKey]
-  );
 
   const loadData = useCallback(async () => {
     try {
@@ -408,32 +418,15 @@ export default function DashboardPage({ actorType }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load dashboard data.");
       setPayload(data);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch {
-        // Ignore session storage failures.
-      }
       latestSnapshotRef.current = String(data?.lastSyncCompletedAt || data?.generatedAt || "");
     } catch (e) {
       setError(e.message);
     }
-  }, [cacheKey, snapshotKey]);
+  }, [snapshotKey, actorType]);
 
   useEffect(() => {
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object") {
-          setPayload(parsed);
-          latestSnapshotRef.current = String(parsed?.lastSyncCompletedAt || parsed?.generatedAt || "");
-        }
-      }
-    } catch {
-      // Ignore stale cache parse errors.
-    }
     loadData();
-  }, [cacheKey, loadData]);
+  }, [loadData]);
 
   useEffect(() => {
     if (snapshotKey) return undefined;
@@ -462,6 +455,14 @@ export default function DashboardPage({ actorType }) {
     const id = setInterval(() => setNowMs(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!isDrep) return;
+    const walletDrepId = String(wallet?.walletDrep?.dRepIDCip105 || "").trim();
+    if (walletDrepId && !String(registerDrepId || "").trim()) {
+      setRegisterDrepId(walletDrepId);
+    }
+  }, [isDrep, wallet?.walletDrep?.dRepIDCip105, registerDrepId]);
 
   useEffect(() => {
     if (!typeMenuOpen) return undefined;
@@ -989,6 +990,61 @@ export default function DashboardPage({ actorType }) {
     return `${base}/${encodeURIComponent(actorId)}${snapshotSuffix}`;
   }
 
+  async function registerAsDrep() {
+    if (!isDrep) return;
+    if (!wallet?.walletApi) {
+      setRegisterDrepNotice("Connect your wallet in the top bar to register as DRep.");
+      return;
+    }
+    if (!wallet.walletRewardAddress) {
+      setRegisterDrepNotice("No reward address found in connected wallet. DRep registration requires a stake/reward address.");
+      return;
+    }
+    const walletDrepId = String(wallet?.walletDrep?.dRepIDCip105 || "").trim();
+    const manualDrepId = String(registerDrepId || "").trim();
+    const derivedDrepId = deriveDrepIdFromRewardAddress(wallet.walletRewardAddress);
+    const drepId = manualDrepId || walletDrepId || derivedDrepId;
+    if (!drepId) {
+      setRegisterDrepNotice("Unable to derive DRep ID from connected wallet. Enter a DRep ID manually.");
+      return;
+    }
+    const deposit = Number(registerDrepDeposit || 0);
+    if (!Number.isFinite(deposit) || deposit <= 0) {
+      setRegisterDrepNotice("DRep deposit must be a positive lovelace amount.");
+      return;
+    }
+    const anchorUrl = String(registerDrepAnchorUrl || "").trim();
+    const anchorHash = String(registerDrepAnchorHash || "").trim();
+    if ((anchorUrl && !anchorHash) || (!anchorUrl && anchorHash)) {
+      setRegisterDrepNotice("Provide both anchor URL and anchor hash, or leave both empty.");
+      return;
+    }
+    const anchor = anchorUrl && anchorHash ? { url: anchorUrl, hash: anchorHash } : undefined;
+
+    try {
+      setRegisteringDrep(true);
+      setRegisterDrepNotice("");
+
+      const tx = new Transaction({
+        initiator: wallet.walletApi,
+        verbose: false
+      });
+      tx.setNetwork("mainnet");
+      tx.txBuilder.drepRegistrationCertificate(drepId, anchor, deposit);
+
+      const unsignedTx = await tx.build();
+      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
+      const txHash = await wallet.walletApi.submitTx(signedTx);
+
+      setRegisterDrepNotice(`DRep registration submitted on-chain. Tx: ${txHash}`);
+    } catch (e) {
+      const message = e?.message || "DRep registration transaction failed.";
+      setRegisterDrepNotice(`DRep registration failed: ${message}`);
+    } finally {
+      setRegisteringDrep(false);
+    }
+  }
+
   function setSelectedWithUrl(nextId) {
     if (!nextId) setProfileImageOpen(false);
     if (nextId !== selectedId) setProfileImageOpen(false);
@@ -1133,6 +1189,72 @@ export default function DashboardPage({ actorType }) {
           {payload?.historical ? <p className="muted">History: {payload.snapshotKey}</p> : null}
         </article>
       </section>
+
+      {isDrep ? (
+        <section className="panel">
+          <h2>DRep Registration</h2>
+          <div className="vote-confirm-actions">
+            <button
+              type="button"
+              className="mode-btn active"
+              onClick={() => setShowDrepRegistrationForm((prev) => !prev)}
+            >
+              {showDrepRegistrationForm ? "Hide DRep Registration" : "Register as a DRep"}
+            </button>
+          </div>
+          {showDrepRegistrationForm ? (
+            <>
+              <p className="muted">Register the connected wallet as a DRep using your wallet extension for signing.</p>
+              <div className="controls dashboard-controls">
+                <label>
+                  DRep ID (CIP-105, optional override)
+                  <input
+                    value={registerDrepId}
+                    onChange={(e) => setRegisterDrepId(e.target.value)}
+                    placeholder="Auto-derived from connected wallet if empty"
+                  />
+                </label>
+                <label>
+                  Deposit (lovelace)
+                  <input
+                    value={registerDrepDeposit}
+                    onChange={(e) => setRegisterDrepDeposit(e.target.value)}
+                    placeholder="500000000"
+                  />
+                </label>
+                <label>
+                  Anchor URL (optional)
+                  <input
+                    value={registerDrepAnchorUrl}
+                    onChange={(e) => setRegisterDrepAnchorUrl(e.target.value)}
+                    placeholder="https://... or ipfs://..."
+                  />
+                </label>
+                <label>
+                  Anchor Hash (optional)
+                  <input
+                    value={registerDrepAnchorHash}
+                    onChange={(e) => setRegisterDrepAnchorHash(e.target.value)}
+                    placeholder="blake2b-256 hex"
+                  />
+                </label>
+              </div>
+              <div className="vote-confirm-actions">
+                <button
+                  type="button"
+                  className="mode-btn active"
+                  onClick={registerAsDrep}
+                  disabled={registeringDrep}
+                >
+                  {registeringDrep ? "Submitting Registration..." : "Register Connected Wallet As DRep"}
+                </button>
+              </div>
+            </>
+          ) : null}
+          {!wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable registration.</p> : null}
+          {registerDrepNotice ? <p className="muted">{registerDrepNotice}</p> : null}
+        </section>
+      ) : null}
 
       <div className="filter-block panel">
         <section className="controls dashboard-controls">

@@ -40,11 +40,35 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set "SERVER_PID="
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":8080 .*LISTENING"') do (
+  set "SERVER_PID=%%P"
+  goto :found_pid
+)
+:found_pid
+if defined SERVER_PID (
+  echo [INFO] Port 8080 is already in use by PID %SERVER_PID%. Stopping it...
+  taskkill /PID %SERVER_PID% /F >nul 2>nul
+  timeout /t 1 /nobreak >nul
+)
+
 echo [INFO] Starting Civitas server in a new window...
 start "Civitas Server" cmd /k "cd /d ""%~dp0"" && npm start"
 
-echo [INFO] Waiting for server startup...
-timeout /t 6 /nobreak >nul
+echo [INFO] Waiting for server startup (health check)...
+set "HEALTH_OK="
+for /L %%I in (1,1,45) do (
+  curl -s -f http://127.0.0.1:8080/api/health >nul 2>nul
+  if not errorlevel 1 (
+    set "HEALTH_OK=1"
+    goto :health_ready
+  )
+  timeout /t 1 /nobreak >nul
+)
+:health_ready
+if not defined HEALTH_OK (
+  echo [WARN] Server did not report healthy within timeout. Opening browser anyway.
+)
 
 set "URL=http://127.0.0.1:8080"
 set "CHROME="

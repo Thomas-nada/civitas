@@ -379,10 +379,6 @@ export default function GovernanceActionsPage() {
   const detailPanelRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
-  const cacheKey = useMemo(
-    () => `civitas.accountability.actions.${snapshotKey || "latest"}`,
-    [snapshotKey]
-  );
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -396,37 +392,17 @@ export default function GovernanceActionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load governance actions.");
       setPayload(data);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch {
-        // Ignore session storage failures.
-      }
       latestSnapshotRef.current = String(data?.lastSyncCompletedAt || data?.generatedAt || "");
     } catch (e) {
       setError(e.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [cacheKey, snapshotKey]);
+  }, [snapshotKey]);
 
   useEffect(() => {
-    let hydrated = false;
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object") {
-          setPayload(parsed);
-          setLoading(false);
-          latestSnapshotRef.current = String(parsed?.lastSyncCompletedAt || parsed?.generatedAt || "");
-          hydrated = true;
-        }
-      }
-    } catch {
-      // Ignore stale cache parse errors.
-    }
-    loadData({ silent: hydrated });
-  }, [cacheKey, loadData]);
+    loadData();
+  }, [loadData]);
 
   useEffect(() => {
     if (snapshotKey) return undefined;
