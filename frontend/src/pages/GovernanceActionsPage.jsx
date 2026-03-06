@@ -87,11 +87,27 @@ function deriveStatus(info) {
   const governanceType = String(info.governanceType || "").toLowerCase();
   const isInfoAction = governanceType.includes("info action") || governanceType === "info";
   if (isInfoAction) return "";
+  // Final terminal states must override ratified/enacted labels if present due to stale cached fields.
+  const droppedEpoch = Number(info?.droppedEpoch || 0);
+  const expiredEpoch = Number(info?.expiredEpoch || 0);
+  const expirationEpoch = Number(info?.expirationEpoch || 0);
+  const hasDropped = Number.isFinite(droppedEpoch) && droppedEpoch > 0;
+  const hasExpired = Number.isFinite(expiredEpoch) && expiredEpoch > 0;
+  if (hasDropped && hasExpired) {
+    // If it was dropped before natural expiry, classify as Dropped.
+    // Otherwise treat as Expired (the expiry path is what users care about).
+    if (Number.isFinite(expirationEpoch) && expirationEpoch > 0 && droppedEpoch < expirationEpoch) return "Dropped";
+    return "Expired";
+  }
+  if (hasDropped) {
+    // Many providers encode natural expiry with droppedEpoch when expiration is reached.
+    // Treat drop at/after expiration as Expired, and only pre-expiration drops as Dropped.
+    if (Number.isFinite(expirationEpoch) && expirationEpoch > 0 && droppedEpoch >= expirationEpoch) return "Expired";
+    return "Dropped";
+  }
+  if (hasExpired) return "Expired";
   if (info.enactedEpoch !== null && info.enactedEpoch !== undefined) return "Enacted";
   if (info.ratifiedEpoch !== null && info.ratifiedEpoch !== undefined) return "Ratified";
-  if (info.droppedEpoch !== null && info.droppedEpoch !== undefined) return "Dropped";
-  if (governanceType.includes("treasury") && info.expiredEpoch !== null && info.expiredEpoch !== undefined) return "Dropped";
-  if (info.expiredEpoch !== null && info.expiredEpoch !== undefined) return "Expired";
   return String(info.outcome || "Unknown");
 }
 
