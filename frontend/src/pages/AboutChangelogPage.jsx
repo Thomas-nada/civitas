@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 const version = "v1.1";
 const changelog = [
+  "Added DRep Delegation Risk scoring contribution to accountability metrics.",
   "Added wallet-based DRep registration directly in Civitas.",
   "Improved governance action submission reliability (script handling, collateral, fee/re-sign flow).",
   "Locked submission flow to single-network deployment behavior (no per-form network switching).",

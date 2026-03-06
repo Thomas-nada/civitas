@@ -19,6 +19,7 @@ const tocGroups = [
     title: "Using Civitas",
     items: [
       { id: "tool-drep-delegation", label: "Delegating to a DRep" },
+      { id: "tool-drep-delegation-risk", label: "DRep Delegation Risk" },
       { id: "tool-drep-voting", label: "Voting as a DRep" },
       { id: "tool-drep-registration", label: "DRep Registration" },
       { id: "tool-submit-actions", label: "Submit Actions" },
@@ -895,6 +896,56 @@ export default function GuidePage() {
           </section>
         );
 
+      case "tool-drep-delegation-risk":
+        return (
+          <section className="wiki-section panel">
+            <h2>Use Civitas: DRep Delegation Risk</h2>
+            <p>
+              Civitas includes a <strong>Delegation Risk</strong> indicator to highlight delegation concentration.
+              The purpose is decentralization awareness, not a judgment of any individual DRep.
+            </p>
+
+            <h3 className="guide-subhead">What It Represents</h3>
+            <p>
+              The indicator reflects how large a DRep&apos;s share is within <strong>active delegated voting power</strong>.
+              A larger share means one actor has greater influence over governance outcomes if they vote consistently.
+            </p>
+            <p>
+              Risk levels are shown as:
+            </p>
+            <ol>
+              <li><strong>Low</strong>: lower concentration footprint.</li>
+              <li><strong>Medium</strong>: meaningful concentration that should be monitored.</li>
+              <li><strong>High</strong>: strong concentration signal where decentralization tradeoffs are more significant.</li>
+            </ol>
+
+            <h3 className="guide-subhead">How To Use It</h3>
+            <ol>
+              <li>Open <Link className="inline-link" to="/dreps">DReps</Link>.</li>
+              <li>Sort by <strong>Delegation Risk</strong> if you want to prioritize decentralization review.</li>
+              <li>Open a DRep profile and compare risk with attendance, rationale behavior, and responsiveness.</li>
+              <li>Choose the delegation target that best matches your decentralization and governance priorities.</li>
+            </ol>
+
+            <h3 className="guide-subhead">Delegation Warning Modal</h3>
+            <p>
+              If you attempt to delegate to a DRep marked <strong>High</strong>, Civitas shows an in-app warning modal
+              before submission. The modal:
+            </p>
+            <ol>
+              <li>shows the DRep&apos;s current active-share context,</li>
+              <li>kindly asks you to consider a lower-concentration option, and</li>
+              <li>lets you either cancel or continue intentionally.</li>
+            </ol>
+
+            <h3 className="guide-subhead">Important Context</h3>
+            <p>
+              Delegation Risk is an awareness signal, not financial advice and not a reputation score. It should be used
+              together with qualitative factors such as voting rationale quality, policy alignment, and response behavior.
+            </p>
+          </section>
+        );
+
       case "tool-drep-voting":
         return (
           <section className="wiki-section panel">
@@ -1414,7 +1465,34 @@ export default function GuidePage() {
               to surface objective signals that let you form your own view.
             </p>
 
-            <h3 className="guide-subhead">Attendance (45%)</h3>
+            <h3 className="guide-subhead">Role-Based Equations</h3>
+            <p>
+              Civitas now computes accountability with role-specific weighted averages:
+            </p>
+            <p>
+              <strong>DRep score</strong>:{" "}
+              <code>
+                0.35*Attendance + 0.25*Transparency + 0.15*Consistency + 0.10*Responsiveness + 0.15*DelegationDecentralization
+              </code>
+            </p>
+            <p>
+              <strong>SPO score</strong>:{" "}
+              <code>
+                0.45*Attendance + 0.30*Transparency + 0.15*Consistency + 0.10*Responsiveness
+              </code>
+            </p>
+            <p>
+              <strong>CC score</strong>:{" "}
+              <code>
+                0.45*Attendance + 0.35*RationaleQuality + 0.10*Responsiveness
+              </code>
+            </p>
+            <p>
+              If you toggle a metric off in the dashboard, Civitas removes that term and renormalizes by the
+              remaining active weights.
+            </p>
+
+            <h3 className="guide-subhead">Attendance (DRep 35%, SPO/CC 45%)</h3>
             <p>
               The share of eligible proposals an actor actually voted on.{" "}
               <code>cast votes ÷ eligible proposals</code>. Eligibility is role-aware and term-aware:
@@ -1423,7 +1501,7 @@ export default function GuidePage() {
               they had no standing to vote on.
             </p>
 
-            <h3 className="guide-subhead">Transparency (30%) — DReps and SPOs only</h3>
+            <h3 className="guide-subhead">Transparency (DRep 25%, SPO 30%) — DReps and SPOs only</h3>
             <p>
               The share of cast votes accompanied by a rationale signal —{" "}
               a metadata anchor, IPFS link, or other rationale reference.{" "}
@@ -1437,6 +1515,18 @@ export default function GuidePage() {
               matched the result. <code>matching votes ÷ comparable votes</code>. Abstain votes are excluded.
               High consistency can mean either strong policy judgement or late voting — pair with responsiveness
               to tell them apart.
+            </p>
+
+            <h3 className="guide-subhead">Delegation Decentralization (15%) — DReps only</h3>
+            <p>
+              This term converts delegation concentration risk into a positive contribution:
+              <code>DelegationDecentralization = 100 - DelegationRisk</code>.
+              A DRep with lower concentration risk receives a higher decentralization contribution.
+            </p>
+            <p>
+              Delegation risk itself is derived from active delegated voting-power share and scaled into a 0-100 range.
+              In practice, this means large concentration footprints reduce the final accountability score, while
+              broadly distributed delegation improves it.
             </p>
 
             <h3 className="guide-subhead">Rationale Quality (35%) — CC only</h3>
@@ -1463,13 +1553,6 @@ export default function GuidePage() {
               <code>average hours between proposal submission and vote</code>, normalized by:
               <code>max(0, 100 - (avgHours / (24*30))*100)</code>.{" "}
               A responsive actor is engaged and deliberate rather than waiting until the last moment.
-            </p>
-
-            <h3 className="guide-subhead">Toggling Metrics</h3>
-            <p>
-              Each metric can be toggled on or off in the dashboard. When you disable a metric, it is removed
-              from the denominator — the score is renormalized over active weights only. This lets you see
-              how rankings change when you prioritize different behaviors.
             </p>
 
             <h3 className="guide-subhead">A Score Is a Starting Point</h3>
