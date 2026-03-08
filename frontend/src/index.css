@@ -1502,6 +1502,27 @@ a {
   margin: 0.25rem 0;
 }
 
+.wallet-antitrust-alert {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.wallet-antitrust-alert p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.wallet-antitrust-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .delegate-cta {
   margin: 0.45rem 0 0.5rem;
 }
@@ -1808,6 +1829,44 @@ tbody tr.active {
   z-index: 3;
 }
 
+.action-vote-pie--mini {
+  width: 52px;
+  height: 52px;
+}
+
+.action-vote-pie--mini::after {
+  inset: 11px;
+}
+
+.action-vote-pie--mini .action-vote-pie-threshold::before {
+  height: 11px;
+}
+
+.action-vote-pie--mini span {
+  font-size: 0.62rem;
+}
+
+.action-vote-mini-pies {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.action-vote-mini-pie {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.action-vote-mini-label {
+  margin: 0;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
 .action-vote-pie-meta {
   margin: 0;
   font-size: 0.92rem;
@@ -2020,6 +2079,13 @@ tbody tr.active {
 .drep-row-credentials {
   font-size: 0.7rem;
   opacity: 0.55;
+}
+
+.drep-row-awareness {
+  font-size: 0.72rem;
+  white-space: normal;
+  line-height: 1.25;
+  max-width: 62ch;
 }
 
 .detail {
