@@ -130,8 +130,8 @@ function voteSlices(stats) {
 function eligibleVoteGroups(row) {
   const groups = [];
   const drepEligible = Number(row?.drepRequiredPct || 0) > 0 || Number(row?.voteStats?.drep?.total || 0) > 0;
-  const ccEligible = row?.thresholdInfo?.ccRequiredPct != null || Number(row?.voteStats?.constitutional_committee?.total || 0) > 0;
-  const spoEligible = row?.thresholdInfo?.poolRequiredPct != null || Number(row?.voteStats?.stake_pool?.total || 0) > 0;
+  const ccEligible = row?.ccRequiredPct != null;
+  const spoEligible = row?.spoRequiredPct != null;
   if (drepEligible) groups.push({ key: "drep", label: "DRep", stats: row?.voteStats?.drep || {} });
   if (ccEligible) groups.push({ key: "cc", label: "CC", stats: row?.voteStats?.constitutional_committee || {} });
   if (spoEligible) groups.push({ key: "spo", label: "SPO", stats: row?.voteStats?.stake_pool || {} });
@@ -212,7 +212,7 @@ function VoteMixPie({ group, row }) {
     ? toFiniteOrNull(row?.drepRequiredPct)
     : (isSpo
       ? toFiniteOrNull(row?.spoRequiredPct)
-      : (isCommittee ? toFiniteOrNull(row?.thresholdInfo?.ccRequiredPct) : null));
+      : (isCommittee ? toFiniteOrNull(row?.ccRequiredPct) : null));
   const thresholdAngle = thresholdPct !== null
     ? Math.max(0, Math.min(100, thresholdPct)) * 3.6
     : null;
@@ -268,6 +268,75 @@ function VoteMixPie({ group, row }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function VoteMiniPie({ group, row }) {
+  const { key, stats } = group;
+  const isCommittee = key === "cc";
+  const isSpo = key === "spo";
+  const isDrep = key === "drep";
+  const asActivePct = (v, b) => (b > 0 ? (Number(v || 0) / b) * 100 : 0);
+
+  const drepBase = Number(row?.totalActiveStakeAda || 0);
+  const drepYes = Number(row?.drepYesPowerAda || 0);
+  const drepNo = Number(row?.drepNoPowerAda || 0);
+  const drepAbstain = Number(row?.drepAbstainActivePowerAda || 0);
+  const drepOutcomeBase = Math.max(drepBase - drepAbstain, 0);
+  const drepYesPct = asActivePct(drepYes, drepOutcomeBase);
+  const drepNoPct = asActivePct(drepNo, drepOutcomeBase);
+  const drepNotVotedPct = asActivePct(Math.max(drepBase - drepYes - drepNo - drepAbstain, 0), drepOutcomeBase);
+
+  const spoYes = Number(row?.spoYesAda || 0);
+  const spoNo = Number(row?.spoNoAda || 0);
+  const spoTotal = Math.max(spoYes + spoNo, 0);
+  const spoYesPct = spoTotal > 0 ? (spoYes / spoTotal) * 100 : 0;
+  const spoNoPct = spoTotal > 0 ? (spoNo / spoTotal) * 100 : 0;
+
+  const { yes, no, abstain } = voteSlices(stats);
+  const ccCast = yes + no + abstain;
+  const ccElig = Math.max(Number(row?.ccEligibleCount || 0), 0);
+  const ccDen = ccElig > 0 ? ccElig : Math.max(ccCast, 1);
+  const ccYesPct = (yes / ccDen) * 100;
+  const ccNoPct = (no / ccDen) * 100;
+  const ccAbstainPct = (abstain / ccDen) * 100;
+  const ccNotVotedPct = (Math.max(ccElig - ccCast, 0) / ccDen) * 100;
+
+  const pieYesPct = isDrep ? drepYesPct : (isCommittee ? ccYesPct : spoYesPct);
+  const pieNoPct = isDrep ? drepNoPct : (isCommittee ? ccNoPct : spoNoPct);
+  const pieAbstainPct = isCommittee ? ccAbstainPct : 0;
+  const pieOtherPct = isDrep ? drepNotVotedPct : (isCommittee ? ccNotVotedPct : 0);
+
+  const thresholdPct = isDrep
+    ? toFiniteOrNull(row?.drepRequiredPct)
+    : isSpo ? toFiniteOrNull(row?.spoRequiredPct)
+    : isCommittee ? toFiniteOrNull(row?.ccRequiredPct) : null;
+  const thresholdAngle = thresholdPct !== null ? Math.max(0, Math.min(100, thresholdPct)) * 3.6 : null;
+
+  const bg = `conic-gradient(#54e4bc 0 ${pieYesPct}%, #ff6f7d ${pieYesPct}% ${pieYesPct + pieNoPct}%, #ffc766 ${pieYesPct + pieNoPct}% ${pieYesPct + pieNoPct + pieAbstainPct}%, #7c8fa8 ${pieYesPct + pieNoPct + pieAbstainPct}% ${pieYesPct + pieNoPct + pieAbstainPct + pieOtherPct}%)`;
+  const centerText = isCommittee ? `${yes}/${ccElig || ccCast}` : `${Math.round(pieYesPct)}%`;
+  const label = isDrep ? "DRep" : isCommittee ? "CC" : "SPO";
+
+  return (
+    <div className="action-vote-mini-pie">
+      <div className="action-vote-pie action-vote-pie--mini" style={{ background: bg }}>
+        {thresholdAngle !== null ? (
+          <div aria-hidden="true" className="action-vote-pie-threshold" style={{ "--threshold-angle": `${thresholdAngle}deg` }} />
+        ) : null}
+        <span>{centerText}</span>
+      </div>
+      <p className="action-vote-mini-label">{label}</p>
+    </div>
+  );
+}
+
+function VoteMiniPies({ row }) {
+  const groups = eligibleVoteGroups(row);
+  if (groups.length === 0) return <span className="muted">—</span>;
+  return (
+    <div className="action-vote-mini-pies">
+      {groups.map((group) => <VoteMiniPie key={group.key} group={group} row={row} />)}
+    </div>
   );
 }
 
@@ -844,6 +913,7 @@ export default function GovernanceActionsPage() {
         spoAlwaysAbstainAda,
         drepRequiredPct: drepRequiredPct > 0 ? drepRequiredPct : null,
         spoRequiredPct: spoRequiredPct > 0 ? spoRequiredPct : null,
+        ccRequiredPct: info?.thresholdInfo?.ccRequiredPct ?? null,
         drepThresholdMet,
         spoThresholdMet,
         passingNow,
@@ -1182,7 +1252,7 @@ export default function GovernanceActionsPage() {
                 <th>Type</th>
                 <th>Status</th>
                 <th>Submitted</th>
-                <th>Yes / No (active)</th>
+                <th>Votes</th>
               </tr>
             </thead>
             <tbody>
@@ -1223,8 +1293,8 @@ export default function GovernanceActionsPage() {
                         </div>
                       ) : null}
                     </td>
-                    <td data-label="Yes / No (active)">
-                      {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
+                    <td data-label="Votes">
+                      <VoteMiniPies row={row} />
                     </td>
                   </tr>
                 ))

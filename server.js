@@ -65,6 +65,11 @@ const SYNC_BATCH_SIZE = Number(process.env.SYNC_BATCH_SIZE || 5);
 const SYNC_CONCURRENCY = Number(process.env.SYNC_CONCURRENCY || 1);
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 3 * 60 * 60 * 1000);
 const SYNC_STARTUP_DELAY_MS = Number(process.env.SYNC_STARTUP_DELAY_MS || 3000);
+const DELTA_POLL_MS = Number(process.env.DELTA_POLL_MS || 10 * 60 * 1000);
+const DELTA_PROPOSAL_RECENT_WINDOW_MS = Number(process.env.DELTA_PROPOSAL_RECENT_WINDOW_MS || 6 * 60 * 60 * 1000);
+const DELTA_PROPOSAL_RECENT_POLL_MS = Number(process.env.DELTA_PROPOSAL_RECENT_POLL_MS || 3 * 60 * 1000);
+const DELTA_PROPOSAL_IDLE_POLL_MS = Number(process.env.DELTA_PROPOSAL_IDLE_POLL_MS || 30 * 60 * 1000);
+const DREP_PROFILE_REFRESH_MIN_MS = Number(process.env.DREP_PROFILE_REFRESH_MIN_MS || 6 * 60 * 60 * 1000);
 const SYNC_START_UTC_HOURS = parseUtcHourList(process.env.SYNC_START_UTC_HOURS, [11, 23]);
 const SNAPSHOT_EXPOSE_UTC_HOURS = parseUtcHourList(process.env.SNAPSHOT_EXPOSE_UTC_HOURS, [0, 12]);
 const SNAPSHOT_PATH = process.env.SNAPSHOT_PATH || path.join(__dirname, "snapshot.accountability.json");
@@ -79,6 +84,8 @@ const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_L
 const VOTE_TX_RATIONALE_MAX_DURATION_MS = Number(process.env.VOTE_TX_RATIONALE_MAX_DURATION_MS || 6 * 60 * 1000);
 const VOTE_TX_RATIONALE_CACHE_PATH = process.env.VOTE_TX_RATIONALE_CACHE_PATH || path.join(__dirname, "cache.voteTxRationales.json");
 const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(__dirname, "cache.spoProfiles.json");
+const DREP_META_CACHE_PATH = process.env.DREP_META_CACHE_PATH || path.join(__dirname, "cache.drepMeta.json");
+const DREP_META_CACHE_TTL_MS = Number(process.env.DREP_META_CACHE_TTL_MS || 48 * 60 * 60 * 1000);
 const FRONTEND_DIST_PATH = process.env.FRONTEND_DIST_PATH || path.join(__dirname, "frontend", "dist");
 const BUG_REPORTS_PATH = process.env.BUG_REPORTS_PATH || path.join(__dirname, "reports", "bug_reports.ndjson");
 const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
@@ -89,6 +96,7 @@ const BUG_REPORT_RATE_LIMIT_MAX = Number(process.env.BUG_REPORT_RATE_LIMIT_MAX |
 const BUG_REPORT_RATE_LIMIT_WINDOW_MS = Number(process.env.BUG_REPORT_RATE_LIMIT_WINDOW_MS || 60_000);
 const OPS_RATE_LIMIT_MAX = Number(process.env.OPS_RATE_LIMIT_MAX || 12);
 const OPS_RATE_LIMIT_WINDOW_MS = Number(process.env.OPS_RATE_LIMIT_WINDOW_MS || 60_000);
+const WALLET_DELEGATION_CACHE_TTL_MS = Number(process.env.WALLET_DELEGATION_CACHE_TTL_MS || 10 * 60 * 1000);
 const SPECIAL_DREP_REFRESH_MS = Number(process.env.SPECIAL_DREP_REFRESH_MS || 15 * 60 * 1000);
 const SPECIAL_DREP_IDS = {
   alwaysAbstain: "drep_always_abstain",
@@ -272,6 +280,7 @@ let epochBackfillState = {
 };
 let voteTxTimeCache = {};
 let voteTxRationaleCache = {};
+let drepMetaCache = {};
 const cgovSpoRationaleLookupCache = new Map();
 const cgovCommitteeRationaleLookupCache = new Map();
 const cgovDrepRationaleLookupCache = new Map();
@@ -324,6 +333,8 @@ const nclRefreshPromises = {};
 const voteRationaleCache = new Map();
 const voteRationaleResultCache = new Map();
 const drepRationaleByProposalVoter = new Map();
+const proposalDeltaPollState = new Map();
+const drepProfileRefreshState = new Map();
 let drepRationaleWarmState = {
   running: false,
   lastStartedAt: null,
@@ -335,9 +346,116 @@ let drepRationaleWarmState = {
 
 let lastRequestAt = 0;
 let lastKoiosRequestAt = 0;
+const walletDelegationCache = new Map();
+let latestChainEpochCache = { value: null, cachedAt: 0 };
+const proposalVotingSummaryCache = new Map();
+const PROPOSAL_VOTING_SUMMARY_TTL_MS = 15 * 60 * 1000;
+const opsRequestMetrics = {
+  startedAt: new Date().toISOString(),
+  blockfrost: {
+    total: 0,
+    ok: 0,
+    failed: 0,
+    byEndpoint: {}
+  },
+  koios: {
+    total: 0,
+    ok: 0,
+    failed: 0,
+    byEndpoint: {}
+  }
+};
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeMetricsEndpoint(endpointWithQuery) {
+  const raw = String(endpointWithQuery || "").trim();
+  if (!raw) return "/";
+  const pathOnly = raw.split("?")[0] || "/";
+  const parts = pathOnly.split("/").filter(Boolean);
+  const normalized = parts.map((segment) => {
+    const s = String(segment || "").trim();
+    if (!s) return s;
+    if (/^[0-9]+$/.test(s)) return ":n";
+    if (/^[a-f0-9]{24,}$/i.test(s)) return ":id";
+    if ((s.startsWith("stake") || s.startsWith("pool") || s.startsWith("drep") || s.startsWith("cc_")) && s.length > 16) return ":id";
+    if (s.length > 42) return ":id";
+    return s;
+  });
+  return `/${normalized.join("/")}`;
+}
+
+function recordOpsProviderRequest(provider, endpointWithQuery, ok, statusCode, durationMs) {
+  const key = provider === "koios" ? "koios" : "blockfrost";
+  const bucket = opsRequestMetrics[key];
+  const endpoint = normalizeMetricsEndpoint(endpointWithQuery);
+  if (!bucket.byEndpoint[endpoint]) {
+    bucket.byEndpoint[endpoint] = {
+      total: 0,
+      ok: 0,
+      failed: 0,
+      lastStatus: null,
+      lastDurationMs: 0,
+      totalDurationMs: 0,
+      lastAt: null
+    };
+  }
+  const row = bucket.byEndpoint[endpoint];
+  bucket.total += 1;
+  row.total += 1;
+  if (ok) {
+    bucket.ok += 1;
+    row.ok += 1;
+  } else {
+    bucket.failed += 1;
+    row.failed += 1;
+  }
+  row.lastStatus = Number.isFinite(Number(statusCode)) ? Number(statusCode) : null;
+  row.lastDurationMs = Math.max(0, Number(durationMs || 0));
+  row.totalDurationMs += row.lastDurationMs;
+  row.lastAt = new Date().toISOString();
+}
+
+function buildOpsMetricsPayload() {
+  const summarize = (providerBucket) => {
+    const byEndpoint = providerBucket.byEndpoint || {};
+    const topEndpoints = Object.entries(byEndpoint)
+      .map(([endpoint, value]) => ({
+        endpoint,
+        ...value,
+        avgDurationMs: value.total > 0 ? Math.round((Number(value.totalDurationMs || 0) / value.total) * 100) / 100 : 0
+      }))
+      .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+      .slice(0, 40);
+    return {
+      total: Number(providerBucket.total || 0),
+      ok: Number(providerBucket.ok || 0),
+      failed: Number(providerBucket.failed || 0),
+      endpointsTracked: Object.keys(byEndpoint).length,
+      topEndpoints
+    };
+  };
+  return {
+    startedAt: opsRequestMetrics.startedAt,
+    now: new Date().toISOString(),
+    sync: {
+      syncing: Boolean(syncState.syncing),
+      lastStartedAt: syncState.lastStartedAt,
+      lastCompletedAt: syncState.lastCompletedAt,
+      lastError: syncState.lastError,
+      lastSyncMode: syncState.lastSyncMode
+    },
+    blockfrost: summarize(opsRequestMetrics.blockfrost),
+    koios: summarize(opsRequestMetrics.koios)
+  };
+}
+
+function resetOpsMetrics() {
+  opsRequestMetrics.startedAt = new Date().toISOString();
+  opsRequestMetrics.blockfrost = { total: 0, ok: 0, failed: 0, byEndpoint: {} };
+  opsRequestMetrics.koios = { total: 0, ok: 0, failed: 0, byEndpoint: {} };
 }
 
 function json(res, status, data) {
@@ -408,6 +526,14 @@ function readBugReports(limit = 200) {
     }
   }
   return parsed.slice(0, limit);
+}
+
+function inferRewardAddressNetwork(rewardAddressRaw) {
+  const rewardAddress = String(rewardAddressRaw || "").trim().toLowerCase();
+  if (!rewardAddress) return "unknown";
+  if (rewardAddress.startsWith("stake_test1")) return "testnet";
+  if (rewardAddress.startsWith("stake1")) return "mainnet";
+  return "unknown";
 }
 
 function readBugReportsAll() {
@@ -638,7 +764,8 @@ function compactProposalInfoForDashboard(proposalInfo) {
       enactedEpoch: Number(info?.enactedEpoch || 0),
       droppedEpoch: Number(info?.droppedEpoch || 0),
       expiredEpoch: Number(info?.expiredEpoch || 0),
-      voteStats: info?.voteStats || {}
+      voteStats: info?.voteStats || {},
+      thresholdInfo: info?.thresholdInfo || null
     };
   }
   return compact;
@@ -2188,8 +2315,11 @@ async function resolveDrepProfileFromMetadataEnvelope(metadataEnvelope, payloadC
 
 function outcomeFromProposal(proposalDetail) {
   if (!proposalDetail) return "pending";
-  if (proposalDetail.enacted_epoch !== null || proposalDetail.ratified_epoch !== null) return "yes";
-  if (proposalDetail.dropped_epoch !== null || proposalDetail.expired_epoch !== null) return "no";
+  if (proposalDetail.enacted_epoch !== null && proposalDetail.enacted_epoch !== undefined) return "yes";
+  // Expired/dropped must override ratified for final outcome display.
+  if (proposalDetail.dropped_epoch !== null && proposalDetail.dropped_epoch !== undefined) return "no";
+  if (proposalDetail.expired_epoch !== null && proposalDetail.expired_epoch !== undefined) return "no";
+  if (proposalDetail.ratified_epoch !== null && proposalDetail.ratified_epoch !== undefined) return "yes";
   return "pending";
 }
 
@@ -2749,6 +2879,7 @@ async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "appl
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), BLOCKFROST_REQUEST_TIMEOUT_MS);
   let response;
+  const started = Date.now();
   try {
     response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
       method: "POST",
@@ -2759,6 +2890,7 @@ async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "appl
   } finally {
     clearTimeout(timer);
   }
+  recordOpsProviderRequest("blockfrost", endpointWithQuery, response.ok, response.status, Date.now() - started);
   const text = await response.text();
   let parsed;
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
@@ -2776,11 +2908,13 @@ async function blockfrostGet(endpointWithQuery) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), BLOCKFROST_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
         headers: { project_id: BLOCKFROST_API_KEY },
         signal: controller.signal
       });
+      recordOpsProviderRequest("blockfrost", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -2811,6 +2945,7 @@ async function koiosGet(endpointWithQuery) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KOIOS_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       const headers = {
         "Content-Type": "application/json"
@@ -2820,6 +2955,7 @@ async function koiosGet(endpointWithQuery) {
         headers,
         signal: controller.signal
       });
+      recordOpsProviderRequest("koios", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -2850,6 +2986,7 @@ async function koiosPost(endpointWithQuery, body = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KOIOS_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       const headers = {
         "Content-Type": "application/json"
@@ -2861,6 +2998,7 @@ async function koiosPost(endpointWithQuery, body = {}) {
         body: JSON.stringify(body || {}),
         signal: controller.signal
       });
+      recordOpsProviderRequest("koios", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -3533,6 +3671,20 @@ function saveVoteTxRationaleCache() {
   fs.writeFileSync(VOTE_TX_RATIONALE_CACHE_PATH, JSON.stringify(voteTxRationaleCache));
 }
 
+function loadDrepMetaCache() {
+  if (!fs.existsSync(DREP_META_CACHE_PATH)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(DREP_META_CACHE_PATH, "utf8"));
+    if (parsed && typeof parsed === "object") drepMetaCache = parsed;
+  } catch { /* ignore corrupt cache */ }
+}
+
+function saveDrepMetaCache() {
+  try {
+    fs.writeFileSync(DREP_META_CACHE_PATH, JSON.stringify(drepMetaCache));
+  } catch { /* ignore write errors */ }
+}
+
 function looksLikeUrl(value) {
   const s = String(value || "").trim();
   if (!s) return false;
@@ -3813,9 +3965,15 @@ async function fetchDrepPowerForEpoch(epochNo) {
 }
 
 async function fetchLatestChainEpoch() {
+  const now = Date.now();
+  if (latestChainEpochCache.value !== null && (now - latestChainEpochCache.cachedAt) < 10 * 60 * 1000) {
+    return latestChainEpochCache.value;
+  }
   const row = await blockfrostGet("/epochs/latest").catch(() => null);
   const epoch = Number(row?.epoch || 0);
-  return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  const result = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  if (result !== null) latestChainEpochCache = { value: result, cachedAt: now };
+  return result;
 }
 
 async function fetchAllDrepIdsFromBlockfrost() {
@@ -4075,6 +4233,11 @@ async function buildDeltaSnapshot(base) {
   const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
   const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
   const currentProposalIds = new Set(proposals.map((p) => String(p?.id || "").trim()).filter(Boolean));
+  for (const proposalId of Array.from(proposalDeltaPollState.keys())) {
+    if (!currentProposalIds.has(proposalId)) {
+      proposalDeltaPollState.delete(proposalId);
+    }
+  }
 
   syncState.totalProposals = proposalsAll.length;
   syncState.scannedProposals = proposals.length;
@@ -4294,8 +4457,29 @@ async function buildDeltaSnapshot(base) {
   // --- Phase 2: Check active known proposals for new votes (watermark-based) ---
   const newlyActiveDrepIds = new Set();
 
-  for (let start = 0; start < activeKnownProposals.length; start += SYNC_BATCH_SIZE) {
-    const batch = activeKnownProposals.slice(start, start + SYNC_BATCH_SIZE);
+  // Pre-filter: skip proposals still within their poll interval BEFORE firing Koios calls,
+  // so we never pay for a Koios batch fetch for proposals we'd immediately skip anyway.
+  const nowMsPhase2 = Date.now();
+  const proposalsNeedingCheck = [];
+  for (const p of activeKnownProposals) {
+    const proposalId = String(p?.id || "").trim();
+    const pollState = proposalDeltaPollState.get(proposalId) || null;
+    if (pollState && Number.isFinite(pollState.lastCheckedAt) && pollState.lastCheckedAt > 0) {
+      const hasRecentActivity =
+        Number.isFinite(pollState.lastNewVotesAt) &&
+        pollState.lastNewVotesAt > 0 &&
+        (nowMsPhase2 - pollState.lastNewVotesAt) <= DELTA_PROPOSAL_RECENT_WINDOW_MS;
+      const minInterval = hasRecentActivity ? DELTA_PROPOSAL_RECENT_POLL_MS : DELTA_PROPOSAL_IDLE_POLL_MS;
+      if (nowMsPhase2 - pollState.lastCheckedAt < minInterval) {
+        syncState.processedProposals += 1;
+        continue;
+      }
+    }
+    proposalsNeedingCheck.push(p);
+  }
+
+  for (let start = 0; start < proposalsNeedingCheck.length; start += SYNC_BATCH_SIZE) {
+    const batch = proposalsNeedingCheck.slice(start, start + SYNC_BATCH_SIZE);
     const batchIds = batch.map((p) => p.id);
 
     const [koiosVoteLookupByProposal, koiosSpoVoteLookupByProposal] = await Promise.all([
@@ -4304,6 +4488,10 @@ async function buildDeltaSnapshot(base) {
     ]);
 
     await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
+      const proposalId = String(proposal?.id || "").trim();
+      const nowMs = Date.now();
+      const pollState = proposalDeltaPollState.get(proposalId) || null;
+
       const safeId = encodeURIComponent(proposal.id);
       const watermark = knownVoteTxHashByProposal.get(proposal.id) || new Set();
       const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
@@ -4325,23 +4513,25 @@ async function buildDeltaSnapshot(base) {
         const query = `/governance/proposals/${safeId}/votes?count=${PROPOSAL_VOTES_PAGE_SIZE}&page=${page}&order=desc`;
         const chunk = await blockfrostGet(query).catch(() => []);
         if (!Array.isArray(chunk) || chunk.length === 0) break;
-        let knownInPage = 0;
-        let unseenInPage = 0;
         for (const vote of chunk) {
           const txh = String(vote.tx_hash || "").toLowerCase();
           if (watermark.has(txh)) {
-            knownInPage += 1;
-            continue;
+            // Descending order boundary reached: all following votes are older.
+            hitWatermark = true;
+            break;
           }
           newVotes.push(vote);
-          unseenInPage += 1;
         }
-        if (knownInPage > 0 && unseenInPage === 0) hitWatermark = true;
+        if (hitWatermark) break;
         if (chunk.length < PROPOSAL_VOTES_PAGE_SIZE) break;
         page += 1;
       }
 
       if (newVotes.length === 0) {
+        proposalDeltaPollState.set(proposalId, {
+          lastCheckedAt: nowMs,
+          lastNewVotesAt: Number(pollState?.lastNewVotesAt || 0)
+        });
         syncState.processedProposals += 1;
         return;
       }
@@ -4363,14 +4553,25 @@ async function buildDeltaSnapshot(base) {
       if (freshDetail) {
         const freshOutcome = titleCase(outcomeFromProposal(freshDetail));
         if (proposalInfo[proposal.id]) {
+          const current = proposalInfo[proposal.id] || {};
+          const nextExpirationEpoch =
+            freshDetail.expiration !== undefined ? freshDetail.expiration : current.expirationEpoch;
+          const nextRatifiedEpoch =
+            freshDetail.ratified_epoch !== undefined ? freshDetail.ratified_epoch : current.ratifiedEpoch;
+          const nextEnactedEpoch =
+            freshDetail.enacted_epoch !== undefined ? freshDetail.enacted_epoch : current.enactedEpoch;
+          const nextDroppedEpoch =
+            freshDetail.dropped_epoch !== undefined ? freshDetail.dropped_epoch : current.droppedEpoch;
+          const nextExpiredEpoch =
+            freshDetail.expired_epoch !== undefined ? freshDetail.expired_epoch : current.expiredEpoch;
           proposalInfo[proposal.id] = {
-            ...proposalInfo[proposal.id],
+            ...current,
             outcome: freshOutcome,
-            expirationEpoch: freshDetail.expiration ?? proposalInfo[proposal.id].expirationEpoch,
-            ratifiedEpoch: freshDetail.ratified_epoch ?? proposalInfo[proposal.id].ratifiedEpoch,
-            enactedEpoch: freshDetail.enacted_epoch ?? proposalInfo[proposal.id].enactedEpoch,
-            droppedEpoch: freshDetail.dropped_epoch ?? proposalInfo[proposal.id].droppedEpoch,
-            expiredEpoch: freshDetail.expired_epoch ?? proposalInfo[proposal.id].expiredEpoch
+            expirationEpoch: nextExpirationEpoch,
+            ratifiedEpoch: nextRatifiedEpoch,
+            enactedEpoch: nextEnactedEpoch,
+            droppedEpoch: nextDroppedEpoch,
+            expiredEpoch: nextExpiredEpoch
           };
         }
       }
@@ -4432,6 +4633,11 @@ async function buildDeltaSnapshot(base) {
         };
       }
 
+      proposalDeltaPollState.set(proposalId, {
+        lastCheckedAt: nowMs,
+        lastNewVotesAt: nowMs
+      });
+
       syncState.processedProposals += 1;
     });
   }
@@ -4442,6 +4648,11 @@ async function buildDeltaSnapshot(base) {
   for (let start = 0; start < drepIdsToRefresh.length; start += SYNC_BATCH_SIZE) {
     const batch = drepIdsToRefresh.slice(start, start + SYNC_BATCH_SIZE);
     await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
+      const nowMs = Date.now();
+      const lastRefreshAt = Number(drepProfileRefreshState.get(drepId) || 0);
+      if (lastRefreshAt > 0 && nowMs - lastRefreshAt < DREP_PROFILE_REFRESH_MIN_MS) {
+        return;
+      }
       const safeId = encodeURIComponent(drepId);
       const [details, metadata] = await Promise.allSettled([
         blockfrostGet(`/governance/dreps/${safeId}`),
@@ -4468,6 +4679,9 @@ async function buildDeltaSnapshot(base) {
         row.name = resolveName(metadata.value.json_metadata, row.id);
         if (!row.name && row.profile?.name) row.name = row.profile.name;
         if (!row.name) row.name = await resolveDrepNameFromMetadataEnvelope(metadata.value, new Map(), drepMetadataPayloadCache);
+      }
+      if (details.status === "fulfilled" || metadata.status === "fulfilled") {
+        drepProfileRefreshState.set(drepId, nowMs);
       }
     });
   }
@@ -4916,35 +5130,48 @@ async function buildFullSnapshot() {
     const batch = drepIds.slice(start, start + SYNC_BATCH_SIZE);
     await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
       const safeId = encodeURIComponent(drepId);
-      const [details, metadata] = await Promise.allSettled([
-        blockfrostGet(`/governance/dreps/${safeId}`),
-        blockfrostGet(`/governance/dreps/${safeId}/metadata`)
-      ]);
+      const nowMs = Date.now();
+      const cached = drepMetaCache[drepId];
+      const isFresh = cached && (nowMs - Number(cached.fetchedAt || 0)) < DREP_META_CACHE_TTL_MS;
+
+      let detailsValue = isFresh ? cached.details : null;
+      let metadataValue = isFresh ? cached.metadata : null;
+
+      if (!isFresh) {
+        const [details, metadata] = await Promise.allSettled([
+          blockfrostGet(`/governance/dreps/${safeId}`),
+          blockfrostGet(`/governance/dreps/${safeId}/metadata`)
+        ]);
+        detailsValue = details.status === "fulfilled" ? details.value : null;
+        metadataValue = metadata.status === "fulfilled" ? metadata.value : null;
+        drepMetaCache[drepId] = { fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
+      }
+
       const row = drepAggregate.get(drepId);
       if (!row) return;
-      if (details.status === "fulfilled") {
-        row.votingPowerAda = Math.floor(Number(details.value.amount || 0) / 1_000_000);
-        const active = details.value?.active === true;
-        const retired = details.value?.retired === true;
-        const expired = details.value?.expired === true;
+      if (detailsValue) {
+        row.votingPowerAda = Math.floor(Number(detailsValue.amount || 0) / 1_000_000);
+        const active = detailsValue?.active === true;
+        const retired = detailsValue?.retired === true;
+        const expired = detailsValue?.expired === true;
         row.active = active;
         row.retired = retired;
         row.expired = expired;
-        row.activeEpoch = Number(details.value?.active_epoch || 0) || null;
-        row.lastActiveEpoch = Number(details.value?.last_active_epoch || 0) || null;
-        row.hasScript = details.value?.has_script === true;
+        row.activeEpoch = Number(detailsValue?.active_epoch || 0) || null;
+        row.lastActiveEpoch = Number(detailsValue?.last_active_epoch || 0) || null;
+        row.hasScript = detailsValue?.has_script === true;
         row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
       }
-      if (metadata.status === "fulfilled") {
-        row.transparencyScore = computeTransparencyScore(metadata.value);
-        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadata.value, drepMetadataPayloadCache);
-        row.name = resolveName(metadata.value.json_metadata, row.id);
+      if (metadataValue) {
+        row.transparencyScore = computeTransparencyScore(metadataValue);
+        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadataValue, drepMetadataPayloadCache);
+        row.name = resolveName(metadataValue.json_metadata, row.id);
         if (!row.name && row.profile?.name) {
           row.name = row.profile.name;
         }
         if (!row.name) {
           row.name = await resolveDrepNameFromMetadataEnvelope(
-            metadata.value,
+            metadataValue,
             drepMetadataUrlNameCache,
             drepMetadataPayloadCache
           );
@@ -4952,6 +5179,7 @@ async function buildFullSnapshot() {
       }
     });
   }
+  saveDrepMetaCache();
 
   const dreps = [];
   for (const row of drepAggregate.values()) {
@@ -5644,9 +5872,6 @@ async function runSync(options = {}) {
 }
 
 function startScheduler() {
-  // How often to poll for new votes (delta syncs).  Default: 3 minutes.
-  const DELTA_POLL_MS = Number(process.env.DELTA_POLL_MS || 3 * 60 * 1000);
-
   // How often to force a full rebuild (epoch boundary check).
   // The full rebuild also runs automatically whenever the epoch advances.
   // This is a safety-net interval (default: once per day) in case the epoch
@@ -5772,6 +5997,7 @@ async function runStartupInitialization() {
   loadVoteTxTimeCache();
   loadVoteTxRationaleCache();
   loadSpoProfileCache();
+  loadDrepMetaCache();
   loadNclCacheFromDisk();
   backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
   backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
@@ -5803,6 +6029,74 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/health") {
     json(res, 200, { ok: true, hasBlockfrostKey: Boolean(BLOCKFROST_API_KEY) });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/wallet-delegation") {
+    const rewardAddress = String(url.searchParams.get("rewardAddress") || "").trim();
+    if (!rewardAddress) {
+      json(res, 400, { error: "rewardAddress query parameter is required." });
+      return;
+    }
+    if (!BLOCKFROST_API_KEY) {
+      json(res, 503, { error: "Blockfrost API key is not configured on the server." });
+      return;
+    }
+
+    const rewardNetwork = inferRewardAddressNetwork(rewardAddress);
+    const configuredNetwork = String(CONFIGURED_BLOCKFROST_NETWORK || "unknown").toLowerCase();
+    const configuredIsMainnet = configuredNetwork === "mainnet";
+    if (
+      rewardNetwork !== "unknown" &&
+      configuredNetwork !== "unknown" &&
+      configuredNetwork !== rewardNetwork &&
+      !(configuredIsMainnet && rewardNetwork === "mainnet") &&
+      !(!configuredIsMainnet && rewardNetwork === "testnet")
+    ) {
+      json(res, 400, {
+        error: "Reward address network does not match server network.",
+        data: {
+          rewardAddress,
+          rewardNetwork,
+          serverNetwork: configuredNetwork
+        }
+      });
+      return;
+    }
+
+    const cacheKey = `${configuredNetwork}:${rewardAddress.toLowerCase()}`;
+    const cached = walletDelegationCache.get(cacheKey);
+    if (cached && Number(cached.expiresAt || 0) > Date.now()) {
+      json(res, 200, cached.value);
+      return;
+    }
+
+    try {
+      const account = await blockfrostGet(`/accounts/${rewardAddress}`);
+      const drepId = String(account?.drep_id || "").trim();
+      const payload = {
+        ok: true,
+        rewardAddress,
+        network: configuredNetwork,
+        delegatedDrepLiteralRaw: drepId,
+        delegatedDrepLiteral: normalizeLiteral(drepId),
+        delegationStatus: classifySpoDelegationStatusFromDrepId(drepId)
+      };
+      walletDelegationCache.set(cacheKey, {
+        value: payload,
+        expiresAt: Date.now() + Math.max(5_000, WALLET_DELEGATION_CACHE_TTL_MS)
+      });
+      json(res, 200, payload);
+    } catch (error) {
+      const message = String(error?.message || "Failed to lookup wallet delegation.");
+      const notFound = message.includes("Blockfrost 404");
+      json(res, notFound ? 404 : 502, {
+        error: notFound
+          ? "Reward account was not found on this network."
+          : "Failed to lookup wallet delegation.",
+        details: message
+      });
+    }
     return;
   }
 
@@ -6260,6 +6554,51 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/ops-metrics") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    json(res, 200, buildOpsMetricsPayload());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ops-metrics/reset") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    resetOpsMetrics();
+    json(res, 200, { ok: true, resetAt: new Date().toISOString() });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/proposal-metadata") {
     const proposalId = String(url.searchParams.get("proposalId") || "").trim();
     if (!proposalId) {
@@ -6517,17 +6856,19 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "Missing proposalId." });
       return;
     }
+    const nowMs = Date.now();
+    const cachedSummary = proposalVotingSummaryCache.get(proposalId);
+    if (cachedSummary && (nowMs - cachedSummary.cachedAt) < PROPOSAL_VOTING_SUMMARY_TTL_MS) {
+      json(res, 200, cachedSummary.data);
+      return;
+    }
     try {
       const byId = await fetchKoiosVotingSummariesByProposalIds([proposalId]);
       const summary = byId.get(proposalId) || null;
       const nomosModel = buildNomosModelFromKoiosSummary(summary);
-      json(res, 200, {
-        ok: true,
-        proposalId,
-        hasSummary: Boolean(summary),
-        koiosVotingSummary: summary,
-        nomosModel
-      });
+      const data = { ok: true, proposalId, hasSummary: Boolean(summary), koiosVotingSummary: summary, nomosModel };
+      proposalVotingSummaryCache.set(proposalId, { data, cachedAt: nowMs });
+      json(res, 200, data);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal voting summary." });
