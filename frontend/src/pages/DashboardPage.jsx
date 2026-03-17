@@ -1,14 +1,32 @@
 import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Transaction } from "@meshsdk/core";
+import { Transaction, resolveStakeKeyHash } from "@meshsdk/core";
+import { hexToBech32 } from "@meshsdk/core-cst";
 import { useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
+import { getSoftCoercedDrepMatch } from "../constants/softCoercedDreps";
+import { SHOW_DELEGATION_AWARENESS_UI } from "../constants/featureFlags";
 
-const scoreWeights = {
+const DREP_SCORE_WEIGHTS = {
+  attendance: 0.35,
+  transparency: 0.25,
+  consistency: 0.15,
+  responsiveness: 0.1,
+  delegationRisk: 0.15
+};
+const SPO_SCORE_WEIGHTS = {
   attendance: 0.45,
   transparency: 0.3,
   consistency: 0.15,
   responsiveness: 0.1
 };
+const COMMITTEE_SCORE_WEIGHTS = {
+  attendance: 0.45,
+  rationaleQuality: 0.35,
+  responsiveness: 0.1
+};
+const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
+const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
+const DREP_DELEGATION_RISK_HIGH_CUTOFF = 75;
 
 function round(v) {
   return Math.round(v * 10) / 10;
@@ -37,6 +55,12 @@ function formatVoteLabelForActor(voteValue, actorType) {
 function hasVoteRationaleSignal(vote) {
   if (vote?.hasRationale === true) return true;
   return Boolean(String(vote?.rationaleUrl || "").trim());
+}
+
+function deriveDrepIdFromRewardAddress(rewardAddress) {
+  const stakeKeyHash = String(resolveStakeKeyHash(String(rewardAddress || "")) || "").trim();
+  if (!stakeKeyHash) return "";
+  return String(hexToBech32("drep", stakeKeyHash) || "").trim();
 }
 
 function MetricInfo({ text, label = "How calculated" }) {
@@ -137,7 +161,48 @@ function responsivenessTooltip(row) {
   ].join("\n");
 }
 
-function accountabilityTooltip(row, isCommittee, includeAttendance, includeTransparency, includeAlignment, includeResponsiveness) {
+function delegationConcentrationRiskScore(sharePctActive) {
+  const share = Number(sharePctActive || 0);
+  if (!Number.isFinite(share) || share <= 0) return 0;
+  // Awareness metric tuning: ~0.9% active-share maps to 100 risk on current dataset.
+  return Math.max(0, Math.min(100, round((share / DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT) * 100)));
+}
+
+function delegationConcentrationRiskLabel(score) {
+  const value = Number(score || 0);
+  if (value >= DREP_DELEGATION_RISK_HIGH_CUTOFF) return "High";
+  if (value >= DREP_DELEGATION_RISK_MEDIUM_CUTOFF) return "Medium";
+  return "Low";
+}
+
+function delegationConcentrationRiskTooltip(row) {
+  const share = Number(row?.votingPowerPctActive || 0);
+  const risk = Number(row?.delegationRiskScore || 0);
+  const label = String(row?.delegationRiskLabel || delegationConcentrationRiskLabel(risk));
+  const levelMessage =
+    label === "High"
+      ? "This DRep has a high share of active delegated power, which can increase concentration risk in governance outcomes."
+      : label === "Medium"
+        ? "This DRep has a meaningful share of active delegated power; concentration should be monitored over time."
+        : "This DRep currently has a lower concentration footprint relative to the active delegation set.";
+  return [
+    "Why this risk level:",
+    levelMessage,
+    `Current delegation share in active voting power: ${round(share)}%.`,
+    "Use this as decentralization awareness when choosing delegation."
+  ].join("\n");
+}
+
+function accountabilityTooltip(
+  row,
+  isCommittee,
+  isDrep,
+  includeAttendance,
+  includeTransparency,
+  includeAlignment,
+  includeResponsiveness,
+  includeDelegationRisk
+) {
   if (isCommittee) {
     return [
       "Committee accountability score:",
@@ -147,10 +212,18 @@ function accountabilityTooltip(row, isCommittee, includeAttendance, includeTrans
     ].join("\n");
   }
   const enabled = [];
-  if (includeAttendance) enabled.push("Attendance 45%");
-  if (includeTransparency) enabled.push("Transparency 30%");
-  if (includeAlignment) enabled.push("Consistency 15%");
-  if (includeResponsiveness) enabled.push("Responsiveness 10%");
+  if (isDrep) {
+    if (includeAttendance) enabled.push("Attendance 35%");
+    if (includeTransparency) enabled.push("Transparency 25%");
+    if (includeAlignment) enabled.push("Consistency 15%");
+    if (includeResponsiveness) enabled.push("Responsiveness 10%");
+    if (includeDelegationRisk) enabled.push("Delegation decentralization 15% (100 - risk)");
+  } else {
+    if (includeAttendance) enabled.push("Attendance 45%");
+    if (includeTransparency) enabled.push("Transparency 30%");
+    if (includeAlignment) enabled.push("Consistency 15%");
+    if (includeResponsiveness) enabled.push("Responsiveness 10%");
+  }
   return [
     "Accountability score:",
     "Weighted average of enabled metrics.",
@@ -205,6 +278,28 @@ function cardanoscanCredentialLink(credential) {
   if (value.startsWith("cc_cold1")) return `https://cardanoscan.io/ccmember/${encodeURIComponent(value)}`;
   if (value.startsWith("cc_hot1")) return `https://cardanoscan.io/cchot/${encodeURIComponent(value)}`;
   return cardanoscanSearchLink(value);
+}
+
+function SoftCoercedDrepBadge({ drepId }) {
+  if (!SHOW_DELEGATION_AWARENESS_UI) return null;
+  const match = getSoftCoercedDrepMatch(drepId);
+  if (!match) return null;
+  return (
+    <span className="pill mid" title={`Shown in local delegation-awareness list: ${match.label}`}>
+      Awareness
+    </span>
+  );
+}
+
+function SoftCoercedDrepReason({ drepId }) {
+  if (!SHOW_DELEGATION_AWARENESS_UI) return null;
+  const match = getSoftCoercedDrepMatch(drepId);
+  if (!match || !match.reason) return null;
+  return (
+    <div className="drep-row-line drep-row-awareness muted" title={match.reason}>
+      Reason: {match.reason}
+    </div>
+  );
 }
 
 const CC_TERM_OVERRIDES_BY_HOT = {
@@ -375,6 +470,7 @@ export default function DashboardPage({ actorType }) {
   const [includeTransparency, setIncludeTransparency] = useState(!isCommittee);
   const [includeAlignment, setIncludeAlignment] = useState(isCommittee);
   const [includeResponsiveness, setIncludeResponsiveness] = useState(isCommittee);
+  const [includeDelegationRisk, setIncludeDelegationRisk] = useState(isDrep);
   const [includePreviousCommitteeMembers, setIncludePreviousCommitteeMembers] = useState(false);
   const [detailVoteView, setDetailVoteView] = useState("voted");
   const [voteRationaleText, setVoteRationaleText] = useState({});
@@ -385,6 +481,14 @@ export default function DashboardPage({ actorType }) {
   const wallet = useContext(WalletContext);
   const [delegateNotice, setDelegateNotice] = useState("");
   const [delegating, setDelegating] = useState(false);
+  const [highRiskDelegationModalOpen, setHighRiskDelegationModalOpen] = useState(false);
+  const [registeringDrep, setRegisteringDrep] = useState(false);
+  const [registerDrepNotice, setRegisterDrepNotice] = useState("");
+  const [showDrepRegistrationForm, setShowDrepRegistrationForm] = useState(false);
+  const [registerDrepId, setRegisterDrepId] = useState("");
+  const [registerDrepDeposit, setRegisterDrepDeposit] = useState("500000000");
+  const [registerDrepAnchorUrl, setRegisterDrepAnchorUrl] = useState("");
+  const [registerDrepAnchorHash, setRegisterDrepAnchorHash] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileImageOpen, setProfileImageOpen] = useState(false);
   const [rationaleModal, setRationaleModal] = useState({ open: false, key: "", title: "", proposalId: "" });
@@ -392,10 +496,6 @@ export default function DashboardPage({ actorType }) {
   const syncPollBusyRef = useRef(false);
   const detailPanelRef = useRef(null);
   const useModalDetails = false;
-  const cacheKey = useMemo(
-    () => `civitas.accountability.${actorType}.${snapshotKey || "latest"}`,
-    [actorType, snapshotKey]
-  );
 
   const loadData = useCallback(async () => {
     try {
@@ -408,32 +508,15 @@ export default function DashboardPage({ actorType }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load dashboard data.");
       setPayload(data);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch {
-        // Ignore session storage failures.
-      }
       latestSnapshotRef.current = String(data?.lastSyncCompletedAt || data?.generatedAt || "");
     } catch (e) {
       setError(e.message);
     }
-  }, [cacheKey, snapshotKey]);
+  }, [snapshotKey, actorType]);
 
   useEffect(() => {
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object") {
-          setPayload(parsed);
-          latestSnapshotRef.current = String(parsed?.lastSyncCompletedAt || parsed?.generatedAt || "");
-        }
-      }
-    } catch {
-      // Ignore stale cache parse errors.
-    }
     loadData();
-  }, [cacheKey, loadData]);
+  }, [loadData]);
 
   useEffect(() => {
     if (snapshotKey) return undefined;
@@ -464,6 +547,14 @@ export default function DashboardPage({ actorType }) {
   }, []);
 
   useEffect(() => {
+    if (!isDrep) return;
+    const walletDrepId = String(wallet?.walletDrep?.dRepIDCip105 || "").trim();
+    if (walletDrepId && !String(registerDrepId || "").trim()) {
+      setRegisterDrepId(walletDrepId);
+    }
+  }, [isDrep, wallet?.walletDrep?.dRepIDCip105, registerDrepId]);
+
+  useEffect(() => {
     if (!typeMenuOpen) return undefined;
     const handlePointerDown = (event) => {
       if (!typePickerRef.current) return;
@@ -482,7 +573,7 @@ export default function DashboardPage({ actorType }) {
     };
   }, [typeMenuOpen]);
 
-  async function prepareDelegation() {
+  async function submitDelegationTransaction() {
     if (!selected) return;
     if (!wallet?.walletApi) {
       setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
@@ -519,6 +610,23 @@ export default function DashboardPage({ actorType }) {
     } finally {
       setDelegating(false);
     }
+  }
+
+  async function prepareDelegation() {
+    if (!selected) return;
+    if (!wallet?.walletApi) {
+      setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
+      return;
+    }
+    if (!wallet.walletRewardAddress) {
+      setDelegateNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
+      return;
+    }
+    if (String(selected?.delegationRiskLabel || "") === "High") {
+      setHighRiskDelegationModalOpen(true);
+      return;
+    }
+    await submitDelegationTransaction();
   }
 
   async function loadVoteRationale(item) {
@@ -837,18 +945,26 @@ export default function DashboardPage({ actorType }) {
           : isSpo
             ? (isAlwaysAbstainSpo ? 0 : (activeSpoVotingPower > 0 ? Number(actor.votingPowerAda || 0) / activeSpoVotingPower * 100 : 0))
             : 0;
+        const delegationRiskScore = isDrep ? delegationConcentrationRiskScore(vpPctActive) : 0;
+        const delegationRiskLabel = isDrep ? delegationConcentrationRiskLabel(delegationRiskScore) : "";
+        const delegationRiskContribution = isDrep ? Math.max(0, Math.min(100, 100 - delegationRiskScore)) : 0;
 
-        const wAttendance = includeAttendance ? scoreWeights.attendance : 0;
-        const wTransparency = !isCommittee && includeTransparency ? scoreWeights.transparency : 0;
-        const wAlignment = !isCommittee && includeAlignment ? scoreWeights.consistency : 0;
-        const wResponsiveness = (isDrep || isSpo) && includeResponsiveness ? scoreWeights.responsiveness : 0;
-        // CC-specific weights: attendance 45%, rationale quality 35%, responsiveness 10%, breadth 10%
-        const wRationaleQuality = isCommittee && includeAlignment ? 0.35 : 0;
-        const wCcResponsiveness = isCommittee && includeResponsiveness ? 0.1 : 0;
-        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness + wRationaleQuality + wCcResponsiveness;
+        const actorWeights = isDrep ? DREP_SCORE_WEIGHTS : SPO_SCORE_WEIGHTS;
+        const wAttendance = includeAttendance ? actorWeights.attendance : 0;
+        const wTransparency = !isCommittee && includeTransparency ? actorWeights.transparency : 0;
+        const wAlignment = !isCommittee && includeAlignment ? actorWeights.consistency : 0;
+        const wResponsiveness = (isDrep || isSpo) && includeResponsiveness ? actorWeights.responsiveness : 0;
+        const wDelegationRisk = isDrep && includeDelegationRisk ? DREP_SCORE_WEIGHTS.delegationRisk : 0;
+        const wRationaleQuality = isCommittee && includeAlignment ? COMMITTEE_SCORE_WEIGHTS.rationaleQuality : 0;
+        const wCcResponsiveness = isCommittee && includeResponsiveness ? COMMITTEE_SCORE_WEIGHTS.responsiveness : 0;
+        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness + wDelegationRisk + wRationaleQuality + wCcResponsiveness;
         const weighted = isCommittee
           ? attendance * wAttendance + committeeQuality * wRationaleQuality + responsiveness * wCcResponsiveness
-          : attendance * wAttendance + transparency * wTransparency + consistencyMetric * wAlignment + responsiveness * wResponsiveness;
+          : attendance * wAttendance +
+            transparency * wTransparency +
+            consistencyMetric * wAlignment +
+            responsiveness * wResponsiveness +
+            delegationRiskContribution * wDelegationRisk;
         const accountability = activeWeight > 0 ? weighted / activeWeight : 0;
 
         return {
@@ -874,7 +990,10 @@ export default function DashboardPage({ actorType }) {
           accountability: round(accountability),
           votingPowerPct: vpPctTotal,
           votingPowerPctTotal: vpPctTotal,
-          votingPowerPctActive: vpPctActive
+          votingPowerPctActive: vpPctActive,
+          delegationRiskScore,
+          delegationRiskLabel,
+          delegationRiskContribution
         };
       })
       .filter((row) => (isCommittee ? row.cast > 0 : true))
@@ -899,6 +1018,7 @@ export default function DashboardPage({ actorType }) {
     includeTransparency,
     includeAlignment,
     includeResponsiveness,
+    includeDelegationRisk,
     includePreviousCommitteeMembers,
     minAttendance,
     deferredSearch,
@@ -926,7 +1046,7 @@ export default function DashboardPage({ actorType }) {
 
   useEffect(() => {
     setPage(1);
-  }, [minAttendance, deferredSearch, sortBy, selectedAction, selectedTypes, includeActiveActions, includePreviousCommitteeMembers, pageSize]);
+  }, [minAttendance, deferredSearch, sortBy, selectedAction, selectedTypes, includeActiveActions, includePreviousCommitteeMembers, includeDelegationRisk, pageSize]);
 
   const effectivePageSize = useMemo(() => {
     if (isCommittee) return Math.max(rows.length, 1);
@@ -967,6 +1087,7 @@ export default function DashboardPage({ actorType }) {
     const shouldLockScroll =
       Boolean(rationaleModal?.open) ||
       Boolean(profileImageOpen) ||
+      Boolean(highRiskDelegationModalOpen) ||
       (useModalDetails && Boolean(selectedId));
     if (!shouldLockScroll) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -974,19 +1095,74 @@ export default function DashboardPage({ actorType }) {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [rationaleModal?.open, profileImageOpen, useModalDetails, selectedId]);
+  }, [rationaleModal?.open, profileImageOpen, highRiskDelegationModalOpen, useModalDetails, selectedId]);
 
   const selected = rows.find((r) => r.id === selectedId);
   const showResponsivenessColumn = isDrep || isSpo || isCommittee;
   const showTransparencyColumn = !isCommittee;
   const transparencyLabel = "Transparency";
   const alignmentLabel = isCommittee ? "Rationale Quality" : "Alignment";
-  const tableColSpan = isCommittee ? 8 : showResponsivenessColumn ? 7 : 6;
+  const tableColSpan = isCommittee ? 8 : isDrep ? 8 : showResponsivenessColumn ? 7 : 6;
 
   function actorProfilePath(actorId) {
     const base = isDrep ? "/dreps" : isSpo ? "/spos" : "/committee";
     const snapshotSuffix = snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : "";
     return `${base}/${encodeURIComponent(actorId)}${snapshotSuffix}`;
+  }
+
+  async function registerAsDrep() {
+    if (!isDrep) return;
+    if (!wallet?.walletApi) {
+      setRegisterDrepNotice("Connect your wallet in the top bar to register as DRep.");
+      return;
+    }
+    if (!wallet.walletRewardAddress) {
+      setRegisterDrepNotice("No reward address found in connected wallet. DRep registration requires a stake/reward address.");
+      return;
+    }
+    const walletDrepId = String(wallet?.walletDrep?.dRepIDCip105 || "").trim();
+    const manualDrepId = String(registerDrepId || "").trim();
+    const derivedDrepId = deriveDrepIdFromRewardAddress(wallet.walletRewardAddress);
+    const drepId = manualDrepId || walletDrepId || derivedDrepId;
+    if (!drepId) {
+      setRegisterDrepNotice("Unable to derive DRep ID from connected wallet. Enter a DRep ID manually.");
+      return;
+    }
+    const deposit = Number(registerDrepDeposit || 0);
+    if (!Number.isFinite(deposit) || deposit <= 0) {
+      setRegisterDrepNotice("DRep deposit must be a positive lovelace amount.");
+      return;
+    }
+    const anchorUrl = String(registerDrepAnchorUrl || "").trim();
+    const anchorHash = String(registerDrepAnchorHash || "").trim();
+    if ((anchorUrl && !anchorHash) || (!anchorUrl && anchorHash)) {
+      setRegisterDrepNotice("Provide both anchor URL and anchor hash, or leave both empty.");
+      return;
+    }
+    const anchor = anchorUrl && anchorHash ? { url: anchorUrl, hash: anchorHash } : undefined;
+
+    try {
+      setRegisteringDrep(true);
+      setRegisterDrepNotice("");
+
+      const tx = new Transaction({
+        initiator: wallet.walletApi,
+        verbose: false
+      });
+      tx.setNetwork("mainnet");
+      tx.txBuilder.drepRegistrationCertificate(drepId, anchor, deposit);
+
+      const unsignedTx = await tx.build();
+      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
+      const txHash = await wallet.walletApi.submitTx(signedTx);
+
+      setRegisterDrepNotice(`DRep registration submitted on-chain. Tx: ${txHash}`);
+    } catch (e) {
+      const message = e?.message || "DRep registration transaction failed.";
+      setRegisterDrepNotice(`DRep registration failed: ${message}`);
+    } finally {
+      setRegisteringDrep(false);
+    }
   }
 
   function setSelectedWithUrl(nextId) {
@@ -1134,6 +1310,72 @@ export default function DashboardPage({ actorType }) {
         </article>
       </section>
 
+      {isDrep ? (
+        <section className="panel">
+          <h2>DRep Registration</h2>
+          <div className="vote-confirm-actions">
+            <button
+              type="button"
+              className="mode-btn active"
+              onClick={() => setShowDrepRegistrationForm((prev) => !prev)}
+            >
+              {showDrepRegistrationForm ? "Hide DRep Registration" : "Register as a DRep"}
+            </button>
+          </div>
+          {showDrepRegistrationForm ? (
+            <>
+              <p className="muted">Register the connected wallet as a DRep using your wallet extension for signing.</p>
+              <div className="controls dashboard-controls">
+                <label>
+                  DRep ID (CIP-105, optional override)
+                  <input
+                    value={registerDrepId}
+                    onChange={(e) => setRegisterDrepId(e.target.value)}
+                    placeholder="Auto-derived from connected wallet if empty"
+                  />
+                </label>
+                <label>
+                  Deposit (lovelace)
+                  <input
+                    value={registerDrepDeposit}
+                    onChange={(e) => setRegisterDrepDeposit(e.target.value)}
+                    placeholder="500000000"
+                  />
+                </label>
+                <label>
+                  Anchor URL (optional)
+                  <input
+                    value={registerDrepAnchorUrl}
+                    onChange={(e) => setRegisterDrepAnchorUrl(e.target.value)}
+                    placeholder="https://... or ipfs://..."
+                  />
+                </label>
+                <label>
+                  Anchor Hash (optional)
+                  <input
+                    value={registerDrepAnchorHash}
+                    onChange={(e) => setRegisterDrepAnchorHash(e.target.value)}
+                    placeholder="blake2b-256 hex"
+                  />
+                </label>
+              </div>
+              <div className="vote-confirm-actions">
+                <button
+                  type="button"
+                  className="mode-btn active"
+                  onClick={registerAsDrep}
+                  disabled={registeringDrep}
+                >
+                  {registeringDrep ? "Submitting Registration..." : "Register Connected Wallet As DRep"}
+                </button>
+              </div>
+            </>
+          ) : null}
+          {!wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable registration.</p> : null}
+          {registerDrepNotice ? <p className="muted">{registerDrepNotice}</p> : null}
+        </section>
+      ) : null}
+
       <div className="filter-block panel">
         <section className="controls dashboard-controls">
           <label>
@@ -1154,6 +1396,7 @@ export default function DashboardPage({ actorType }) {
               <option value="abstainRate">Abstain Rate</option>
               {showTransparencyColumn ? <option value="transparencyScore">{transparencyLabel}</option> : null}
               {(isDrep || isSpo) ? <option value="votingPowerAda">Voting Power</option> : null}
+              {isDrep ? <option value="delegationRiskScore">Delegation Risk</option> : null}
               <option value="name">Name</option>
             </select>
           </label>
@@ -1235,6 +1478,16 @@ export default function DashboardPage({ actorType }) {
               <input type="checkbox" checked={includeResponsiveness} onChange={(e) => setIncludeResponsiveness(e.target.checked)} />
             </label>
           ) : null}
+          {isDrep ? (
+            <label className="toggle dashboard-toggle">
+              Include Delegation Risk In Score
+              <input
+                type="checkbox"
+                checked={includeDelegationRisk}
+                onChange={(e) => setIncludeDelegationRisk(e.target.checked)}
+              />
+            </label>
+          ) : null}
           {isCommittee ? (
             <label className="toggle dashboard-toggle">
               Include Previous CC Members
@@ -1272,6 +1525,7 @@ export default function DashboardPage({ actorType }) {
                 {showTransparencyColumn ? <th>{transparencyLabel}</th> : null}
                 <th>{alignmentLabel}</th>
                 <th>Abstain</th>
+        {isDrep ? <th>Delegation Risk</th> : null}
         {showResponsivenessColumn ? <th>Responsiveness</th> : null}
         {isCommittee ? <th>Term start</th> : null}
         {isCommittee ? <th>Term End</th> : null}
@@ -1306,7 +1560,9 @@ export default function DashboardPage({ actorType }) {
                           <div className="drep-row-block">
                             <div className="drep-row-line drep-row-name">
                               {row.name ? <strong>{row.name}</strong> : <strong>Unnamed DRep</strong>}
+                              <SoftCoercedDrepBadge drepId={row.id} />
                             </div>
+                            <SoftCoercedDrepReason drepId={row.id} />
                             <div className="drep-row-line drep-row-power">
                               {Number(row.votingPowerAda || 0).toLocaleString()} ada
                             </div>
@@ -1420,6 +1676,17 @@ export default function DashboardPage({ actorType }) {
                         {row.abstainCount ?? 0}/{row.abstainTotal ?? 0}
                       </div>
                     </td>
+                    {isDrep ? (
+                      <td data-label="Delegation Risk">
+                        <span className="metric-value-with-info">
+                          <span className={`pill ${row.delegationRiskScore >= DREP_DELEGATION_RISK_HIGH_CUTOFF ? "low" : row.delegationRiskScore >= DREP_DELEGATION_RISK_MEDIUM_CUTOFF ? "mid" : "good"}`}>
+                            {row.delegationRiskScore}%
+                          </span>
+                          <MetricInfo text={delegationConcentrationRiskTooltip(row)} label="Delegation concentration risk" />
+                        </span>
+                        <div className="muted">{row.delegationRiskLabel} ({round(row.votingPowerPctActive || 0)}% active share)</div>
+                      </td>
+                    ) : null}
                     {showResponsivenessColumn ? (
                       <td data-label="Responsiveness">
                         <span className="metric-value-with-info">
@@ -1455,7 +1722,16 @@ export default function DashboardPage({ actorType }) {
                           {row.accountability}
                         </span>
                         <MetricInfo
-                          text={accountabilityTooltip(row, isCommittee, includeAttendance, includeTransparency, includeAlignment, includeResponsiveness)}
+                          text={accountabilityTooltip(
+                            row,
+                            isCommittee,
+                            isDrep,
+                            includeAttendance,
+                            includeTransparency,
+                            includeAlignment,
+                            includeResponsiveness,
+                            includeDelegationRisk
+                          )}
                           label="Accountability calculation"
                         />
                       </span>
@@ -1832,6 +2108,56 @@ export default function DashboardPage({ actorType }) {
               ) : (
                 <p className="rationale-text">{voteRationaleText[rationaleModal.key] || "No rationale available."}</p>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {highRiskDelegationModalOpen && selected ? (
+        <div className="image-modal-backdrop" role="presentation" onClick={() => setHighRiskDelegationModalOpen(false)}>
+          <div className="image-modal vote-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="image-modal-close"
+              onClick={() => setHighRiskDelegationModalOpen(false)}
+            >
+              Close
+            </button>
+            <h3 className="rationale-modal-title">Delegation Concentration Awareness</h3>
+            <div className="vote-confirm-body">
+              <p>
+                This DRep currently has a high delegated share (
+                <strong>{round(Number(selected?.votingPowerPctActive || 0))}%</strong> of active voting power).
+              </p>
+              <p className="muted">
+                For decentralization, please consider delegating to a DRep with lower delegation concentration.
+              </p>
+              <p className="muted">
+                You can still continue if this is your intentional choice.
+              </p>
+              <div className="vote-confirm-actions">
+                <button
+                  type="button"
+                  className="mode-btn"
+                  onClick={() => {
+                    setHighRiskDelegationModalOpen(false);
+                    setDelegateNotice("Delegation canceled. Consider reviewing DReps with lower delegated concentration.");
+                  }}
+                  disabled={delegating}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="mode-btn active"
+                  onClick={async () => {
+                    setHighRiskDelegationModalOpen(false);
+                    await submitDelegationTransaction();
+                  }}
+                  disabled={delegating}
+                >
+                  Continue Delegation
+                </button>
+              </div>
             </div>
           </div>
         </div>

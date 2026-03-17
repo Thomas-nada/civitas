@@ -10,15 +10,172 @@ function asPct(value) {
   return `${Math.round(Number(value) * 100) / 100}%`;
 }
 
-function roleStats(voteStats, key) {
-  const s = voteStats?.[key] || {};
+function toFiniteOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function voteSlices(stats) {
+  const yes = Number(stats?.yes || 0);
+  const no = Number(stats?.no || 0);
+  const abstain = Number(stats?.abstain || 0);
+  const other = Number(stats?.noConfidence || 0) + Number(stats?.other || 0);
+  const total = yes + no + abstain + other;
+  return { yes, no, abstain, other, total };
+}
+
+function formatAdaCompact(value) {
+  return `${Math.round(Number(value || 0)).toLocaleString()} ada`;
+}
+
+function formatAdaShort(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 1_000_000_000) return `${Math.round((n / 1_000_000_000) * 100) / 100}B`;
+  if (n >= 1_000_000) return `${Math.round((n / 1_000_000) * 100) / 100}M`;
+  if (n >= 1_000) return `${Math.round((n / 1_000) * 100) / 100}K`;
+  return `${Math.round(n)}`;
+}
+
+function eligibleVoteGroups(info) {
+  const groups = [];
+  const drepEligible = Number(info?.thresholdInfo?.drepRequiredPct || 0) > 0 || Number(info?.voteStats?.drep?.total || 0) > 0;
+  const ccEligible = info?.thresholdInfo?.ccRequiredPct != null;
+  const spoEligible = info?.thresholdInfo?.poolRequiredPct != null;
+  if (drepEligible) groups.push({ key: "drep", label: "DRep", stats: info?.voteStats?.drep || {} });
+  if (ccEligible) groups.push({ key: "cc", label: "Constitutional Committee", stats: info?.voteStats?.constitutional_committee || {} });
+  if (spoEligible) groups.push({ key: "spo", label: "SPO", stats: info?.voteStats?.stake_pool || {} });
+  return groups;
+}
+
+const SPO_FORMULA_TRANSITION_EPOCH = 534;
+const SPO_FORMULA_TRANSITION_GOV_ACTION = "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
+
+function computePieInfo(info, proposalId, payload) {
+  if (!info || !payload) return info || {};
+  const dreps = Array.isArray(payload.dreps) ? payload.dreps : [];
+  const spos = Array.isArray(payload.spos) ? payload.spos : [];
+  const committeeMembers = Array.isArray(payload.committeeMembers) ? payload.committeeMembers : [];
+
+  // === DRep power ===
+  const ALWAYS_ABSTAIN_ID = "drep_always_abstain";
+  const ALWAYS_NO_CONFIDENCE_ID = "drep_always_no_confidence";
+  const knownIds = new Set(dreps.map((d) => d.id));
+  const autoAbstainIds = new Set([ALWAYS_ABSTAIN_ID]);
+  for (const drep of dreps) {
+    const name = String(drep.name || "").toLowerCase();
+    const id = String(drep.id || "").toLowerCase();
+    const allAbstain = (drep.votes || []).every((v) => String(v.vote || "").toLowerCase() === "abstain");
+    if (name.includes("auto") && name.includes("abstain")) autoAbstainIds.add(drep.id);
+    else if (name.includes("always") && name.includes("abstain")) autoAbstainIds.add(drep.id);
+    else if (id.includes("always") && id.includes("abstain")) autoAbstainIds.add(drep.id);
+    else if (id.includes("auto") && id.includes("abstain")) autoAbstainIds.add(drep.id);
+    else if (allAbstain && (name.includes("abstain") || id.includes("abstain"))) autoAbstainIds.add(drep.id);
+  }
+
+  let regularDrepStakeAda = dreps.reduce((s, d) => s + Number(d.votingPowerAda || 0), 0);
+  if (knownIds.has(ALWAYS_ABSTAIN_ID)) regularDrepStakeAda -= Number(dreps.find((d) => d.id === ALWAYS_ABSTAIN_ID)?.votingPowerAda || 0);
+  if (knownIds.has(ALWAYS_NO_CONFIDENCE_ID)) regularDrepStakeAda -= Number(dreps.find((d) => d.id === ALWAYS_NO_CONFIDENCE_ID)?.votingPowerAda || 0);
+  const alwaysAbstainPowerAda = Number(dreps.find((d) => d.id === ALWAYS_ABSTAIN_ID)?.votingPowerAda || 0);
+  const alwaysNoConfidencePowerAda = Number(dreps.find((d) => d.id === ALWAYS_NO_CONFIDENCE_ID)?.votingPowerAda || 0);
+  const totalActiveStakeAda = Math.max(regularDrepStakeAda, 0) + alwaysNoConfidencePowerAda;
+
+  const drepPs = { yesPowerAda: 0, noPowerAda: 0, abstainActivePowerAda: 0, abstainAutoPowerAda: alwaysAbstainPowerAda };
+  for (const drep of dreps) {
+    const vp = Number(drep.votingPowerAda || 0);
+    const vote = (drep.votes || []).find((v) => v.proposalId === proposalId);
+    if (!vote) continue;
+    const v = String(vote.vote || "").toLowerCase();
+    if (v === "yes") drepPs.yesPowerAda += vp;
+    else if (v === "no") drepPs.noPowerAda += vp;
+    else if (v === "abstain") {
+      if (autoAbstainIds.has(drep.id)) drepPs.abstainAutoPowerAda += vp;
+      else drepPs.abstainActivePowerAda += vp;
+    }
+  }
+
+  const govType = String(info?.governanceType || "").toLowerCase();
+  const isNoConf = govType.includes("no confidence") || govType.includes("noconfidence");
+  const isHardFork = govType.includes("hard fork") || govType.includes("hardfork");
+  const yesTotalAda = isNoConf ? drepPs.yesPowerAda + alwaysNoConfidencePowerAda : drepPs.yesPowerAda;
+  const noTotalAda = isNoConf ? drepPs.noPowerAda : drepPs.noPowerAda + alwaysNoConfidencePowerAda;
+
+  // === SPO power ===
+  const spoStats = { activeYesPowerAda: 0, activeNoPowerAda: 0, activeAbstainPowerAda: 0, passiveAlwaysAbstainPowerAda: 0, passiveAlwaysNoConfidencePowerAda: 0, passiveNoVotePowerAda: 0 };
+  for (const spo of spos) {
+    const vp = Number(spo.votingPowerAda || 0);
+    const status = String(spo?.delegationStatus || "").toLowerCase();
+    const literal = String(spo?.delegatedDrepLiteralRaw || spo?.delegatedDrepLiteral || "").toLowerCase();
+    const spoAlwaysAbstain = status.includes("always abstain") || literal.includes("always_abstain");
+    const spoAlwaysNoConf = status.includes("always no confidence") || literal.includes("always_no_confidence");
+    const vote = (spo.votes || []).find((v) => v.proposalId === proposalId);
+    if (!vote) {
+      if (spoAlwaysAbstain) spoStats.passiveAlwaysAbstainPowerAda += vp;
+      else if (spoAlwaysNoConf) spoStats.passiveAlwaysNoConfidencePowerAda += vp;
+      else spoStats.passiveNoVotePowerAda += vp;
+    } else {
+      const v = String(vote.vote || "").toLowerCase();
+      if (v === "yes") spoStats.activeYesPowerAda += vp;
+      else if (v === "no") spoStats.activeNoPowerAda += vp;
+      else if (v === "abstain") spoStats.activeAbstainPowerAda += vp;
+      else spoStats.passiveNoVotePowerAda += vp;
+    }
+  }
+
+  const epoch = Number(info?.submittedEpoch);
+  const useNewSpoFormula = String(proposalId || "") === SPO_FORMULA_TRANSITION_GOV_ACTION ||
+    (Number.isFinite(epoch) && epoch >= SPO_FORMULA_TRANSITION_EPOCH);
+  const spoNotVotedAda = Math.max(spoStats.passiveNoVotePowerAda, 0);
+  let spoYesAda, spoNoAda, spoAbstainAda;
+  if (useNewSpoFormula) {
+    if (isHardFork) {
+      spoYesAda = spoStats.activeYesPowerAda;
+      spoAbstainAda = spoStats.activeAbstainPowerAda;
+      spoNoAda = spoStats.activeNoPowerAda + spoNotVotedAda + spoStats.passiveAlwaysNoConfidencePowerAda + spoStats.passiveAlwaysAbstainPowerAda;
+    } else if (isNoConf) {
+      spoYesAda = spoStats.activeYesPowerAda + spoStats.passiveAlwaysNoConfidencePowerAda;
+      spoAbstainAda = spoStats.activeAbstainPowerAda + spoStats.passiveAlwaysAbstainPowerAda;
+      spoNoAda = spoStats.activeNoPowerAda + spoNotVotedAda;
+    } else {
+      spoYesAda = spoStats.activeYesPowerAda;
+      spoAbstainAda = spoStats.activeAbstainPowerAda + spoStats.passiveAlwaysAbstainPowerAda;
+      spoNoAda = spoStats.activeNoPowerAda + spoNotVotedAda;
+    }
+  } else {
+    spoYesAda = spoStats.activeYesPowerAda;
+    spoNoAda = spoStats.activeNoPowerAda + spoStats.passiveAlwaysNoConfidencePowerAda;
+    spoAbstainAda = spoStats.activeAbstainPowerAda + spoStats.passiveAlwaysAbstainPowerAda;
+  }
+
+  // === CC eligible count ===
+  const submittedEpoch = Number(info?.submittedEpoch || 0);
+  const activeNowCount = committeeMembers.filter((m) => String(m?.status || "").toLowerCase() === "active").length;
+  const ccEligibleCountFromEpoch = submittedEpoch > 0
+    ? committeeMembers.filter((m) => {
+        const start = Number(m?.seatStartEpoch || 0);
+        const end = Number(m?.expirationEpoch || 0);
+        if (start > 0 && start > submittedEpoch) return false;
+        if (end > 0 && end < submittedEpoch) return false;
+        return true;
+      }).length
+    : 0;
+  const committeeMinSize = Number(payload?.thresholdContext?.committeeMinSize || 0);
+  const ccEligibleCount = ccEligibleCountFromEpoch > 0
+    ? ccEligibleCountFromEpoch
+    : (activeNowCount > 0 ? activeNowCount : committeeMinSize);
+
   return {
-    yes: Number(s.yes || 0),
-    no: Number(s.no || 0),
-    abstain: Number(s.abstain || 0),
-    noConfidence: Number(s.noConfidence || 0),
-    other: Number(s.other || 0),
-    total: Number(s.total || 0)
+    ...info,
+    totalActiveStakeAda,
+    drepYesPowerAda: yesTotalAda,
+    drepNoPowerAda: noTotalAda,
+    drepAbstainActivePowerAda: drepPs.abstainActivePowerAda,
+    spoYesAda,
+    spoNoAda,
+    spoAbstainAda,
+    spoNotVotedAda,
+    ccEligibleCount,
+    drepRequiredPct: info?.thresholdInfo?.drepRequiredPct,
   };
 }
 
@@ -72,6 +229,115 @@ function normalizeActionPayload(selected, liveMetadata) {
     metadataUrl: String(liveMetadata?.url || selected?.metadataUrl || "").trim(),
     metadataHash: String(liveMetadata?.hash || selected?.metadataHash || "").trim()
   };
+}
+
+function VoteMixPie({ group, info }) {
+  const { key, label, stats } = group;
+  const isCommittee = key === "cc";
+  const isSpo = key === "spo";
+  const isDrep = key === "drep";
+  const asActivePct = (value, base) => (base > 0 ? (Number(value || 0) / base) * 100 : 0);
+
+  const drepActiveBaseAda = Number(info?.totalActiveStakeAda || 0);
+  const drepYesAda = Number(info?.drepYesPowerAda || 0);
+  const drepNoAda = Number(info?.drepNoPowerAda || 0);
+  const drepAbstainAda = Number(info?.drepAbstainActivePowerAda || 0);
+  const drepNotVotedAda = Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepAbstainAda, 0);
+  const drepOutcomeBaseAda = Math.max(drepActiveBaseAda - drepAbstainAda, 0);
+  const drepYesPct = asActivePct(drepYesAda, drepOutcomeBaseAda);
+  const drepNoPct = asActivePct(drepNoAda, drepOutcomeBaseAda);
+  const drepAbstainPct = asActivePct(drepAbstainAda, drepActiveBaseAda);
+  const drepNotVotedPct = asActivePct(drepNotVotedAda, drepOutcomeBaseAda);
+
+  const spoYesAda = Number(info?.spoYesAda || 0);
+  const spoNoWithNotVotedAda = Number(info?.spoNoAda || 0);
+  const spoAbstainAda = Number(info?.spoAbstainAda || 0);
+  const spoNotVotedAda = Number(info?.spoNotVotedAda || 0);
+  const spoOutcomeTotalAda = Math.max(spoYesAda + spoNoWithNotVotedAda, 0);
+  const spoYesPctDisplay = spoOutcomeTotalAda > 0 ? (spoYesAda / spoOutcomeTotalAda) * 100 : 0;
+  const spoNoPctDisplay = spoOutcomeTotalAda > 0 ? (spoNoWithNotVotedAda / spoOutcomeTotalAda) * 100 : 0;
+
+  const { yes, no, abstain, total } = voteSlices(stats);
+  const ccCastCount = yes + no + abstain;
+  const ccEligibleCount = Math.max(Number(info?.ccEligibleCount || 0), 0);
+  const ccNotVotedCount = Math.max(ccEligibleCount - ccCastCount, 0);
+  const ccDenominator = ccEligibleCount > 0 ? ccEligibleCount : total;
+  const defaultYesPct = total > 0 ? (yes / total) * 100 : 0;
+  const defaultNoPct = total > 0 ? (no / total) * 100 : 0;
+  const defaultAbstainPct = total > 0 ? (abstain / total) * 100 : 0;
+  const defaultOtherPct = Math.max(0, 100 - defaultYesPct - defaultNoPct - defaultAbstainPct);
+  const ccYesPct = ccDenominator > 0 ? (yes / ccDenominator) * 100 : 0;
+  const ccNoPct = ccDenominator > 0 ? (no / ccDenominator) * 100 : 0;
+  const ccAbstainPct = ccDenominator > 0 ? (abstain / ccDenominator) * 100 : 0;
+  const ccNotVotedPct = ccDenominator > 0 ? (ccNotVotedCount / ccDenominator) * 100 : 0;
+
+  const pieYesPct = isCommittee ? ccYesPct : (isDrep ? drepYesPct : (isSpo ? spoYesPctDisplay : defaultYesPct));
+  const pieNoPct = isCommittee ? ccNoPct : (isDrep ? drepNoPct : (isSpo ? spoNoPctDisplay : defaultNoPct));
+  const pieAbstainPct = isCommittee ? ccAbstainPct : (isDrep ? 0 : (isSpo ? 0 : defaultAbstainPct));
+  const pieOtherPct = isCommittee ? ccNotVotedPct : (isDrep ? drepNotVotedPct : (isSpo ? 0 : defaultOtherPct));
+
+  const thresholdPct = isDrep
+    ? toFiniteOrNull(info?.drepRequiredPct)
+    : (isSpo
+      ? toFiniteOrNull(info?.thresholdInfo?.poolRequiredPct)
+      : (isCommittee ? toFiniteOrNull(info?.thresholdInfo?.ccRequiredPct) : null));
+  const thresholdAngle = thresholdPct !== null ? Math.max(0, Math.min(100, thresholdPct)) * 3.6 : null;
+
+  const centerValue = isDrep
+    ? formatAdaShort(drepActiveBaseAda)
+    : (isCommittee ? ccCastCount : (isSpo ? formatAdaShort(spoOutcomeTotalAda) : total));
+
+  const bg = `conic-gradient(#54e4bc 0 ${pieYesPct}%, #ff6f7d ${pieYesPct}% ${pieYesPct + pieNoPct}%, #ffc766 ${pieYesPct + pieNoPct}% ${pieYesPct + pieNoPct + pieAbstainPct}%, #7c8fa8 ${pieYesPct + pieNoPct + pieAbstainPct}% ${pieYesPct + pieNoPct + pieAbstainPct + pieOtherPct}%)`;
+
+  return (
+    <article className="action-vote-pie-card">
+      <p className="action-vote-pie-title">{label}</p>
+      <div className="action-vote-pie-body">
+        <div className="action-vote-pie" style={{ background: bg }}>
+          {thresholdAngle !== null ? (
+            <div
+              aria-hidden="true"
+              className="action-vote-pie-threshold"
+              style={{ "--threshold-angle": `${thresholdAngle}deg` }}
+            />
+          ) : null}
+          <span>{centerValue}</span>
+        </div>
+        <div className="action-vote-pie-meta">
+          {isCommittee ? (
+            <>
+              <p><span className="vote-label vote-label-yes">Constitutional</span> <strong>{yes}</strong></p>
+              <p><span className="vote-label vote-label-no">Unconstitutional</span> <strong>{no}</strong></p>
+              <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{abstain}</strong></p>
+              <p><span className="vote-label vote-label-not-voted">Not voted</span> <strong>{ccNotVotedCount}</strong></p>
+            </>
+          ) : isSpo ? (
+            <>
+              <p>
+                <span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(spoYesPctDisplay)}</strong>{" "}
+                ({formatAdaCompact(spoYesAda)})
+              </p>
+              <p>
+                <span className="vote-label vote-label-no">No</span> <strong>{asPct(spoNoPctDisplay)}</strong>{" "}
+                ({formatAdaCompact(spoNoWithNotVotedAda)})
+                {" "}includes not voted: <strong>{formatAdaCompact(spoNotVotedAda)}</strong>
+              </p>
+              <p>
+                <span className="vote-label vote-label-abstain">Abstain (active + always)</span>{" "}
+                <strong>{formatAdaCompact(spoAbstainAda)}</strong>
+              </p>
+            </>
+          ) : (
+            <>
+              <p><span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
+              <p><span className="vote-label vote-label-no">No</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
+              <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
+            </>
+          )}
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export default function ProposalDetailPage() {
@@ -142,6 +408,11 @@ export default function ProposalDetailPage() {
   const payloadDoc = useMemo(
     () => normalizeActionPayload({ ...(info || {}), actionName: info?.actionName || decodedProposalId }, metadata || null),
     [info, metadata, decodedProposalId]
+  );
+
+  const pieInfo = useMemo(
+    () => computePieInfo(info, decodedProposalId, payload),
+    [info, decodedProposalId, payload]
   );
 
   const allVotes = useMemo(() => {
@@ -224,10 +495,6 @@ export default function ProposalDetailPage() {
     );
   }
 
-  const drep = roleStats(info.voteStats, "drep");
-  const cc = roleStats(info.voteStats, "constitutional_committee");
-  const spo = roleStats(info.voteStats, "stake_pool");
-
   async function loadVoteRationale(item) {
     if (!item) return;
     const key = `${decodedProposalId}-${item.role}-${item.voterId}-${item.voteTxHash || ""}`;
@@ -274,6 +541,8 @@ export default function ProposalDetailPage() {
     loadVoteRationale(item);
   }
 
+  const voteGroups = eligibleVoteGroups(pieInfo);
+
   return (
     <main className="page shell stats-page">
       <section className="page-head">
@@ -304,12 +573,15 @@ export default function ProposalDetailPage() {
       </section>
 
       <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Thresholds</h2>
-        <div className="stats-section-body meta">
-          <p>Required DRep threshold: <strong>{asPct(info?.thresholdInfo?.drepRequiredPct)}</strong></p>
-          <p>Required CC threshold: <strong>{asPct(info?.thresholdInfo?.ccRequiredPct)}</strong></p>
-          <p>Required SPO threshold: <strong>{asPct(info?.thresholdInfo?.poolRequiredPct)}</strong></p>
-          {info?.thresholdInfo?.parameterGroup ? <p>Parameter group: <strong>{info.thresholdInfo.parameterGroup}</strong></p> : null}
+        <h2 className="stats-section-title">Votes</h2>
+        {pieInfo?.thresholdInfo?.parameterGroup ? (
+          <p className="muted">Parameter group: <strong>{pieInfo.thresholdInfo.parameterGroup}</strong></p>
+        ) : null}
+        <div className="action-vote-pies">
+          {voteGroups.map((group) => (
+            <VoteMixPie key={group.key} group={group} info={pieInfo} />
+          ))}
+          {voteGroups.length === 0 ? <p className="muted">No vote data available.</p> : null}
         </div>
       </section>
 
@@ -329,26 +601,6 @@ export default function ProposalDetailPage() {
             </section>
           ))}
           {payloadDoc.sections.length === 0 ? <p className="muted">No payload body sections available.</p> : null}
-        </div>
-      </section>
-
-      <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Full Vote Breakdown</h2>
-        <div className="stats-section-body">
-          <div className="vote-list">
-            <article className="vote-item">
-              <h3>DRep</h3>
-              <p>Yes: <strong>{drep.yes}</strong> | No: <strong>{drep.no}</strong> | Abstain: <strong>{drep.abstain}</strong> | No confidence: <strong>{drep.noConfidence}</strong> | Other: <strong>{drep.other}</strong> | Total: <strong>{drep.total}</strong></p>
-            </article>
-            <article className="vote-item">
-              <h3>Constitutional Committee</h3>
-              <p>Yes: <strong>{cc.yes}</strong> | No: <strong>{cc.no}</strong> | Abstain: <strong>{cc.abstain}</strong> | No confidence: <strong>{cc.noConfidence}</strong> | Other: <strong>{cc.other}</strong> | Total: <strong>{cc.total}</strong></p>
-            </article>
-            <article className="vote-item">
-              <h3>SPO</h3>
-              <p>Yes: <strong>{spo.yes}</strong> | No: <strong>{spo.no}</strong> | Abstain: <strong>{spo.abstain}</strong> | No confidence: <strong>{spo.noConfidence}</strong> | Other: <strong>{spo.other}</strong> | Total: <strong>{spo.total}</strong></p>
-            </article>
-          </div>
         </div>
       </section>
 

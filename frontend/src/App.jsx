@@ -10,6 +10,7 @@ const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage")
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
+const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
@@ -286,6 +287,7 @@ export default function App() {
           <Route path="/constitution" element={<ConstitutionPage />} />
           <Route path="/bugs" element={<BugsPage />} />
           <Route path="/guide" element={<GuidePage />} />
+          <Route path="/about/changelog" element={<AboutChangelogPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

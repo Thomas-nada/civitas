@@ -87,11 +87,27 @@ function deriveStatus(info) {
   const governanceType = String(info.governanceType || "").toLowerCase();
   const isInfoAction = governanceType.includes("info action") || governanceType === "info";
   if (isInfoAction) return "";
+  // Final terminal states must override ratified/enacted labels if present due to stale cached fields.
+  const droppedEpoch = Number(info?.droppedEpoch || 0);
+  const expiredEpoch = Number(info?.expiredEpoch || 0);
+  const expirationEpoch = Number(info?.expirationEpoch || 0);
+  const hasDropped = Number.isFinite(droppedEpoch) && droppedEpoch > 0;
+  const hasExpired = Number.isFinite(expiredEpoch) && expiredEpoch > 0;
+  if (hasDropped && hasExpired) {
+    // If it was dropped before natural expiry, classify as Dropped.
+    // Otherwise treat as Expired (the expiry path is what users care about).
+    if (Number.isFinite(expirationEpoch) && expirationEpoch > 0 && droppedEpoch < expirationEpoch) return "Dropped";
+    return "Expired";
+  }
+  if (hasDropped) {
+    // Many providers encode natural expiry with droppedEpoch when expiration is reached.
+    // Treat drop at/after expiration as Expired, and only pre-expiration drops as Dropped.
+    if (Number.isFinite(expirationEpoch) && expirationEpoch > 0 && droppedEpoch >= expirationEpoch) return "Expired";
+    return "Dropped";
+  }
+  if (hasExpired) return "Expired";
   if (info.enactedEpoch !== null && info.enactedEpoch !== undefined) return "Enacted";
   if (info.ratifiedEpoch !== null && info.ratifiedEpoch !== undefined) return "Ratified";
-  if (info.droppedEpoch !== null && info.droppedEpoch !== undefined) return "Dropped";
-  if (governanceType.includes("treasury") && info.expiredEpoch !== null && info.expiredEpoch !== undefined) return "Dropped";
-  if (info.expiredEpoch !== null && info.expiredEpoch !== undefined) return "Expired";
   return String(info.outcome || "Unknown");
 }
 
@@ -114,8 +130,8 @@ function voteSlices(stats) {
 function eligibleVoteGroups(row) {
   const groups = [];
   const drepEligible = Number(row?.drepRequiredPct || 0) > 0 || Number(row?.voteStats?.drep?.total || 0) > 0;
-  const ccEligible = row?.thresholdInfo?.ccRequiredPct != null || Number(row?.voteStats?.constitutional_committee?.total || 0) > 0;
-  const spoEligible = row?.thresholdInfo?.poolRequiredPct != null || Number(row?.voteStats?.stake_pool?.total || 0) > 0;
+  const ccEligible = row?.ccRequiredPct != null;
+  const spoEligible = row?.spoRequiredPct != null;
   if (drepEligible) groups.push({ key: "drep", label: "DRep", stats: row?.voteStats?.drep || {} });
   if (ccEligible) groups.push({ key: "cc", label: "CC", stats: row?.voteStats?.constitutional_committee || {} });
   if (spoEligible) groups.push({ key: "spo", label: "SPO", stats: row?.voteStats?.stake_pool || {} });
@@ -196,7 +212,7 @@ function VoteMixPie({ group, row }) {
     ? toFiniteOrNull(row?.drepRequiredPct)
     : (isSpo
       ? toFiniteOrNull(row?.spoRequiredPct)
-      : (isCommittee ? toFiniteOrNull(row?.thresholdInfo?.ccRequiredPct) : null));
+      : (isCommittee ? toFiniteOrNull(row?.ccRequiredPct) : null));
   const thresholdAngle = thresholdPct !== null
     ? Math.max(0, Math.min(100, thresholdPct)) * 3.6
     : null;
@@ -252,6 +268,75 @@ function VoteMixPie({ group, row }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function VoteMiniPie({ group, row }) {
+  const { key, stats } = group;
+  const isCommittee = key === "cc";
+  const isSpo = key === "spo";
+  const isDrep = key === "drep";
+  const asActivePct = (v, b) => (b > 0 ? (Number(v || 0) / b) * 100 : 0);
+
+  const drepBase = Number(row?.totalActiveStakeAda || 0);
+  const drepYes = Number(row?.drepYesPowerAda || 0);
+  const drepNo = Number(row?.drepNoPowerAda || 0);
+  const drepAbstain = Number(row?.drepAbstainActivePowerAda || 0);
+  const drepOutcomeBase = Math.max(drepBase - drepAbstain, 0);
+  const drepYesPct = asActivePct(drepYes, drepOutcomeBase);
+  const drepNoPct = asActivePct(drepNo, drepOutcomeBase);
+  const drepNotVotedPct = asActivePct(Math.max(drepBase - drepYes - drepNo - drepAbstain, 0), drepOutcomeBase);
+
+  const spoYes = Number(row?.spoYesAda || 0);
+  const spoNo = Number(row?.spoNoAda || 0);
+  const spoTotal = Math.max(spoYes + spoNo, 0);
+  const spoYesPct = spoTotal > 0 ? (spoYes / spoTotal) * 100 : 0;
+  const spoNoPct = spoTotal > 0 ? (spoNo / spoTotal) * 100 : 0;
+
+  const { yes, no, abstain } = voteSlices(stats);
+  const ccCast = yes + no + abstain;
+  const ccElig = Math.max(Number(row?.ccEligibleCount || 0), 0);
+  const ccDen = ccElig > 0 ? ccElig : Math.max(ccCast, 1);
+  const ccYesPct = (yes / ccDen) * 100;
+  const ccNoPct = (no / ccDen) * 100;
+  const ccAbstainPct = (abstain / ccDen) * 100;
+  const ccNotVotedPct = (Math.max(ccElig - ccCast, 0) / ccDen) * 100;
+
+  const pieYesPct = isDrep ? drepYesPct : (isCommittee ? ccYesPct : spoYesPct);
+  const pieNoPct = isDrep ? drepNoPct : (isCommittee ? ccNoPct : spoNoPct);
+  const pieAbstainPct = isCommittee ? ccAbstainPct : 0;
+  const pieOtherPct = isDrep ? drepNotVotedPct : (isCommittee ? ccNotVotedPct : 0);
+
+  const thresholdPct = isDrep
+    ? toFiniteOrNull(row?.drepRequiredPct)
+    : isSpo ? toFiniteOrNull(row?.spoRequiredPct)
+    : isCommittee ? toFiniteOrNull(row?.ccRequiredPct) : null;
+  const thresholdAngle = thresholdPct !== null ? Math.max(0, Math.min(100, thresholdPct)) * 3.6 : null;
+
+  const bg = `conic-gradient(#54e4bc 0 ${pieYesPct}%, #ff6f7d ${pieYesPct}% ${pieYesPct + pieNoPct}%, #ffc766 ${pieYesPct + pieNoPct}% ${pieYesPct + pieNoPct + pieAbstainPct}%, #7c8fa8 ${pieYesPct + pieNoPct + pieAbstainPct}% ${pieYesPct + pieNoPct + pieAbstainPct + pieOtherPct}%)`;
+  const centerText = isCommittee ? `${yes}/${ccElig || ccCast}` : `${Math.round(pieYesPct)}%`;
+  const label = isDrep ? "DRep" : isCommittee ? "CC" : "SPO";
+
+  return (
+    <div className="action-vote-mini-pie">
+      <div className="action-vote-pie action-vote-pie--mini" style={{ background: bg }}>
+        {thresholdAngle !== null ? (
+          <div aria-hidden="true" className="action-vote-pie-threshold" style={{ "--threshold-angle": `${thresholdAngle}deg` }} />
+        ) : null}
+        <span>{centerText}</span>
+      </div>
+      <p className="action-vote-mini-label">{label}</p>
+    </div>
+  );
+}
+
+function VoteMiniPies({ row }) {
+  const groups = eligibleVoteGroups(row);
+  if (groups.length === 0) return <span className="muted">—</span>;
+  return (
+    <div className="action-vote-mini-pies">
+      {groups.map((group) => <VoteMiniPie key={group.key} group={group} row={row} />)}
+    </div>
   );
 }
 
@@ -379,10 +464,6 @@ export default function GovernanceActionsPage() {
   const detailPanelRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
-  const cacheKey = useMemo(
-    () => `civitas.accountability.actions.${snapshotKey || "latest"}`,
-    [snapshotKey]
-  );
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -396,37 +477,17 @@ export default function GovernanceActionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load governance actions.");
       setPayload(data);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch {
-        // Ignore session storage failures.
-      }
       latestSnapshotRef.current = String(data?.lastSyncCompletedAt || data?.generatedAt || "");
     } catch (e) {
       setError(e.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [cacheKey, snapshotKey]);
+  }, [snapshotKey]);
 
   useEffect(() => {
-    let hydrated = false;
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object") {
-          setPayload(parsed);
-          setLoading(false);
-          latestSnapshotRef.current = String(parsed?.lastSyncCompletedAt || parsed?.generatedAt || "");
-          hydrated = true;
-        }
-      }
-    } catch {
-      // Ignore stale cache parse errors.
-    }
-    loadData({ silent: hydrated });
-  }, [cacheKey, loadData]);
+    loadData();
+  }, [loadData]);
 
   useEffect(() => {
     if (snapshotKey) return undefined;
@@ -852,6 +913,7 @@ export default function GovernanceActionsPage() {
         spoAlwaysAbstainAda,
         drepRequiredPct: drepRequiredPct > 0 ? drepRequiredPct : null,
         spoRequiredPct: spoRequiredPct > 0 ? spoRequiredPct : null,
+        ccRequiredPct: info?.thresholdInfo?.ccRequiredPct ?? null,
         drepThresholdMet,
         spoThresholdMet,
         passingNow,
@@ -1232,8 +1294,8 @@ export default function GovernanceActionsPage() {
                       {row.expirationEpoch ? <div className="muted">{formatEpochDate(row.expirationEpoch)}</div> : null}
                       {row.isExpiringSoon ? <div className="expiring-inline-note">{Math.max(0, Number(row.epochsUntilExpiration || 0))} ep left</div> : null}
                     </td>
-                    <td data-label="Yes / No (active)">
-                      {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
+                    <td data-label="Votes">
+                      <VoteMiniPies row={row} />
                     </td>
                   </tr>
                 ))

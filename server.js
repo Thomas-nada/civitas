@@ -49,6 +49,11 @@ const SPO_RATIONALE_USE_CGOV_FALLBACK = String(process.env.SPO_RATIONALE_USE_CGO
 const CC_RATIONALE_USE_CGOV_FALLBACK = String(process.env.CC_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const DREP_RATIONALE_USE_CGOV_FALLBACK = String(process.env.DREP_RATIONALE_USE_CGOV_FALLBACK || "true").toLowerCase() !== "false";
 const DREP_PARTICIPATION_START_EPOCH = Number(process.env.DREP_PARTICIPATION_START_EPOCH || 534);
+const GUARDRAILS_CACHE_TTL_MS = Number(process.env.GUARDRAILS_CACHE_TTL_MS || 120_000);
+const AUTO_START_SCHEDULER = String(process.env.AUTO_START_SCHEDULER || "false").toLowerCase() === "true";
+const SKIP_BOOT_HYDRATION = String(process.env.SKIP_BOOT_HYDRATION || "true").toLowerCase() === "true";
+const SNAPSHOT_REMOTE_URL = String(process.env.SNAPSHOT_REMOTE_URL || "").trim();
+const SNAPSHOT_REMOTE_TIMEOUT_MS = Number(process.env.SNAPSHOT_REMOTE_TIMEOUT_MS || 12000);
 
 const PROPOSAL_PAGE_SIZE = Number(process.env.PROPOSAL_PAGE_SIZE || 100);
 const PROPOSAL_MAX_PAGES = Number(process.env.PROPOSAL_MAX_PAGES || 1000);
@@ -61,6 +66,11 @@ const SYNC_BATCH_SIZE = Number(process.env.SYNC_BATCH_SIZE || 5);
 const SYNC_CONCURRENCY = Number(process.env.SYNC_CONCURRENCY || 1);
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 3 * 60 * 60 * 1000);
 const SYNC_STARTUP_DELAY_MS = Number(process.env.SYNC_STARTUP_DELAY_MS || 3000);
+const DELTA_POLL_MS = Number(process.env.DELTA_POLL_MS || 10 * 60 * 1000);
+const DELTA_PROPOSAL_RECENT_WINDOW_MS = Number(process.env.DELTA_PROPOSAL_RECENT_WINDOW_MS || 6 * 60 * 60 * 1000);
+const DELTA_PROPOSAL_RECENT_POLL_MS = Number(process.env.DELTA_PROPOSAL_RECENT_POLL_MS || 3 * 60 * 1000);
+const DELTA_PROPOSAL_IDLE_POLL_MS = Number(process.env.DELTA_PROPOSAL_IDLE_POLL_MS || 30 * 60 * 1000);
+const DREP_PROFILE_REFRESH_MIN_MS = Number(process.env.DREP_PROFILE_REFRESH_MIN_MS || 6 * 60 * 60 * 1000);
 const SYNC_START_UTC_HOURS = parseUtcHourList(process.env.SYNC_START_UTC_HOURS, [11, 23]);
 const SNAPSHOT_EXPOSE_UTC_HOURS = parseUtcHourList(process.env.SNAPSHOT_EXPOSE_UTC_HOURS, [0, 12]);
 const SNAPSHOT_PATH = process.env.SNAPSHOT_PATH || path.join(__dirname, "snapshot.accountability.json");
@@ -75,6 +85,8 @@ const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_L
 const VOTE_TX_RATIONALE_MAX_DURATION_MS = Number(process.env.VOTE_TX_RATIONALE_MAX_DURATION_MS || 6 * 60 * 1000);
 const VOTE_TX_RATIONALE_CACHE_PATH = process.env.VOTE_TX_RATIONALE_CACHE_PATH || path.join(__dirname, "cache.voteTxRationales.json");
 const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(__dirname, "cache.spoProfiles.json");
+const DREP_META_CACHE_PATH = process.env.DREP_META_CACHE_PATH || path.join(__dirname, "cache.drepMeta.json");
+const DREP_META_CACHE_TTL_MS = Number(process.env.DREP_META_CACHE_TTL_MS || 48 * 60 * 60 * 1000);
 const FRONTEND_DIST_PATH = process.env.FRONTEND_DIST_PATH || path.join(__dirname, "frontend", "dist");
 const BUG_REPORTS_PATH = process.env.BUG_REPORTS_PATH || path.join(__dirname, "reports", "bug_reports.ndjson");
 const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
@@ -85,6 +97,7 @@ const BUG_REPORT_RATE_LIMIT_MAX = Number(process.env.BUG_REPORT_RATE_LIMIT_MAX |
 const BUG_REPORT_RATE_LIMIT_WINDOW_MS = Number(process.env.BUG_REPORT_RATE_LIMIT_WINDOW_MS || 60_000);
 const OPS_RATE_LIMIT_MAX = Number(process.env.OPS_RATE_LIMIT_MAX || 12);
 const OPS_RATE_LIMIT_WINDOW_MS = Number(process.env.OPS_RATE_LIMIT_WINDOW_MS || 60_000);
+const WALLET_DELEGATION_CACHE_TTL_MS = Number(process.env.WALLET_DELEGATION_CACHE_TTL_MS || 10 * 60 * 1000);
 const SPECIAL_DREP_REFRESH_MS = Number(process.env.SPECIAL_DREP_REFRESH_MS || 15 * 60 * 1000);
 const SPECIAL_DREP_IDS = {
   alwaysAbstain: "drep_always_abstain",
@@ -204,8 +217,32 @@ const contentTypes = {
   ".ico": "image/x-icon"
 };
 
+const CONFIGURED_BLOCKFROST_NETWORK = detectBlockfrostNetworkFromBaseUrl();
+
+function getSnapshotNetwork(payload) {
+  return String(payload?.network || "").trim().toLowerCase();
+}
+
+function withSnapshotNetwork(payload) {
+  const fallback = getSnapshotNetwork(payload) || "unknown";
+  const network = CONFIGURED_BLOCKFROST_NETWORK === "unknown" ? fallback : CONFIGURED_BLOCKFROST_NETWORK;
+  return {
+    ...payload,
+    network
+  };
+}
+
+function snapshotMatchesConfiguredNetwork(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (CONFIGURED_BLOCKFROST_NETWORK === "unknown") return true;
+  const snapshotNetwork = getSnapshotNetwork(payload);
+  if (!snapshotNetwork) return true;
+  return snapshotNetwork === CONFIGURED_BLOCKFROST_NETWORK;
+}
+
 let snapshot = {
   schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+  network: CONFIGURED_BLOCKFROST_NETWORK === "unknown" ? "unknown" : CONFIGURED_BLOCKFROST_NETWORK,
   generatedAt: null,
   proposalCount: 0,
   scannedProposalCount: 0,
@@ -244,6 +281,7 @@ let epochBackfillState = {
 };
 let voteTxTimeCache = {};
 let voteTxRationaleCache = {};
+let drepMetaCache = {};
 const cgovSpoRationaleLookupCache = new Map();
 const cgovCommitteeRationaleLookupCache = new Map();
 const cgovDrepRationaleLookupCache = new Map();
@@ -253,6 +291,7 @@ let committeeRationaleEnrichPromise = null;
 let committeeRationaleEnrichPromiseKey = "";
 let committeeVoteTimeHydrationPromise = null;
 let committeeVoteTimeHydrationKey = "";
+const guardrailsLatestCache = new Map();
 let specialDrepsCache = {
   fetchedAt: 0,
   value: {}
@@ -295,6 +334,8 @@ const nclRefreshPromises = {};
 const voteRationaleCache = new Map();
 const voteRationaleResultCache = new Map();
 const drepRationaleByProposalVoter = new Map();
+const proposalDeltaPollState = new Map();
+const drepProfileRefreshState = new Map();
 let drepRationaleWarmState = {
   running: false,
   lastStartedAt: null,
@@ -306,9 +347,116 @@ let drepRationaleWarmState = {
 
 let lastRequestAt = 0;
 let lastKoiosRequestAt = 0;
+const walletDelegationCache = new Map();
+let latestChainEpochCache = { value: null, cachedAt: 0 };
+const proposalVotingSummaryCache = new Map();
+const PROPOSAL_VOTING_SUMMARY_TTL_MS = 15 * 60 * 1000;
+const opsRequestMetrics = {
+  startedAt: new Date().toISOString(),
+  blockfrost: {
+    total: 0,
+    ok: 0,
+    failed: 0,
+    byEndpoint: {}
+  },
+  koios: {
+    total: 0,
+    ok: 0,
+    failed: 0,
+    byEndpoint: {}
+  }
+};
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeMetricsEndpoint(endpointWithQuery) {
+  const raw = String(endpointWithQuery || "").trim();
+  if (!raw) return "/";
+  const pathOnly = raw.split("?")[0] || "/";
+  const parts = pathOnly.split("/").filter(Boolean);
+  const normalized = parts.map((segment) => {
+    const s = String(segment || "").trim();
+    if (!s) return s;
+    if (/^[0-9]+$/.test(s)) return ":n";
+    if (/^[a-f0-9]{24,}$/i.test(s)) return ":id";
+    if ((s.startsWith("stake") || s.startsWith("pool") || s.startsWith("drep") || s.startsWith("cc_")) && s.length > 16) return ":id";
+    if (s.length > 42) return ":id";
+    return s;
+  });
+  return `/${normalized.join("/")}`;
+}
+
+function recordOpsProviderRequest(provider, endpointWithQuery, ok, statusCode, durationMs) {
+  const key = provider === "koios" ? "koios" : "blockfrost";
+  const bucket = opsRequestMetrics[key];
+  const endpoint = normalizeMetricsEndpoint(endpointWithQuery);
+  if (!bucket.byEndpoint[endpoint]) {
+    bucket.byEndpoint[endpoint] = {
+      total: 0,
+      ok: 0,
+      failed: 0,
+      lastStatus: null,
+      lastDurationMs: 0,
+      totalDurationMs: 0,
+      lastAt: null
+    };
+  }
+  const row = bucket.byEndpoint[endpoint];
+  bucket.total += 1;
+  row.total += 1;
+  if (ok) {
+    bucket.ok += 1;
+    row.ok += 1;
+  } else {
+    bucket.failed += 1;
+    row.failed += 1;
+  }
+  row.lastStatus = Number.isFinite(Number(statusCode)) ? Number(statusCode) : null;
+  row.lastDurationMs = Math.max(0, Number(durationMs || 0));
+  row.totalDurationMs += row.lastDurationMs;
+  row.lastAt = new Date().toISOString();
+}
+
+function buildOpsMetricsPayload() {
+  const summarize = (providerBucket) => {
+    const byEndpoint = providerBucket.byEndpoint || {};
+    const topEndpoints = Object.entries(byEndpoint)
+      .map(([endpoint, value]) => ({
+        endpoint,
+        ...value,
+        avgDurationMs: value.total > 0 ? Math.round((Number(value.totalDurationMs || 0) / value.total) * 100) / 100 : 0
+      }))
+      .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+      .slice(0, 40);
+    return {
+      total: Number(providerBucket.total || 0),
+      ok: Number(providerBucket.ok || 0),
+      failed: Number(providerBucket.failed || 0),
+      endpointsTracked: Object.keys(byEndpoint).length,
+      topEndpoints
+    };
+  };
+  return {
+    startedAt: opsRequestMetrics.startedAt,
+    now: new Date().toISOString(),
+    sync: {
+      syncing: Boolean(syncState.syncing),
+      lastStartedAt: syncState.lastStartedAt,
+      lastCompletedAt: syncState.lastCompletedAt,
+      lastError: syncState.lastError,
+      lastSyncMode: syncState.lastSyncMode
+    },
+    blockfrost: summarize(opsRequestMetrics.blockfrost),
+    koios: summarize(opsRequestMetrics.koios)
+  };
+}
+
+function resetOpsMetrics() {
+  opsRequestMetrics.startedAt = new Date().toISOString();
+  opsRequestMetrics.blockfrost = { total: 0, ok: 0, failed: 0, byEndpoint: {} };
+  opsRequestMetrics.koios = { total: 0, ok: 0, failed: 0, byEndpoint: {} };
 }
 
 function json(res, status, data) {
@@ -379,6 +527,14 @@ function readBugReports(limit = 200) {
     }
   }
   return parsed.slice(0, limit);
+}
+
+function inferRewardAddressNetwork(rewardAddressRaw) {
+  const rewardAddress = String(rewardAddressRaw || "").trim().toLowerCase();
+  if (!rewardAddress) return "unknown";
+  if (rewardAddress.startsWith("stake_test1")) return "testnet";
+  if (rewardAddress.startsWith("stake1")) return "mainnet";
+  return "unknown";
 }
 
 function readBugReportsAll() {
@@ -609,7 +765,8 @@ function compactProposalInfoForDashboard(proposalInfo) {
       enactedEpoch: Number(info?.enactedEpoch || 0),
       droppedEpoch: Number(info?.droppedEpoch || 0),
       expiredEpoch: Number(info?.expiredEpoch || 0),
-      voteStats: info?.voteStats || {}
+      voteStats: info?.voteStats || {},
+      thresholdInfo: info?.thresholdInfo || null
     };
   }
   return compact;
@@ -716,6 +873,66 @@ function extractConstitutionScriptHashFromGovernanceDescription(desc) {
     if (isPolicyHash(s)) return s;
   }
   return "";
+}
+
+// Query the ACTIVE constitution script hash directly from the ledger via Koios Ogmios.
+// This is the authoritative source — it's what the node actually enforces right now,
+// regardless of whether the constitution came from a NewConstitutionAction or genesis.
+async function fetchActiveConstitutionScriptHash() {
+  try {
+    const ogmiosUrl = `${KOIOS_BASE_URL}/ogmios`;
+    const headers = { "Content-Type": "application/json" };
+    if (KOIOS_API_KEY) headers.Authorization = `Bearer ${KOIOS_API_KEY}`;
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "queryLedgerState/constitution",
+      params: {}
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(ogmiosUrl, { method: "POST", headers, body, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) {
+      console.warn("[fetchActiveConstitutionScriptHash] Ogmios HTTP error:", response.status, response.statusText);
+      return null;
+    }
+    const data = await response.json();
+    console.log("[fetchActiveConstitutionScriptHash] Raw Ogmios response:", JSON.stringify(data));
+
+    const isHash = (v) => v && /^[0-9a-f]{56}$/i.test(String(v).trim());
+
+    // Try every known Ogmios response shape for queryLedgerState/constitution:
+    // Shape A (Ogmios v6 Conway): result.guardrails.hash
+    // Shape B (some proxies):     result.script.hash
+    // Shape C (nested):           result.guardrails.script.hash
+    // Shape D (direct string):    result.guardrails (the hash itself)
+    // Shape E (direct string):    result.script     (the hash itself)
+    const candidates = [
+      data?.result?.guardrails?.hash,
+      data?.result?.script?.hash,
+      data?.result?.guardrails?.script?.hash,
+      typeof data?.result?.guardrails === "string" ? data.result.guardrails : undefined,
+      typeof data?.result?.script === "string" ? data.result.script : undefined,
+    ];
+
+    for (const candidate of candidates) {
+      if (isHash(candidate)) {
+        const found = String(candidate).trim().toLowerCase();
+        console.log("[fetchActiveConstitutionScriptHash] Found hash:", found);
+        return found;
+      }
+    }
+
+    console.warn("[fetchActiveConstitutionScriptHash] Could not find a valid 56-char hex hash in response. result keys:", Object.keys(data?.result || {}));
+    return null;
+  } catch (err) {
+    console.warn("[fetchActiveConstitutionScriptHash] Exception:", err.message);
+    return null;
+  }
 }
 
 async function findLatestEnactedConstitutionGuardrails() {
@@ -2154,8 +2371,11 @@ async function resolveDrepProfileFromMetadataEnvelope(metadataEnvelope, payloadC
 
 function outcomeFromProposal(proposalDetail) {
   if (!proposalDetail) return "pending";
-  if (proposalDetail.enacted_epoch !== null || proposalDetail.ratified_epoch !== null) return "yes";
-  if (proposalDetail.dropped_epoch !== null || proposalDetail.expired_epoch !== null) return "no";
+  if (proposalDetail.enacted_epoch !== null && proposalDetail.enacted_epoch !== undefined) return "yes";
+  // Expired/dropped must override ratified for final outcome display.
+  if (proposalDetail.dropped_epoch !== null && proposalDetail.dropped_epoch !== undefined) return "no";
+  if (proposalDetail.expired_epoch !== null && proposalDetail.expired_epoch !== undefined) return "no";
+  if (proposalDetail.ratified_epoch !== null && proposalDetail.ratified_epoch !== undefined) return "yes";
   return "pending";
 }
 
@@ -2711,6 +2931,28 @@ function buildNomosModelFromKoiosSummary(summary) {
   };
 }
 
+async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "application/cbor") {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BLOCKFROST_REQUEST_TIMEOUT_MS);
+  let response;
+  const started = Date.now();
+  try {
+    response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
+      method: "POST",
+      headers: { project_id: BLOCKFROST_API_KEY, "Content-Type": contentType },
+      body: bodyBuffer,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  recordOpsProviderRequest("blockfrost", endpointWithQuery, response.ok, response.status, Date.now() - started);
+  const text = await response.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  return { status: response.status, ok: response.ok, body: parsed };
+}
+
 async function blockfrostGet(endpointWithQuery) {
   for (let attempt = 0; attempt <= BLOCKFROST_MAX_RETRIES; attempt += 1) {
     const elapsed = Date.now() - lastRequestAt;
@@ -2722,11 +2964,13 @@ async function blockfrostGet(endpointWithQuery) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), BLOCKFROST_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
         headers: { project_id: BLOCKFROST_API_KEY },
         signal: controller.signal
       });
+      recordOpsProviderRequest("blockfrost", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -2757,6 +3001,7 @@ async function koiosGet(endpointWithQuery) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KOIOS_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       const headers = {
         "Content-Type": "application/json"
@@ -2766,6 +3011,7 @@ async function koiosGet(endpointWithQuery) {
         headers,
         signal: controller.signal
       });
+      recordOpsProviderRequest("koios", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -2796,6 +3042,7 @@ async function koiosPost(endpointWithQuery, body = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KOIOS_REQUEST_TIMEOUT_MS);
     let response;
+    const started = Date.now();
     try {
       const headers = {
         "Content-Type": "application/json"
@@ -2807,6 +3054,7 @@ async function koiosPost(endpointWithQuery, body = {}) {
         body: JSON.stringify(body || {}),
         signal: controller.signal
       });
+      recordOpsProviderRequest("koios", endpointWithQuery, response.ok, response.status, Date.now() - started);
     } finally {
       clearTimeout(timer);
     }
@@ -3168,20 +3416,22 @@ function loadSnapshotFromDisk() {
   if (!fs.existsSync(SNAPSHOT_PATH)) {
     const latestHistory = readLatestSnapshotFromHistory();
     if (latestHistory) {
-      snapshot = {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...latestHistory
-      };
+      });
     }
     return;
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8"));
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps)) {
-      snapshot = {
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps) && snapshotMatchesConfiguredNetwork(parsed)) {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...parsed
-      };
+      });
+    } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.dreps)) {
+      syncState.lastError = `Snapshot network mismatch. Configured=${CONFIGURED_BLOCKFROST_NETWORK}, snapshot=${getSnapshotNetwork(parsed) || "missing"}. Rebuilding.`;
     }
     snapshot = pickBestSnapshotForApi(snapshot);
     patchMissingProposalEpochs(snapshot);
@@ -3190,10 +3440,10 @@ function loadSnapshotFromDisk() {
     syncState.lastError = `Failed to read snapshot file: ${error.message}`;
     const latestHistory = readLatestSnapshotFromHistory();
     if (latestHistory) {
-      snapshot = {
+      snapshot = withSnapshotNetwork({
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         ...latestHistory
-      };
+      });
     }
   }
 }
@@ -3206,11 +3456,46 @@ function loadSeedSnapshot() {
   try {
     const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_SEED_PATH, "utf8"));
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return;
-    snapshot = { schemaVersion: SNAPSHOT_SCHEMA_VERSION, ...parsed };
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return;
+    snapshot = withSnapshotNetwork({ schemaVersion: SNAPSHOT_SCHEMA_VERSION, ...parsed });
     console.log(`Loaded seed snapshot (epoch ${parsed.latestEpoch || "?"}, generated ${parsed.generatedAt || "unknown"})`);
   } catch (error) {
     console.warn(`Could not load seed snapshot: ${error.message}`);
   }
+}
+
+async function fetchRemoteSnapshot(remoteUrl) {
+  const url = String(remoteUrl || "").trim();
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SNAPSHOT_REMOTE_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) return null;
+    const parsed = await response.json();
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return null;
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return null;
+    return withSnapshotNetwork({
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      ...parsed
+    });
+  } catch {
+    return null;
+  }
+}
+
+function applyRemoteSnapshot(remoteSnapshot) {
+  if (!remoteSnapshot || typeof remoteSnapshot !== "object") return false;
+  snapshot = remoteSnapshot;
+  refreshAllThresholdInfo(snapshot);
+  saveSnapshotToDisk(snapshot);
+  saveSeedSnapshotToDisk(snapshot);
+  return true;
 }
 
 function ensureSnapshotHistoryDir() {
@@ -3247,6 +3532,7 @@ function readSnapshotFromHistory(snapshotKey) {
   try {
     const parsed = JSON.parse(fs.readFileSync(fullPath, "utf8"));
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.dreps)) return null;
+    if (!snapshotMatchesConfiguredNetwork(parsed)) return null;
     return parsed;
   } catch {
     return null;
@@ -3348,18 +3634,18 @@ function normalizeCommitteeMembersForApi(rows) {
 }
 
 function saveSnapshotToDisk(payload) {
-  const withSchema = {
+  const withSchema = withSnapshotNetwork({
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
     ...payload
-  };
+  });
   fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(withSchema));
 }
 
 function saveSeedSnapshotToDisk(payload) {
-  const withSchema = {
+  const withSchema = withSnapshotNetwork({
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
     ...payload
-  };
+  });
   fs.writeFileSync(SNAPSHOT_SEED_PATH, JSON.stringify(withSchema));
 }
 
@@ -3441,6 +3727,20 @@ function loadVoteTxRationaleCache() {
 
 function saveVoteTxRationaleCache() {
   fs.writeFileSync(VOTE_TX_RATIONALE_CACHE_PATH, JSON.stringify(voteTxRationaleCache));
+}
+
+function loadDrepMetaCache() {
+  if (!fs.existsSync(DREP_META_CACHE_PATH)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(DREP_META_CACHE_PATH, "utf8"));
+    if (parsed && typeof parsed === "object") drepMetaCache = parsed;
+  } catch { /* ignore corrupt cache */ }
+}
+
+function saveDrepMetaCache() {
+  try {
+    fs.writeFileSync(DREP_META_CACHE_PATH, JSON.stringify(drepMetaCache));
+  } catch { /* ignore write errors */ }
 }
 
 function looksLikeUrl(value) {
@@ -3723,9 +4023,15 @@ async function fetchDrepPowerForEpoch(epochNo) {
 }
 
 async function fetchLatestChainEpoch() {
+  const now = Date.now();
+  if (latestChainEpochCache.value !== null && (now - latestChainEpochCache.cachedAt) < 10 * 60 * 1000) {
+    return latestChainEpochCache.value;
+  }
   const row = await blockfrostGet("/epochs/latest").catch(() => null);
   const epoch = Number(row?.epoch || 0);
-  return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  const result = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  if (result !== null) latestChainEpochCache = { value: result, cachedAt: now };
+  return result;
 }
 
 async function fetchAllDrepIdsFromBlockfrost() {
@@ -3908,7 +4214,7 @@ async function backfillEpochSnapshotsFromCurrent(force = false) {
     for (const epoch of eligibleTargets) {
       const cutoffUnix = Number(endTimes.get(epoch) || 0);
       const drepPowerMap = await fetchDrepPowerForEpoch(epoch);
-      const scoped = buildEpochScopedSnapshot(snapshot, epoch, cutoffUnix, drepPowerMap);
+      const scoped = withSnapshotNetwork(buildEpochScopedSnapshot(snapshot, epoch, cutoffUnix, drepPowerMap));
       const filename = epochSnapshotFilename(epoch);
       const fullPath = path.join(SNAPSHOT_HISTORY_DIR, filename);
       fs.writeFileSync(fullPath, JSON.stringify(scoped));
@@ -3981,13 +4287,48 @@ async function fetchSpecialDreps(force = false) {
 async function buildDeltaSnapshot(base) {
   const latestEpoch = await fetchLatestChainEpoch().catch(() => null);
 
-  // Build lookup structures from the existing snapshot so we can do O(1) checks.
-  const existingProposalIds = new Set(Object.keys(base.proposalInfo || {}));
+  // Fetch current full proposal list (paginated, same as full sync).
+  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
+  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
+  const currentProposalIds = new Set(proposals.map((p) => String(p?.id || "").trim()).filter(Boolean));
+  for (const proposalId of Array.from(proposalDeltaPollState.keys())) {
+    if (!currentProposalIds.has(proposalId)) {
+      proposalDeltaPollState.delete(proposalId);
+    }
+  }
+
+  syncState.totalProposals = proposalsAll.length;
+  syncState.scannedProposals = proposals.length;
+  syncState.processedProposals = 0;
+
+  // Build mutable maps of actors keyed by id for fast in-place updates.
+  const drepById = new Map((base.dreps || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const proposalInfo = { ...(base.proposalInfo || {}) };
+
+  // Canonicalize to the currently indexed proposal set. This prevents stale
+  // proposal IDs from older snapshots from persisting forever in delta mode.
+  for (const pid of Object.keys(proposalInfo)) {
+    if (!currentProposalIds.has(String(pid || "").trim())) delete proposalInfo[pid];
+  }
+  const pruneVotes = (mapObj) => {
+    for (const actor of mapObj.values()) {
+      actor.votes = (actor.votes || []).filter((vote) =>
+        currentProposalIds.has(String(vote?.proposalId || "").trim())
+      );
+    }
+  };
+  pruneVotes(drepById);
+  pruneVotes(spoById);
+  pruneVotes(ccById);
+
+  // Build lookup structures from the pruned snapshot so we can do O(1) checks.
+  const existingProposalIds = new Set(Object.keys(proposalInfo));
 
   // Per-proposal: set of vote tx hashes we already know about (watermark).
   const knownVoteTxHashByProposal = new Map(); // proposalId -> Set<txHash>
-  const actorRole = new Map(); // voteTxHash -> "drep"|"spo"|"committee"
-  for (const actor of [...(base.dreps || []), ...(base.spos || []), ...(base.committeeMembers || [])]) {
+  for (const actor of [...drepById.values(), ...spoById.values(), ...ccById.values()]) {
     for (const vote of (actor.votes || [])) {
       const pid = String(vote.proposalId || "");
       const txh = String(vote.voteTxHash || "").toLowerCase();
@@ -3997,25 +4338,11 @@ async function buildDeltaSnapshot(base) {
     }
   }
 
-  // Build mutable maps of actors keyed by id for fast in-place updates.
-  const drepById = new Map((base.dreps || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const proposalInfo = { ...(base.proposalInfo || {}) };
-
   // Backfill any votes that were persisted with null votedAtUnix but whose
   // tx hash is now in the cache.  This is a no-op once all votes are patched.
   backfillVoteTimestampsFromCache(drepById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(spoById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(ccById.values(), proposalInfo);
-
-  // Fetch current full proposal list (paginated, same as full sync).
-  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
-  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
-
-  syncState.totalProposals = proposalsAll.length;
-  syncState.scannedProposals = proposals.length;
-  syncState.processedProposals = 0;
 
   // Identify new proposals (not in existing snapshot) and known ones.
   const newProposals = proposals.filter((p) => !existingProposalIds.has(p.id));
@@ -4189,8 +4516,29 @@ async function buildDeltaSnapshot(base) {
   // --- Phase 2: Check active known proposals for new votes (watermark-based) ---
   const newlyActiveDrepIds = new Set();
 
-  for (let start = 0; start < activeKnownProposals.length; start += SYNC_BATCH_SIZE) {
-    const batch = activeKnownProposals.slice(start, start + SYNC_BATCH_SIZE);
+  // Pre-filter: skip proposals still within their poll interval BEFORE firing Koios calls,
+  // so we never pay for a Koios batch fetch for proposals we'd immediately skip anyway.
+  const nowMsPhase2 = Date.now();
+  const proposalsNeedingCheck = [];
+  for (const p of activeKnownProposals) {
+    const proposalId = String(p?.id || "").trim();
+    const pollState = proposalDeltaPollState.get(proposalId) || null;
+    if (pollState && Number.isFinite(pollState.lastCheckedAt) && pollState.lastCheckedAt > 0) {
+      const hasRecentActivity =
+        Number.isFinite(pollState.lastNewVotesAt) &&
+        pollState.lastNewVotesAt > 0 &&
+        (nowMsPhase2 - pollState.lastNewVotesAt) <= DELTA_PROPOSAL_RECENT_WINDOW_MS;
+      const minInterval = hasRecentActivity ? DELTA_PROPOSAL_RECENT_POLL_MS : DELTA_PROPOSAL_IDLE_POLL_MS;
+      if (nowMsPhase2 - pollState.lastCheckedAt < minInterval) {
+        syncState.processedProposals += 1;
+        continue;
+      }
+    }
+    proposalsNeedingCheck.push(p);
+  }
+
+  for (let start = 0; start < proposalsNeedingCheck.length; start += SYNC_BATCH_SIZE) {
+    const batch = proposalsNeedingCheck.slice(start, start + SYNC_BATCH_SIZE);
     const batchIds = batch.map((p) => p.id);
 
     const [koiosVoteLookupByProposal, koiosSpoVoteLookupByProposal] = await Promise.all([
@@ -4199,6 +4547,10 @@ async function buildDeltaSnapshot(base) {
     ]);
 
     await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
+      const proposalId = String(proposal?.id || "").trim();
+      const nowMs = Date.now();
+      const pollState = proposalDeltaPollState.get(proposalId) || null;
+
       const safeId = encodeURIComponent(proposal.id);
       const watermark = knownVoteTxHashByProposal.get(proposal.id) || new Set();
       const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
@@ -4220,23 +4572,25 @@ async function buildDeltaSnapshot(base) {
         const query = `/governance/proposals/${safeId}/votes?count=${PROPOSAL_VOTES_PAGE_SIZE}&page=${page}&order=desc`;
         const chunk = await blockfrostGet(query).catch(() => []);
         if (!Array.isArray(chunk) || chunk.length === 0) break;
-        let knownInPage = 0;
-        let unseenInPage = 0;
         for (const vote of chunk) {
           const txh = String(vote.tx_hash || "").toLowerCase();
           if (watermark.has(txh)) {
-            knownInPage += 1;
-            continue;
+            // Descending order boundary reached: all following votes are older.
+            hitWatermark = true;
+            break;
           }
           newVotes.push(vote);
-          unseenInPage += 1;
         }
-        if (knownInPage > 0 && unseenInPage === 0) hitWatermark = true;
+        if (hitWatermark) break;
         if (chunk.length < PROPOSAL_VOTES_PAGE_SIZE) break;
         page += 1;
       }
 
       if (newVotes.length === 0) {
+        proposalDeltaPollState.set(proposalId, {
+          lastCheckedAt: nowMs,
+          lastNewVotesAt: Number(pollState?.lastNewVotesAt || 0)
+        });
         syncState.processedProposals += 1;
         return;
       }
@@ -4258,14 +4612,25 @@ async function buildDeltaSnapshot(base) {
       if (freshDetail) {
         const freshOutcome = titleCase(outcomeFromProposal(freshDetail));
         if (proposalInfo[proposal.id]) {
+          const current = proposalInfo[proposal.id] || {};
+          const nextExpirationEpoch =
+            freshDetail.expiration !== undefined ? freshDetail.expiration : current.expirationEpoch;
+          const nextRatifiedEpoch =
+            freshDetail.ratified_epoch !== undefined ? freshDetail.ratified_epoch : current.ratifiedEpoch;
+          const nextEnactedEpoch =
+            freshDetail.enacted_epoch !== undefined ? freshDetail.enacted_epoch : current.enactedEpoch;
+          const nextDroppedEpoch =
+            freshDetail.dropped_epoch !== undefined ? freshDetail.dropped_epoch : current.droppedEpoch;
+          const nextExpiredEpoch =
+            freshDetail.expired_epoch !== undefined ? freshDetail.expired_epoch : current.expiredEpoch;
           proposalInfo[proposal.id] = {
-            ...proposalInfo[proposal.id],
+            ...current,
             outcome: freshOutcome,
-            expirationEpoch: freshDetail.expiration ?? proposalInfo[proposal.id].expirationEpoch,
-            ratifiedEpoch: freshDetail.ratified_epoch ?? proposalInfo[proposal.id].ratifiedEpoch,
-            enactedEpoch: freshDetail.enacted_epoch ?? proposalInfo[proposal.id].enactedEpoch,
-            droppedEpoch: freshDetail.dropped_epoch ?? proposalInfo[proposal.id].droppedEpoch,
-            expiredEpoch: freshDetail.expired_epoch ?? proposalInfo[proposal.id].expiredEpoch
+            expirationEpoch: nextExpirationEpoch,
+            ratifiedEpoch: nextRatifiedEpoch,
+            enactedEpoch: nextEnactedEpoch,
+            droppedEpoch: nextDroppedEpoch,
+            expiredEpoch: nextExpiredEpoch
           };
         }
       }
@@ -4327,6 +4692,11 @@ async function buildDeltaSnapshot(base) {
         };
       }
 
+      proposalDeltaPollState.set(proposalId, {
+        lastCheckedAt: nowMs,
+        lastNewVotesAt: nowMs
+      });
+
       syncState.processedProposals += 1;
     });
   }
@@ -4337,6 +4707,11 @@ async function buildDeltaSnapshot(base) {
   for (let start = 0; start < drepIdsToRefresh.length; start += SYNC_BATCH_SIZE) {
     const batch = drepIdsToRefresh.slice(start, start + SYNC_BATCH_SIZE);
     await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
+      const nowMs = Date.now();
+      const lastRefreshAt = Number(drepProfileRefreshState.get(drepId) || 0);
+      if (lastRefreshAt > 0 && nowMs - lastRefreshAt < DREP_PROFILE_REFRESH_MIN_MS) {
+        return;
+      }
       const safeId = encodeURIComponent(drepId);
       const [details, metadata] = await Promise.allSettled([
         blockfrostGet(`/governance/dreps/${safeId}`),
@@ -4363,6 +4738,9 @@ async function buildDeltaSnapshot(base) {
         row.name = resolveName(metadata.value.json_metadata, row.id);
         if (!row.name && row.profile?.name) row.name = row.profile.name;
         if (!row.name) row.name = await resolveDrepNameFromMetadataEnvelope(metadata.value, new Map(), drepMetadataPayloadCache);
+      }
+      if (details.status === "fulfilled" || metadata.status === "fulfilled") {
+        drepProfileRefreshState.set(drepId, nowMs);
       }
     });
   }
@@ -4812,35 +5190,48 @@ async function buildFullSnapshot() {
     const batch = drepIds.slice(start, start + SYNC_BATCH_SIZE);
     await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
       const safeId = encodeURIComponent(drepId);
-      const [details, metadata] = await Promise.allSettled([
-        blockfrostGet(`/governance/dreps/${safeId}`),
-        blockfrostGet(`/governance/dreps/${safeId}/metadata`)
-      ]);
+      const nowMs = Date.now();
+      const cached = drepMetaCache[drepId];
+      const isFresh = cached && (nowMs - Number(cached.fetchedAt || 0)) < DREP_META_CACHE_TTL_MS;
+
+      let detailsValue = isFresh ? cached.details : null;
+      let metadataValue = isFresh ? cached.metadata : null;
+
+      if (!isFresh) {
+        const [details, metadata] = await Promise.allSettled([
+          blockfrostGet(`/governance/dreps/${safeId}`),
+          blockfrostGet(`/governance/dreps/${safeId}/metadata`)
+        ]);
+        detailsValue = details.status === "fulfilled" ? details.value : null;
+        metadataValue = metadata.status === "fulfilled" ? metadata.value : null;
+        drepMetaCache[drepId] = { fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
+      }
+
       const row = drepAggregate.get(drepId);
       if (!row) return;
-      if (details.status === "fulfilled") {
-        row.votingPowerAda = Math.floor(Number(details.value.amount || 0) / 1_000_000);
-        const active = details.value?.active === true;
-        const retired = details.value?.retired === true;
-        const expired = details.value?.expired === true;
+      if (detailsValue) {
+        row.votingPowerAda = Math.floor(Number(detailsValue.amount || 0) / 1_000_000);
+        const active = detailsValue?.active === true;
+        const retired = detailsValue?.retired === true;
+        const expired = detailsValue?.expired === true;
         row.active = active;
         row.retired = retired;
         row.expired = expired;
-        row.activeEpoch = Number(details.value?.active_epoch || 0) || null;
-        row.lastActiveEpoch = Number(details.value?.last_active_epoch || 0) || null;
-        row.hasScript = details.value?.has_script === true;
+        row.activeEpoch = Number(detailsValue?.active_epoch || 0) || null;
+        row.lastActiveEpoch = Number(detailsValue?.last_active_epoch || 0) || null;
+        row.hasScript = detailsValue?.has_script === true;
         row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
       }
-      if (metadata.status === "fulfilled") {
-        row.transparencyScore = computeTransparencyScore(metadata.value);
-        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadata.value, drepMetadataPayloadCache);
-        row.name = resolveName(metadata.value.json_metadata, row.id);
+      if (metadataValue) {
+        row.transparencyScore = computeTransparencyScore(metadataValue);
+        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadataValue, drepMetadataPayloadCache);
+        row.name = resolveName(metadataValue.json_metadata, row.id);
         if (!row.name && row.profile?.name) {
           row.name = row.profile.name;
         }
         if (!row.name) {
           row.name = await resolveDrepNameFromMetadataEnvelope(
-            metadata.value,
+            metadataValue,
             drepMetadataUrlNameCache,
             drepMetadataPayloadCache
           );
@@ -4848,6 +5239,7 @@ async function buildFullSnapshot() {
       }
     });
   }
+  saveDrepMetaCache();
 
   const dreps = [];
   for (const row of drepAggregate.values()) {
@@ -5475,7 +5867,7 @@ async function backfillMissingProposalMetadata(snapshotObj) {
 
 function publishSnapshot(payload) {
   if (!payload || typeof payload !== "object") return;
-  snapshot = payload;
+  snapshot = withSnapshotNetwork(payload);
   // Always recompute thresholds so code changes take effect without a
   // manual snapshot wipe.
   refreshAllThresholdInfo(snapshot);
@@ -5538,7 +5930,7 @@ async function runSync(options = {}) {
   syncState.lastError = null;
 
   try {
-    const base = pickBestSnapshotForApi(snapshot);
+    const base = snapshot;
     const baseEpoch = Number(base?.latestEpoch || 0);
     const lastEpoch = Number(syncState.lastEpochAtSync || 0);
 
@@ -5561,8 +5953,8 @@ async function runSync(options = {}) {
       fresh = await buildFullSnapshot();
     }
 
-    const candidate = pickBestSnapshotForApi(fresh);
-    const currentServed = pickBestSnapshotForApi(snapshot);
+    const candidate = fresh;
+    const currentServed = snapshot;
     const canPromoteNow = snapshotIsComplete(candidate) || !snapshotIsComplete(currentServed);
 
     // Always publish immediately (user preference: option 3).
@@ -5583,9 +5975,6 @@ async function runSync(options = {}) {
 }
 
 function startScheduler() {
-  // How often to poll for new votes (delta syncs).  Default: 3 minutes.
-  const DELTA_POLL_MS = Number(process.env.DELTA_POLL_MS || 3 * 60 * 1000);
-
   // How often to force a full rebuild (epoch boundary check).
   // The full rebuild also runs automatically whenever the epoch advances.
   // This is a safety-net interval (default: once per day) in case the epoch
@@ -5680,34 +6069,53 @@ function serveStatic(req, res) {
   });
 }
 
-loadSnapshotFromDisk();
-// If the live snapshot is absent or incomplete (ephemeral filesystem after
-// a cold start) fall back to the committed seed so the first delta sync has
-// a complete base and startup is near-instant.
-if (!snapshotIsComplete(snapshot)) {
-  loadSeedSnapshot();
+async function runStartupInitialization() {
+  if (SKIP_BOOT_HYDRATION) {
+    console.log("Boot hydration skipped (SKIP_BOOT_HYDRATION=true).");
+    if (SNAPSHOT_REMOTE_URL) {
+      fetchRemoteSnapshot(SNAPSHOT_REMOTE_URL)
+        .then((remoteSnapshot) => {
+          if (!remoteSnapshot) return;
+          if (applyRemoteSnapshot(remoteSnapshot)) {
+            console.log(
+              `Loaded remote snapshot from ${SNAPSHOT_REMOTE_URL} (epoch ${remoteSnapshot.latestEpoch || "?"}).`
+            );
+          }
+        })
+        .catch(() => null);
+    }
+    if (AUTO_START_SCHEDULER) {
+      startScheduler();
+    } else {
+      console.log("Auto scheduler startup disabled (AUTO_START_SCHEDULER=false).");
+    }
+    return;
+  }
+  // Fast startup path: load existing snapshot/caches for immediate UI responses,
+  // but skip expensive warmups/backfills that can block the event loop.
+  loadSnapshotFromDisk();
+  if (!snapshotIsComplete(snapshot)) {
+    loadSeedSnapshot();
+  }
+  loadVoteTxTimeCache();
+  loadVoteTxRationaleCache();
+  loadSpoProfileCache();
+  loadDrepMetaCache();
+  loadNclCacheFromDisk();
+  backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
+  backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
+  backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
+  refreshAllThresholdInfo(snapshot);
+  // Persist normalized startup snapshot once; avoid heavy history backfill here.
+  if (snapshot?.generatedAt) {
+    saveSnapshotToDisk(snapshot);
+  }
+  if (AUTO_START_SCHEDULER) {
+    startScheduler();
+  } else {
+    console.log("Auto scheduler startup disabled (AUTO_START_SCHEDULER=false).");
+  }
 }
-loadVoteTxTimeCache();
-// Now that the tx-time cache is loaded, backfill any votes in the snapshot
-// that were saved before their timestamps were cached.  This repairs data
-// on ephemeral deployments that start from the seed snapshot.
-backfillVoteTimestampsFromCache(snapshot.dreps, snapshot.proposalInfo);
-backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
-backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
-// Recompute threshold info using current code so stale snapshots are fixed
-// immediately on startup without waiting for the next sync.
-refreshAllThresholdInfo(snapshot);
-loadVoteTxRationaleCache();
-loadSpoProfileCache();
-loadNclCacheFromDisk();
-warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
-if (snapshot?.generatedAt && listSnapshotHistoryFiles().length === 0) {
-  saveSnapshotToDisk(snapshot);
-}
-if (snapshot?.generatedAt && Number(snapshot?.latestEpoch || 0) >= EPOCH_SNAPSHOT_START_EPOCH) {
-  backfillEpochSnapshotsFromCurrent(false);
-}
-startScheduler();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -5727,19 +6135,122 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/wallet-delegation") {
+    const rewardAddress = String(url.searchParams.get("rewardAddress") || "").trim();
+    if (!rewardAddress) {
+      json(res, 400, { error: "rewardAddress query parameter is required." });
+      return;
+    }
+    if (!BLOCKFROST_API_KEY) {
+      json(res, 503, { error: "Blockfrost API key is not configured on the server." });
+      return;
+    }
+
+    const rewardNetwork = inferRewardAddressNetwork(rewardAddress);
+    const configuredNetwork = String(CONFIGURED_BLOCKFROST_NETWORK || "unknown").toLowerCase();
+    const configuredIsMainnet = configuredNetwork === "mainnet";
+    if (
+      rewardNetwork !== "unknown" &&
+      configuredNetwork !== "unknown" &&
+      configuredNetwork !== rewardNetwork &&
+      !(configuredIsMainnet && rewardNetwork === "mainnet") &&
+      !(!configuredIsMainnet && rewardNetwork === "testnet")
+    ) {
+      json(res, 400, {
+        error: "Reward address network does not match server network.",
+        data: {
+          rewardAddress,
+          rewardNetwork,
+          serverNetwork: configuredNetwork
+        }
+      });
+      return;
+    }
+
+    const cacheKey = `${configuredNetwork}:${rewardAddress.toLowerCase()}`;
+    const cached = walletDelegationCache.get(cacheKey);
+    if (cached && Number(cached.expiresAt || 0) > Date.now()) {
+      json(res, 200, cached.value);
+      return;
+    }
+
+    try {
+      const account = await blockfrostGet(`/accounts/${rewardAddress}`);
+      const drepId = String(account?.drep_id || "").trim();
+      const payload = {
+        ok: true,
+        rewardAddress,
+        network: configuredNetwork,
+        delegatedDrepLiteralRaw: drepId,
+        delegatedDrepLiteral: normalizeLiteral(drepId),
+        delegationStatus: classifySpoDelegationStatusFromDrepId(drepId)
+      };
+      walletDelegationCache.set(cacheKey, {
+        value: payload,
+        expiresAt: Date.now() + Math.max(5_000, WALLET_DELEGATION_CACHE_TTL_MS)
+      });
+      json(res, 200, payload);
+    } catch (error) {
+      const message = String(error?.message || "Failed to lookup wallet delegation.");
+      const notFound = message.includes("Blockfrost 404");
+      json(res, notFound ? 404 : 502, {
+        error: notFound
+          ? "Reward account was not found on this network."
+          : "Failed to lookup wallet delegation.",
+        details: message
+      });
+    }
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/accountability") {
     const requestedSnapshot = String(url.searchParams.get("snapshot") || "").trim();
     const requestedView = String(url.searchParams.get("view") || "all").trim().toLowerCase();
     const view = ["all", "drep", "spo", "committee", "actions", "stats"].includes(requestedView)
       ? requestedView
       : "all";
-    const includeDreps = view === "all" || view === "drep" || view === "actions" || view === "stats";
+    const includeDreps = view === "all" || view === "drep" || view === "stats";
     const includeCommittee = view === "all" || view === "committee" || view === "stats";
-    const includeSpos = view === "all" || view === "spo" || view === "actions" || view === "stats";
+    const includeSpos = view === "all" || view === "spo" || view === "stats";
+    const allowSpoEnrichment = view === "all" || view === "spo" || view === "stats";
     const compactDashboardView = view === "drep" || view === "spo" || view === "committee" || view === "stats";
     const compactActionsView = view === "actions";
     const historical = requestedSnapshot ? readSnapshotFromHistory(requestedSnapshot) : null;
-    const sourceSnapshot = historical || pickBestSnapshotForApi(snapshot);
+    const sourceSnapshot = historical || snapshot;
+    if (view === "actions") {
+      const proposalInfo = compactProposalInfoForDashboard(sourceSnapshot?.proposalInfo || {});
+      const drepsRaw = Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : [];
+      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || []);
+      const sposRaw = Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : [];
+      const hasSpecialDreps = sourceSnapshot?.specialDreps && Object.keys(sourceSnapshot.specialDreps).length > 0;
+      const specialDreps = hasSpecialDreps ? sourceSnapshot.specialDreps : (specialDrepsCache.value || {});
+      json(res, 200, {
+        schemaVersion: sourceSnapshot?.schemaVersion || SNAPSHOT_SCHEMA_VERSION,
+        network: sourceSnapshot?.network || CONFIGURED_BLOCKFROST_NETWORK,
+        generatedAt: sourceSnapshot?.generatedAt || null,
+        latestEpoch: sourceSnapshot?.latestEpoch || null,
+        drepParticipationStartEpoch: sourceSnapshot?.drepParticipationStartEpoch || null,
+        thresholdContext: sourceSnapshot?.thresholdContext || {},
+        proposalInfo,
+        dreps: compactActorsForDashboard(drepsRaw),
+        committeeMembers: compactActorsForDashboard(committeeRaw),
+        specialDreps,
+        spos: compactActorsForDashboard(sposRaw),
+        view,
+        snapshotKey: requestedSnapshot || "",
+        historical: Boolean(historical),
+        syncing: syncState.syncing,
+        lastSyncStartedAt: syncState.lastStartedAt,
+        lastSyncCompletedAt: syncState.lastCompletedAt,
+        lastSyncError: syncState.lastError,
+        syncTotalProposals: syncState.totalProposals,
+        syncScannedProposals: syncState.scannedProposals,
+        syncProcessedProposals: syncState.processedProposals,
+        pendingSnapshotReady: Boolean(pendingSnapshot),
+        pendingSnapshotBuiltAt
+      });
+      return;
+    }
     const sourceKey = [
       requestedSnapshot || "latest",
       sourceSnapshot?.generatedAt || "",
@@ -5778,10 +6289,10 @@ const server = http.createServer(async (req, res) => {
       specialDreps = {};
     }
     let spos = includeSpos ? (Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : []) : [];
-    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0) {
+    if (includeSpos && allowSpoEnrichment && !historical && Array.isArray(spos) && spos.length > 0) {
       mergeSpoDelegationFromProfile(spos);
     }
-    if (includeSpos && !historical && spos.length === 0) {
+    if (includeSpos && allowSpoEnrichment && !historical && spos.length === 0) {
       const spoFallbackLimit = SPO_FALLBACK_LIMIT > 0 ? SPO_FALLBACK_LIMIT : 400;
       if (spoFallbackCache.rows.length > 0) {
         spos = spoFallbackCache.rows.slice(0, spoFallbackLimit);
@@ -5793,7 +6304,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
-    if (includeSpos && !historical && Array.isArray(spos) && spos.length > 0 && (view === "actions" || view === "spo")) {
+    if (includeSpos && allowSpoEnrichment && !historical && Array.isArray(spos) && spos.length > 0 && view === "spo") {
       let totalPower = 0;
       let unknownPower = 0;
       for (const row of spos) {
@@ -5810,7 +6321,7 @@ const server = http.createServer(async (req, res) => {
         mergeSpoDelegationFromProfile(spos);
       }
     }
-    if (includeSpos && !historical) {
+    if (includeSpos && allowSpoEnrichment && !historical) {
       const refreshAgeMs = Date.now() - Number(spoFallbackCache.fetchedAt || 0);
       const refreshStale = spoFallbackCache.rows.length === 0 || refreshAgeMs > 15 * 60 * 1000;
       const roster = SPO_FALLBACK_LIMIT > 0
@@ -5882,7 +6393,7 @@ const server = http.createServer(async (req, res) => {
     const dreps = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(drepsRaw) : drepsRaw;
     const compactSpos = (compactDashboardView || compactActionsView) ? compactActorsForDashboard(spos) : spos;
     const proposalInfoRaw = sourceSnapshot?.proposalInfo || {};
-    const proposalInfo = compactDashboardView ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
+    const proposalInfo = (compactDashboardView || compactActionsView) ? compactProposalInfoForDashboard(proposalInfoRaw) : proposalInfoRaw;
 
     if (view === "stats") {
       json(res, 200, {
@@ -6243,6 +6754,51 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/ops-metrics") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    json(res, 200, buildOpsMetricsPayload());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ops-metrics/reset") {
+    const opsLimit = consumeRateLimit({
+      scope: "ops",
+      key: getClientIp(req),
+      maxRequests: OPS_RATE_LIMIT_MAX,
+      windowMs: OPS_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, opsLimit, "Too many operations requests. Please wait before retrying.")) {
+      return;
+    }
+    if (!OPERATIONS_API_TOKEN) {
+      json(res, 503, { error: "Operations admin token is not configured." });
+      return;
+    }
+    if (!isOperationsAuthorized(req, url)) {
+      json(res, 401, { error: "Unauthorized." });
+      return;
+    }
+    resetOpsMetrics();
+    json(res, 200, { ok: true, resetAt: new Date().toISOString() });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/proposal-metadata") {
     const proposalId = String(url.searchParams.get("proposalId") || "").trim();
     if (!proposalId) {
@@ -6318,28 +6874,76 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const latestConstitution = await findLatestEnactedConstitutionGuardrails();
-      const latestTreasury = await findLatestEnactedTreasuryGuardrails();
-      const latest = latestConstitution || latestTreasury;
-      if (!latest) {
-        json(res, 404, { error: "Could not find a constitution or treasury governance action with a guardrails policy hash." });
+      const cacheKey = requestedNetwork;
+      const cached = guardrailsLatestCache.get(cacheKey);
+      if (cached && (Date.now() - Number(cached.cachedAt || 0)) < GUARDRAILS_CACHE_TTL_MS) {
+        json(res, 200, cached.payload);
         return;
       }
 
-      const koiosPolicyHash = latestConstitution
-        ? ""
-        : await findKoiosTreasuryPolicyHash(latest.proposalId);
-      const koiosMatch = koiosPolicyHash ? koiosPolicyHash === latest.policyHash : null;
+      // Primary: query the ledger directly via Ogmios — this is always authoritative.
+      // On preview/preprod, the genesis constitution has no on-chain NewConstitutionAction,
+      // so proposal scanning would return the wrong (un-enacted) hash.
+      const ogmiosScriptHash = await fetchActiveConstitutionScriptHash();
       const presetRefRaw = GUARDRAILS_REFERENCE_PRESETS?.[requestedNetwork];
+
+      // Fast path: if Ogmios gives us the active hash, return immediately without
+      // scanning many governance proposals from Blockfrost.
+      if (ogmiosScriptHash) {
+        const presetReference = presetRefRaw && typeof presetRefRaw === "object" ? {
+          txHash: String(presetRefRaw.txHash || "").trim(),
+          txIndex: Number(presetRefRaw.txIndex ?? 0),
+          scriptSize: String(presetRefRaw.scriptSize || "").trim(),
+          scriptHash: String(presetRefRaw.scriptHash || ogmiosScriptHash).trim().toLowerCase(),
+          version: String(presetRefRaw.version || "V3").trim()
+        } : null;
+        const payload = {
+          ok: true,
+          network: requestedNetwork,
+          source: {
+            blockfrostBaseUrl: BLOCKFROST_BASE_URL,
+            koiosBaseUrl: KOIOS_BASE_URL
+          },
+          sourceActionType: "ogmios_ledger_state",
+          latestEnactedConstitutionAction: null,
+          latestEnactedTreasuryWithdrawal: null,
+          policyHash: ogmiosScriptHash,
+          koiosCrossCheck: {
+            policyHash: ogmiosScriptHash,
+            match: true
+          },
+          referencePreset: presetReference,
+          note: presetReference
+            ? "Reference script preset found for this network."
+            : "No reference script preset configured. Set GUARDRAILS_REFERENCE_PRESETS_JSON to auto-fill reference fields."
+        };
+        guardrailsLatestCache.set(cacheKey, { cachedAt: Date.now(), payload });
+        json(res, 200, payload);
+        return;
+      }
+
+      // Slow fallback: only run proposal scans when Ogmios is unavailable.
+      const latestConstitution = await findLatestEnactedConstitutionGuardrails();
+      const latestTreasury = await findLatestEnactedTreasuryGuardrails();
+      const latest = latestConstitution || latestTreasury;
+      const authorativePolicyHash = latest?.policyHash || null;
+
+      if (!authorativePolicyHash) {
+        json(res, 404, { error: "Could not determine active guardrails policy hash from ledger or governance proposals." });
+        return;
+      }
+
+      const koiosPolicyHash = latestConstitution ? "" : await findKoiosTreasuryPolicyHash(latest?.proposalId);
+      const koiosMatch = koiosPolicyHash ? koiosPolicyHash === latest?.policyHash : null;
       const presetReference = presetRefRaw && typeof presetRefRaw === "object" ? {
         txHash: String(presetRefRaw.txHash || "").trim(),
         txIndex: Number(presetRefRaw.txIndex ?? 0),
         scriptSize: String(presetRefRaw.scriptSize || "").trim(),
-        scriptHash: String(presetRefRaw.scriptHash || latest.policyHash).trim().toLowerCase(),
+        scriptHash: String(presetRefRaw.scriptHash || authorativePolicyHash).trim().toLowerCase(),
         version: String(presetRefRaw.version || "V3").trim()
       } : null;
 
-      json(res, 200, {
+      const payload = {
         ok: true,
         network: requestedNetwork,
         source: {
@@ -6349,7 +6953,7 @@ const server = http.createServer(async (req, res) => {
         sourceActionType: latestConstitution ? "new_constitution" : "treasury_withdrawals",
         latestEnactedConstitutionAction: latestConstitution,
         latestEnactedTreasuryWithdrawal: latestTreasury,
-        policyHash: latest.policyHash,
+        policyHash: authorativePolicyHash,
         koiosCrossCheck: {
           policyHash: koiosPolicyHash || null,
           match: koiosMatch
@@ -6358,7 +6962,9 @@ const server = http.createServer(async (req, res) => {
         note: presetReference
           ? "Reference script preset found for this network."
           : "No reference script preset configured. Set GUARDRAILS_REFERENCE_PRESETS_JSON to auto-fill reference fields."
-      });
+      };
+      guardrailsLatestCache.set(cacheKey, { cachedAt: Date.now(), payload });
+      json(res, 200, payload);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch latest guardrails policy." });
@@ -6378,7 +6984,16 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const summary = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}`).catch(() => null);
-      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`);
+      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`).catch((err) => {
+        const msg = String(err?.message || "");
+        if (msg.includes("404")) {
+          json(res, 404, { error: `Script not found in Blockfrost for hash ${scriptHash}. It may not be indexed on this network.` });
+        } else {
+          json(res, 500, { error: msg || "Failed to fetch script CBOR." });
+        }
+        return null;
+      });
+      if (cborRow === null) return;
       const cbor = String(cborRow?.cbor || "").trim();
       if (!cbor) {
         json(res, 404, { error: "Script CBOR not found for this script hash." });
@@ -6404,23 +7019,84 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // POST /api/evaluate  — evaluates a tx via Koios/Ogmios without submitting it.
+  // Body JSON: { txCbor: "<hex>" }
+  // Uses Ogmios evaluateTransaction which has full Conway-era governance support.
+  if (req.method === "POST" && url.pathname === "/api/evaluate") {
+    let body;
+    try {
+      const raw = await new Promise((resolve, reject) => {
+        let data = "";
+        req.on("data", chunk => { data += chunk; });
+        req.on("end", () => resolve(data));
+        req.on("error", reject);
+      });
+      body = JSON.parse(raw);
+    } catch {
+      json(res, 400, { error: "Invalid JSON body." });
+      return;
+    }
+    const txCborHex = String(body?.txCbor || "").trim();
+    if (!txCborHex || !/^[0-9a-fA-F]+$/.test(txCborHex)) {
+      json(res, 400, { error: "Missing or invalid txCbor (expected hex string)." });
+      return;
+    }
+    try {
+      // Use Koios Ogmios proxy — full Conway/Plutus V3 support
+      const ogmiosUrl = `${KOIOS_BASE_URL}/ogmios`;
+      const headers = { "Content-Type": "application/json" };
+      if (KOIOS_API_KEY) headers.Authorization = `Bearer ${KOIOS_API_KEY}`;
+      const ogmiosBody = JSON.stringify({
+        jsonrpc: "2.0",
+        method: "evaluateTransaction",
+        params: { transaction: { cbor: txCborHex } }
+      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      let ogmiosRes;
+      try {
+        ogmiosRes = await fetch(ogmiosUrl, { method: "POST", headers, body: ogmiosBody, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      const ogmiosText = await ogmiosRes.text();
+      let ogmiosData;
+      try { ogmiosData = JSON.parse(ogmiosText); } catch { ogmiosData = { raw: ogmiosText }; }
+      // Ogmios returns result.EvaluationResult on success, result.EvaluationFailure on script failure
+      const isFailure = ogmiosData?.result?.EvaluationFailure !== undefined;
+      const isSuccess = ogmiosData?.result?.EvaluationResult !== undefined;
+      json(res, ogmiosRes.ok && !isFailure ? 200 : 400, {
+        ok: ogmiosRes.ok && !isFailure,
+        isSuccess,
+        isFailure,
+        evaluation: ogmiosData
+      });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Evaluation request failed." });
+      return;
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/api/proposal-voting-summary") {
     const proposalId = String(url.searchParams.get("proposalId") || "").trim();
     if (!proposalId) {
       json(res, 400, { error: "Missing proposalId." });
       return;
     }
+    const nowMs = Date.now();
+    const cachedSummary = proposalVotingSummaryCache.get(proposalId);
+    if (cachedSummary && (nowMs - cachedSummary.cachedAt) < PROPOSAL_VOTING_SUMMARY_TTL_MS) {
+      json(res, 200, cachedSummary.data);
+      return;
+    }
     try {
       const byId = await fetchKoiosVotingSummariesByProposalIds([proposalId]);
       const summary = byId.get(proposalId) || null;
       const nomosModel = buildNomosModelFromKoiosSummary(summary);
-      json(res, 200, {
-        ok: true,
-        proposalId,
-        hasSummary: Boolean(summary),
-        koiosVotingSummary: summary,
-        nomosModel
-      });
+      const data = { ok: true, proposalId, hasSummary: Boolean(summary), koiosVotingSummary: summary, nomosModel };
+      proposalVotingSummaryCache.set(proposalId, { data, cachedAt: nowMs });
+      json(res, 200, data);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal voting summary." });
@@ -6790,6 +7466,30 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Server running at http://${HOST}:${PORT}`);
+let listenRetryCount = 0;
+const LISTEN_MAX_RETRIES = Number(process.env.LISTEN_MAX_RETRIES || 20);
+const LISTEN_RETRY_DELAY_MS = Number(process.env.LISTEN_RETRY_DELAY_MS || 1000);
+
+function bindServer() {
+  server.listen(PORT, HOST, () => {
+    listenRetryCount = 0;
+    console.log(`Server running at http://${HOST}:${PORT}`);
+    // Do heavy snapshot/cache initialization after the socket is bound so
+    // local UI loads don't fail with ERR_CONNECTION_REFUSED during startup.
+    setTimeout(runStartupInitialization, 0);
+  });
+}
+
+server.on("error", (error) => {
+  if (error?.code === "EADDRINUSE" && listenRetryCount < LISTEN_MAX_RETRIES) {
+    listenRetryCount += 1;
+    console.warn(
+      `Port ${PORT} is in use. Retry ${listenRetryCount}/${LISTEN_MAX_RETRIES} in ${LISTEN_RETRY_DELAY_MS}ms...`
+    );
+    setTimeout(bindServer, LISTEN_RETRY_DELAY_MS);
+    return;
+  }
+  throw error;
 });
+
+bindServer();

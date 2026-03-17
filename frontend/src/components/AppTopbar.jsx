@@ -1,6 +1,8 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
+import { getSoftCoercedDrepMatch } from "../constants/softCoercedDreps";
+import { SHOW_DELEGATION_AWARENESS_UI } from "../constants/featureFlags";
 
 const NAV_GROUPS = [
   {
@@ -27,7 +29,7 @@ const NAV_GROUPS = [
     label: "Insights",
     links: [
       { to: "/stats", label: "Governance Stats" },
-      { to: "/guide", label: "Governance Guide" },
+      { to: "/guide", label: "Governance Guides" },
       { to: "/about", label: "About Civitas" }
     ]
   }
@@ -104,6 +106,7 @@ function BrandMark({ theme, alertActive }) {
 
 export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isLanding = location.pathname === "/";
   const currentNavGroupKey = useMemo(
     () => getCurrentNavGroupKey(location.pathname),
@@ -128,10 +131,91 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
   });
   const [hasNewBugSignal, setHasNewBugSignal] = useState(false);
   const [latestBugId, setLatestBugId] = useState("");
+  const [walletDelegation, setWalletDelegation] = useState(null);
+  const [walletDelegationLoading, setWalletDelegationLoading] = useState(false);
+  const [walletDelegationError, setWalletDelegationError] = useState("");
+  const [softCoercedDismissed, setSoftCoercedDismissed] = useState(false);
+
+  const matchedSoftCoercedDrep = useMemo(() => {
+    return getSoftCoercedDrepMatch(walletDelegation?.delegatedDrepLiteralRaw);
+  }, [walletDelegation]);
+
+  const softCoercedDismissKey = useMemo(() => {
+    const reward = String(wallet?.walletRewardAddress || "").trim().toLowerCase();
+    const drepId = String(matchedSoftCoercedDrep?.id || "").trim().toLowerCase();
+    if (!reward || !drepId) return "";
+    return `civitas.softCoercedDrep.dismissed:${reward}:${drepId}`;
+  }, [wallet?.walletRewardAddress, matchedSoftCoercedDrep]);
 
   useEffect(() => {
     setOpenNavGroupKey(currentNavGroupKey);
   }, [currentNavGroupKey]);
+
+  useEffect(() => {
+    const rewardAddress = String(wallet?.walletRewardAddress || "").trim();
+    if (!wallet?.walletApi || !rewardAddress) {
+      setWalletDelegation(null);
+      setWalletDelegationLoading(false);
+      setWalletDelegationError("");
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    async function loadWalletDelegation() {
+      setWalletDelegationLoading(true);
+      setWalletDelegationError("");
+      try {
+        const res = await fetch(`/api/wallet-delegation?rewardAddress=${encodeURIComponent(rewardAddress)}`, {
+          signal: controller.signal
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Failed to lookup wallet delegation.");
+        if (!active) return;
+        setWalletDelegation(data);
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setWalletDelegation(null);
+        setWalletDelegationError(String(error?.message || "Failed to lookup wallet delegation."));
+      } finally {
+        if (active) setWalletDelegationLoading(false);
+      }
+    }
+
+    loadWalletDelegation();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [wallet?.walletApi, wallet?.walletRewardAddress]);
+
+  useEffect(() => {
+    if (!softCoercedDismissKey) {
+      setSoftCoercedDismissed(false);
+      return;
+    }
+    try {
+      setSoftCoercedDismissed(window.localStorage.getItem(softCoercedDismissKey) === "1");
+    } catch {
+      setSoftCoercedDismissed(false);
+    }
+  }, [softCoercedDismissKey]);
+
+  function dismissSoftCoercedPrompt() {
+    if (!softCoercedDismissKey) return;
+    try {
+      window.localStorage.setItem(softCoercedDismissKey, "1");
+    } catch {
+      // Ignore storage failures.
+    }
+    setSoftCoercedDismissed(true);
+  }
+
+  function openDrepListForRedelegation() {
+    wallet?.setWalletMenuOpen(false);
+    navigate("/dreps");
+  }
 
   useEffect(() => {
     let stop = false;
@@ -369,11 +453,37 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
                         <p>
                           Balance: <strong>{formatAda(wallet.walletLovelace)}</strong>
                         </p>
+                        {SHOW_DELEGATION_AWARENESS_UI && matchedSoftCoercedDrep && !softCoercedDismissed ? (
+                          <div className="wallet-antitrust-alert" role="alert">
+                            <p>
+                              This wallet is delegated to a DRep in the local delegation-awareness list. This does not judge
+                              the DRep, but helps surface cases where users may have delegated via default flows.
+                            </p>
+                            {matchedSoftCoercedDrep.reason ? (
+                              <p className="muted">
+                                Reason: {matchedSoftCoercedDrep.reason}
+                              </p>
+                            ) : null}
+                            <p className="muted">
+                              If this was intentional, you can ignore this. If not, you can re-delegate at any time.
+                            </p>
+                            <div className="wallet-antitrust-actions">
+                              <button type="button" className="mode-btn active" onClick={openDrepListForRedelegation}>
+                                Review DRep options
+                              </button>
+                              <button type="button" className="mode-btn" onClick={dismissSoftCoercedPrompt}>
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                         {wallet.walletDrep ? (
                           <p className="muted">DRep credential detected — you can vote on governance actions.</p>
                         ) : (
                           <p className="muted">No DRep credential — you can delegate to a DRep.</p>
                         )}
+                        {walletDelegationLoading ? <p className="muted">Checking delegation...</p> : null}
+                        {walletDelegationError ? <p className="muted">Delegation check: {walletDelegationError}</p> : null}
                         <p className="mono">{wallet.walletRewardAddress || "No reward address exposed by wallet."}</p>
                         <button type="button" className="mode-btn" onClick={wallet.disconnectWallet}>
                           Disconnect

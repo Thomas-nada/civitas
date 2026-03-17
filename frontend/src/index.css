@@ -804,6 +804,29 @@ a {
   gap: 0.3rem;
 }
 
+.wiki-nav-group {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.wiki-nav-group:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.wiki-nav-title {
+  margin: 0.15rem 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .wiki-nav button {
   appearance: none;
   width: 100%;
@@ -1205,6 +1228,61 @@ a {
   border-top: 1px solid var(--line);
 }
 
+.guide-wizard {
+  margin-top: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 0.75rem;
+}
+
+.guide-command-block {
+  margin: 0.55rem 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.guide-command-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-command-block pre {
+  margin: 0;
+  padding: 0.65rem;
+  overflow-x: auto;
+}
+
+.guide-stepper {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.guide-step-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.guide-step-dot.done {
+  background: color-mix(in srgb, var(--mint) 45%, var(--surface));
+}
+
+.guide-step-dot.active {
+  background: var(--mint);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mint) 35%, transparent);
+}
+
 .wiki-history-box {
   margin-top: 0.7rem;
   border: 1px solid var(--line);
@@ -1422,6 +1500,27 @@ a {
 
 .wallet-connected p {
   margin: 0.25rem 0;
+}
+
+.wallet-antitrust-alert {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.wallet-antitrust-alert p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.wallet-antitrust-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .delegate-cta {
@@ -1730,6 +1829,44 @@ tbody tr.active {
   z-index: 3;
 }
 
+.action-vote-pie--mini {
+  width: 52px;
+  height: 52px;
+}
+
+.action-vote-pie--mini::after {
+  inset: 11px;
+}
+
+.action-vote-pie--mini .action-vote-pie-threshold::before {
+  height: 11px;
+}
+
+.action-vote-pie--mini span {
+  font-size: 0.62rem;
+}
+
+.action-vote-mini-pies {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.action-vote-mini-pie {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.action-vote-mini-label {
+  margin: 0;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
 .action-vote-pie-meta {
   margin: 0;
   font-size: 0.92rem;
@@ -1942,6 +2079,13 @@ tbody tr.active {
 .drep-row-credentials {
   font-size: 0.7rem;
   opacity: 0.55;
+}
+
+.drep-row-awareness {
+  font-size: 0.72rem;
+  white-space: normal;
+  line-height: 1.25;
+  max-width: 62ch;
 }
 
 .detail {

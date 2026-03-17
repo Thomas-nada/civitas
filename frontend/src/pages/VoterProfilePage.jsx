@@ -7,9 +7,25 @@ import { CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Ba
 import { WalletContext } from "../context/WalletContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
+const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
+const DREP_DELEGATION_RISK_HIGH_CUTOFF = 75;
 
 function round(v) {
   return Math.round(Number(v || 0) * 10) / 10;
+}
+
+function delegationConcentrationRiskScore(sharePctActive) {
+  const share = Number(sharePctActive || 0);
+  if (!Number.isFinite(share) || share <= 0) return 0;
+  return Math.max(0, Math.min(100, round((share / DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT) * 100)));
+}
+
+function delegationConcentrationRiskLabel(score) {
+  const value = Number(score || 0);
+  if (value >= DREP_DELEGATION_RISK_HIGH_CUTOFF) return "High";
+  if (value >= DREP_DELEGATION_RISK_MEDIUM_CUTOFF) return "Medium";
+  return "Low";
 }
 
 function fmt(n, dec = 0) {
@@ -171,6 +187,7 @@ export default function VoterProfilePage({ actorType }) {
   const wallet = useContext(WalletContext);
   const [delegateNotice, setDelegateNotice] = useState("");
   const [delegating, setDelegating] = useState(false);
+  const [highRiskDelegationModalOpen, setHighRiskDelegationModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,7 +312,25 @@ export default function VoterProfilePage({ actorType }) {
   const isCommittee = actorType === "committee";
   const isDrep = actorType === "drep";
 
-  async function prepareDelegation() {
+  const drepDelegationRisk = useMemo(() => {
+    if (!isDrep || !actor) return { score: 0, label: "Low", activeSharePct: 0 };
+    const drepRows = Array.isArray(actors) ? actors : [];
+    const totalPower = drepRows.reduce((sum, row) => sum + Number(row?.votingPowerAda || 0), 0);
+    const abstainPower = Number(
+      drepRows.find((row) => String(row?.id || "").trim().toLowerCase() === "drep_always_abstain")?.votingPowerAda || 0
+    );
+    const activePower = Math.max(0, totalPower - abstainPower);
+    const isAlwaysAbstain = String(actor?.id || "").trim().toLowerCase() === "drep_always_abstain";
+    const activeSharePct = isAlwaysAbstain ? 0 : (activePower > 0 ? (Number(actor?.votingPowerAda || 0) / activePower) * 100 : 0);
+    const score = delegationConcentrationRiskScore(activeSharePct);
+    return {
+      score,
+      label: delegationConcentrationRiskLabel(score),
+      activeSharePct
+    };
+  }, [isDrep, actor, actors]);
+
+  async function submitDelegationTransaction() {
     if (!isDrep || !actor) return;
     if (!wallet?.walletApi) {
       setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
@@ -320,6 +355,23 @@ export default function VoterProfilePage({ actorType }) {
     } finally {
       setDelegating(false);
     }
+  }
+
+  async function prepareDelegation() {
+    if (!isDrep || !actor) return;
+    if (!wallet?.walletApi) {
+      setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
+      return;
+    }
+    if (!wallet.walletRewardAddress) {
+      setDelegateNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
+      return;
+    }
+    if (drepDelegationRisk.label === "High") {
+      setHighRiskDelegationModalOpen(true);
+      return;
+    }
+    await submitDelegationTransaction();
   }
 
   async function loadVoteRationale(item) {
@@ -369,14 +421,14 @@ export default function VoterProfilePage({ actorType }) {
   }
 
   useEffect(() => {
-    const shouldLock = imageOpen || rationaleModal.open;
+    const shouldLock = imageOpen || rationaleModal.open || highRiskDelegationModalOpen;
     if (!shouldLock) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [imageOpen, rationaleModal.open]);
+  }, [imageOpen, rationaleModal.open, highRiskDelegationModalOpen]);
 
   if (error) {
     return (
@@ -647,6 +699,56 @@ export default function VoterProfilePage({ actorType }) {
           <div className="image-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="image-modal-close" onClick={() => setImageOpen(false)}>Close</button>
             <img className="image-modal-img" src={actor.profile.imageUrl} alt={`${actor.name || actor.id} profile`} />
+          </div>
+        </div>
+      ) : null}
+      {highRiskDelegationModalOpen && isDrep ? (
+        <div className="image-modal-backdrop" role="presentation" onClick={() => setHighRiskDelegationModalOpen(false)}>
+          <div className="image-modal vote-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="image-modal-close"
+              onClick={() => setHighRiskDelegationModalOpen(false)}
+            >
+              Close
+            </button>
+            <h3 className="rationale-modal-title">Delegation Concentration Awareness</h3>
+            <div className="vote-confirm-body">
+              <p>
+                This DRep currently has a high delegated share (
+                <strong>{round(Number(drepDelegationRisk.activeSharePct || 0))}%</strong> of active voting power).
+              </p>
+              <p className="muted">
+                For decentralization, please consider delegating to a DRep with lower delegation concentration.
+              </p>
+              <p className="muted">
+                You can still continue if this is your intentional choice.
+              </p>
+              <div className="vote-confirm-actions">
+                <button
+                  type="button"
+                  className="mode-btn"
+                  onClick={() => {
+                    setHighRiskDelegationModalOpen(false);
+                    setDelegateNotice("Delegation canceled. Consider reviewing DReps with lower delegated concentration.");
+                  }}
+                  disabled={delegating}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="mode-btn active"
+                  onClick={async () => {
+                    setHighRiskDelegationModalOpen(false);
+                    await submitDelegationTransaction();
+                  }}
+                  disabled={delegating}
+                >
+                  Continue Delegation
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
