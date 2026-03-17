@@ -122,7 +122,22 @@ export default function ProposalDetailPage() {
     };
   }, [decodedProposalId, snapshotKey]);
 
-  const info = payload?.proposalInfo?.[decodedProposalId] || null;
+  const snapshotInfo = payload?.proposalInfo?.[decodedProposalId] || null;
+  // Supplement snapshot fields that may be null with live values from the metadata endpoint.
+  // Also covers the case where the proposal isn't in the snapshot yet.
+  const info = snapshotInfo || metadata
+    ? {
+        ...(snapshotInfo || {}),
+        submittedEpoch: snapshotInfo?.submittedEpoch ?? metadata?.submittedEpoch ?? null,
+        expirationEpoch: snapshotInfo?.expirationEpoch ?? metadata?.expirationEpoch ?? null,
+        enactedEpoch: snapshotInfo?.enactedEpoch ?? metadata?.enactedEpoch ?? null,
+        ratifiedEpoch: snapshotInfo?.ratifiedEpoch ?? metadata?.ratifiedEpoch ?? null,
+        droppedEpoch: snapshotInfo?.droppedEpoch ?? metadata?.droppedEpoch ?? null,
+        expiredEpoch: snapshotInfo?.expiredEpoch ?? metadata?.expiredEpoch ?? null,
+        txHash: snapshotInfo?.txHash ?? metadata?.txHash ?? null,
+        governanceType: snapshotInfo?.governanceType ?? metadata?.governanceType ?? null,
+      }
+    : null;
 
   const payloadDoc = useMemo(
     () => normalizeActionPayload({ ...(info || {}), actionName: info?.actionName || decodedProposalId }, metadata || null),
@@ -263,10 +278,18 @@ export default function ProposalDetailPage() {
     <main className="page shell stats-page">
       <section className="page-head">
         <p className="eyebrow">Proposal Detail</p>
-        <h1>{info.actionName || decodedProposalId}</h1>
+        <h1>{payloadDoc.title || info.actionName || decodedProposalId}</h1>
         <p className="mono">{decodedProposalId}</p>
         <p><Link className="inline-link" to={`/actions${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`}>Back to actions</Link></p>
       </section>
+
+      {metadata?.hashMismatch ? (
+        <section className="stats-section stats-section--wide">
+          <div className="stats-section-body" style={{ background: "rgba(255,180,0,0.08)", border: "1px solid rgba(255,180,0,0.35)", borderRadius: "6px", padding: "12px 16px" }}>
+            <p style={{ margin: 0 }}><strong>Hash mismatch warning:</strong> The metadata content at the anchor URL does not match the hash registered on-chain. This may indicate the document was modified after submission. Displaying content for reference only.</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="stats-section stats-section--wide">
         <h2 className="stats-section-title">Timeline</h2>
