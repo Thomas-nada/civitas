@@ -677,12 +677,42 @@ export default function StatsPage() {
   const [activePropType, setActivePropType]       = useState(0);
   const [activePropOutcome, setActivePropOutcome] = useState(0);
 
+  // Delegation trend
+  const [trendEpochs, setTrendEpochs] = useState(5);
+  const [trend, setTrend]             = useState(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+
+  // Delegation history (per-DRep search)
+  const [histQuery, setHistQuery]       = useState("");
+  const [histSelected, setHistSelected] = useState(null); // { id, name }
+  const [histData, setHistData]         = useState(null);
+  const [histLoading, setHistLoading]   = useState(false);
+  const [histDropdown, setHistDropdown] = useState(false);
+
   useEffect(() => {
     fetch(`${API_BASE}/api/accountability?view=stats`)
       .then(r => r.json())
       .then(d => { setRaw(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
+
+  useEffect(() => {
+    setTrendLoading(true);
+    fetch(`${API_BASE}/api/drep-delegation-trend?epochs=${trendEpochs}`)
+      .then(r => r.json())
+      .then(d => { setTrend(d); setTrendLoading(false); })
+      .catch(() => setTrendLoading(false));
+  }, [trendEpochs]);
+
+  useEffect(() => {
+    if (!histSelected) return;
+    setHistLoading(true);
+    setHistData(null);
+    fetch(`${API_BASE}/api/drep-delegation-history?id=${encodeURIComponent(histSelected.id)}`)
+      .then(r => r.json())
+      .then(d => { setHistData(d); setHistLoading(false); })
+      .catch(() => setHistLoading(false));
+  }, [histSelected]);
 
   const s = useMemo(() => {
     if (!raw) return null;
@@ -1061,6 +1091,17 @@ export default function StatsPage() {
     };
   }, [raw]);
 
+  const histMatches = useMemo(() => {
+    const q = histQuery.trim().toLowerCase();
+    if (!q || !raw) return [];
+    const dreps = (raw.dreps || []).filter(d => {
+      const id = String(d.id || "").toLowerCase();
+      const name = String(d.name || "").toLowerCase();
+      return !id.includes("always_") && (name.includes(q) || id.includes(q));
+    });
+    return dreps.slice(0, 8).map(d => ({ id: d.id, name: (d.name || "").trim() || d.id }));
+  }, [histQuery, raw]);
+
   if (loading) return <main className="shell stats-page"><p className="muted" style={{paddingTop:"3rem"}}>Loading statistics…</p></main>;
   if (error)   return <main className="shell stats-page"><p className="vote-error" style={{paddingTop:"3rem"}}>Error: {error}</p></main>;
   if (!s)      return null;
@@ -1292,6 +1333,164 @@ export default function StatsPage() {
           </ResponsiveContainer>
         </Section>
       </div>
+
+      {/* ── Delegation Movers ─────────────────────────────────────────────────── */}
+      <Section title="DRep Delegation Movers" wide>
+        <div style={{ display:"flex", gap:"0.5rem", marginBottom:"1rem", flexWrap:"wrap" }}>
+          {[1,3,5,10].map(n => (
+            <button
+              key={n}
+              className={`stats-filter-btn${trendEpochs === n ? " active" : ""}`}
+              onClick={() => setTrendEpochs(n)}
+            >
+              {n} epoch{n > 1 ? "s" : ""}
+            </button>
+          ))}
+          {trend?.comparedEpoch != null && (
+            <span className="muted" style={{ alignSelf:"center", fontSize:11 }}>
+              Epoch {trend.comparedEpoch} → {trend.currentEpoch}
+            </span>
+          )}
+        </div>
+        {trendLoading && <p className="muted" style={{ fontSize:12 }}>Loading…</p>}
+        {!trendLoading && trend && (trend.gainers?.length > 0 || trend.losers?.length > 0) ? (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.5rem" }}>
+            {/* Gainers */}
+            <div>
+              <p style={{ fontSize:11, fontWeight:600, color:C.yes, marginBottom:"0.5rem", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                Top Gainers
+              </p>
+              {(trend.gainers || []).map((d, i) => (
+                <div key={d.id} style={{ display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem" }}>
+                  <span style={{ width:14, fontSize:10, color:C.muted, flexShrink:0 }}>{i+1}</span>
+                  <span style={{ flex:1, fontSize:11, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.name}>{d.name}</span>
+                  <span style={{ fontSize:11, color:C.yes, fontWeight:600, flexShrink:0 }}>+{d.deltaPct.toFixed(1)}%</span>
+                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{fmtAda(d.currentAda)}</span>
+                </div>
+              ))}
+            </div>
+            {/* Losers */}
+            <div>
+              <p style={{ fontSize:11, fontWeight:600, color:C.no, marginBottom:"0.5rem", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                Top Losers
+              </p>
+              {(trend.losers || []).map((d, i) => (
+                <div key={d.id} style={{ display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem" }}>
+                  <span style={{ width:14, fontSize:10, color:C.muted, flexShrink:0 }}>{i+1}</span>
+                  <span style={{ flex:1, fontSize:11, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.name}>{d.name}</span>
+                  <span style={{ fontSize:11, color:C.no, fontWeight:600, flexShrink:0 }}>{d.deltaPct.toFixed(1)}%</span>
+                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{fmtAda(d.currentAda)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (!trendLoading && (
+          <p className="muted" style={{ fontSize:12 }}>
+            No significant delegation changes found for this period.
+          </p>
+        ))}
+        <p className="muted stats-note">
+          Percentage change in delegated voting power per DRep compared to {trendEpochs} epoch{trendEpochs > 1 ? "s" : ""} ago.
+          Only DReps present in both snapshots are shown.
+        </p>
+      </Section>
+
+      {/* ── DRep Delegation History ───────────────────────────────────────────── */}
+      <Section title="DRep Delegation History" wide>
+        {/* Search */}
+        <div style={{ position:"relative", maxWidth:360, marginBottom:"1rem" }}>
+          <input
+            type="text"
+            placeholder="Search DRep by name or ID…"
+            value={histQuery}
+            onChange={e => { setHistQuery(e.target.value); setHistDropdown(true); }}
+            onFocus={() => setHistDropdown(true)}
+            onBlur={() => setTimeout(() => setHistDropdown(false), 150)}
+            style={{
+              width:"100%", boxSizing:"border-box",
+              background:"#0e1822", border:"1px solid rgba(255,255,255,0.15)",
+              borderRadius:6, padding:"0.45rem 0.75rem",
+              color:"#e8f0f4", fontSize:12, outline:"none"
+            }}
+          />
+          {histDropdown && histMatches.length > 0 && (
+            <div style={{
+              position:"absolute", top:"100%", left:0, right:0, zIndex:20,
+              background:"#1a2530", border:"1px solid rgba(255,255,255,0.15)",
+              borderRadius:6, marginTop:2, overflow:"hidden"
+            }}>
+              {histMatches.map(d => (
+                <div
+                  key={d.id}
+                  onMouseDown={() => { setHistSelected(d); setHistQuery(d.name); setHistDropdown(false); }}
+                  style={{
+                    padding:"0.4rem 0.75rem", fontSize:12, cursor:"pointer",
+                    color: histSelected?.id === d.id ? C.yes : C.text,
+                    background: histSelected?.id === d.id ? "rgba(84,228,188,0.08)" : "transparent"
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.06)"}
+                  onMouseLeave={e => e.currentTarget.style.background=histSelected?.id===d.id?"rgba(84,228,188,0.08)":"transparent"}
+                >
+                  <span style={{ fontWeight:600 }}>{d.name !== d.id ? d.name : ""}</span>
+                  {d.name !== d.id && <span style={{ color:C.muted, marginLeft:6 }}>{d.id.slice(0,22)}…</span>}
+                  {d.name === d.id && <span>{d.id}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Chart */}
+        {histLoading && <p className="muted" style={{ fontSize:12 }}>Loading…</p>}
+        {!histLoading && histData && histData.epochs?.length > 0 && (() => {
+          const chartData = histData.epochs.map(e => ({
+            epoch: e.epoch,
+            ada: e.ada,
+            deltaPct: e.deltaPct
+          }));
+          const CustomTooltip = ({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0].payload;
+            const delta = d.deltaPct;
+            const deltaColor = delta > 0 ? C.yes : delta < 0 ? C.no : C.muted;
+            const deltaStr = delta === null ? "" : delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
+            return (
+              <div style={{
+                background:"#1a2530", border:"1px solid rgba(255,255,255,0.15)",
+                borderRadius:8, padding:"0.5rem 0.75rem", fontSize:12
+              }}>
+                <p style={{ color:C.muted, margin:0, marginBottom:2 }}>Epoch {d.epoch}</p>
+                <p style={{ color:C.text, margin:0, fontWeight:600 }}>{fmtAda(d.ada)}</p>
+                {deltaStr && <p style={{ color:deltaColor, margin:0, marginTop:2 }}>{deltaStr} vs prev epoch</p>}
+              </div>
+            );
+          };
+          const yMax = Math.max(...chartData.map(d => d.ada));
+          return (
+            <div>
+              <p style={{ fontSize:11, color:C.muted, marginBottom:"0.5rem" }}>
+                <span style={{ color:C.text, fontWeight:600 }}>{histData.name}</span>
+                {" · "}{chartData.length} epochs · current: <span style={{ color:C.yes }}>{fmtAda(chartData[chartData.length-1]?.ada)}</span>
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top:4, right:16, bottom:4, left:8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+                  <XAxis dataKey="epoch" tick={{ fill:C.muted, fontSize:S.axisSmall }} />
+                  <YAxis tick={{ fill:C.muted, fontSize:S.axisSmall }} tickFormatter={v => fmtAda(v)} domain={[0, yMax * 1.05]} width={72} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="ada" stroke={C.yes} strokeWidth={2} dot={false} activeDot={{ r:4, fill:C.yes }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
+        {!histLoading && histData && histData.epochs?.length === 0 && (
+          <p className="muted" style={{ fontSize:12 }}>No delegation history found for this DRep.</p>
+        )}
+        {!histSelected && !histLoading && (
+          <p className="muted stats-note">Search for a DRep to see their delegation over time. Hover over the chart to see ADA and % change per epoch.</p>
+        )}
+      </Section>
 
       {/* ── CC section ────────────────────────────────────────────────────────── */}
 

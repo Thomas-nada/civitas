@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
+const { blake2b } = require("@noble/hashes/blake2.js");
 
 function loadDotEnv() {
   const envPath = path.join(__dirname, ".env");
@@ -2054,6 +2055,61 @@ function mergeDrepProfiles(primary, fallback) {
   };
 }
 
+async function fetchRawBytesWithTimeout(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return null;
+    const buf = await response.arrayBuffer();
+    return Buffer.from(buf);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function enrichProposalMetadataWithIpfsFallback(metadata) {
+  if (!metadata || typeof metadata !== "object") return metadata;
+  if (metadata.json_metadata && typeof metadata.json_metadata === "object") return metadata;
+  const url = String(metadata.url || "").trim();
+  if (!url) return metadata;
+
+  // Resolve HTTP URL(s) to try
+  const httpUrls = url.startsWith("ipfs://") ? normalizeIpfsUrl(url) : [url];
+
+  let rawBytes = null;
+  let rawPayload = null;
+  for (const httpUrl of httpUrls) {
+    rawBytes = await fetchRawBytesWithTimeout(httpUrl).catch(() => null);
+    if (rawBytes) {
+      try { rawPayload = JSON.parse(rawBytes.toString("utf8")); } catch { rawPayload = null; }
+      if (rawPayload && typeof rawPayload === "object") break;
+      rawBytes = null;
+    }
+  }
+
+  if (!rawPayload || typeof rawPayload !== "object") return metadata;
+
+  // Verify using BLAKE2b-256 (the algorithm Cardano actually uses for anchor hashes).
+  // Blockfrost incorrectly uses SHA-256 for its own HASH_MISMATCH check, causing false
+  // positives. We recompute here so the warning is only shown for genuine mismatches.
+  let hashMismatch = false;
+  const onChainHash = String(metadata.hash || "").trim().toLowerCase();
+  if (onChainHash && rawBytes) {
+    try {
+      const computed = Buffer.from(blake2b(rawBytes, { dkLen: 32 })).toString("hex");
+      hashMismatch = computed !== onChainHash;
+    } catch {
+      // If hashing fails for any reason, don't show a warning
+      hashMismatch = false;
+    }
+  }
+
+  return { ...metadata, json_metadata: rawPayload, hashMismatch };
+}
+
 async function fetchRawMetadataByUrl(metadataUrl, payloadCache) {
   const url = String(metadataUrl || "").trim();
   if (!url) return null;
@@ -3128,6 +3184,8 @@ function loadSnapshotFromDisk() {
       };
     }
     snapshot = pickBestSnapshotForApi(snapshot);
+    patchMissingProposalEpochs(snapshot);
+    backfillMissingProposalMetadata(snapshot).catch(() => null);
   } catch (error) {
     syncState.lastError = `Failed to read snapshot file: ${error.message}`;
     const latestHistory = readLatestSnapshotFromHistory();
@@ -3990,11 +4048,12 @@ async function buildDeltaSnapshot(base) {
     const detailRows = await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
       const safeId = encodeURIComponent(proposal.id);
       try {
-        const [detail, metadata, txInfo] = await Promise.all([
+        const [detail, rawMetadata, txInfo] = await Promise.all([
           blockfrostGet(`/governance/proposals/${safeId}`),
           blockfrostGet(`/governance/proposals/${safeId}/metadata`).catch(() => null),
           blockfrostGet(`/txs/${proposal.tx_hash}`).catch(() => null)
         ]);
+        const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
         const koiosVotingSummary = koiosSummaryByProposal.get(proposal.id) || null;
         const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
         const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
@@ -4050,7 +4109,7 @@ async function buildDeltaSnapshot(base) {
         outcome: titleCase(outcome),
         submittedAtUnix: blockTime || null,
         submittedAt: blockTime ? new Date(blockTime * 1000).toISOString() : null,
-        submittedEpoch: row.detail?.block_epoch || Number(row.koiosVotingSummary?.epoch_no || 0) || null,
+        submittedEpoch: row.detail?.block_epoch || Number(row.koiosVotingSummary?.epoch_no || 0) || (blockTime > 0 ? 208 + Math.floor((blockTime - 1596059091) / 432000) : null),
         txHash: row.detail?.tx_hash || null,
         certIndex: row.detail?.cert_index ?? null,
         depositAda: row.detail?.deposit ? Math.floor(Number(row.detail.deposit) / 1_000_000) : 0,
@@ -4399,11 +4458,12 @@ async function buildFullSnapshot() {
     const detailRows = await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
       const safeId = encodeURIComponent(proposal.id);
       try {
-        const [detail, metadata, txInfo] = await Promise.all([
+        const [detail, rawMetadata, txInfo] = await Promise.all([
           blockfrostGet(`/governance/proposals/${safeId}`),
           blockfrostGet(`/governance/proposals/${safeId}/metadata`).catch(() => null),
           blockfrostGet(`/txs/${proposal.tx_hash}`).catch(() => null)
         ]);
+        const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
         const koiosVotingSummary = koiosSummaryByProposal.get(proposal.id) || null;
         const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
         const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
@@ -4485,7 +4545,7 @@ async function buildFullSnapshot() {
         outcome: titleCase(outcome),
         submittedAtUnix: row.blockTime || null,
         submittedAt: row.blockTime ? new Date(row.blockTime * 1000).toISOString() : null,
-        submittedEpoch: row.blockEpoch || Number(row.koiosVotingSummary?.epoch_no || 0) || null,
+        submittedEpoch: row.blockEpoch || Number(row.koiosVotingSummary?.epoch_no || 0) || (row.blockTime > 0 ? 208 + Math.floor((row.blockTime - 1596059091) / 432000) : null),
         txHash: row.detail?.tx_hash || null,
         certIndex: row.detail?.cert_index ?? null,
         depositAda: row.detail?.deposit ? Math.floor(Number(row.detail.deposit) / 1_000_000) : 0,
@@ -5372,12 +5432,55 @@ async function buildFullSnapshot() {
   };
 }
 
+/** Compute submittedEpoch from submittedAtUnix for any proposal that is missing it. */
+function patchMissingProposalEpochs(snapshotObj) {
+  const proposals = snapshotObj?.proposalInfo;
+  if (!proposals || typeof proposals !== "object") return;
+  const SHELLEY_START = 1596059091;
+  const EPOCH_SECS = 432000;
+  for (const p of Object.values(proposals)) {
+    if (!p || p.submittedEpoch) continue;
+    const unix = Number(p.submittedAtUnix || 0);
+    if (unix > 0) {
+      p.submittedEpoch = 208 + Math.floor((unix - SHELLEY_START) / EPOCH_SECS);
+    }
+  }
+}
+
+/** Re-fetch IPFS metadata for proposals that have a URL but no metadataJson. Runs in background. */
+async function backfillMissingProposalMetadata(snapshotObj) {
+  const proposals = snapshotObj?.proposalInfo;
+  if (!proposals || typeof proposals !== "object") return;
+  const missing = Object.values(proposals).filter(
+    (p) => p && !p.metadataJson && p.metadataUrl && typeof p.metadataUrl === "string"
+  );
+  if (missing.length === 0) return;
+  const cache = new Map();
+  for (const p of missing) {
+    try {
+      const raw = await fetchRawMetadataByUrl(p.metadataUrl, cache).catch(() => null);
+      if (!raw || typeof raw !== "object") continue;
+      p.metadataJson = raw;
+      const resolved = resolveNameFromRawMetadata(raw);
+      if (resolved) {
+        const body = raw.body && typeof raw.body === "object" ? raw.body : raw;
+        p.actionName = resolved;
+        if (!p.rationale && body.rationale) p.rationale = String(body.rationale).slice(0, 4000);
+      }
+    } catch {
+      // best-effort
+    }
+  }
+}
+
 function publishSnapshot(payload) {
   if (!payload || typeof payload !== "object") return;
   snapshot = payload;
   // Always recompute thresholds so code changes take effect without a
   // manual snapshot wipe.
   refreshAllThresholdInfo(snapshot);
+  patchMissingProposalEpochs(snapshot);
+  backfillMissingProposalMetadata(snapshot).catch(() => null);
   saveSnapshotToDisk(snapshot);
   saveSeedSnapshotToDisk(snapshot);
   warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
@@ -5849,6 +5952,103 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/drep-delegation-history") {
+    const drepId = String(url.searchParams.get("id") || "").trim();
+    if (!drepId) {
+      json(res, 400, { error: "id parameter required" });
+      return;
+    }
+
+    // Fetch all epochs for this DRep from Koios
+    const rows = [];
+    const limit = 1000;
+    let offset = 0;
+    while (offset < 10000) {
+      const query = `/drep_history?drep_id=eq.${encodeURIComponent(drepId)}&order=epoch_no.asc&limit=${limit}&offset=${offset}`;
+      const page = await koiosGet(query).catch(() => []);
+      if (!Array.isArray(page) || page.length === 0) break;
+      rows.push(...page);
+      if (page.length < limit) break;
+      offset += page.length;
+    }
+
+    const epochs = rows
+      .filter((r) => Number.isFinite(Number(r?.epoch_no)))
+      .map((r) => ({ epoch: Number(r.epoch_no), ada: Number(r.amount || 0) / 1_000_000 }))
+      .sort((a, b) => a.epoch - b.epoch);
+
+    // Compute delta vs previous epoch entry
+    for (let i = 0; i < epochs.length; i++) {
+      const prev = i > 0 ? epochs[i - 1].ada : null;
+      if (prev === null) { epochs[i].deltaPct = null; }
+      else if (prev <= 0) { epochs[i].deltaPct = epochs[i].ada > 0 ? 100 : 0; }
+      else { epochs[i].deltaPct = ((epochs[i].ada - prev) / prev) * 100; }
+    }
+
+    // Resolve DRep name from current snapshot
+    const drepRow = (snapshot?.dreps || []).find((d) => String(d.id || "") === drepId);
+    const name = (drepRow?.name || "").trim() || drepId;
+
+    json(res, 200, { id: drepId, name, epochs });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/drep-delegation-trend") {
+    const epochs = Math.min(50, Math.max(1, Number(url.searchParams.get("epochs") || 5)));
+    const currentEpoch = Number(snapshot?.latestEpoch || 0);
+
+    if (!currentEpoch || !Array.isArray(snapshot?.dreps)) {
+      json(res, 503, { error: "Snapshot not available" });
+      return;
+    }
+
+    const targetEpoch = currentEpoch - epochs;
+    const SPECIAL_IDS = new Set(Object.values(SPECIAL_DREP_IDS));
+    let comparedEpoch = null;
+    let histPowerById = new Map();
+
+    // Try pre-built snapshot file first
+    const historyFiles = listSnapshotHistoryFiles()
+      .filter((row) => row.epoch > 0 && row.epoch <= targetEpoch)
+      .sort((a, b) => b.epoch - a.epoch);
+
+    const histFile = historyFiles[0] || null;
+    const histSnapshot = histFile ? readSnapshotFromHistory(histFile.name) : null;
+
+    if (histSnapshot) {
+      comparedEpoch = histFile.epoch;
+      for (const d of (histSnapshot.dreps || [])) {
+        const id = String(d.id || "").trim();
+        if (!id || SPECIAL_IDS.has(id)) continue;
+        histPowerById.set(id, Number(d.votingPowerAda || 0));
+      }
+    } else {
+      // Fall back to live Koios drep_history for the target epoch
+      comparedEpoch = targetEpoch;
+      histPowerById = await fetchDrepPowerForEpoch(targetEpoch).catch(() => new Map());
+    }
+
+    const deltas = [];
+    for (const d of snapshot.dreps) {
+      const id = String(d.id || "").trim();
+      if (!id || SPECIAL_IDS.has(id)) continue;
+      const current = Number(d.votingPowerAda || 0);
+      if (!histPowerById.has(id)) continue; // skip new DReps (no baseline to compare)
+      const previous = histPowerById.get(id);
+      if (previous <= 0 && current <= 0) continue;
+      const deltaAda = current - previous;
+      const deltaPct = previous > 0 ? (deltaAda / previous) * 100 : 100;
+      const label = (d.name || "").trim() || (id.length > 20 ? id.slice(0, 16) + "…" : id);
+      deltas.push({ id, name: label, currentAda: current, previousAda: previous, deltaAda, deltaPct });
+    }
+
+    const gainers = deltas.filter((d) => d.deltaAda > 0).sort((a, b) => b.deltaPct - a.deltaPct).slice(0, 10);
+    const losers  = deltas.filter((d) => d.deltaAda < 0).sort((a, b) => a.deltaPct - b.deltaPct).slice(0, 10);
+
+    json(res, 200, { currentEpoch, comparedEpoch, periods: epochs, gainers, losers });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/ncl") {
     const periodKey = String(url.searchParams.get("period") || "current").trim().toLowerCase();
     const summary = await fetchNclSummary(periodKey, { allowStale: true, refreshInBackground: true });
@@ -6054,13 +6254,41 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const metadata = await blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`);
+      const [rawMetadata, rawDetail] = await Promise.all([
+        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
+        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
+      ]);
+      const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
+
+      // Blockfrost's governance proposals endpoint has no submitted epoch field.
+      // Derive it from the transaction's block_time using the Shelley epoch formula.
+      let submittedEpoch = null;
+      const txHash = rawDetail?.tx_hash ?? null;
+      if (txHash) {
+        const txInfo = await blockfrostGet(`/txs/${txHash}`).catch(() => null);
+        const blockTime = Number(txInfo?.block_time || 0);
+        if (blockTime > 0) {
+          const SHELLEY_EPOCH_208_START = 1596059091;
+          const EPOCH_SECONDS = 5 * 24 * 60 * 60;
+          submittedEpoch = 208 + Math.floor((blockTime - SHELLEY_EPOCH_208_START) / EPOCH_SECONDS);
+        }
+      }
+
       json(res, 200, {
         ok: true,
         proposalId,
         json_metadata: metadata?.json_metadata || null,
         url: metadata?.url || "",
-        hash: metadata?.hash || ""
+        hash: metadata?.hash || "",
+        hashMismatch: metadata?.hashMismatch || false,
+        submittedEpoch,
+        expirationEpoch: rawDetail?.expiration ?? null,
+        enactedEpoch: rawDetail?.enacted_epoch ?? null,
+        ratifiedEpoch: rawDetail?.ratified_epoch ?? null,
+        droppedEpoch: rawDetail?.dropped_epoch ?? null,
+        expiredEpoch: rawDetail?.expired_epoch ?? null,
+        txHash,
+        governanceType: rawDetail?.governance_type ?? null,
       });
       return;
     } catch (error) {

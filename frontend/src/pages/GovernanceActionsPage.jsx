@@ -1190,13 +1190,14 @@ export default function GovernanceActionsPage() {
                 <th>Type</th>
                 <th>Status</th>
                 <th>Submitted</th>
+                <th>Expires</th>
                 <th>Yes / No (active)</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     No governance actions match these filters.
                   </td>
                 </tr>
@@ -1225,11 +1226,11 @@ export default function GovernanceActionsPage() {
                     <td data-label="Submitted">
                       {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
                       {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
-                      {row.isExpiringSoon && row.expirationEpoch ? (
-                        <div className="expiring-inline-note">
-                          Expires by epoch {row.expirationEpoch}
-                        </div>
-                      ) : null}
+                    </td>
+                    <td data-label="Expires">
+                      {row.expirationEpoch ? <span>Epoch {row.expirationEpoch}</span> : <span className="muted">—</span>}
+                      {row.expirationEpoch ? <div className="muted">{formatEpochDate(row.expirationEpoch)}</div> : null}
+                      {row.isExpiringSoon ? <div className="expiring-inline-note">{Math.max(0, Number(row.epochsUntilExpiration || 0))} ep left</div> : null}
                     </td>
                     <td data-label="Yes / No (active)">
                       {asPct(row.drepYesPowerPct)} / {asPct(row.drepNoPowerPct)}
