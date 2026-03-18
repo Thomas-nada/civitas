@@ -1484,7 +1484,7 @@ export default function GuidePage() {
             <p>
               <strong>CC score</strong>:{" "}
               <code>
-                0.45*Attendance + 0.35*RationaleQuality + 0.10*Responsiveness
+                0.55*Attendance + 0.45*RationaleQuality
               </code>
             </p>
             <p>

@@ -20,9 +20,8 @@ const SPO_SCORE_WEIGHTS = {
   responsiveness: 0.1
 };
 const COMMITTEE_SCORE_WEIGHTS = {
-  attendance: 0.45,
-  rationaleQuality: 0.35,
-  responsiveness: 0.1
+  attendance: 0.55,
+  rationaleQuality: 0.45
 };
 const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
 const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
@@ -207,7 +206,7 @@ function accountabilityTooltip(
     return [
       "Committee accountability score:",
       "Weighted average of enabled metrics.",
-      "Weights: Attendance 45%, Rationale quality 35%, Responsiveness 10%.",
+      "Weights: Attendance 55%, Rationale quality 45%.",
       `Current score: ${Number(row?.accountability || 0)}%`
     ].join("\n");
   }
@@ -956,10 +955,9 @@ export default function DashboardPage({ actorType }) {
         const wResponsiveness = (isDrep || isSpo) && includeResponsiveness ? actorWeights.responsiveness : 0;
         const wDelegationRisk = isDrep && includeDelegationRisk ? DREP_SCORE_WEIGHTS.delegationRisk : 0;
         const wRationaleQuality = isCommittee && includeAlignment ? COMMITTEE_SCORE_WEIGHTS.rationaleQuality : 0;
-        const wCcResponsiveness = isCommittee && includeResponsiveness ? COMMITTEE_SCORE_WEIGHTS.responsiveness : 0;
-        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness + wDelegationRisk + wRationaleQuality + wCcResponsiveness;
+        const activeWeight = wAttendance + wTransparency + wAlignment + wResponsiveness + wDelegationRisk + wRationaleQuality;
         const weighted = isCommittee
-          ? attendance * wAttendance + committeeQuality * wRationaleQuality + responsiveness * wCcResponsiveness
+          ? attendance * wAttendance + committeeQuality * wRationaleQuality
           : attendance * wAttendance +
             transparency * wTransparency +
             consistencyMetric * wAlignment +
@@ -1098,11 +1096,11 @@ export default function DashboardPage({ actorType }) {
   }, [rationaleModal?.open, profileImageOpen, highRiskDelegationModalOpen, useModalDetails, selectedId]);
 
   const selected = rows.find((r) => r.id === selectedId);
-  const showResponsivenessColumn = isDrep || isSpo || isCommittee;
+  const showResponsivenessColumn = isDrep || isSpo;
   const showTransparencyColumn = !isCommittee;
   const transparencyLabel = "Transparency";
   const alignmentLabel = isCommittee ? "Rationale Quality" : "Alignment";
-  const tableColSpan = isCommittee ? 8 : isDrep ? 8 : showResponsivenessColumn ? 7 : 6;
+  const tableColSpan = isCommittee ? 7 : isDrep ? 8 : showResponsivenessColumn ? 7 : 6;
 
   function actorProfilePath(actorId) {
     const base = isDrep ? "/dreps" : isSpo ? "/spos" : "/committee";
@@ -1472,7 +1470,7 @@ export default function DashboardPage({ actorType }) {
             {isCommittee ? "Include Rationale Quality In Score" : "Include Alignment In Score"}
             <input type="checkbox" checked={includeAlignment} onChange={(e) => setIncludeAlignment(e.target.checked)} />
           </label>
-          {(isDrep || isSpo || isCommittee) ? (
+          {(isDrep || isSpo) ? (
             <label className="toggle dashboard-toggle">
               Include Responsiveness In Score
               <input type="checkbox" checked={includeResponsiveness} onChange={(e) => setIncludeResponsiveness(e.target.checked)} />
@@ -1829,7 +1827,7 @@ export default function DashboardPage({ actorType }) {
                                 <MetricInfo text={abstainTooltip(selected)} label="Abstain calculation" />
                               </span>
                             </p>
-                            {(isDrep || isSpo || isCommittee) ? (
+                            {(isDrep || isSpo) ? (
                               <p>
                                 Avg response time:{" "}
                                 <span className="metric-value-with-info">
