@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -261,19 +262,21 @@ function VoteMixPie({ group, info }) {
   const ccCastCount = yes + no + abstain;
   const ccEligibleCount = Math.max(Number(info?.ccEligibleCount || 0), 0);
   const ccNotVotedCount = Math.max(ccEligibleCount - ccCastCount, 0);
-  const ccDenominator = ccEligibleCount > 0 ? ccEligibleCount : total;
+  // Abstaining members are excluded from the quorum denominator per Cardano spec:
+  // required yes = ceil(threshold × (eligible − abstain))
+  const ccOutcomeBase = Math.max(ccEligibleCount - abstain, yes + no + ccNotVotedCount);
+  const ccDenominator = ccOutcomeBase > 0 ? ccOutcomeBase : total;
   const defaultYesPct = total > 0 ? (yes / total) * 100 : 0;
   const defaultNoPct = total > 0 ? (no / total) * 100 : 0;
   const defaultAbstainPct = total > 0 ? (abstain / total) * 100 : 0;
   const defaultOtherPct = Math.max(0, 100 - defaultYesPct - defaultNoPct - defaultAbstainPct);
   const ccYesPct = ccDenominator > 0 ? (yes / ccDenominator) * 100 : 0;
   const ccNoPct = ccDenominator > 0 ? (no / ccDenominator) * 100 : 0;
-  const ccAbstainPct = ccDenominator > 0 ? (abstain / ccDenominator) * 100 : 0;
   const ccNotVotedPct = ccDenominator > 0 ? (ccNotVotedCount / ccDenominator) * 100 : 0;
 
   const pieYesPct = isCommittee ? ccYesPct : (isDrep ? drepYesPct : (isSpo ? spoYesPctDisplay : defaultYesPct));
   const pieNoPct = isCommittee ? ccNoPct : (isDrep ? drepNoPct : (isSpo ? spoNoPctDisplay : defaultNoPct));
-  const pieAbstainPct = isCommittee ? ccAbstainPct : (isDrep ? 0 : (isSpo ? 0 : defaultAbstainPct));
+  const pieAbstainPct = isCommittee ? 0 : (isDrep ? 0 : (isSpo ? 0 : defaultAbstainPct));
   const pieOtherPct = isCommittee ? ccNotVotedPct : (isDrep ? drepNotVotedPct : (isSpo ? 0 : defaultOtherPct));
 
   const thresholdPct = isDrep
@@ -359,34 +362,45 @@ export default function ProposalDetailPage() {
   const [rationaleFilter, setRationaleFilter] = useState("all");
   const [voteSearch, setVoteSearch] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const params = new URLSearchParams();
-        if (snapshotKey) params.set("snapshot", snapshotKey);
-        params.set("view", "all");
-        const res = await fetch(`${API_BASE}/api/accountability?${params.toString()}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load proposal.");
-        if (!cancelled) setPayload(data);
+  const silentRefreshRef = useRef(false);
 
-        const mRes = await fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`);
-        const mData = await mRes.json().catch(() => ({}));
-        if (!cancelled && mRes.ok) setMetadata(mData);
-      } catch (e) {
-        if (!cancelled) setError(e.message || "Failed to load proposal.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (snapshotKey) params.set("snapshot", snapshotKey);
+      params.set("view", "all");
+      const res = await fetch(`${API_BASE}/api/accountability?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load proposal.");
+      setPayload(data);
+
+      const mRes = await fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`);
+      const mData = await mRes.json().catch(() => ({}));
+      if (mRes.ok) setMetadata(mData);
+    } catch (e) {
+      if (!silent) setError(e.message || "Failed to load proposal.");
+    } finally {
+      if (!silent) setLoading(false);
+      silentRefreshRef.current = false;
+    }
   }, [decodedProposalId, snapshotKey]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Live updates via SSE — silently refresh when server publishes a new snapshot.
+  const { isLive, lastUpdatedAt } = useSnapshotUpdates({
+    enabled: !snapshotKey,
+    onUpdate: () => {
+      if (!silentRefreshRef.current) {
+        silentRefreshRef.current = true;
+        loadData({ silent: true });
+      }
+    },
+  });
 
   const snapshotInfo = payload?.proposalInfo?.[decodedProposalId] || null;
   // Supplement snapshot fields that may be null with live values from the metadata endpoint.
@@ -547,7 +561,20 @@ export default function ProposalDetailPage() {
     <main className="page shell stats-page">
       <section className="page-head">
         <p className="eyebrow">Proposal Detail</p>
-        <h1>{payloadDoc.title || info.actionName || decodedProposalId}</h1>
+        <div className="hero-title-row">
+          <h1>{payloadDoc.title || info?.actionName || decodedProposalId}</h1>
+          {!snapshotKey && (
+            <span
+              className={`live-badge${isLive ? " live-badge--live" : ""}`}
+              title={isLive ? "Receiving live updates via SSE" : "Waiting for server connection…"}
+            >
+              {isLive ? "● Live" : "○ Connecting…"}
+              {lastUpdatedAt && (
+                <> · updated {Math.round((Date.now() - lastUpdatedAt.getTime()) / 1000)}s ago</>
+              )}
+            </span>
+          )}
+        </div>
         <p className="mono">{decodedProposalId}</p>
         <p><Link className="inline-link" to={`/actions${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`}>Back to actions</Link></p>
       </section>
