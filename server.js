@@ -6263,6 +6263,37 @@ function label17SurveyFromEntry(entry, txInfo) {
   };
 }
 
+function label17ResolveResponseWeight(response, weighting) {
+  if (weighting === "StakeBased") {
+    const stakeAda = Number(response?.responseStakeAda || 0);
+    return Number.isFinite(stakeAda) && stakeAda > 0 ? stakeAda : 0;
+  }
+  if (weighting === "PledgeBased") {
+    const pledgeAda = Number(response?.responsePledgeAda || 0);
+    return Number.isFinite(pledgeAda) && pledgeAda > 0 ? pledgeAda : 0;
+  }
+  return 1;
+}
+
+function label17FormatRangeLabel(lo, hi, isLast) {
+  const loText = Number.isInteger(lo) ? String(lo) : lo.toFixed(2);
+  const hiText = Number.isInteger(hi) ? String(hi) : hi.toFixed(2);
+  return isLast ? `${loText}-${hiText}` : `${loText}-${hiText}`;
+}
+
+function label17WeightedMedian(pairs) {
+  if (!Array.isArray(pairs) || pairs.length === 0) return null;
+  const totalWeight = pairs.reduce((sum, pair) => sum + Number(pair?.weight || 0), 0);
+  if (!(totalWeight > 0)) return null;
+  const sorted = [...pairs].sort((a, b) => Number(a?.value || 0) - Number(b?.value || 0));
+  let cumulative = 0;
+  for (const pair of sorted) {
+    cumulative += Number(pair?.weight || 0);
+    if (cumulative >= totalWeight / 2) return Number(pair?.value || 0);
+  }
+  return Number(sorted[sorted.length - 1]?.value || 0);
+}
+
 async function fetchSurveyByTxHash(txHash) {
   const safeHash = String(txHash || "").trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(safeHash)) return null;
@@ -6315,6 +6346,8 @@ async function _runLabel17Build() {
   const responsesBySurvey = {};
   const txInfoCache = {};
   const utxoCache = {};
+  const addressInfoCache = {};
+  const accountCache = {};
 
   // Fetch tx info in parallel batches of 10
   const txHashes = [...new Set(relevantEntries.map((e) => e.tx_hash).filter(Boolean))];
@@ -6353,6 +6386,23 @@ async function _runLabel17Build() {
         utxoCache[txHash] = await blockfrostGet(`/txs/${txHash}/utxos`).catch(() => null);
       }
       const inputAddress = utxoCache[txHash]?.inputs?.[0]?.address ?? null;
+      let rewardAddress = null;
+      if (typeof inputAddress === "string" && inputAddress.startsWith("stake")) {
+        rewardAddress = inputAddress;
+      } else if (typeof inputAddress === "string" && inputAddress) {
+        if (!addressInfoCache[inputAddress]) {
+          addressInfoCache[inputAddress] = await blockfrostGet(`/addresses/${inputAddress}`).catch(() => null);
+        }
+        rewardAddress = addressInfoCache[inputAddress]?.stake_address ?? null;
+      }
+
+      let responseStakeAda = 0;
+      if (typeof rewardAddress === "string" && rewardAddress) {
+        if (!accountCache[rewardAddress]) {
+          accountCache[rewardAddress] = await blockfrostGet(`/accounts/${rewardAddress}`).catch(() => null);
+        }
+        responseStakeAda = Number(accountCache[rewardAddress]?.controlled_amount || 0) / 1_000_000;
+      }
 
       try {
         const restored = label17FromMeta(meta);
@@ -6369,7 +6419,9 @@ async function _runLabel17Build() {
           surveyTxId: resp.surveyTxId,
           answers: resp.answers ?? [],
           specVersion: resp.specVersion,
-          responseCredential: inputAddress ?? txHash,
+          rewardAddress,
+          responseStakeAda: Number.isFinite(responseStakeAda) ? responseStakeAda : 0,
+          responseCredential: rewardAddress ?? inputAddress ?? txHash,
         });
       } catch { /* skip malformed */ }
     }
@@ -6393,7 +6445,7 @@ const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
 function label17TallySurvey(details, responses) {
   const questions = details?.questions ?? [];
   if (questions.length === 0 || responses.length === 0) {
-    return { totalResponses: 0, uniqueCredentials: 0, roleTallies: [], questionTallies: [] };
+    return { totalResponses: 0, uniqueCredentials: 0, totalWeight: 0, roleTallies: [], questionTallies: [] };
   }
 
   // Deduplicate: latest-response-wins per (role, credential)
@@ -6407,13 +6459,16 @@ function label17TallySurvey(details, responses) {
   const roleWeighting = details.roleWeighting ?? {};
   const roleTallies = Object.entries(roleWeighting).map(([role, weighting]) => {
     const roleResps = deduped.filter((r) => r.responderRole === role);
+    const roleWeightTotal = roleResps.reduce((sum, response) => sum + label17ResolveResponseWeight(response, weighting), 0);
     const questionTallies = questions.map((q) => {
       const qt = {
         questionId: q.questionId,
         question: q.question,
         methodType: q.methodType,
+        weighted: weighting === "StakeBased" || weighting === "PledgeBased",
+        weighting,
         optionTallies: (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT)
-          ? (q.options ?? []).map((label, index) => ({ index, label, count: 0 }))
+          ? (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 }))
           : undefined,
         numericTally: null,
         customTexts: (q.methodType !== METHOD_SINGLE_CHOICE && q.methodType !== METHOD_MULTI_SELECT && q.methodType !== METHOD_NUMERIC_RANGE)
@@ -6424,23 +6479,32 @@ function label17TallySurvey(details, responses) {
       for (const r of roleResps) {
         const answer = (r.answers ?? []).find((a) => a.questionId === q.questionId);
         if (!answer) continue;
+        const responseWeight = label17ResolveResponseWeight(r, weighting);
         if (qt.optionTallies) {
           for (const idx of (answer.selection ?? [])) {
-            if (idx >= 0 && idx < qt.optionTallies.length) qt.optionTallies[idx].count++;
+            if (idx >= 0 && idx < qt.optionTallies.length) {
+              qt.optionTallies[idx].count++;
+              qt.optionTallies[idx].weight += responseWeight;
+            }
           }
         } else if (q.methodType === METHOD_NUMERIC_RANGE && answer.numericValue != null) {
-          numericValues.push(answer.numericValue);
+          numericValues.push({ value: Number(answer.numericValue), weight: responseWeight });
         } else if (qt.customTexts != null && answer.customValue != null) {
           qt.customTexts.push(typeof answer.customValue === "string" ? answer.customValue : JSON.stringify(answer.customValue));
         }
       }
 
       if (q.methodType === METHOD_NUMERIC_RANGE && numericValues.length > 0) {
-        const sorted = [...numericValues].sort((a, b) => a - b);
-        const mean = numericValues.reduce((s, v) => s + v, 0) / numericValues.length;
+        const sorted = [...numericValues].sort((a, b) => a.value - b.value);
+        const rawValues = sorted.map((entry) => entry.value);
+        const totalWeight = sorted.reduce((sum, entry) => sum + Number(entry.weight || 0), 0);
+        const weightedMeanBase = sorted.reduce((sum, entry) => sum + (entry.value * Number(entry.weight || 0)), 0);
+        const mean = totalWeight > 0 ? weightedMeanBase / totalWeight : rawValues.reduce((s, v) => s + v, 0) / rawValues.length;
         const mid = Math.floor(sorted.length / 2);
-        const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-        const nc = q.numericConstraints ?? { minValue: sorted[0], maxValue: sorted[sorted.length - 1] };
+        const median = totalWeight > 0
+          ? label17WeightedMedian(sorted)
+          : (sorted.length % 2 === 0 ? (sorted[mid - 1].value + sorted[mid].value) / 2 : sorted[mid].value);
+        const nc = q.numericConstraints ?? { minValue: rawValues[0], maxValue: rawValues[rawValues.length - 1] };
         const range = nc.maxValue - nc.minValue;
         const binCount = Math.max(1, Math.min(10, range + 1));
         const binSize = range / binCount || 1;
@@ -6448,20 +6512,43 @@ function label17TallySurvey(details, responses) {
         for (let i = 0; i < binCount; i++) {
           const lo = nc.minValue + i * binSize;
           const hi = i === binCount - 1 ? nc.maxValue : nc.minValue + (i + 1) * binSize;
-          bins.push({ range: `${Math.round(lo)}-${Math.round(hi)}`, count: numericValues.filter((v) => i === binCount - 1 ? v >= lo && v <= hi : v >= lo && v < hi).length });
+          const inBin = sorted.filter((entry) => i === binCount - 1
+            ? entry.value >= lo && entry.value <= hi
+            : entry.value >= lo && entry.value < hi);
+          bins.push({
+            range: label17FormatRangeLabel(lo, hi, i === binCount - 1),
+            count: inBin.length,
+            weight: inBin.reduce((sum, entry) => sum + Number(entry.weight || 0), 0)
+          });
         }
-        qt.numericTally = { values: numericValues, mean, median, min: sorted[0], max: sorted[sorted.length - 1], bins };
+        qt.numericTally = {
+          values: rawValues,
+          mean,
+          median,
+          min: rawValues[0],
+          max: rawValues[rawValues.length - 1],
+          totalWeight,
+          weighted: qt.weighted,
+          bins
+        };
       }
 
       return qt;
     });
 
-    return { role, weighting, responses: roleResps.length, questionTallies };
+    return {
+      role,
+      weighting,
+      responses: roleResps.length,
+      totalWeight: roleWeightTotal,
+      questionTallies
+    };
   });
 
   return {
     totalResponses: responses.length,
     uniqueCredentials: deduped.length,
+    totalWeight: roleTallies.reduce((sum, row) => sum + Number(row.totalWeight || 0), 0),
     roleTallies,
     questionTallies: roleTallies.find((r) => r.responses > 0)?.questionTallies ?? [],
   };

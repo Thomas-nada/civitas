@@ -22,6 +22,15 @@ function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+function fmtAda(value, opts = {}) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "—";
+  return `${amount.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: opts.compact ? 1 : 2,
+  })} ADA`;
+}
+
 function shortAddr(addr) {
   if (!addr || addr.length < 16) return addr || "—";
   return `${addr.slice(0, 10)}…${addr.slice(-8)}`;
@@ -64,20 +73,25 @@ function PendingPoller({ onFound }) {
 
 // ── Tally charts ────────────────────────────────────────────────────────────
 
-function OptionTallyChart({ optionTallies, totalResponses }) {
+function OptionTallyChart({ optionTallies, totalResponses, totalWeight = 0, weighted = false }) {
   if (!optionTallies || optionTallies.length === 0) return <p className="muted">No responses yet.</p>;
-  const max = Math.max(...optionTallies.map((o) => o.count), 1);
+  const metricKey = weighted ? "weight" : "count";
+  const max = Math.max(...optionTallies.map((o) => Number(o?.[metricKey] || 0)), 1);
+  const totalMetric = weighted ? totalWeight : totalResponses;
   return (
     <div className="option-tally-list">
       {optionTallies.map((opt) => (
         <div key={opt.index} className="option-tally-row">
           <span className="option-tally-label">{opt.label}</span>
           <div className="option-tally-bar-wrap">
-            <div className="option-tally-bar" style={{ width: `${(opt.count / max) * 100}%` }} />
+            <div className="option-tally-bar" style={{ width: `${((Number(opt?.[metricKey] || 0) / max) * 100)}%` }} />
           </div>
-          <span className="option-tally-count">{opt.count}</span>
-          <span className="muted" style={{ fontSize: "0.8rem" }}>
-            {totalResponses > 0 ? `${((opt.count / totalResponses) * 100).toFixed(1)}%` : "—"}
+          <div className="option-tally-stat">
+            <span className="option-tally-count">{weighted ? fmtAda(opt.weight, { compact: true }) : opt.count}</span>
+            {weighted ? <span className="muted option-tally-subcount">{opt.count} responses</span> : null}
+          </div>
+          <span className="muted option-tally-percent">
+            {totalMetric > 0 ? `${((Number(opt?.[metricKey] || 0) / totalMetric) * 100).toFixed(1)}%` : "—"}
           </span>
         </div>
       ))}
@@ -87,27 +101,31 @@ function OptionTallyChart({ optionTallies, totalResponses }) {
 
 function NumericTallyChart({ numericTally }) {
   if (!numericTally || numericTally.values.length === 0) return <p className="muted">No responses yet.</p>;
+  const weighted = Boolean(numericTally.weighted);
+  const barKey = weighted ? "weight" : "count";
   return (
     <div>
       <div className="numeric-tally-stats">
-        <span>Mean: <strong>{numericTally.mean.toFixed(2)}</strong></span>
+        <span>{weighted ? "Weighted mean" : "Mean"}: <strong>{numericTally.mean.toFixed(2)}</strong></span>
         <span>Median: <strong>{numericTally.median.toFixed(2)}</strong></span>
         <span>Min: <strong>{numericTally.min}</strong></span>
         <span>Max: <strong>{numericTally.max}</strong></span>
         <span>Responses: <strong>{numericTally.values.length}</strong></span>
+        {weighted ? <span>Counted stake: <strong>{fmtAda(numericTally.totalWeight, { compact: true })}</strong></span> : null}
       </div>
       {numericTally.bins?.length > 0 && (
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={numericTally.bins} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
             <XAxis dataKey="range" tick={{ fill: "rgba(200,200,210,0.75)", fontSize: 10 }} />
-            <YAxis allowDecimals={false} tick={{ fill: "rgba(200,200,210,0.75)", fontSize: 10 }} />
+            <YAxis allowDecimals={weighted} tick={{ fill: "rgba(200,200,210,0.75)", fontSize: 10 }} />
             <Tooltip
               contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
               labelStyle={{ color: "rgba(200,200,210,0.9)" }}
               itemStyle={{ color: "rgba(200,200,210,0.85)" }}
+              formatter={(value) => weighted ? fmtAda(value, { compact: true }) : value}
             />
-            <Bar dataKey="count" fill="var(--mint)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey={barKey} fill="var(--mint)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -115,18 +133,21 @@ function NumericTallyChart({ numericTally }) {
   );
 }
 
-function QuestionTallyCard({ qt, totalResponses }) {
+function QuestionTallyCard({ qt, totalResponses, totalWeight }) {
   const isChoice = qt.methodType === METHOD_SINGLE_CHOICE || qt.methodType === METHOD_MULTI_SELECT;
   const isNumeric = qt.methodType === METHOD_NUMERIC_RANGE;
   return (
     <div className="panel question-tally-card">
-      <p className="muted" style={{ fontSize: "0.78rem", marginBottom: "0.3rem" }}>
-        {qt.methodType === METHOD_SINGLE_CHOICE ? "Single choice" :
-         qt.methodType === METHOD_MULTI_SELECT  ? "Multi-select" :
-         qt.methodType === METHOD_NUMERIC_RANGE ? "Numeric range" : "Custom"}
-      </p>
+      <div className="question-tally-header">
+        <p className="muted question-tally-method">
+          {qt.methodType === METHOD_SINGLE_CHOICE ? "Single choice" :
+           qt.methodType === METHOD_MULTI_SELECT  ? "Multi-select" :
+           qt.methodType === METHOD_NUMERIC_RANGE ? "Numeric range" : "Custom"}
+        </p>
+        {qt.weighted ? <span className="question-tally-weight-badge">Weighted by stake</span> : null}
+      </div>
       <h4>{qt.question}</h4>
-      {isChoice   ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} /> : null}
+      {isChoice   ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
       {isNumeric  ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
       {qt.customTexts?.length > 0 ? (
         <ul className="custom-text-list">
@@ -358,6 +379,9 @@ export default function SurveyDetailPage() {
     : roleTallies.find((r) => r.responses > 0) ?? roleTallies[0];
   const questionTallies = visibleTally?.questionTallies ?? tally.questionTallies ?? [];
   const tallyResponseCount = visibleTally?.responses ?? tally.totalResponses ?? 0;
+  const tallyWeight = visibleTally?.totalWeight ?? tally.totalWeight ?? 0;
+  const showStakeWeight = roleTallies.some((row) => row.weighting === "StakeBased" && Number(row.totalWeight || 0) > 0)
+    || responses.some((response) => Number(response.responseStakeAda || 0) > 0);
 
   if (loading) return (
     <main className="shell">
@@ -421,6 +445,12 @@ export default function SurveyDetailPage() {
           <span className="muted">Total responses</span>
           <strong>{tally.totalResponses ?? 0}</strong>
         </div>
+        {showStakeWeight ? (
+          <div className="survey-meta-item">
+            <span className="muted">Counted stake</span>
+            <strong>{fmtAda(tally.totalWeight ?? 0, { compact: true })}</strong>
+          </div>
+        ) : null}
         <div className="survey-meta-item">
           <span className="muted">Created</span>
           <strong>{fmtDate(survey?.blockTime)}</strong>
@@ -462,7 +492,7 @@ export default function SurveyDetailPage() {
                   className={`survey-role-btn${(selectedRole ?? (roleTallies.find((r) => r.responses > 0)?.role ?? roleTallies[0]?.role)) === rt.role ? " active" : ""}`}
                   onClick={() => setSelectedRole(rt.role)}
                 >
-                  {rt.role} ({rt.responses})
+                  {rt.role} ({rt.weighting === "StakeBased" ? fmtAda(rt.totalWeight || 0, { compact: true }) : rt.responses})
                 </button>
               ))}
             </div>
@@ -472,7 +502,7 @@ export default function SurveyDetailPage() {
             <div className="panel"><p className="muted">No responses yet — be the first to respond.</p></div>
           ) : (
             questionTallies.map((qt) => (
-              <QuestionTallyCard key={qt.questionId} qt={qt} totalResponses={tallyResponseCount} />
+              <QuestionTallyCard key={qt.questionId} qt={qt} totalResponses={tallyResponseCount} totalWeight={tallyWeight} />
             ))
           )}
         </section>
@@ -490,6 +520,7 @@ export default function SurveyDetailPage() {
                 <tr>
                   <th>Address</th>
                   <th>Role</th>
+                  {showStakeWeight ? <th>Stake</th> : null}
                   <th>Date</th>
                   <th>TX</th>
                 </tr>
@@ -505,6 +536,14 @@ export default function SurveyDetailPage() {
                         color: ROLE_COLORS[r.responderRole] ?? "inherit",
                       }}>{r.responderRole}</span>
                     </td>
+                    {showStakeWeight ? (
+                      <td>
+                        <div className="survey-response-stake">
+                          <strong>{Number(r.responseStakeAda || 0) > 0 ? fmtAda(r.responseStakeAda, { compact: true }) : "—"}</strong>
+                          {r.rewardAddress ? <span className="muted mono">{shortAddr(r.rewardAddress)}</span> : null}
+                        </div>
+                      </td>
+                    ) : null}
                     <td>{fmtDate(r.blockTime)}</td>
                     <td>
                       <a className="ext-link mono" style={{ fontSize: "0.78rem" }}

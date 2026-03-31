@@ -4273,21 +4273,48 @@ tbody tr.active {
 }
 .question-tally-card + .question-tally-card { margin-top: 1rem; }
 .question-tally-card h4 { margin: 0.2rem 0 0.75rem; font-size: 1rem; }
+.question-tally-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.question-tally-method {
+  font-size: 0.78rem;
+  margin: 0;
+}
+.question-tally-weight-badge {
+  padding: 0.22rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid rgba(84,228,188,0.28);
+  background: rgba(84,228,188,0.1);
+  color: var(--mint);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
 
 /* Option tally bars */
 .option-tally-list { display: flex; flex-direction: column; gap: 0.55rem; }
 .option-tally-row {
   display: grid;
-  grid-template-columns: 160px 1fr 40px 48px;
-  align-items: center;
-  gap: 0.6rem;
+  grid-template-columns: minmax(220px, 2.2fr) minmax(160px, 2.8fr) minmax(110px, auto) 58px;
+  align-items: start;
+  gap: 0.8rem;
 }
-.option-tally-label { font-size: 0.87rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.option-tally-label {
+  font-size: 0.9rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.4;
+}
 .option-tally-bar-wrap {
   height: 8px;
   background: rgba(255,255,255,0.08);
   border-radius: 999px;
   overflow: hidden;
+  margin-top: 0.45rem;
 }
 .option-tally-bar {
   height: 100%;
@@ -4297,6 +4324,20 @@ tbody tr.active {
   min-width: 2px;
 }
 .option-tally-count { font-size: 0.82rem; font-weight: 600; text-align: right; }
+.option-tally-stat {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: end;
+  text-align: right;
+}
+.option-tally-subcount {
+  font-size: 0.74rem;
+}
+.option-tally-percent {
+  display: inline-flex;
+  justify-content: flex-end;
+  padding-top: 0.08rem;
+}
 
 /* Numeric tally */
 .numeric-tally-stats {
@@ -4495,6 +4536,17 @@ tbody tr.active {
   width: 100%;
   min-height: 48px;
 }
+.survey-response-stake {
+  display: grid;
+  gap: 0.16rem;
+}
+.survey-response-stake strong {
+  font-size: 0.92rem;
+  line-height: 1.1;
+}
+.survey-response-stake span {
+  font-size: 0.74rem;
+}
 
 /* Create survey form */
 .create-survey-form {
@@ -4623,9 +4675,18 @@ button.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 600px) {
   .option-tally-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
-  .option-tally-bar-wrap { grid-column: 1 / -1; }
+  .option-tally-bar-wrap {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+  .option-tally-stat,
+  .option-tally-percent {
+    justify-items: start;
+    justify-content: flex-start;
+    text-align: left;
+  }
   .survey-hero-copy { gap: 0.6rem; }
   .survey-hero-title { max-width: none; font-size: clamp(1.9rem, 8vw, 2.7rem); }
   .survey-hero-description { font-size: 0.96rem; }
