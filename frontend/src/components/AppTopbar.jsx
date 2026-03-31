@@ -12,7 +12,8 @@ const NAV_GROUPS = [
       { to: "/actions", label: "Governance Actions" },
       { to: "/actions/submit", label: "Submit Governance Action" },
       { to: "/constitution", label: "Read the Cardano Constitution" },
-      { to: "/ncl", label: "NCL" }
+      { to: "/treasury", label: "Treasury" },
+      { to: "/surveys", label: "Surveys & Polls" }
     ]
   },
   {
@@ -104,7 +105,44 @@ function BrandMark({ theme, alertActive }) {
   );
 }
 
-export default function AppTopbar({ theme = "dark", onToggleTheme }) {
+function EasterBrandMark({ alertActive }) {
+  const body      = alertActive ? "#ff6b6b" : "#fde047";
+  const bodyShade = alertActive ? "#ff3b30" : "#facc15";
+  const wing      = alertActive ? "#ff8080" : "#fef08a";
+  const beak      = alertActive ? "#ff3b30" : "#f97316";
+
+  return (
+    <svg className="brand-mark-svg" viewBox="24 48 208 164" role="img" aria-hidden="true">
+      <defs>
+        <radialGradient id="chickBodyGrad" cx="38%" cy="32%" r="62%">
+          <stop offset="0%"   stopColor="#fefce8" />
+          <stop offset="55%"  stopColor={body} />
+          <stop offset="100%" stopColor={bodyShade} />
+        </radialGradient>
+      </defs>
+      <ellipse cx="116" cy="58" rx="7" ry="13" fill={body} transform="rotate(-18,116,58)" />
+      <ellipse cx="128" cy="54" rx="7" ry="14" fill={body} />
+      <ellipse cx="140" cy="58" rx="7" ry="13" fill={body} transform="rotate(18,140,58)" />
+      <ellipse cx="128" cy="154" rx="54" ry="46" fill="url(#chickBodyGrad)" />
+      <circle cx="128" cy="93" r="37" fill="url(#chickBodyGrad)" />
+      <ellipse cx="74"  cy="150" rx="22" ry="15" fill={wing} opacity="0.92" transform="rotate(-22,74,150)" />
+      <ellipse cx="182" cy="150" rx="22" ry="15" fill={wing} opacity="0.92" transform="rotate(22,182,150)" />
+      <polygon points="128,106 117,119 139,119" fill={beak} />
+      <circle cx="113" cy="85" r="5.5" fill="#1c0a00" />
+      <circle cx="143" cy="85" r="5.5" fill="#1c0a00" />
+      <circle cx="115" cy="83" r="2"   fill="white" opacity="0.85" />
+      <circle cx="145" cy="83" r="2"   fill="white" opacity="0.85" />
+      <line x1="112" y1="197" x2="100" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+      <line x1="112" y1="197" x2="112" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+      <line x1="112" y1="197" x2="124" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+      <line x1="144" y1="197" x2="132" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+      <line x1="144" y1="197" x2="144" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+      <line x1="144" y1="197" x2="156" y2="210" stroke={beak} strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const isLanding = location.pathname === "/";
@@ -336,7 +374,10 @@ export default function AppTopbar({ theme = "dark", onToggleTheme }) {
               <Link to="/" className="brand-home-link" aria-label="Go to Civitas home">
                 <div className="brand-lockup" aria-label="Civitas">
                   <span className={`brand-mark${hasNewBugSignal ? " is-alert" : ""}`} title={hasNewBugSignal ? "New bug report signal" : "Civitas logo"}>
-                    <BrandMark theme={theme} alertActive={hasNewBugSignal} />
+                    {isEaster
+                      ? <EasterBrandMark alertActive={hasNewBugSignal} />
+                      : <BrandMark theme={theme} alertActive={hasNewBugSignal} />
+                    }
                   </span>
                   <div className="brand-text">
                     <p className="brand">Civitas</p>

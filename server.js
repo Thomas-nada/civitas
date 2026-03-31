@@ -95,6 +95,10 @@ function loadDotEnv() {
   }
 }
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] Unhandled rejection (non-fatal):", reason?.message ?? reason);
+});
+
 loadDotEnv();
 
 function parseUtcHourList(input, fallback) {
@@ -346,6 +350,14 @@ let syncState = {
 };
 let pendingSnapshot = null;
 let pendingSnapshotBuiltAt = null;
+const sseClients = new Set();
+
+// ── Survey / Label-17 index cache ─────────────────────────────────────────
+const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
+const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
+let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {} };
+let label17BuildPromise = null;
+
 let epochBackfillState = {
   running: false,
   lastStartedAt: null,
@@ -5952,6 +5964,14 @@ function publishSnapshot(payload) {
   saveSeedSnapshotToDisk(snapshot);
   warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
   backfillEpochSnapshotsFromCurrent(false);
+  // Notify SSE clients that a fresh snapshot is available.
+  if (sseClients.size > 0) {
+    const ssePayload = `event: snapshot-updated\ndata: ${JSON.stringify({ updatedAt: new Date().toISOString(), mode: syncState.lastSyncMode || "delta" })}\n\n`;
+    for (const client of sseClients) {
+      try { client.write(ssePayload); }
+      catch { sseClients.delete(client); }
+    }
+  }
 }
 
 function promotePendingSnapshot() {
@@ -6190,6 +6210,261 @@ async function runStartupInitialization() {
   } else {
     console.log("Auto scheduler startup disabled (AUTO_START_SCHEDULER=false).");
   }
+}
+
+// ── CIP-0179 / Label-17 helpers ───────────────────────────────────────────
+
+const MAX_METADATA_STR_BYTES = 64;
+const LABEL17_TEXT_FIELDS = new Set(["title", "description", "question", "customValue"]);
+
+function shouldJoinLabel17StringArray(value, parentKey = "") {
+  if (!Array.isArray(value) || value.length <= 1) return false;
+  if (!value.every((v) => typeof v === "string")) return false;
+  if (LABEL17_TEXT_FIELDS.has(parentKey)) return true;
+  const enc = new TextEncoder();
+  return value.some((part) => enc.encode(part).length === MAX_METADATA_STR_BYTES);
+}
+
+function label17FromMeta(value, parentKey = "") {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    if (shouldJoinLabel17StringArray(value, parentKey)) return value.join("");
+    return value.map((item) => label17FromMeta(item, parentKey));
+  }
+  if (typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = label17FromMeta(v, k);
+    return out;
+  }
+  return value;
+}
+
+function label17KindFromMeta(meta) {
+  if (!meta || typeof meta !== "object") return null;
+  const hasDetails = "surveyDetails" in meta;
+  const hasResponse = "surveyResponse" in meta;
+  if ((hasDetails && hasResponse) || (!hasDetails && !hasResponse)) return null;
+  return hasDetails ? "surveyDetails" : "surveyResponse";
+}
+
+function label17SurveyFromEntry(entry, txInfo) {
+  const meta = entry?.json_metadata;
+  if (label17KindFromMeta(meta) !== "surveyDetails") return null;
+  const restored = label17FromMeta(meta);
+  const details = restored?.surveyDetails;
+  if (!details || typeof details !== "object") return null;
+  return {
+    surveyTxId: entry.tx_hash,
+    details,
+    msg: restored.msg || null,
+    slot: txInfo?.slot ?? null,
+    blockTime: txInfo?.block_time ?? null,
+  };
+}
+
+async function fetchSurveyByTxHash(txHash) {
+  const safeHash = String(txHash || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(safeHash)) return null;
+
+  const [rows, txInfo] = await Promise.all([
+    blockfrostGet(`/txs/${safeHash}/metadata`).catch(() => []),
+    blockfrostGet(`/txs/${safeHash}`).catch(() => null),
+  ]);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const entry = rows.find((row) => String(row?.label || "") === "17");
+  if (!entry) return null;
+  return label17SurveyFromEntry({ ...entry, tx_hash: safeHash }, txInfo);
+}
+
+async function buildLabel17Index() {
+  const now = Date.now();
+  if (label17Cache.fetchedAt > 0 && now - label17Cache.fetchedAt < LABEL17_TTL_MS) {
+    return label17Cache;
+  }
+  const hasWarmCache = label17Cache.fetchedAt > 0;
+  if (!label17BuildPromise) {
+    label17BuildPromise = _runLabel17Build()
+      .catch((e) => console.warn("[label17] index build failed:", e?.message))
+      .finally(() => { label17BuildPromise = null; });
+  }
+  if (!hasWarmCache) {
+    await label17BuildPromise;
+  }
+  return label17Cache;
+}
+
+async function _runLabel17Build() {
+  const now = Date.now();
+
+  // Scan recent label-17 traffic newest-first and only keep survey-related entries.
+  const relevantEntries = [];
+  let page = 1;
+  while (page <= LABEL17_MAX_PAGES) {
+    const entries = await blockfrostGet(`/metadata/txs/labels/17?page=${page}&count=100&order=desc`).catch(() => []);
+    if (!Array.isArray(entries) || entries.length === 0) break;
+    relevantEntries.push(
+      ...entries.filter((entry) => label17KindFromMeta(entry?.json_metadata))
+    );
+    if (entries.length < 100) break;
+    page++;
+  }
+
+  const surveys = [];
+  const responsesBySurvey = {};
+  const txInfoCache = {};
+  const utxoCache = {};
+
+  // Fetch tx info in parallel batches of 10
+  const txHashes = [...new Set(relevantEntries.map((e) => e.tx_hash).filter(Boolean))];
+  const BATCH = 10;
+  for (let i = 0; i < txHashes.length; i += BATCH) {
+    const batch = txHashes.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map((h) => blockfrostGet(`/txs/${h}`).catch(() => null))
+    );
+    batch.forEach((h, idx) => { txInfoCache[h] = results[idx]; });
+  }
+
+  for (const entry of relevantEntries) {
+    const meta = entry?.json_metadata;
+    const kind = label17KindFromMeta(meta);
+    if (!kind) continue;
+    const txHash = entry.tx_hash;
+    if (!txHash) continue;
+
+    const txInfo = txInfoCache[txHash];
+
+    if (kind === "surveyDetails") {
+      try {
+        const survey = label17SurveyFromEntry(entry, txInfo);
+        if (!survey) continue;
+        surveys.push(survey);
+      } catch { /* skip malformed */ }
+      continue;
+    }
+
+    if (kind === "surveyResponse") {
+      const surveyTxId = meta?.surveyResponse?.surveyTxId;
+      if (typeof surveyTxId !== "string") continue;
+
+      if (!utxoCache[txHash]) {
+        utxoCache[txHash] = await blockfrostGet(`/txs/${txHash}/utxos`).catch(() => null);
+      }
+      const inputAddress = utxoCache[txHash]?.inputs?.[0]?.address ?? null;
+
+      try {
+        const restored = label17FromMeta(meta);
+        const resp = restored.surveyResponse;
+        if (!resp || typeof resp !== "object") continue;
+        if (!responsesBySurvey[surveyTxId]) responsesBySurvey[surveyTxId] = [];
+        responsesBySurvey[surveyTxId].push({
+          txId: txHash,
+          inputAddress,
+          slot: txInfo?.slot ?? null,
+          txIndexInBlock: txInfo?.index ?? 0,
+          blockTime: txInfo?.block_time ?? null,
+          responderRole: resp.responderRole,
+          surveyTxId: resp.surveyTxId,
+          answers: resp.answers ?? [],
+          specVersion: resp.specVersion,
+          responseCredential: inputAddress ?? txHash,
+        });
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  // Sort surveys newest-first
+  surveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
+  // Sort responses by slot ascending (for latest-wins dedup)
+  for (const list of Object.values(responsesBySurvey)) {
+    list.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.txIndexInBlock ?? 0) - (b.txIndexInBlock ?? 0));
+  }
+
+  label17Cache = { fetchedAt: now, surveys, responsesBySurvey };
+  return label17Cache;
+}
+
+const METHOD_SINGLE_CHOICE = "urn:cardano:poll-method:single-choice:v1";
+const METHOD_MULTI_SELECT  = "urn:cardano:poll-method:multi-select:v1";
+const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
+
+function label17TallySurvey(details, responses) {
+  const questions = details?.questions ?? [];
+  if (questions.length === 0 || responses.length === 0) {
+    return { totalResponses: 0, uniqueCredentials: 0, roleTallies: [], questionTallies: [] };
+  }
+
+  // Deduplicate: latest-response-wins per (role, credential)
+  const latestByKey = {};
+  for (const r of responses) {
+    const key = `${r.responderRole}|${r.responseCredential}`;
+    latestByKey[key] = r;
+  }
+  const deduped = Object.values(latestByKey);
+
+  const roleWeighting = details.roleWeighting ?? {};
+  const roleTallies = Object.entries(roleWeighting).map(([role, weighting]) => {
+    const roleResps = deduped.filter((r) => r.responderRole === role);
+    const questionTallies = questions.map((q) => {
+      const qt = {
+        questionId: q.questionId,
+        question: q.question,
+        methodType: q.methodType,
+        optionTallies: (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT)
+          ? (q.options ?? []).map((label, index) => ({ index, label, count: 0 }))
+          : undefined,
+        numericTally: null,
+        customTexts: (q.methodType !== METHOD_SINGLE_CHOICE && q.methodType !== METHOD_MULTI_SELECT && q.methodType !== METHOD_NUMERIC_RANGE)
+          ? [] : undefined,
+      };
+
+      const numericValues = [];
+      for (const r of roleResps) {
+        const answer = (r.answers ?? []).find((a) => a.questionId === q.questionId);
+        if (!answer) continue;
+        if (qt.optionTallies) {
+          for (const idx of (answer.selection ?? [])) {
+            if (idx >= 0 && idx < qt.optionTallies.length) qt.optionTallies[idx].count++;
+          }
+        } else if (q.methodType === METHOD_NUMERIC_RANGE && answer.numericValue != null) {
+          numericValues.push(answer.numericValue);
+        } else if (qt.customTexts != null && answer.customValue != null) {
+          qt.customTexts.push(typeof answer.customValue === "string" ? answer.customValue : JSON.stringify(answer.customValue));
+        }
+      }
+
+      if (q.methodType === METHOD_NUMERIC_RANGE && numericValues.length > 0) {
+        const sorted = [...numericValues].sort((a, b) => a - b);
+        const mean = numericValues.reduce((s, v) => s + v, 0) / numericValues.length;
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+        const nc = q.numericConstraints ?? { minValue: sorted[0], maxValue: sorted[sorted.length - 1] };
+        const range = nc.maxValue - nc.minValue;
+        const binCount = Math.max(1, Math.min(10, range + 1));
+        const binSize = range / binCount || 1;
+        const bins = [];
+        for (let i = 0; i < binCount; i++) {
+          const lo = nc.minValue + i * binSize;
+          const hi = i === binCount - 1 ? nc.maxValue : nc.minValue + (i + 1) * binSize;
+          bins.push({ range: `${Math.round(lo)}-${Math.round(hi)}`, count: numericValues.filter((v) => i === binCount - 1 ? v >= lo && v <= hi : v >= lo && v < hi).length });
+        }
+        qt.numericTally = { values: numericValues, mean, median, min: sorted[0], max: sorted[sorted.length - 1], bins };
+      }
+
+      return qt;
+    });
+
+    return { role, weighting, responses: roleResps.length, questionTallies };
+  });
+
+  return {
+    totalResponses: responses.length,
+    uniqueCredentials: deduped.length,
+    roleTallies,
+    questionTallies: roleTallies.find((r) => r.responses > 0)?.questionTallies ?? [],
+  };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -7531,6 +7806,113 @@ const server = http.createServer(async (req, res) => {
       pendingSnapshotBuiltAt
     });
     return;
+  }
+
+  // ── SSE: live snapshot-updated events ────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no"
+    });
+    res.write(": connected\n\n");
+    const heartbeat = setInterval(() => {
+      try { res.write(": heartbeat\n\n"); }
+      catch { clearInterval(heartbeat); sseClients.delete(res); }
+    }, 25_000);
+    sseClients.add(res);
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    });
+    return;
+  }
+
+  // ── Treasury analytics (expanded NCL view) ────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/treasury") {
+    const [current, previous] = await Promise.all([
+      fetchNclSummary("current",  { allowStale: true, refreshInBackground: true }),
+      fetchNclSummary("previous", { allowStale: true, refreshInBackground: true }),
+    ]);
+
+    function epochBreakdown(summary) {
+      const byEpoch = {};
+      for (const w of (summary.withdrawals || [])) {
+        const ep = w.enactedEpoch ?? "?";
+        byEpoch[ep] = (byEpoch[ep] || 0) + Number(w.amountAda || 0);
+      }
+      return Object.entries(byEpoch)
+        .map(([epoch, ada]) => ({ epoch: Number(epoch), ada }))
+        .sort((a, b) => a.epoch - b.epoch);
+    }
+
+    const src = pickBestSnapshotForApi(snapshot);
+    const proposalInfo = src?.proposalInfo || {};
+    const pending = Object.entries(proposalInfo)
+      .filter(([, info]) => info?.governanceType === "TreasuryWithdrawals" &&
+                            ["Active", "Ratified"].includes(info?.outcome))
+      .map(([proposalId, info]) => ({
+        proposalId,
+        title: info.actionName || proposalId,
+        outcome: info.outcome,
+        expirationEpoch: info.expirationEpoch ?? null,
+        amountAda: info.requestedAda ?? null,
+      }));
+
+    json(res, 200, {
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      generatedAt: new Date().toISOString(),
+      periods: Object.values(NCL_PERIODS),
+      current:  { ...current,  epochBreakdown: epochBreakdown(current) },
+      previous: { ...previous, epochBreakdown: epochBreakdown(previous) },
+      pending,
+    });
+    return;
+  }
+
+  // ── Surveys: force-refresh the label-17 index ────────────────────────────
+  if (req.method === "POST" && url.pathname === "/api/surveys/refresh") {
+    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {} };
+    label17BuildPromise = null;
+    buildLabel17Index().catch(() => {});
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  // ── Surveys: list all CIP-0179 label-17 surveys ──────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/surveys") {
+    try {
+      const index = await buildLabel17Index();
+      json(res, 200, {
+        cachedAt: index.fetchedAt,
+        count: index.surveys.length,
+        surveys: index.surveys,
+      });
+    } catch (e) {
+      json(res, 500, { error: e?.message || "Failed to load surveys." });
+    }
+    return;
+  }
+
+  // ── Surveys: detail + responses + tally for a single survey ──────────────
+  {
+    const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})$/);
+    if (req.method === "GET" && m) {
+      try {
+        const txHash = m[1].toLowerCase();
+        const index = await buildLabel17Index();
+        const survey = index.surveys.find((s) => s.surveyTxId === txHash)
+          || await fetchSurveyByTxHash(txHash);
+        if (!survey) { json(res, 404, { error: "Survey not found." }); return; }
+        const responses = index.responsesBySurvey[txHash] || [];
+        const tally = label17TallySurvey(survey.details, responses);
+        json(res, 200, { survey, responses, tally, cachedAt: index.fetchedAt });
+      } catch (e) {
+        json(res, 500, { error: e?.message || "Failed to load survey." });
+      }
+      return;
+    }
   }
 
   if (url.pathname.startsWith("/api/")) {

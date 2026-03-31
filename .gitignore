@@ -27,6 +27,10 @@ Thumbs.db
 
 # Local scripts, generated reports, and one-off tools (not for GitHub)
 local/
+_actions_live.json
+_remote_seed.json
+tmp_drep.json
+preview.env.example
+snapshot.seed.json
 
 .claude/
-

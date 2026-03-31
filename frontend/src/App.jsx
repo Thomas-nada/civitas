@@ -1,4 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+
+// Easter window: March 28 – April 7 (covers Holy Week through Easter Monday)
+function isEasterPeriod() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const start = new Date(y, 2, 28); // March 28
+  const end   = new Date(y, 3,  7, 23, 59, 59); // April 7
+  return now >= start && now <= end;
+}
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { BrowserWallet } from "@meshsdk/core";
 import AppTopbar from "./components/AppTopbar";
@@ -12,6 +21,10 @@ const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
+const TreasuryPage = lazy(() => import("./pages/TreasuryPage"));
+const SurveysListPage = lazy(() => import("./pages/SurveysListPage"));
+const SurveyDetailPage = lazy(() => import("./pages/SurveyDetailPage"));
+const CreateSurveyPage = lazy(() => import("./pages/CreateSurveyPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
 const ConstitutionPage = lazy(() => import("./pages/ConstitutionPage"));
@@ -139,6 +152,7 @@ function BackgroundMotionClock() {
   return null;
 }
 
+
 function RouteTransitionFade() {
   const location = useLocation();
   const animationKey = `${location.pathname}${location.search}`;
@@ -155,6 +169,18 @@ function RouteTransitionFade() {
 export default function App() {
   const location = useLocation();
   const isLandingRoute = location.pathname === "/";
+  const [isEaster] = useState(isEasterPeriod);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isEaster) {
+      root.setAttribute("data-easter", "true");
+    } else {
+      root.removeAttribute("data-easter");
+    }
+    return () => root.removeAttribute("data-easter");
+  }, [isEaster]);
+
   const [theme, setTheme] = useState(() => {
     try {
       const stored = window.localStorage.getItem("civitas.theme");
@@ -268,7 +294,7 @@ export default function App() {
         <div className="global-watermark-art" />
       </div>
       <ScrollToTopOnRouteChange />
-      {!isLandingRoute ? <AppTopbar theme={theme} onToggleTheme={toggleTheme} /> : null}
+      {!isLandingRoute ? <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} /> : null}
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
         <Routes>
@@ -276,7 +302,11 @@ export default function App() {
           <Route path="/actions" element={<GovernanceActionsPage />} />
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
-          <Route path="/ncl" element={<NclPage />} />
+          <Route path="/surveys" element={<SurveysListPage />} />
+          <Route path="/surveys/create" element={<CreateSurveyPage />} />
+          <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />
+          <Route path="/ncl" element={<Navigate to="/treasury" replace />} />
+          <Route path="/treasury" element={<TreasuryPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
           <Route path="/dreps/:actorId" element={<VoterProfilePage actorType="drep" />} />
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />

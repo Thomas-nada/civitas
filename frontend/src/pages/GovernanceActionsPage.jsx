@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
@@ -489,28 +490,11 @@ export default function GovernanceActionsPage() {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    if (snapshotKey) return undefined;
-    const poll = async () => {
-      if (syncPollBusyRef.current) return;
-      syncPollBusyRef.current = true;
-      try {
-        const res = await fetch("/api/sync-status");
-        const status = await res.json();
-        if (!res.ok) return;
-        const latest = String(status?.lastCompletedAt || "");
-        if (latest && latest !== latestSnapshotRef.current) {
-          await loadData({ silent: true });
-        }
-      } catch {
-        // Ignore background poll errors.
-      } finally {
-        syncPollBusyRef.current = false;
-      }
-    };
-    const id = setInterval(poll, 10000);
-    return () => clearInterval(id);
-  }, [loadData, snapshotKey]);
+  // Live updates via SSE (replaces the previous 10s sync-status polling).
+  const { isLive, lastUpdatedAt } = useSnapshotUpdates({
+    enabled: !snapshotKey,
+    onUpdate: () => loadData({ silent: true }),
+  });
 
   const proposalInfo = payload?.proposalInfo || {};
   const drepPowerStats = useMemo(() => {
@@ -1170,7 +1154,20 @@ export default function GovernanceActionsPage() {
   return (
     <main className="shell">
       <header className="hero">
-        <h1>Governance Action Explorer</h1>
+        <div className="hero-title-row">
+          <h1>Governance Action Explorer</h1>
+          {!snapshotKey && (
+            <span
+              className={`live-badge${isLive ? " live-badge--live" : ""}`}
+              title={isLive ? "Receiving live updates via SSE" : "Waiting for server connection…"}
+            >
+              {isLive ? "● Live" : "○ Connecting…"}
+              {lastUpdatedAt && (
+                <> · updated {Math.round((Date.now() - lastUpdatedAt.getTime()) / 1000)}s ago</>
+              )}
+            </span>
+          )}
+        </div>
         <p className="muted">
           Need to submit a new proposal?{" "}
           <Link to="/actions/submit">Open the submission page</Link>.
