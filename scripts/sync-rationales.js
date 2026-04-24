@@ -21,8 +21,13 @@ const http  = require("http");
 
 const BASE_URL      = process.env.CIVITAS_URL || "https://civitas-nglb.onrender.com";
 const OUT_DIR       = path.resolve(__dirname, "..", "rationales");
-const CONCURRENCY   = 8;
-const IPFS_GATEWAY  = "https://ipfs.io/ipfs/";
+const CONCURRENCY   = 4;
+const IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs/",
+  "https://cloudflare-ipfs.com/ipfs/",
+  "https://dweb.link/ipfs/",
+  "https://gateway.pinata.cloud/ipfs/",
+];
 const REQUEST_TIMEOUT_MS = 20_000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -37,21 +42,19 @@ function sanitizePath(name, maxLen = 80) {
     || "Unknown";
 }
 
-function resolveIpfs(url) {
+function resolveIpfs(url, gatewayIndex = 0) {
   if (!url) return url;
-  if (url.startsWith("ipfs://")) return IPFS_GATEWAY + url.slice(7);
+  if (url.startsWith("ipfs://")) return IPFS_GATEWAYS[gatewayIndex % IPFS_GATEWAYS.length] + url.slice(7);
   return url;
 }
 
-function fetchUrl(rawUrl) {
+function fetchUrlOnce(url) {
   return new Promise((resolve, reject) => {
-    const url = resolveIpfs(rawUrl);
     if (!url) return reject(new Error("Empty URL"));
-    const mod  = url.startsWith("https://") ? https : http;
-    const req  = mod.get(url, { timeout: REQUEST_TIMEOUT_MS }, (res) => {
-      // Follow one redirect
+    const mod = url.startsWith("https://") ? https : http;
+    const req = mod.get(url, { timeout: REQUEST_TIMEOUT_MS }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrl(res.headers.location).then(resolve).catch(reject);
+        fetchUrlOnce(res.headers.location).then(resolve).catch(reject);
         res.resume();
         return;
       }
@@ -67,6 +70,24 @@ function fetchUrl(rawUrl) {
     req.on("timeout", () => { req.destroy(); reject(new Error(`Timeout: ${url}`)); });
     req.on("error", reject);
   });
+}
+
+async function fetchUrl(rawUrl) {
+  if (!rawUrl) throw new Error("Empty URL");
+  const isIpfs = rawUrl.startsWith("ipfs://");
+  if (!isIpfs) return fetchUrlOnce(rawUrl);
+
+  // For IPFS URLs, try each gateway in turn
+  let lastErr;
+  for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
+    const url = resolveIpfs(rawUrl, i);
+    try {
+      return await fetchUrlOnce(url);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 
 function extractRationaleText(raw) {
