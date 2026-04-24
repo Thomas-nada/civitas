@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -27,39 +28,42 @@ function fmtPct(value) {
 export default function TreasuryPage() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [periodKey, setPeriodKey] = useState("current");
   const [checkedRatified, setCheckedRatified] = useState({});
   const [checkedActive, setCheckedActive] = useState({});
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        setLoading(true);
-        setError("");
-        const res = await fetch("/api/treasury");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load treasury data.");
-        if (!cancelled) {
-          setPayload(data);
-          // Default all checked
-          const allRatified = {};
-          for (const r of (data.ratified || [])) allRatified[r.proposalId] = true;
-          setCheckedRatified(allRatified);
-          const allActive = {};
-          for (const r of (data.activePipeline || [])) allActive[r.proposalId] = true;
-          setCheckedActive(allActive);
-        }
-      } catch (e) {
-        if (!cancelled) setError(e.message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const load = useCallback(async (opts = {}) => {
+    try {
+      if (opts.soft) setRefreshing(true);
+      else setLoading(true);
+      setError("");
+      const res = await fetch("/api/treasury");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load treasury data.");
+      setPayload(data);
+      setCheckedRatified((prev) => {
+        const next = { ...prev };
+        for (const r of (data.ratified || [])) if (!(r.proposalId in next)) next[r.proposalId] = true;
+        return next;
+      });
+      setCheckedActive((prev) => {
+        const next = { ...prev };
+        for (const r of (data.activePipeline || [])) if (!(r.proposalId in next)) next[r.proposalId] = true;
+        return next;
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    load();
-    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  useSnapshotUpdates({ onUpdate: () => load({ soft: true }) });
 
   const periods = payload?.periods || [];
   const periodData = periodKey === "current" ? payload?.current : payload?.previous;
@@ -129,6 +133,14 @@ export default function TreasuryPage() {
             Track Cardano treasury withdrawals, net change limit usage, and pending proposals.
           </p>
         </div>
+        <button
+          className="btn-secondary"
+          onClick={() => load({ soft: true })}
+          disabled={refreshing || loading}
+          style={{ alignSelf: "flex-start" }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
       </header>
 
       <section className="controls dashboard-controls">
