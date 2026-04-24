@@ -458,28 +458,20 @@ export default function TreasuryPage() {
                 </article>
               </section>
 
-              <div className="treasury-progress-track">
-                {/* enacted portion */}
-                <div
-                  className="treasury-progress-fill"
-                  style={{
-                    width: `${Math.min(100, limitAda > 0 ? (enactedAda / limitAda) * 100 : 0)}%`,
-                    background: "#22c55e",
-                    borderRadius: scenarioCombinedAda <= limitAda ? undefined : "4px 0 0 4px",
-                  }}
-                />
-                {/* selected pending/active portion */}
+              <div className="treasury-progress-track" style={{ display: "flex", overflow: "hidden" }}>
+                <div style={{
+                  width: `${Math.min(100, limitAda > 0 ? (enactedAda / limitAda) * 100 : 0)}%`,
+                  background: "#22c55e",
+                  height: "100%",
+                  flexShrink: 0,
+                }} />
                 {scenarioTotalAda > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${Math.min(100, limitAda > 0 ? (enactedAda / limitAda) * 100 : 0)}%`,
-                      width: `${Math.min(100 - (limitAda > 0 ? (enactedAda / limitAda) * 100 : 0), limitAda > 0 ? (scenarioTotalAda / limitAda) * 100 : 0)}%`,
-                      height: "100%",
-                      background: scenarioOverLimit ? "#ef4444" : "#f59e0b",
-                      borderRadius: "0 4px 4px 0",
-                    }}
-                  />
+                  <div style={{
+                    width: `${Math.min(100, limitAda > 0 ? (scenarioTotalAda / limitAda) * 100 : 0)}%`,
+                    background: scenarioOverLimit ? "#ef4444" : "#f59e0b",
+                    height: "100%",
+                    flexShrink: 0,
+                  }} />
                 )}
               </div>
               <div style={{ display: "flex", gap: "1.5rem", marginTop: "0.5rem", fontSize: "0.8rem", color: "rgba(200,200,210,0.7)" }}>
