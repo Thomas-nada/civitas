@@ -24,12 +24,13 @@ function fmtPct(value) {
   return `${n.toFixed(2)}%`;
 }
 
-
 export default function TreasuryPage() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [periodKey, setPeriodKey] = useState("current");
+  const [checkedRatified, setCheckedRatified] = useState({});
+  const [checkedActive, setCheckedActive] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +41,16 @@ export default function TreasuryPage() {
         const res = await fetch("/api/treasury");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load treasury data.");
-        if (!cancelled) setPayload(data);
+        if (!cancelled) {
+          setPayload(data);
+          // Default all checked
+          const allRatified = {};
+          for (const r of (data.ratified || [])) allRatified[r.proposalId] = true;
+          setCheckedRatified(allRatified);
+          const allActive = {};
+          for (const r of (data.activePipeline || [])) allActive[r.proposalId] = true;
+          setCheckedActive(allActive);
+        }
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
@@ -57,9 +67,7 @@ export default function TreasuryPage() {
   const withdrawals = periodData?.withdrawals || [];
   const epochBreakdown = periodData?.epochBreakdown || [];
   const ratified = payload?.ratified || [];
-  const ratifiedTotalAda = payload?.ratifiedTotalAda || 0;
   const activePipeline = payload?.activePipeline || [];
-  const activePipelineTotalAda = payload?.activePipelineTotalAda || 0;
 
   const overLimit = Number(totals.remainingLovelace || 0) < 0;
   const usagePct = Number(totals.usagePct || 0);
@@ -70,6 +78,47 @@ export default function TreasuryPage() {
     const selected = periods.find((p) => p.key === periodKey);
     return selected?.label || periodData?.period?.label || "NCL Window";
   }, [periods, periodKey, periodData]);
+
+  // Scenario totals
+  const scenarioRatifiedAda = ratified
+    .filter((r) => checkedRatified[r.proposalId])
+    .reduce((sum, r) => sum + Number(r.amountAda || 0), 0);
+
+  const scenarioActiveAda = activePipeline
+    .filter((r) => checkedActive[r.proposalId])
+    .reduce((sum, r) => sum + Number(r.amountAda || 0), 0);
+
+  const scenarioTotalAda = scenarioRatifiedAda + scenarioActiveAda;
+  const enactedAda = Number(totals.withdrawnAda || 0);
+  const limitAda = Number(totals.limitAda || 0);
+  const scenarioCombinedAda = enactedAda + scenarioTotalAda;
+  const scenarioRemainingAda = limitAda - scenarioCombinedAda;
+  const scenarioUsagePct = limitAda > 0 ? (scenarioCombinedAda / limitAda) * 100 : 0;
+  const scenarioOverLimit = scenarioRemainingAda < 0;
+  const scenarioBarColor = scenarioOverLimit ? "#ef4444" : scenarioUsagePct >= 90 ? "#f59e0b" : "#22c55e";
+
+  const anyChecked = Object.values(checkedRatified).some(Boolean) || Object.values(checkedActive).some(Boolean);
+  const showScenario = !loading && (ratified.length > 0 || activePipeline.length > 0);
+
+  function toggleRatified(id) {
+    setCheckedRatified((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+  function toggleActive(id) {
+    setCheckedActive((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+  function selectAllActive(val) {
+    const next = {};
+    for (const r of activePipeline) next[r.proposalId] = val;
+    setCheckedActive(next);
+  }
+  function selectAllRatified(val) {
+    const next = {};
+    for (const r of ratified) next[r.proposalId] = val;
+    setCheckedRatified(next);
+  }
+
+  const allActiveChecked = activePipeline.length > 0 && activePipeline.every((r) => checkedActive[r.proposalId]);
+  const allRatifiedChecked = ratified.length > 0 && ratified.every((r) => checkedRatified[r.proposalId]);
 
   return (
     <main className="shell">
@@ -225,9 +274,7 @@ export default function TreasuryPage() {
         <h2>Ratified — Pending Payout</h2>
         <p className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.83rem" }}>
           These proposals have been ratified and will be paid out when enacted at the next epoch boundary.
-          {ratified.length > 0 && (
-            <> Total queued: <strong>{fmtAda(ratifiedTotalAda)} ₳</strong></>
-          )}
+          Use the checkboxes to include or exclude them from the scenario below.
         </p>
         {loading ? <p className="muted">Loading…</p> : null}
         {!loading && ratified.length === 0 ? (
@@ -237,6 +284,14 @@ export default function TreasuryPage() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: "2rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={allRatifiedChecked}
+                    onChange={(e) => selectAllRatified(e.target.checked)}
+                    title="Select all"
+                  />
+                </th>
                 <th>Proposal</th>
                 <th>Expires (epoch)</th>
                 <th>Amount</th>
@@ -245,57 +300,14 @@ export default function TreasuryPage() {
             </thead>
             <tbody>
               {ratified.map((row) => (
-                <tr key={row.proposalId}>
+                <tr key={row.proposalId} style={{ opacity: checkedRatified[row.proposalId] ? 1 : 0.45 }}>
                   <td>
-                    <Link className="inline-link" to={`/actions/${encodeURIComponent(row.proposalId)}`}>
-                      {row.title || row.proposalId}
-                    </Link>
+                    <input
+                      type="checkbox"
+                      checked={!!checkedRatified[row.proposalId]}
+                      onChange={() => toggleRatified(row.proposalId)}
+                    />
                   </td>
-                  <td>{row.expirationEpoch ?? "—"}</td>
-                  <td>{row.amountAda != null ? `${fmtAda(row.amountAda)} ₳` : "—"}</td>
-                  <td className="mono">
-                    <a
-                      className="ext-link"
-                      href={`https://cardanoscan.io/govAction/${encodeURIComponent(row.proposalId)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {row.proposalId}
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : null}
-      </section>
-
-      {/* ── Active pipeline ── */}
-      <section className="panel">
-        <h2>Active Pipeline</h2>
-        <p className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.83rem" }}>
-          Treasury withdrawal proposals currently under vote — not yet ratified, expired, or enacted.
-          {activePipeline.length > 0 && (
-            <> Potential total: <strong>{fmtAda(activePipelineTotalAda)} ₳</strong></>
-          )}
-        </p>
-        {loading ? <p className="muted">Loading…</p> : null}
-        {!loading && activePipeline.length === 0 ? (
-          <p className="muted">No active treasury withdrawal proposals at this time.</p>
-        ) : null}
-        {!loading && activePipeline.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Proposal</th>
-                <th>Expires (epoch)</th>
-                <th>Amount</th>
-                <th>Proposal ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activePipeline.map((row) => (
-                <tr key={row.proposalId}>
                   <td>
                     <Link className="inline-link" to={`/actions/${encodeURIComponent(row.proposalId)}`}>
                       {row.title || row.proposalId}
@@ -318,14 +330,172 @@ export default function TreasuryPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={2}><strong>Total</strong></td>
-                <td><strong>{fmtAda(activePipelineTotalAda)} ₳</strong></td>
+                <td />
+                <td colSpan={2}><strong>Selected total</strong></td>
+                <td><strong>{fmtAda(scenarioRatifiedAda)} ₳</strong></td>
                 <td />
               </tr>
             </tfoot>
           </table>
         ) : null}
       </section>
+
+      {/* ── Active pipeline ── */}
+      <section className="panel">
+        <h2>Active Pipeline</h2>
+        <p className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.83rem" }}>
+          Treasury withdrawal proposals currently under vote — not yet ratified, expired, or enacted.
+          Check or uncheck to model different outcomes in the scenario below.
+        </p>
+        {loading ? <p className="muted">Loading…</p> : null}
+        {!loading && activePipeline.length === 0 ? (
+          <p className="muted">No active treasury withdrawal proposals at this time.</p>
+        ) : null}
+        {!loading && activePipeline.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: "2rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={allActiveChecked}
+                    onChange={(e) => selectAllActive(e.target.checked)}
+                    title="Select all"
+                  />
+                </th>
+                <th>Proposal</th>
+                <th>Expires (epoch)</th>
+                <th>Amount</th>
+                <th>Proposal ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePipeline.map((row) => (
+                <tr key={row.proposalId} style={{ opacity: checkedActive[row.proposalId] ? 1 : 0.45 }}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={!!checkedActive[row.proposalId]}
+                      onChange={() => toggleActive(row.proposalId)}
+                    />
+                  </td>
+                  <td>
+                    <Link className="inline-link" to={`/actions/${encodeURIComponent(row.proposalId)}`}>
+                      {row.title || row.proposalId}
+                    </Link>
+                  </td>
+                  <td>{row.expirationEpoch ?? "—"}</td>
+                  <td>{row.amountAda != null ? `${fmtAda(row.amountAda)} ₳` : "—"}</td>
+                  <td className="mono">
+                    <a
+                      className="ext-link"
+                      href={`https://cardanoscan.io/govAction/${encodeURIComponent(row.proposalId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {row.proposalId}
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td />
+                <td colSpan={2}><strong>Selected total</strong></td>
+                <td><strong>{fmtAda(scenarioActiveAda)} ₳</strong></td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        ) : null}
+      </section>
+
+      {/* ── Scenario summary ── */}
+      {showScenario ? (
+        <section className="panel">
+          <h2>Scenario: If Selected Proposals Are Enacted</h2>
+          <p className="muted" style={{ marginBottom: "1rem", fontSize: "0.83rem" }}>
+            Based on your selection above — toggle proposals to model different outcomes.
+          </p>
+
+          {!anyChecked ? (
+            <p className="muted">No proposals selected. Check proposals above to model a scenario.</p>
+          ) : (
+            <>
+              <section className="cards" style={{ marginBottom: "1rem" }}>
+                <article className="card">
+                  <p>Already Enacted</p>
+                  <strong>{fmtAda(enactedAda)} ₳</strong>
+                  <p className="muted">confirmed withdrawals</p>
+                </article>
+                <article className="card">
+                  <p>Selected (Pending + Active)</p>
+                  <strong>{fmtAda(scenarioTotalAda)} ₳</strong>
+                  <p className="muted">
+                    {ratified.filter((r) => checkedRatified[r.proposalId]).length + activePipeline.filter((r) => checkedActive[r.proposalId]).length} proposals
+                  </p>
+                </article>
+                <article className="card">
+                  <p>Projected Total</p>
+                  <strong>{fmtAda(scenarioCombinedAda)} ₳</strong>
+                  <p className="muted">of {fmtAda(limitAda)} ₳ limit</p>
+                </article>
+                <article className="card">
+                  <p>Projected Remaining</p>
+                  <strong style={{ color: scenarioOverLimit ? "#ef4444" : "inherit" }}>
+                    {fmtAda(Math.abs(scenarioRemainingAda))} ₳
+                  </strong>
+                  <p className="muted">{scenarioOverLimit ? "over limit" : "remaining"}</p>
+                </article>
+                <article className="card">
+                  <p>Projected NCL Usage</p>
+                  <strong>
+                    <span className={scenarioOverLimit ? "pill low" : scenarioUsagePct >= 90 ? "pill mid" : "pill good"}>
+                      {fmtPct(scenarioUsagePct)}
+                    </span>
+                  </strong>
+                </article>
+              </section>
+
+              <div className="treasury-progress-track">
+                {/* enacted portion */}
+                <div
+                  className="treasury-progress-fill"
+                  style={{
+                    width: `${Math.min(100, limitAda > 0 ? (enactedAda / limitAda) * 100 : 0)}%`,
+                    background: "#22c55e",
+                    borderRadius: scenarioCombinedAda <= limitAda ? undefined : "4px 0 0 4px",
+                  }}
+                />
+                {/* selected pending/active portion */}
+                {scenarioTotalAda > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${Math.min(100, limitAda > 0 ? (enactedAda / limitAda) * 100 : 0)}%`,
+                      width: `${Math.min(100 - (limitAda > 0 ? (enactedAda / limitAda) * 100 : 0), limitAda > 0 ? (scenarioTotalAda / limitAda) * 100 : 0)}%`,
+                      height: "100%",
+                      background: scenarioOverLimit ? "#ef4444" : "#f59e0b",
+                      borderRadius: "0 4px 4px 0",
+                    }}
+                  />
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "1.5rem", marginTop: "0.5rem", fontSize: "0.8rem", color: "rgba(200,200,210,0.7)" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#22c55e" }} />
+                  Enacted
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: scenarioOverLimit ? "#ef4444" : "#f59e0b" }} />
+                  Selected proposals
+                </span>
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
     </main>
   );
 }
