@@ -115,7 +115,7 @@ export default function TreasuryPage() {
   const scenarioRemainingAda = limitAda - scenarioCombinedAda;
   const scenarioUsagePct = limitAda > 0 ? (scenarioCombinedAda / limitAda) * 100 : 0;
   const scenarioOverLimit = scenarioRemainingAda < 0;
-  const scenarioBarColor = scenarioOverLimit ? "#ef4444" : scenarioUsagePct >= 90 ? "#f59e0b" : "#22c55e";
+
 
   const anyChecked = Object.values(checkedRatified).some(Boolean) || Object.values(checkedActive).some(Boolean);
   const showScenario = !loading && (ratified.length > 0 || activePipeline.length > 0);
