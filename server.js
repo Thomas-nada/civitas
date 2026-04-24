@@ -7934,8 +7934,10 @@ const server = http.createServer(async (req, res) => {
         .sort((a, b) => a.epoch - b.epoch);
     }
 
-    const src = pickBestSnapshotForApi(snapshot);
-    const proposalInfo = src?.proposalInfo || {};
+    // Use the live snapshot directly for active/ratified proposals so we always
+    // reflect the latest sync — pickBestSnapshotForApi can fall back to a stale
+    // historical snapshot which misses recently submitted proposals.
+    const proposalInfo = snapshot?.proposalInfo || {};
 
     function mapTreasuryProposal([proposalId, info]) {
       const amountLovelace = extractTreasuryWithdrawalLovelaceFromProposal(info);
