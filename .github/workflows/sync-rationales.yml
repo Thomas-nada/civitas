@@ -1,0 +1,53 @@
+name: Sync Rationales
+
+on:
+  schedule:
+    # Run every 12 hours — rationales don't change that frequently
+    - cron: "0 */12 * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Wait for Render to be ready
+        run: |
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://civitas-nglb.onrender.com/api/sync-status)
+            if [ "$STATUS" = "200" ]; then
+              echo "Render is ready (attempt $i)"
+              break
+            fi
+            echo "Waiting for Render... attempt $i (status $STATUS)"
+            sleep 30
+          done
+
+      - name: Run rationale sync
+        run: node scripts/sync-rationales.js
+        env:
+          CIVITAS_URL: https://civitas-nglb.onrender.com
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rationales/
+          if git diff --staged --quiet; then
+            echo "No rationale changes — nothing to commit."
+          else
+            COUNT=$(git diff --staged --name-only | wc -l)
+            git commit -m "chore: sync rationales (${COUNT} files updated)"
+            git push
+          fi
