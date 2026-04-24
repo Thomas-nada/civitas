@@ -73,6 +73,22 @@ export default function TreasuryPage() {
   const ratified = payload?.ratified || [];
   const activePipeline = payload?.activePipeline || [];
 
+  // Pacing calculations
+  const currentEpoch = Number(payload?.currentEpoch || 0);
+  const startEpoch = Number(periodData?.period?.startEpoch || 0);
+  const endEpoch = Number(periodData?.period?.endEpoch || 0);
+  const windowLength = endEpoch - startEpoch;
+  const epochsElapsed = currentEpoch > startEpoch ? Math.min(currentEpoch - startEpoch, windowLength) : 0;
+  const epochsRemaining = currentEpoch < endEpoch ? endEpoch - currentEpoch : 0;
+  const timePct = windowLength > 0 ? (epochsElapsed / windowLength) * 100 : 0;
+  const budgetPct = Number(totals.usagePct || 0);
+  const pacingDelta = budgetPct - timePct; // positive = ahead of pace (spending fast)
+  const adaPerEpoch = epochsElapsed > 0 ? Number(totals.withdrawnAda || 0) / epochsElapsed : 0;
+  const projectedTotalAda = Number(totals.withdrawnAda || 0) + adaPerEpoch * epochsRemaining;
+  const projectedUsagePct = Number(totals.limitAda || 0) > 0
+    ? (projectedTotalAda / Number(totals.limitAda)) * 100 : 0;
+  const showPacing = windowLength > 0 && currentEpoch > 0 && epochsElapsed > 0;
+
   const overLimit = Number(totals.remainingLovelace || 0) < 0;
   const usagePct = Number(totals.usagePct || 0);
   const usageBarColor = overLimit ? "#ef4444" : usagePct >= 90 ? "#f59e0b" : "#22c55e";
@@ -210,6 +226,80 @@ export default function TreasuryPage() {
           {fmtAdaShort(totals.withdrawnAda)} ₳ withdrawn of {fmtAdaShort(totals.limitAda)} ₳ limit
         </p>
       </section>
+
+      {/* ── Pacing indicator ── */}
+      {showPacing && (
+        <section className="panel">
+          <h2>Spending Pace</h2>
+          <p className="muted" style={{ marginBottom: "1rem", fontSize: "0.83rem" }}>
+            {fmtPct(timePct)} of the NCL window has elapsed ({epochsElapsed} of {windowLength} epochs).{" "}
+            {epochsRemaining > 0 ? `${epochsRemaining} epochs remaining.` : "Window complete."}
+          </p>
+
+          <section className="cards" style={{ marginBottom: "1rem" }}>
+            <article className="card">
+              <p>Time Elapsed</p>
+              <strong>{fmtPct(timePct)}</strong>
+              <p className="muted">Epoch {startEpoch} → {endEpoch}</p>
+            </article>
+            <article className="card">
+              <p>Budget Used</p>
+              <strong>{fmtPct(budgetPct)}</strong>
+              <p className="muted">{fmtAdaShort(totals.withdrawnAda)} of {fmtAdaShort(totals.limitAda)} ₳</p>
+            </article>
+            <article className="card">
+              <p>Pace</p>
+              <strong>
+                <span className={
+                  Math.abs(pacingDelta) < 5 ? "pill good" :
+                  pacingDelta > 0 ? "pill mid" : "pill good"
+                }>
+                  {Math.abs(pacingDelta) < 5
+                    ? "On pace"
+                    : pacingDelta > 0
+                      ? `${fmtPct(pacingDelta)} ahead`
+                      : `${fmtPct(Math.abs(pacingDelta))} under`}
+                </span>
+              </strong>
+              <p className="muted">vs time elapsed</p>
+            </article>
+            <article className="card">
+              <p>Burn Rate</p>
+              <strong>{fmtAdaShort(adaPerEpoch)} ₳</strong>
+              <p className="muted">per epoch (avg)</p>
+            </article>
+            <article className="card">
+              <p>Projected End-of-Window</p>
+              <strong style={{ color: projectedUsagePct > 100 ? "#ef4444" : projectedUsagePct > 90 ? "#f59e0b" : "inherit" }}>
+                {fmtAdaShort(projectedTotalAda)} ₳
+              </strong>
+              <p className="muted">{fmtPct(projectedUsagePct)} of limit</p>
+            </article>
+          </section>
+
+          {/* Time vs budget dual bar */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.8rem", color: "rgba(200,200,210,0.75)" }}>
+              <span style={{ width: "5rem", textAlign: "right", flexShrink: 0 }}>Time</span>
+              <div className="treasury-progress-track" style={{ flex: 1, margin: 0 }}>
+                <div className="treasury-progress-fill" style={{ width: `${Math.min(100, timePct)}%`, background: "#64748b" }} />
+              </div>
+              <span style={{ width: "3rem", flexShrink: 0 }}>{fmtPct(timePct)}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.8rem", color: "rgba(200,200,210,0.75)" }}>
+              <span style={{ width: "5rem", textAlign: "right", flexShrink: 0 }}>Budget</span>
+              <div className="treasury-progress-track" style={{ flex: 1, margin: 0 }}>
+                <div className="treasury-progress-fill" style={{ width: `${Math.min(100, budgetPct)}%`, background: usageBarColor }} />
+              </div>
+              <span style={{ width: "3rem", flexShrink: 0 }}>{fmtPct(budgetPct)}</span>
+            </div>
+          </div>
+          <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.78rem" }}>
+            At current burn rate of {fmtAdaShort(adaPerEpoch)} ₳/epoch, projected spend by epoch {endEpoch} is{" "}
+            <strong>{fmtAdaShort(projectedTotalAda)} ₳</strong> ({fmtPct(projectedUsagePct)} of the {fmtAdaShort(totals.limitAda)} ₳ limit).
+          </p>
+        </section>
+      )}
 
       {/* ── Per-epoch bar chart ── */}
       {epochBreakdown.length > 0 && (

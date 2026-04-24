@@ -7980,6 +7980,7 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, {
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
       generatedAt: new Date().toISOString(),
+      currentEpoch: snapshot?.latestEpoch || null,
       periods: Object.values(NCL_PERIODS),
       current:  { ...current,  epochBreakdown: epochBreakdown(current) },
       previous: { ...previous, epochBreakdown: epochBreakdown(previous) },
