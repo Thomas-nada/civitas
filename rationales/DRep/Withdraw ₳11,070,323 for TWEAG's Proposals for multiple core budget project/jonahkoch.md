@@ -1,0 +1,16 @@
+<!-- url: https://raw.githubusercontent.com/jonahkoch/DRep/refs/heads/main/Vote_Context_11M-TWEAG-Core-Projects.jsonld -->
+# jonahkoch
+
+**Proposal:** Withdraw ₳11,070,323 for TWEAG's Proposals for multiple core budget project
+**Vote:** Yes
+**Voter ID:** `drep1yt8trnz8e5cnylmyygt0pyzrfw92rt9s42kg8t4rhm6t0dstyvmdn`
+
+---
+
+This proposal represents a strategic investment in Cardano's core technical infrastructure through a comprehensive suite of eleven specialized projects that address critical operational bottlenecks and long-term scalability requirements. Tweag's systematic approach targets essential components across the entire Cardano stack, from consensus mechanisms and ledger conformance to Plutus optimization and network synchronization improvements.
+Tweag brings unparalleled expertise and institutional knowledge to these initiatives, having continuously collaborated with Input Output Global since 2018 on core protocol development including Ouroboros Genesis implementation, consensus and ledger team leadership, and Ouroboros Peras design contributions. Their deep understanding of Cardano's architecture, combined with over a decade of engineering excellence in critical infrastructure projects, positions them uniquely to deliver on highly specialized technical requirements.
+The proposed projects collectively address fundamental infrastructure needs that underpin ecosystem growth and developer experience. Conformance testing initiatives ensure protocol correctness and future-proofing, while the Plutus Script Re-Executor and Block Cost Investigation provide essential tools for performance optimization that directly benefit decentralized application developers. Network-level improvements through Genesis Sync Accelerator and Hoarding Node development address bootstrap performance and reliability constraints.
+The technical scope demonstrates strategic alignment with Cardano's evolution toward greater scalability, verifiability, and maintainability. Projects like Canonical Ledger State and Block Transaction Diffusion Codecs improve interoperability and consistency, while History Expiry and node emulator maintenance contribute to long-term sustainability and testing capabilities.
+The return on investment extends across the entire ecosystem through faster network upgrades, reduced onboarding friction, improved protocol transparency, and more resilient infrastructure. These foundational improvements enable broader participation while strengthening the technical base supporting future innovations.
+Tweag's partnership with Modus Create provides additional strategic consulting capabilities and global reach that complement their technical expertise. The transparent contract management framework, including independent third-party assurance and audited smart contract administration, ensures accountability and delivery confidence.
+Supporting this proposal advances Cardano's mission to build a resilient, scalable, and verifiable blockchain ecosystem by investing in the fundamental infrastructure that enables continued innovation and growth. The combination of proven technical leadership, comprehensive project scope, and strategic alignment makes this investment essential for maintaining Cardano's competitive position and technological advancement.

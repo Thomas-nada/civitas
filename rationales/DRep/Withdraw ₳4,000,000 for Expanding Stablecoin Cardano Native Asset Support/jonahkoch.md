@@ -1,0 +1,16 @@
+<!-- url: https://raw.githubusercontent.com/jonahkoch/DRep/refs/heads/main/Vote_Context_4M-Expanding-Stablecoin-Support.jsonld -->
+# jonahkoch
+
+**Proposal:** Withdraw ₳4,000,000 for Expanding Stablecoin Cardano Native Asset Support
+**Vote:** Yes
+**Voter ID:** `drep1yt8trnz8e5cnylmyygt0pyzrfw92rt9s42kg8t4rhm6t0dstyvmdn`
+
+---
+
+This proposal addresses critical infrastructure gaps that currently limit Cardano's competitive positioning in the rapidly expanding stablecoin and digital payments market. The absence of institutional-grade custody solutions from major providers like BitGo and Fireblocks creates significant barriers to exchange listings, institutional adoption, and capital attraction for Cardano-native assets including USDA.
+The initiative strategically targets four fundamental bottlenecks constraining ecosystem growth through expanding wallet and custodian support, increasing exchange and OTC desk availability, driving real-world utility beyond crypto trading, and building cost-effective fiat on/off-ramps in frontier markets. These interventions directly address the underrepresentation of Cardano's seven-hundred-million-dollar DeFi ecosystem in centralized exchange trading and institutional investment flows.
+The focus on emerging markets aligns with Cardano's mission to provide financial infrastructure in underserved regions while leveraging the platform's low-fee structure for cross-border payments, remittances, and enterprise settlements. Current fiat ramps charging five to seven percent fees versus one percent for local bank transfers create substantial barriers that this proposal addresses through alternative payment rails across seventy-plus countries.
+The team's combined fifty years of experience across leading financial institutions including Paxos, Western Union, Citibank, and major cryptocurrency exchanges provides proven capability in navigating regulatory requirements, building compliance frameworks, and scaling global payment networks. Their track record in stablecoin liquidity management and institutional adoption demonstrates competence essential for executing complex financial infrastructure projects.
+Market expansion through USDA pairs on centralized exchanges, NEO banks, and OTC desks significantly enhances liquidity while creating trading opportunities that benefit the entire ecosystem. Integration with real estate developers, remittance companies, and payment processors expands utility beyond cryptocurrency trading into practical financial applications that drive mainstream adoption.
+The governance framework including legally binding contracts, delivery milestones, external audits, and oversight by trusted entities ensures accountability while the vendor's commitment to reinvesting earnings into Cardano liquidity and adoption incentives aligns interests with long-term ecosystem success.
+Supporting this proposal strengthens Cardano's position in the competitive stablecoin market while building essential financial infrastructure that enables broader participation in decentralized finance and real-world payment applications. The deliverables directly enhance utility for homegrown stablecoins like USDA and USDM, creating sustainable advantages that benefit users, developers, and the broader Cardano community through improved accessibility and market presence.

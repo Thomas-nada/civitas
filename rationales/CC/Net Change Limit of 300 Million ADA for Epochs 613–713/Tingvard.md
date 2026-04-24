@@ -1,0 +1,14 @@
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmWhceKHGQdexZMxG6fEuK6C2WgTVnzjpoXvXVT5GQwvJM -->
+# Tingvard
+
+**Proposal:** Net Change Limit of 300 Million ADA for Epochs 613–713
+**Vote:** Yes
+**Voter ID:** `646d1b3ac94568a422b687db6c47acdf849f1674982ae4f9a494be43`
+
+---
+
+This governance action establishes a new Net Change Limit (NCL) for the Cardano Treasury covering the period from the start of Epoch 613 (13 February 2026) through the conclusion of Epoch 713 (3 July 2027). Under Appendix I, TREASURY-01a and TREASURY-02a of the Cardano Constitution, a Net Change Limit must be agreed by DReps via an on-chain governance action with a threshold of greater than 50% of the active voting stake, and treasury withdrawals must not exceed the applicable Net Change Limit for the defined period. A valid NCL must therefore be in effect for any treasury withdrawal governance action to be constitutionally enacted during that timeframe.
+The proposal clearly defines both the numerical limit and the period of time to which it applies. The specified limit of 300,000,000,000,000 lovelace (300 million ADA) is lower than the previously adopted 350 million ADA ceiling and therefore represents a tightening rather than an expansion of treasury outflow capacity. The defined epoch range satisfies the constitutional requirement that a Net Change Limit apply to a specific period of time. The Constitution imposes no restriction on the length of such a period, requiring only that the limit exist and be respected.
+The rationale for the chosen timeframe is consistent with sound governance practice. By aligning the NCL cycle with the mid-year budget season and ensuring that a complete prior year of treasury inflow data is available before setting a subsequent NCL, the proposal strengthens fiscal modeling and supports informed decision-making. This approach is aligned with Tenet 8, which requires that the Cardano Blockchain shall not unreasonably spend resources, and Tenet 9, which requires fair and sustainable treatment of all users consistent with long-term viability.
+The proposal’s calculation methodology is transparent and grounded in historical treasury inflows. It references total inflows from Epoch 532 through Epoch 604, amounting to 306,940,195 ADA, and sets the NCL at a slightly conservative level relative to realized income. This supports fiscal discipline while preserving sufficient operational flexibility within constitutional guardrails.
+The governance action also satisfies Article II, § 6, which requires a standardized and legible format including a title, abstract, justification, and relevant supporting materials. The metadata clearly specifies purpose, scope, methodology, and effect, and states that upon approval the NCL shall supersede any previously agreed NCL for the same period, thereby avoiding ambiguity.

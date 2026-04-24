@@ -1,0 +1,16 @@
+<!-- url: https://raw.githubusercontent.com/InputEndorsers/DRep-InputEndorsers/refs/heads/main/NCL2025.jsonld -->
+# InputEndorsers
+
+**Proposal:** 2025 Net Change Limit
+**Vote:** No
+**Voter ID:** `drep1y2hlgh9600zjlt39dh54z7z8d65kahneck8yhh7ugmzc9as0xrzqd`
+
+---
+
+I welcome the proposed Net Change Limit proposal. It is important to approve an NCL and I am voting NO on this one due to several reasons:
+1. The problem I see with a very large first year NCL is that our budgetary and governance processes are the weakest, keep changing from week to week and are probably the most inefficient in the first year. Our ability to audit, prevent waste and abuse are questionable. A lower NCL would focus minds.
+2. The proposers have stated that from January 5th, 2024, Epoch 459, through December 30th, Epoch 531, the actual total income into the Cardano Treasury was 335,957,093 ada. The proposed NCL is 350M ada. This is roughly 14M ada HIGHER than the total income in the Cardano Treasury for 2024. I welcome the proposed reference to modelling and the reference to a previous period for which we have data. The motion uses modelling of ADA inflow for the previous year as the main basis for approving an NCL. It is indeed one of the factors that must be considered.
+3. What I am missing in this proposal - as it proposes a relatively large NCL - is even a minor economic analysis of how approvals of different NCLs could impact the valuation of ADA. An NCL of 350M ADA is sending a signal to the market. What is this signal? How does it compare to previous signals? If we do not have the data, is there room for a prediction at least? With the lack of this economic/monetary analysis, we are left to speculate. My feeling is that NCL approvals in the future will shape the ADA exchange rate vs the USD. It is a signal how much ADA could be released - a signal approved by the majority of DReps. The approval of a large NCL could have an immediate price impact on the value of ADA, thus diminishing the purchase power of the 350M ADA. Before the budget elements are approved. 
+4. After approving a large NCL, the budgetary discussions will probably take place in the shadow of a lower ADA/USD exchange rate. Thus we might be forced by the market to push an annual budget towards the top limit of the NCL. We could create a self-fulfilling prophesy. 
+5. Without a monetary/economic analysis or forecast, I would consider voting for a NCL in the 200-250M ADA in 2025 (depending on the text of the NCL proposal) as it would give a better signal to the market about our intentions to balance the development of the system and the intention to safeguard the value of ADA and Cardano's Top 10 position. Especially, as our abilities to manage the potential spending of so much ADA in the early days of decentralized governance are the lowest. 
+6. I see this conservative approach as something that protects the interests of ADA holders and stakers. We SHOULD approve the closest NCL to the actual budget that we want as DReps. If the intention is to approve a lower budget than 350M ada as some (many?) DReps seem to have indicated, then to preserve the value of that ada for those who will receive it, the best thing we can do is to vote for an NCL that is closest to that intended 2025 budget total.

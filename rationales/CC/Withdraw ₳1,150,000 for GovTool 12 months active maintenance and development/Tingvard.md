@@ -1,0 +1,14 @@
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmPpaDc75VgSwkNGuQTdjFExBAjTrLi4mqbpunjksGbJeE -->
+# Tingvard
+
+**Proposal:** Withdraw ₳1,150,000 for GovTool 12 months active maintenance and development
+**Vote:** Yes
+**Voter ID:** `646d1b3ac94568a422b687db6c47acdf849f1674982ae4f9a494be43`
+
+---
+
+This governance action is properly framed as a treasury withdrawal under Article IV. It requests ₳1,150,000 to fund 12 months of maintenance and development for GovTool, Cardano’s open-source, community-owned governance tooling platform. The withdrawal follows the budget Info action gov_action1n5sn54mgf47a7men2ryq6ppx88kta4wvenz2qkl4f9v6ppje8easqxwm88m, which approved the associated budget, satisfying the constitutional requirement to align withdrawal actions with an approved budget plan (Article IV, § 1).
+The action satisfies the requirements of Article IV, § 2, which governs administration of treasury funds. Administration of the funds will be handled by Intersect through a treasury management smart contract framework developed by Sundae Labs and audited by TxPipe and MLabs. Funds will be held in a Treasury Reserve Smart Contract (TRSC) and disbursed to Project-Specific Smart Contracts (PSSCs) as milestones are met. An Oversight Committee of five independent entities is established to verify key administrative actions on-chain. The Oversight Committee’s limited powers and on-chain verification mechanisms align with the principle of ensuring funds are administered with constitutional accountability.
+The action also satisfies Article IV, § 4, which requires measures to ensure transparency and auditability of treasury usage. Milestones, acceptance criteria, and payment schedules are defined, with delivery verification conducted by Intersect or a third-party assurer before disbursement. A public dashboard (cardanotreasury.fi) will allow the community to audit fund flows, track milestones, and verify spending immutably on-chain. The inclusion of delivery assurance processes and third-party verification provides the transparency and accountability required by the Constitution.
+Article IV, § 5 requires treasury funds not to be delegated to a stake pool operator (SPO) and, where delegated, to use the predefined auto-abstain DRep. The proposal explicitly states that the TRSC and PSSCs cannot delegate to SPOs and will delegate only to the auto-abstain predefined DRep. This satisfies the non-delegation and delegation requirements of Article IV, § 5.
+The action further aligns with the constitutional principles outlined in Article II. It supports the sustainability of Cardano’s governance infrastructure (Tenet 9), enhances decentralisation by providing open-source governance tools accessible to all participants, and upholds transparency and community oversight by making all code public and establishing reporting and verification mechanisms.

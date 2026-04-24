@@ -1,0 +1,10 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYYpZ3qg8MKXDRkYZAdm32AYyS4vjzyBY11wynEaNdgB2 -->
+# hix_coffeepool
+
+**Proposal:** Cardano 2030 Vision, Mission, Strategy Framework and KPIs
+**Vote:** Yes
+**Voter ID:** `drep1ygnh2uf4wkc8ldgfxwz7rzuga3m8jtqew9xh5g3n587mg6g3ge0sj`
+
+---
+
+I am voting Yes on the “Cardano 2030 Vision” Info Action. I believe that articulating a long-term direction for the Cardano ecosystem and establishing a shared foundation for future discussions is meaningful. This proposal outlines certain KPIs and concrete initiatives, and I generally support those elements. However, my support for this Info Action should not be interpreted as unconditional approval of any future governance actions, treasury withdrawals, or large-scale budget proposals. Especially for proposals involving significant treasury spending, it is essential to provide a clear justification, a transparent budget breakdown, measurable outcomes, and robust accountability mechanisms. My support or opposition to future proposals will be determined independently and is not necessarily aligned with this Info Action. I emphasize that agreeing to a high-level vision does not waive the need for strict scrutiny of its implementation. Also, by design, Info Actions are non-binding, and each subsequent action must be assessed on its own merits. This Yes vote reflects support for the direction and the value of continued dialogue, while affirming a cautious and independent stance toward future implementations or funding proposals aligned with this vision. [Japanese Version Follows]  私は「Cardano 2030 Vision」Info Action に対して賛成票（Yes）を投じます。カルダノ・エコシステムとして、長期的な方向性を言語化し、将来に向けた議論の共通基盤を持つこと自体には意義があると考えます。また、本GAには一定のKPIや具体的な施策が埋め込まれており、全体としてはそれらに対して支持する立場です。ただし、本Infoアクションへの賛成は、将来提出されるガバナンスアクションやトレジャリー支出、大規模予算提案を無条件に支持するものではありません。特に、トレジャリーからの多額の支出を伴う提案については、明確な必要性、透明な予算内訳、測定可能な成果指標、そして十分な説明責任が不可欠であり、それらに対する支持・不支持は、本GAに対する賛成票と必ずしも連動するものではありません。高レベルなビジョンへの合意が、実行段階における厳密な検証を省略する理由にはならないことを明示しておきます。また、Info Action は本来、拘束力を持たないものであり、今後の各提案はそれぞれ独立して精査されるべきです。今回のYes票は、方向性そのものへの支持と対話の継続を重視したものであり、今後このビジョンを具体化・資金化する提案については、引き続き慎重かつ独立した立場で判断していく姿勢を示すものです。

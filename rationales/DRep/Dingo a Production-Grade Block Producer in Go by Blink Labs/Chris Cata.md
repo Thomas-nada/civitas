@@ -1,0 +1,10 @@
+<!-- url: ipfs://bafkreie7sf6sn5lvf5eeledpd2fpppozp272qd24kdfawddw6ehm2ffcgy -->
+# Chris Cata
+
+**Proposal:** Dingo a Production-Grade Block Producer in Go by Blink Labs
+**Vote:** Yes
+**Voter ID:** `drep1yfdfs28uwafjgmrkatdektlzrvha2cmvqjhuz700e04mawq23rmrg`
+
+---
+
+I'm voting YES on the Dingo proposal by Blink Labs.The requested ₳6,900,000 is a relatively small, low-risk allocation relative to the Cardano treasury's overall size, making it a prudent step toward advancing essential node diversity. This proposal doesn't need to be funneled through the Intersect budgeting process; we should deliberately exercise direct treasury pathways when suitable to test and refine governance alternatives. Over-reliance on a single mechanism—even a collaborative one like Intersect—could inadvertently centralize decision-making, which runs counter to the decentralization we champion. Node diversity remains a foundational requirement for long-term network resilience and security, and we've consistently affirmed that Cardano should avoid dependence on any single large entity, consortium, or implementation. That same principle applies to funding: direct treasury proposals merit fair, case-by-case evaluation without mandatory redirection.On its merits, Blink Labs brings a proven track record of open-source contributions to the ecosystem. Supporting this initiative backs an independent team leveraging Go—a widely accessible language—ensuring we don't concentrate efforts on just one alternative (Haskell or otherwise). Genuine diversity demands multiple teams with varied skill sets and approaches, reducing single points of failure and fostering innovation across the protocol.This aligns squarely with community goals of building a more robust, decentralized Cardano while balancing progress with prudent risk management. It also resonates directly with my own objectives as a DRep: striking a thoughtful balance in governance actions that serve both short- and long-term ecosystem health, prioritizing continuous improvement.

@@ -1,0 +1,26 @@
+<!-- url: https://raw.githubusercontent.com/hephy-io/mainnet/refs/heads/main/drep_rationales/GA062-063-treasury-snek.jsonld -->
+# Hephaestus Stake Pool [HEPHY]
+
+**Proposal:** Withdraw ₳5M for Cardano's Global Listing Expansion - Powered by Snek
+**Vote:** No
+**Voter ID:** `drep1y2zu74gt8sxtrxcngqsmrnupkzrtmlqshmvmm5qtuhxx6xqt7yhaw`
+
+---
+
+This is a combined rationale for the two treasury withdrawal governance actions submitted by the Snek Foundation, with the action ID’s: “4ff43f1eab5252ef00ba6f1429dc23715e3899834f10c067e8065c8364d5559a#0” and “1d6aea56e6a523b13e03ae30ff24ebf9852543b4f7d415c7e50f55f6baaa4e3d#0”. A combined rationale is provided to give further context to the “NO” vote submitted here.
+
+First and foremost, this is not a reflection of my views regarding Snek’s achievements, their position in the ecosystem to date, or whether treasury funds should be used for project listings and is an assessment of the handling of the submission of these two proposals.
+
+While constitutionality is the remit of the Constitutional Committee and not DReps, it plays a role in assessing the handling of these two proposals. On August 2 2025, two treasury withdrawal actions were submitted less than an hour apart, with a combined governance action deposit of 200,000 ada. It appears as though the second action was submitted in haste following an input error that resulted in the first proposal requesting only 5 ada instead of 5 million ada. This is the first and foremost issue with the first governance action and any DRep voting yes without recognising this fact raises questions about their levels of due diligence when it comes to voting. Constitutional or otherwise, the on-chain treasury withdrawal request is for 5 ada and not the proposed 5 million ada in the proposal text.
+
+A deeper assessment of the timeline of events raises further questions (times in UTC+1). The provided withdrawal address was first funded at 13:13:24 on August 2 2025 with the stake key registered and delegated to a DRep at 13:14:12, breaking the first constitutional requirement for treasury withdrawals before the proposal was even submitted (https://cardanoscan.io/address/addr1q9gcxfl9fe9ulluvtc2sxj6xux7jfa49zzq4aheyywqm0k3gudvqrjyfk4nqpvscu2ggqg67x9e0dk5l5p4s6msvkpys6qv4v6). This address was then funded with the 100,000 ada deposit funds at 13:15:55 with the first governance action submitted at 13:46:02 (https://cardanoscan.io/govAction/gov_action1fl6r784t2ffw7q96du2znhprw90r3xvrfugvqelgqewgxex42kdqq9tgrd5).
+
+Less than an hour later, likely after noticing the 5 ada not 5 million ada error, the provided address was funded with a second round of 100,000 ada at 14:21:48 and a second action submitted at 14:34:22 with the correct 5 million ada value instead of 5 ada (https://cardanoscan.io/govAction/gov_action1r44w54hx553mz0sr4cc07f8tlxzj2sa57l2pt3l9pa2ldw42fc7sq5q3rtn). In the meantime, at 17:43, the Snek X account tried to make light of the situation claiming that this submission was intended for testnet (https://x.com/snek/status/1951685280462749958), despite a mainnet wallet being funded twice with 100,000 ada which is more than just a “button clicking error”. This post was a display of incompetence at best, deception at worst, and should have just honestly owned up to the mistake.
+
+Following further feedback on social channels about constitutionality, the stake address was then delegated to the auto-abstain DRep at 18:13:19 in order to correct that constitutional requirement but with the absence of a previous budget info action, among other shortcomings, the damage there had already been done.
+
+People can claim that “governance is still new” in defence of the handling of these proposals however, with 15 info actions (5 general, 4 NCL, 6 budget), 3 protocol parameter updates, 1 update constitution action. 1 hard fork initiation, 40 treasury withdrawal actions and 1 update constitutional committee action all on-chain prior to these proposals being submitted, that defence is wearing thin. We have plenty of precedents for these things that potential proposers can now look back on and see why actions may or may not have passed / been deemed constitutional/unconstitutional. We also have testnets exactly for this reason, use them! Not only can they help get things right first time but it also allows an opportunity to socialise the proposal and receive any feedback for any potential failings before committing 200,000 ada in deposits.
+
+The submitters of these proposals should have waited after the first one, despite the 5 ada error, as it would have still allowed chance for feedback on other areas before hastily committing to another deposit. Additionally, it was short-sighted also to rush, in the wider context of the epoch timing, the epoch ended 3.5 hours after the second submission, voting periods are measured in epochs and by submitting so late in the epoch they actually sold themselves short of up to 116 hours additional voting time than had they submitted earlier in the epoch.
+
+All-in-all the hasty mishandling of this situation raises questions for me, especially when requesting 5 million ada from the treasury while so nonchalantly throwing 200,000 ada at governance action deposits, now locked for the full voting period with a pair of ill-prepared governance actions.

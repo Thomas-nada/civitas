@@ -1,0 +1,14 @@
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmdaAeBcc9mNxS2nmZCkyqtwvJPxF9Pt4bu3sU5n1trDRv -->
+# Tingvard
+
+**Proposal:** Increase Transaction and Block Memory Units (Part 1 of 2)
+**Vote:** Yes
+**Voter ID:** `646d1b3ac94568a422b687db6c47acdf849f1674982ae4f9a494be43`
+
+---
+
+This governance action is properly framed as a “Protocol Parameter Changes” action and concerns adjustments to critical protocol parameters governing Plutus script memory execution limits. The proposal increases maxTxExecutionUnits[memory] and maxBlockExecutionUnits[memory] in a correlated manner, consistent with the requirements for network and execution-budget parameters under the Constitution.
+The action satisfies the procedural and substantive requirements of Article II, § 6. The proposal is presented in a standardized format, includes immutable off-chain metadata with a corresponding hash, and provides a comprehensive technical rationale, benchmarking evidence, and guardrail analysis. The metadata demonstrates that the proposed changes were preceded by extended off-chain discussion, formal consideration by the Intersect Parameter Committee, and subsequent ratification by the Technical Steering Committee, satisfying expectations of transparency and technical scrutiny.
+The proposed parameter values remain within all mandatory guardrails set out in the Cardano Blockchain Guardrails Appendix. The increases do not exceed maximum bounds, do not reduce existing limits, and respect the recommended per-epoch change constraints. The proposal explicitly acknowledges the critical nature of the affected parameters and correctly relies on the additional SPO voting threshold required for such changes, in accordance with PARAM-03a.
+From a constitutional perspective, the action advances the Tenets set out in Article I. In particular, it promotes Tenet 3 by ensuring that developers are not unreasonably prevented from deploying applications as intended, and Tenet 8 by enabling more efficient use of existing block capacity without wasteful fragmentation or artificial constraints. Real-world development experience has demonstrated that current memory limits force developers to choose between reducing supported functionality or abandoning features that are standard on competing platforms, even after extensive optimization and use of advanced tooling. This update removes such artificial barriers while remaining within safe and benchmarked performance limits.
+The proposal also considers potential trade-offs. Increasing memory execution limits marginally raises hardware requirements for block-producing nodes. However, benchmarking confirms that Praos timing guarantees remain intact, and the resulting requirements remain well within the capacity of the vast majority of existing stake pool operators. The Constitution does not require preservation of minimum-spec operation where doing so would unnecessarily impede the evolution and competitiveness of the ecosystem.

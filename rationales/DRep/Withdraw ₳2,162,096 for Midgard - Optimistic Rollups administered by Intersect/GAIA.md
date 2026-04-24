@@ -1,0 +1,10 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZNV9a2WBey2H7Ksg2J1XLPM7t12srZFHa8KJAm8YfjBB -->
+# GAIA
+
+**Proposal:** Withdraw ₳2,162,096 for Midgard - Optimistic Rollups administered by Intersect
+**Vote:** Yes
+**Voter ID:** `drep1ytxr0lhg5j72wysva9ac2gsn4lck4gyen8ywxkqfchsqg3qs8uy44`
+
+---
+
+I am following through with my YES vote from the Cardano Budget 2025 Ekklesia process. This proposal falls within my personal NCL of 250,000,000 ADA.

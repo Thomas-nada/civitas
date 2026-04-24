@@ -1,0 +1,18 @@
+<!-- url: https://raw.githubusercontent.com/jonahkoch/DRep/refs/heads/main/Vote_Context_26.8M-IOR-Cardano-Vision.jsonld -->
+# jonahkoch
+
+**Proposal:** Withdraw ₳26,840,000 for Input Output Research (IOR) Cardano Vision - Wor
+**Vote:** Yes
+**Voter ID:** `drep1yt8trnz8e5cnylmyygt0pyzrfw92rt9s42kg8t4rhm6t0dstyvmdn`
+
+---
+
+This proposal represents a vital continuation of the research-driven approach that fundamentally defines Cardano's identity and competitive advantage in the blockchain landscape. Input Output Research has been instrumental in delivering Cardano's foundational architecture through rigorous, peer-reviewed methodology, producing over 200 academic papers that established the network's technical credibility and innovative solutions like Ouroboros consensus.
+The structured funnel model connecting fundamental research to practical implementation ensures that Cardano maintains its position as a research leader while delivering tangible technological advances. The proposal's 20 research streams and 6 technology validation initiatives across critical areas including scalability, interoperability, and sustainability directly address the long-term challenges facing blockchain adoption and utility.
+Cardano's research-first methodology distinguishes it from other Layer 1 platforms that often prioritize rapid deployment over thorough validation. This approach has delivered Cardano's unique architecture, including EUTxO, formal verification capabilities, and proven consensus mechanisms that provide security guarantees other networks cannot match. Abandoning this research foundation would undermine Cardano's core value proposition and competitive positioning.
+The five-year Cardano Vision program demonstrates strategic thinking beyond immediate market demands, focusing on breakthrough technologies like quantum-resistant cryptography, advanced zero-knowledge proofs, and next-generation consensus protocols. These innovations require sustained investment and cannot be developed through short-term funding cycles or market-driven approaches alone.
+IOR's track record provides strong confidence in delivery capability, with consistent publication output in increasingly competitive academic venues and successful translation of research into production implementations. The rigorous peer-review process ensures quality while building academic credibility that benefits the entire ecosystem.
+The technology validation component bridges the gap between theoretical research and practical implementation, producing formal specifications, prototypes, and improvement proposals that enable the broader Cardano community to build upon research foundations. This systematic approach accelerates innovation while maintaining quality standards.
+Continued research investment is essential for Cardano to address emerging challenges including quantum computing threats, cross-chain interoperability requirements, and sustainability concerns that will define the next generation of blockchain platforms. Without proactive research, Cardano risks losing its technological edge and narrative leadership.
+The proposal's focus on long-horizon research and development ensures Cardano remains ahead of industry trends rather than reactive to market pressures. This strategic positioning enables the network to capture opportunities that require deep technical innovation rather than competing solely on immediate utility metrics.
+Supporting this proposal maintains Cardano's research-driven identity while funding the foundational work necessary for continued technological leadership and ecosystem evolution.
