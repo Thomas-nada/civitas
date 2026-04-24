@@ -235,7 +235,7 @@ async function main() {
   });
 
   console.log(`\nDone. Written: ${written}  Skipped (unchanged): ${skipped}  Failed: ${failed}`);
-  if (failed > 0) process.exitCode = 1;
+  if (failed > 0) console.warn(`\n${failed} rationale URLs could not be fetched (dead links, IPFS timeouts, etc.) — this is expected and non-fatal.`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
