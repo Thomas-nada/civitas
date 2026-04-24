@@ -7936,16 +7936,33 @@ const server = http.createServer(async (req, res) => {
 
     const src = pickBestSnapshotForApi(snapshot);
     const proposalInfo = src?.proposalInfo || {};
-    const pending = Object.entries(proposalInfo)
-      .filter(([, info]) => info?.governanceType === "TreasuryWithdrawals" &&
-                            ["Active", "Ratified"].includes(info?.outcome))
-      .map(([proposalId, info]) => ({
+
+    function mapTreasuryProposal([proposalId, info]) {
+      const amountLovelace = extractTreasuryWithdrawalLovelaceFromProposal(info);
+      return {
         proposalId,
         title: info.actionName || proposalId,
         outcome: info.outcome,
         expirationEpoch: info.expirationEpoch ?? null,
-        amountAda: info.requestedAda ?? null,
-      }));
+        amountLovelace,
+        amountAda: amountLovelace > 0 ? amountLovelace / 1_000_000 : (info.requestedAda ?? null),
+      };
+    }
+
+    const treasuryEntries = Object.entries(proposalInfo)
+      .filter(([, info]) => info?.governanceType === "TreasuryWithdrawals");
+
+    const ratified = treasuryEntries
+      .filter(([, info]) => info?.outcome === "Ratified")
+      .map(mapTreasuryProposal);
+
+    const activePipeline = treasuryEntries
+      .filter(([, info]) => info?.outcome === "Active")
+      .map(mapTreasuryProposal);
+
+    function sumAda(rows) {
+      return rows.reduce((sum, r) => sum + Number(r.amountAda || 0), 0);
+    }
 
     json(res, 200, {
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -7953,7 +7970,10 @@ const server = http.createServer(async (req, res) => {
       periods: Object.values(NCL_PERIODS),
       current:  { ...current,  epochBreakdown: epochBreakdown(current) },
       previous: { ...previous, epochBreakdown: epochBreakdown(previous) },
-      pending,
+      ratified,
+      ratifiedTotalAda: sumAda(ratified),
+      activePipeline,
+      activePipelineTotalAda: sumAda(activePipeline),
     });
     return;
   }

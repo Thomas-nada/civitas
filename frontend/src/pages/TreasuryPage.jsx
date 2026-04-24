@@ -24,10 +24,6 @@ function fmtPct(value) {
   return `${n.toFixed(2)}%`;
 }
 
-function OutcomePill({ outcome }) {
-  const cls = outcome === "Active" ? "pill good" : "pill mid";
-  return <span className={cls}>{outcome}</span>;
-}
 
 export default function TreasuryPage() {
   const [payload, setPayload] = useState(null);
@@ -60,7 +56,10 @@ export default function TreasuryPage() {
   const totals = periodData?.totals || {};
   const withdrawals = periodData?.withdrawals || [];
   const epochBreakdown = periodData?.epochBreakdown || [];
-  const pending = payload?.pending || [];
+  const ratified = payload?.ratified || [];
+  const ratifiedTotalAda = payload?.ratifiedTotalAda || 0;
+  const activePipeline = payload?.activePipeline || [];
+  const activePipelineTotalAda = payload?.activePipelineTotalAda || 0;
 
   const overLimit = Number(totals.remainingLovelace || 0) < 0;
   const usagePct = Number(totals.usagePct || 0);
@@ -221,36 +220,87 @@ export default function TreasuryPage() {
         ) : null}
       </section>
 
-      {/* ── Pending / ratified treasury proposals ── */}
+      {/* ── Ratified (pending payout) ── */}
       <section className="panel">
-        <h2>Pending Treasury Proposals</h2>
+        <h2>Ratified — Pending Payout</h2>
         <p className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.83rem" }}>
-          Active or ratified treasury withdrawal proposals not yet enacted.
+          These proposals have been ratified and will be paid out when enacted at the next epoch boundary.
+          {ratified.length > 0 && (
+            <> Total queued: <strong>{fmtAda(ratifiedTotalAda)} ₳</strong></>
+          )}
         </p>
         {loading ? <p className="muted">Loading…</p> : null}
-        {!loading && pending.length === 0 ? (
-          <p className="muted">No pending treasury withdrawal proposals at this time.</p>
+        {!loading && ratified.length === 0 ? (
+          <p className="muted">No ratified treasury withdrawals awaiting payout.</p>
         ) : null}
-        {!loading && pending.length > 0 ? (
+        {!loading && ratified.length > 0 ? (
           <table>
             <thead>
               <tr>
                 <th>Proposal</th>
-                <th>Status</th>
                 <th>Expires (epoch)</th>
                 <th>Amount</th>
                 <th>Proposal ID</th>
               </tr>
             </thead>
             <tbody>
-              {pending.map((row) => (
+              {ratified.map((row) => (
                 <tr key={row.proposalId}>
                   <td>
                     <Link className="inline-link" to={`/actions/${encodeURIComponent(row.proposalId)}`}>
                       {row.title || row.proposalId}
                     </Link>
                   </td>
-                  <td><OutcomePill outcome={row.outcome} /></td>
+                  <td>{row.expirationEpoch ?? "—"}</td>
+                  <td>{row.amountAda != null ? `${fmtAda(row.amountAda)} ₳` : "—"}</td>
+                  <td className="mono">
+                    <a
+                      className="ext-link"
+                      href={`https://cardanoscan.io/govAction/${encodeURIComponent(row.proposalId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {row.proposalId}
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </section>
+
+      {/* ── Active pipeline ── */}
+      <section className="panel">
+        <h2>Active Pipeline</h2>
+        <p className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.83rem" }}>
+          Treasury withdrawal proposals currently under vote — not yet ratified, expired, or enacted.
+          {activePipeline.length > 0 && (
+            <> Potential total: <strong>{fmtAda(activePipelineTotalAda)} ₳</strong></>
+          )}
+        </p>
+        {loading ? <p className="muted">Loading…</p> : null}
+        {!loading && activePipeline.length === 0 ? (
+          <p className="muted">No active treasury withdrawal proposals at this time.</p>
+        ) : null}
+        {!loading && activePipeline.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Proposal</th>
+                <th>Expires (epoch)</th>
+                <th>Amount</th>
+                <th>Proposal ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePipeline.map((row) => (
+                <tr key={row.proposalId}>
+                  <td>
+                    <Link className="inline-link" to={`/actions/${encodeURIComponent(row.proposalId)}`}>
+                      {row.title || row.proposalId}
+                    </Link>
+                  </td>
                   <td>{row.expirationEpoch ?? "—"}</td>
                   <td>{row.amountAda != null ? `${fmtAda(row.amountAda)} ₳` : "—"}</td>
                   <td className="mono">
