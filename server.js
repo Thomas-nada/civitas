@@ -7950,7 +7950,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const treasuryEntries = Object.entries(proposalInfo)
-      .filter(([, info]) => info?.governanceType === "TreasuryWithdrawals");
+      .filter(([, info]) => String(info?.governanceType || "").toLowerCase().includes("treasury"));
 
     const ratified = treasuryEntries
       .filter(([, info]) => info?.outcome === "Ratified")
