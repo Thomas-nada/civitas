@@ -7953,11 +7953,22 @@ const server = http.createServer(async (req, res) => {
       .filter(([, info]) => String(info?.governanceType || "").toLowerCase().includes("treasury"));
 
     const ratified = treasuryEntries
-      .filter(([, info]) => info?.outcome === "Ratified")
+      .filter(([, info]) => {
+        const hasRatified = info?.ratifiedEpoch != null && Number(info.ratifiedEpoch) > 0;
+        const hasEnacted = info?.enactedEpoch != null && Number(info.enactedEpoch) > 0;
+        return hasRatified && !hasEnacted;
+      })
       .map(mapTreasuryProposal);
 
     const activePipeline = treasuryEntries
-      .filter(([, info]) => info?.outcome === "Active")
+      .filter(([, info]) => {
+        const outcome = String(info?.outcome || "").toLowerCase();
+        const hasRatified = info?.ratifiedEpoch != null && Number(info.ratifiedEpoch) > 0;
+        const hasEnacted = info?.enactedEpoch != null && Number(info.enactedEpoch) > 0;
+        const hasExpired = (info?.expiredEpoch != null && Number(info.expiredEpoch) > 0) ||
+                           (info?.droppedEpoch != null && Number(info.droppedEpoch) > 0);
+        return outcome === "pending" && !hasRatified && !hasEnacted && !hasExpired;
+      })
       .map(mapTreasuryProposal);
 
     function sumAda(rows) {
