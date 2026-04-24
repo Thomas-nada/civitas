@@ -316,6 +316,13 @@ export default function TreasuryPage() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2}><strong>Total</strong></td>
+                <td><strong>{fmtAda(activePipelineTotalAda)} ₳</strong></td>
+                <td />
+              </tr>
+            </tfoot>
           </table>
         ) : null}
       </section>
