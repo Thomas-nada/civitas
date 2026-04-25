@@ -10,9 +10,9 @@ function approxCurrentEpoch() {
   return delta < 0 ? null : 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
 }
 
-function epochToDate(epoch) {
+function epochEndDate(epoch) {
   if (!epoch) return null;
-  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208) * EPOCH_DURATION_SECONDS) * 1000);
+  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208 + 1) * EPOCH_DURATION_SECONDS) * 1000);
 }
 
 function fmtDate(ts) {
@@ -41,7 +41,7 @@ function SurveyCard({ survey }) {
   const isActive = currentEpoch != null && survey.details?.endEpoch != null
     ? currentEpoch <= survey.details.endEpoch
     : true;
-  const endDate = epochToDate(survey.details?.endEpoch);
+  const endDate = epochEndDate(survey.details?.endEpoch);
   const roles = Object.keys(survey.details?.roleWeighting ?? {});
   const questionCount = survey.details?.questions?.length ?? 0;
 

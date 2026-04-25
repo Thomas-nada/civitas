@@ -12,9 +12,9 @@ function approxCurrentEpoch() {
   return delta < 0 ? null : 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
 }
 
-function epochToDate(epoch) {
+function epochEndDate(epoch) {
   if (!epoch) return null;
-  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208) * EPOCH_DURATION_SECONDS) * 1000);
+  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208 + 1) * EPOCH_DURATION_SECONDS) * 1000);
 }
 
 function fmtDate(ts) {
@@ -370,7 +370,7 @@ export default function SurveyDetailPage() {
   const roles = Object.keys(details.roleWeighting ?? {});
   const currentEpoch = approxCurrentEpoch();
   const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
-  const endDate = epochToDate(details.endEpoch);
+  const endDate = epochEndDate(details.endEpoch);
 
   const roleTallies = tally.roleTallies ?? [];
   const [selectedRole, setSelectedRole] = useState(null);
