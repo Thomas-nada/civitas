@@ -1,0 +1,10 @@
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmVoKATngBrRWVNphoSKUF69GQjqWAsQiaRSPHXLc5aYmx -->
+# Cardano Japan Council
+
+**Proposal:** Pebble + Gerolamo - HLabs 2026 Budget
+**Vote:** Yes
+**Voter ID:** `725d4d44499865071536d54674b080322bd366be15338db221807b31`
+
+---
+
+This proposal is a Treasury Withdrawals proposal involving the withdrawal of funds from the Cardano Treasury, and its purpose is to support the development and maintenance of a suite of TypeScript libraries for the Cardano ecosystem (including Pebble and Gerolamo) by Harmonic Laboratories. In accordance with Article 2, Section 6, Paragraphs 1 and 2 of the Constitution, the proposal text, URL, hash, supplementary materials, and related documents are provided, and the proposal’s content and supporting documentation are sufficiently identified. Furthermore, regarding Article 2, Section 7, Paragraph 1 of the Constitution, the intended use of funds, implementation period, cost breakdown, and refund conditions are stated; regarding Paragraph 2, disclosures regarding funds received within the past 24 months are provided. Furthermore, regarding Paragraphs 4, 5, and 6, independent audits, the supervisory body, segregated management accounts, and delegation to auto-abstain are clearly specified, providing the management, audit, and accountability framework required for Treasury Withdrawals proposals. Furthermore, in relation to Article 2, Section 7, Paragraph 3, and the Treasury Guardrails (TREASURY-02a, TREASURY-03a), the requested amount of ₳8,035,714 for this proposal falls within the currently valid Net Change Limit (epochs 613–713, 350,000,000 ADA), and is submitted in ADA. Therefore, no conflict with the current Constitution or related guardrails has been identified. Based on the foregoing, this proposal meets the disclosure and governance requirements necessary for a Treasury Withdrawals proposal, and as no unconstitutional elements have been identified in light of constitutional requirements, it is deemed constitutional.
