@@ -38,6 +38,18 @@ function formatAdaShort(value) {
   return `${Math.round(n)}`;
 }
 
+function extractTreasuryAmountAda(info) {
+  if (!info) return 0;
+  const withdrawals = info.metadataJson?.body?.onChain?.withdrawals;
+  if (Array.isArray(withdrawals)) {
+    const total = withdrawals.reduce((s, r) => s + Number(r?.withdrawalAmount || 0), 0);
+    if (total > 0) return total / 1_000_000;
+  }
+  const entries = Array.isArray(info.governanceDescription?.contents?.[0]) ? info.governanceDescription.contents[0] : [];
+  const total = entries.reduce((s, item) => s + Number(Array.isArray(item) ? item[1] : 0), 0);
+  return total > 0 ? total / 1_000_000 : 0;
+}
+
 function eligibleVoteGroups(info) {
   const groups = [];
   const drepEligible = Number(info?.thresholdInfo?.drepRequiredPct || 0) > 0 || Number(info?.voteStats?.drep?.total || 0) > 0;
@@ -357,6 +369,7 @@ export default function ProposalDetailPage() {
   const [voteRationaleText, setVoteRationaleText] = useState({});
   const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
   const [voteRationaleError, setVoteRationaleError] = useState({});
+  const [detailTab, setDetailTab] = useState("votes");
   const [roleFilter, setRoleFilter] = useState("all");
   const [voteFilter, setVoteFilter] = useState("all");
   const [rationaleFilter, setRationaleFilter] = useState("all");
@@ -556,6 +569,8 @@ export default function ProposalDetailPage() {
   }
 
   const voteGroups = eligibleVoteGroups(pieInfo);
+  const isTreasury = String(info.governanceType || "").toLowerCase().includes("treasury");
+  const treasuryAmountAda = isTreasury ? extractTreasuryAmountAda(info) : 0;
 
   return (
     <main className="page shell stats-page">
@@ -590,6 +605,9 @@ export default function ProposalDetailPage() {
       <section className="stats-section stats-section--wide">
         <h2 className="stats-section-title">Timeline</h2>
         <div className="stats-section-body meta">
+          {treasuryAmountAda > 0 && (
+            <p>Amount: <strong>₳{Math.round(treasuryAmountAda).toLocaleString()}</strong></p>
+          )}
           <p>Submitted epoch: <strong>{info.submittedEpoch || "-"}</strong></p>
           <p>Expiration epoch: <strong>{info.expirationEpoch || "-"}</strong></p>
           <p>Ratified epoch: <strong>{info.ratifiedEpoch || "-"}</strong></p>
@@ -613,26 +631,40 @@ export default function ProposalDetailPage() {
       </section>
 
       <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Governance Payload</h2>
-        <div className="stats-section-body">
-          {payloadDoc.sections.map((section) => (
-            <section className="rationale-section" key={`${decodedProposalId}-${section.key}`}>
-              <h4>{section.title}</h4>
-              {section.type === "json" ? (
-                <pre className="json-pre payload-pretty">{JSON.stringify(section.content, null, 2)}</pre>
-              ) : (
-                <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
-                  {section.content}
-                </ReactMarkdown>
-              )}
-            </section>
-          ))}
-          {payloadDoc.sections.length === 0 ? <p className="muted">No payload body sections available.</p> : null}
+        <div className="detail-tabs">
+          <button
+            type="button"
+            className={`detail-tab${detailTab === "votes" ? " detail-tab--active" : ""}`}
+            onClick={() => setDetailTab("votes")}
+          >
+            Votes
+          </button>
+          <button
+            type="button"
+            className={`detail-tab${detailTab === "payload" ? " detail-tab--active" : ""}`}
+            onClick={() => setDetailTab("payload")}
+          >
+            Payload
+          </button>
         </div>
-      </section>
 
-      <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">All Votes</h2>
+        {detailTab === "payload" ? (
+          <div className="stats-section-body">
+            {payloadDoc.sections.map((section) => (
+              <section className="rationale-section" key={`${decodedProposalId}-${section.key}`}>
+                <h4>{section.title}</h4>
+                {section.type === "json" ? (
+                  <pre className="json-pre payload-pretty">{JSON.stringify(section.content, null, 2)}</pre>
+                ) : (
+                  <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
+                    {section.content}
+                  </ReactMarkdown>
+                )}
+              </section>
+            ))}
+            {payloadDoc.sections.length === 0 ? <p className="muted">No payload body sections available.</p> : null}
+          </div>
+        ) : (
         <div className="stats-section-body">
           <div className="proposal-vote-filters">
             <label>
@@ -720,6 +752,7 @@ export default function ProposalDetailPage() {
             </table>
           </div>
         </div>
+        )}
       </section>
 
       {rationaleModal.open ? (
