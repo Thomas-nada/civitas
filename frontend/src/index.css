@@ -514,6 +514,100 @@ a {
   margin: 2rem auto 3rem;
 }
 
+.budget-process-banner {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--mint) 38%, var(--line));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--mint) 12%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.info-banner-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.2rem 0;
+}
+
+.info-banner-item + .info-banner-item {
+  padding-left: 0.9rem;
+  border-left: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+}
+
+.budget-process-banner p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.budget-process-banner strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.budget-process-banner-title {
+  margin-bottom: 0.18rem !important;
+  color: var(--mint) !important;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.budget-process-banner-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0.52rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--mint) 58%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mint) 13%, transparent);
+  color: var(--mint);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 0.9rem;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.budget-process-banner-link:hover,
+.budget-process-banner-link:focus-visible {
+  border-color: var(--mint);
+  background: color-mix(in srgb, var(--mint) 19%, transparent);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+@media (max-width: 700px) {
+  .budget-process-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-process-banner-link {
+    width: 100%;
+  }
+
+  .info-banner-item {
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .info-banner-item + .info-banner-item {
+    padding-top: 0.8rem;
+    padding-left: 0;
+    border-top: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+    border-left: 0;
+  }
+}
+
 .landing-shell {
   margin-top: 1.4rem;
 }

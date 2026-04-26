@@ -54,6 +54,7 @@ function getCurrentNavGroupKey(pathname) {
 
 function getCurrentNavItemPath(pathname) {
   const cleanPath = String(pathname || "");
+  if (cleanPath === "/") return "/actions";
   let best = "";
   for (const group of NAV_GROUPS) {
     for (const link of group.links) {
@@ -145,7 +146,6 @@ function EasterBrandMark({ alertActive }) {
 export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = false }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isLanding = location.pathname === "/";
   const currentNavGroupKey = useMemo(
     () => getCurrentNavGroupKey(location.pathname),
     [location.pathname]
@@ -368,25 +368,21 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
     <>
     <header className="topbar">
       <div className="topbar-inner shell">
-        <div className={`topbar-row-main${isLanding ? " is-landing" : ""}`}>
+        <div className="topbar-row-main">
           <div className="topbar-left">
-            {!isLanding ? (
-              <Link to="/" className="brand-home-link" aria-label="Go to Civitas home">
-                <div className="brand-lockup" aria-label="Civitas">
-                  <span className={`brand-mark${hasNewBugSignal ? " is-alert" : ""}`} title={hasNewBugSignal ? "New bug report signal" : "Civitas logo"}>
-                    {isEaster
-                      ? <EasterBrandMark alertActive={hasNewBugSignal} />
-                      : <BrandMark theme={theme} alertActive={hasNewBugSignal} />
-                    }
-                  </span>
-                  <div className="brand-text">
-                    <p className="brand">Civitas</p>
-                  </div>
+            <Link to="/" className="brand-home-link" aria-label="Go to Civitas home">
+              <div className="brand-lockup" aria-label="Civitas">
+                <span className={`brand-mark${hasNewBugSignal ? " is-alert" : ""}`} title={hasNewBugSignal ? "New bug report signal" : "Civitas logo"}>
+                  {isEaster
+                    ? <EasterBrandMark alertActive={hasNewBugSignal} />
+                    : <BrandMark theme={theme} alertActive={hasNewBugSignal} />
+                  }
+                </span>
+                <div className="brand-text">
+                  <p className="brand">Civitas</p>
                 </div>
-              </Link>
-            ) : (
-              <span className="topbar-left-spacer" />
-            )}
+              </div>
+            </Link>
           </div>
 
           <nav className="topnav topnav-row" onMouseLeave={() => setOpenNavGroupKey(currentNavGroupKey)}>
@@ -432,23 +428,21 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
             >
               {theme === "dark" ? "Light mode" : "Dark mode"}
             </button>
-            {!isLanding ? (
-              <button
-                type="button"
-                className="theme-toggle-btn"
-                onClick={() => {
-                  setBugNotice("");
-                  setBugModalOpen(true);
-                }}
-                aria-label="Report a bug"
-                title="Report a bug"
-              >
-                Report Bug
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={() => {
+                setBugNotice("");
+                setBugModalOpen(true);
+              }}
+              aria-label="Report a bug"
+              title="Report a bug"
+            >
+              Report Bug
+            </button>
 
-            {/* Global Wallet Button — hidden on landing page */}
-            {!isLanding && wallet ? (
+            {/* Global Wallet Button */}
+            {wallet ? (
               <div className="wallet-menu-wrap topbar-wallet">
                 <button
                   type="button"

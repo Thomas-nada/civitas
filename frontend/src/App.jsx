@@ -13,7 +13,6 @@ import { BrowserWallet } from "@meshsdk/core";
 import AppTopbar from "./components/AppTopbar";
 import { WalletContext } from "./context/WalletContext";
 
-const LandingPage = lazy(() => import("./pages/LandingPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
@@ -167,8 +166,6 @@ function RouteTransitionFade() {
 }
 
 export default function App() {
-  const location = useLocation();
-  const isLandingRoute = location.pathname === "/";
   const [isEaster] = useState(isEasterPeriod);
 
   useEffect(() => {
@@ -294,11 +291,11 @@ export default function App() {
         <div className="global-watermark-art" />
       </div>
       <ScrollToTopOnRouteChange />
-      {!isLandingRoute ? <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} /> : null}
+      <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<GovernanceActionsPage />} />
           <Route path="/actions" element={<GovernanceActionsPage />} />
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
@@ -319,7 +316,7 @@ export default function App() {
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/about/changelog" element={<AboutChangelogPage />} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/actions" replace />} />
         </Routes>
       </Suspense>
     </WalletContext.Provider>
