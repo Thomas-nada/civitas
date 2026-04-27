@@ -17,6 +17,7 @@ import { WalletContext } from "./context/WalletContext";
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
+const RationalesArchivePage = lazy(() => import("./pages/RationalesArchivePage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
@@ -301,6 +302,7 @@ export default function App() {
           <Route path="/actions" element={<GovernanceActionsPage />} />
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
+          <Route path="/governance/rationales" element={<RationalesArchivePage />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />

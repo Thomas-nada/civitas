@@ -11,6 +11,7 @@ const NAV_GROUPS = [
     links: [
       { to: "/actions", label: "Governance Actions" },
       { to: "/actions/submit", label: "Submit Governance Action" },
+      { to: "/governance/rationales", label: "Rationales Archive" },
       { to: "/constitution", label: "Read the Cardano Constitution" },
       { to: "/treasury", label: "Treasury" },
       { to: "/surveys", label: "Surveys & Polls" }
