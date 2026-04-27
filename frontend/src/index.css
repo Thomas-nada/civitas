@@ -227,6 +227,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 40;
+  overflow: visible;
   display: flex;
   align-items: center;
   backdrop-filter: blur(10px);
@@ -280,6 +281,14 @@ a {
   display: inline-block;
   width: 1px;
   height: 1px;
+}
+
+.mobile-nav-toggle {
+  display: none;
+}
+
+.mobile-nav-backdrop {
+  display: none;
 }
 
 .topbar-controls {
@@ -394,7 +403,7 @@ a {
   font: inherit;
   font-weight: 700;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   line-height: 1.1;
@@ -402,14 +411,13 @@ a {
   border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
-  padding: 0.3rem 0.62rem;
+  padding: 0.36rem 0.72rem;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .topnav-group-label:hover,
 .topnav-group:focus-within .topnav-group-label,
-.topnav-group.is-open .topnav-group-label,
 .topnav-group.is-current .topnav-group-label {
   color: var(--text);
   border-color: color-mix(in srgb, var(--mint) 46%, var(--line));
@@ -417,19 +425,43 @@ a {
 }
 
 .topnav-group-links {
-  position: static;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
   min-width: 220px;
   display: grid;
   gap: 0.18rem;
-  margin-top: 0.35rem;
   padding: 0.38rem;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--line) 94%, transparent);
   background: color-mix(in srgb, var(--panel) 96%, transparent);
   backdrop-filter: blur(6px);
-  box-shadow: none;
-  width: 100%;
-  max-width: 340px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.22);
+  width: max-content;
+  max-width: 300px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, visibility 140ms ease, transform 140ms ease;
+  z-index: 50;
+}
+
+.topnav-group:hover .topnav-group-links,
+.topnav-group:focus-within .topnav-group-links {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.topnav-group-links::before {
+  content: '';
+  position: absolute;
+  top: -0.55rem;
+  left: 0;
+  right: 0;
+  height: 0.55rem;
 }
 
 .topnav-link {
@@ -2965,12 +2997,69 @@ tbody tr.active {
 
   .topbar-left {
     order: 1;
+    flex: 1 1 auto;
+  }
+
+  .mobile-nav-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    order: 2;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
+    border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .mobile-nav-toggle span {
+    display: block;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 2px;
+    transition: transform 200ms ease, opacity 200ms ease;
+    transform-origin: center;
+  }
+
+  .mobile-nav-toggle.is-open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .mobile-nav-toggle.is-open span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-nav-toggle.is-open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
   }
 
   .topnav-row {
-    order: 2;
-    width: 100%;
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 39;
+    background: var(--topbar-bg);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    padding: 0.75rem 1rem 1rem;
+    max-height: calc(100dvh - 56px);
+    overflow-y: auto;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.75rem;
     justify-content: flex-start;
+    width: 100%;
+  }
+
+  .topnav-row.mobile-nav-open {
+    display: flex;
   }
 
   .topbar-controls {

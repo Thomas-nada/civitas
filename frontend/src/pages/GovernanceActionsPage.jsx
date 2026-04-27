@@ -18,111 +18,6 @@ const EXPIRING_SOON_EPOCHS = 1; // one epoch ~= 5 days
 const SPO_FORMULA_TRANSITION_EPOCH = 534;
 const SPO_FORMULA_TRANSITION_GOV_ACTION =
   "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
-const CC_ELECTION_TIMELINE_URL = "https://civicscommittee.docs.intersectmbo.org/cc-election-2026-overview";
-const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5, 1, 0, 0, 0);
-const CC_ELECTION_VOTING_END_MS = Date.UTC(2026, 6, 14, 0, 0, 0);
-const CC_ELECTION_RESULTS_END_MS = Date.UTC(2026, 6, 17, 0, 0, 0);
-const CC_ELECTION_UPDATE_END_MS = Date.UTC(2026, 8, 7, 0, 0, 0);
-const BUDGET_PROCESS_PROPOSAL_END_MS = Date.UTC(2026, 4, 8, 12, 0, 0);
-const BUDGET_PROCESS_REVIEW_END_MS = Date.UTC(2026, 4, 22, 12, 0, 0);
-const BUDGET_PROCESS_VOTING_START_MS = Date.UTC(2026, 4, 26, 12, 0, 0);
-const BUDGET_PROCESS_VOTING_END_MS = Date.UTC(2026, 5, 12, 12, 0, 0);
-const BUDGET_PROCESS_RESULTS_END_MS = Date.UTC(2026, 5, 20, 0, 0, 0);
-
-function getBudgetProcessBanner(nowMs) {
-  if (nowMs < BUDGET_PROCESS_PROPOSAL_END_MS) {
-    return (
-      <>
-        Proposal submissions are open from <strong>16 April 2026 at 12:00 UTC</strong> to{" "}
-        <strong>8 May 2026 at 12:00 UTC</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < BUDGET_PROCESS_REVIEW_END_MS) {
-    return (
-      <>
-        Budget proposals are in final feedback and review from <strong>8 May 2026 at 12:00 UTC</strong> to{" "}
-        <strong>22 May 2026 at 12:00 UTC</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < BUDGET_PROCESS_VOTING_START_MS) {
-    return (
-      <>
-        Budget Hydra voting opens <strong>26 May 2026 at 12:00 UTC</strong> and remains open until{" "}
-        <strong>12 June 2026 at 12:00 UTC</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < BUDGET_PROCESS_VOTING_END_MS) {
-    return (
-      <>
-        Budget Hydra voting is open from <strong>26 May 2026 at 12:00 UTC</strong> to{" "}
-        <strong>12 June 2026 at 12:00 UTC</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < BUDGET_PROCESS_RESULTS_END_MS) {
-    return (
-      <>
-        Budget Hydra voting has closed. Audited voting results are scheduled for{" "}
-        <strong>19 June 2026 at 12:00 UTC</strong>.
-      </>
-    );
-  }
-
-  return (
-    <>
-      Treasury withdrawal submission timing is <strong>to be determined</strong>.
-    </>
-  );
-}
-
-function getCcElectionBanner(nowMs) {
-  if (nowMs < CC_ELECTION_REGISTRATION_END_MS) {
-    return (
-      <>
-        Candidate registration begins{" "}
-        <strong>1 May 2026 at 21:45 UTC</strong> and remains open until <strong>31 May 2026</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < CC_ELECTION_VOTING_END_MS) {
-    return (
-      <>
-        CC Elections voting on the Hydra platform runs from <strong>13 June 2026</strong> to{" "}
-        <strong>13 July 2026</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < CC_ELECTION_RESULTS_END_MS) {
-    return (
-      <>
-        CC Elections voting has closed. Final results are scheduled for <strong>16 July 2026</strong>.
-      </>
-    );
-  }
-
-  if (nowMs < CC_ELECTION_UPDATE_END_MS) {
-    return (
-      <>
-        The Update Committee governance action submission is scheduled for <strong>1 August 2026</strong>.
-      </>
-    );
-  }
-
-  return (
-    <>
-      The 2026 CC Elections timeline has concluded. The published timeline remains available for reference.
-    </>
-  );
-}
 
 function epochToApproxDate(epoch) {
   if (!epoch || epoch <= 0) return null;
@@ -544,7 +439,6 @@ export default function GovernanceActionsPage() {
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const snapshotKey = queryParams.get("snapshot") || "";
   const initialSelectedProposal = queryParams.get("id") || "";
-  const [bannerNowMs, setBannerNowMs] = useState(() => Date.now());
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -571,13 +465,6 @@ export default function GovernanceActionsPage() {
   const detailPanelRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
-  const budgetProcessBanner = useMemo(() => getBudgetProcessBanner(bannerNowMs), [bannerNowMs]);
-  const ccElectionBanner = useMemo(() => getCcElectionBanner(bannerNowMs), [bannerNowMs]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setBannerNowMs(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -1266,42 +1153,6 @@ export default function GovernanceActionsPage() {
 
   return (
     <main className="shell">
-      <section className="budget-process-banner" aria-label="Current governance process information">
-        <article className="info-banner-item">
-          <div>
-            <p className="budget-process-banner-title">
-              Intersect Facilitated Cardano Budget Process
-            </p>
-            <p>{budgetProcessBanner}</p>
-          </div>
-          <a
-            className="budget-process-banner-link"
-            href="https://hydra-voting.intersectmbo.org/budget-process"
-            target="_blank"
-            rel="noreferrer"
-          >
-            View Budget Process
-          </a>
-        </article>
-
-        <article className="info-banner-item">
-          <div>
-            <p className="budget-process-banner-title">
-              Intersect facilitated CC Elections
-            </p>
-            <p>{ccElectionBanner}</p>
-          </div>
-          <a
-            className="budget-process-banner-link"
-            href={CC_ELECTION_TIMELINE_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View CC Election Overview
-          </a>
-        </article>
-      </section>
-
       <header className="hero">
         <div className="hero-title-row">
           <h1>Governance Action Explorer</h1>

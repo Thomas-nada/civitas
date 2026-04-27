@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 import { getSoftCoercedDrepMatch } from "../constants/softCoercedDreps";
@@ -154,7 +154,8 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
     () => getCurrentNavItemPath(location.pathname),
     [location.pathname]
   );
-  const [openNavGroupKey, setOpenNavGroupKey] = useState(currentNavGroupKey);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const headerRef = useRef(null);
   const wallet = useContext(WalletContext);
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [bugSubmitting, setBugSubmitting] = useState(false);
@@ -186,8 +187,15 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
   }, [wallet?.walletRewardAddress, matchedSoftCoercedDrep]);
 
   useEffect(() => {
-    setOpenNavGroupKey(currentNavGroupKey);
-  }, [currentNavGroupKey]);
+    if (!mobileNavOpen) return;
+    function handleOutside(e) {
+      if (headerRef.current && !headerRef.current.contains(e.target)) {
+        setMobileNavOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handleOutside);
+    return () => document.removeEventListener("pointerdown", handleOutside);
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     const rewardAddress = String(wallet?.walletRewardAddress || "").trim();
@@ -366,7 +374,7 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
 
   return (
     <>
-    <header className="topbar">
+    <header className="topbar" ref={headerRef}>
       <div className="topbar-inner shell">
         <div className="topbar-row-main">
           <div className="topbar-left">
@@ -385,20 +393,26 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
             </Link>
           </div>
 
-          <nav className="topnav topnav-row" onMouseLeave={() => setOpenNavGroupKey(currentNavGroupKey)}>
+          <button
+            type="button"
+            className={`mobile-nav-toggle${mobileNavOpen ? " is-open" : ""}`}
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            <span /><span /><span />
+          </button>
+
+          <nav className={`topnav topnav-row${mobileNavOpen ? " mobile-nav-open" : ""}`}>
             {NAV_GROUPS.map((group) => (
               <div
                 key={group.key}
-                className={`topnav-group${currentNavGroupKey === group.key ? " is-current" : ""}${openNavGroupKey === group.key ? " is-open" : ""}`}
-                onMouseEnter={() => setOpenNavGroupKey(group.key)}
-                onFocus={() => setOpenNavGroupKey(group.key)}
+                className={`topnav-group${currentNavGroupKey === group.key ? " is-current" : ""}`}
               >
                 <button
                   type="button"
                   className="topnav-group-label"
                   aria-haspopup="true"
-                  aria-expanded={openNavGroupKey === group.key || currentNavGroupKey === group.key ? "true" : "false"}
-                  onClick={() => setOpenNavGroupKey((prev) => (prev === group.key ? currentNavGroupKey : group.key))}
+                  aria-expanded="false"
                 >
                   {group.label}
                 </button>
@@ -409,6 +423,7 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
                       to={item.to}
                       className={currentNavItemPath === item.to ? "topnav-link active" : "topnav-link"}
                       role="menuitem"
+                      onClick={(e) => { setMobileNavOpen(false); e.currentTarget.blur(); }}
                     >
                       {item.label}
                     </Link>

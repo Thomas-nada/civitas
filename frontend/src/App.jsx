@@ -11,6 +11,7 @@ function isEasterPeriod() {
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { BrowserWallet } from "@meshsdk/core";
 import AppTopbar from "./components/AppTopbar";
+import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -292,6 +293,7 @@ export default function App() {
       </div>
       <ScrollToTopOnRouteChange />
       <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} />
+      <InfoBanner />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
         <Routes>
