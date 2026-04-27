@@ -1168,10 +1168,7 @@ export default function GovernanceActionsPage() {
             </span>
           )}
         </div>
-        <p className="muted">
-          Need to submit a new proposal?{" "}
-          <Link to="/actions/submit">Open the submission page</Link>.
-        </p>
+
       </header>
 
       <section className="cards">
