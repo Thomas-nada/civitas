@@ -301,7 +301,7 @@ export default function App() {
           <Route path="/" element={<GovernanceActionsPage />} />
           <Route path="/actions" element={<GovernanceActionsPage />} />
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
-          <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} />
+          {/* <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} /> */}{/* hidden: WIP */}
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />

@@ -22,7 +22,7 @@ const tocGroups = [
       { id: "tool-drep-delegation-risk", label: "DRep Delegation Risk" },
       { id: "tool-drep-voting", label: "Voting as a DRep" },
       { id: "tool-drep-registration", label: "DRep Registration" },
-      { id: "tool-submit-actions", label: "Submit Actions" },
+      // { id: "tool-submit-actions", label: "Submit Actions" }, // hidden: WIP
       { id: "tool-cc-cold-credentials", label: "CC Credentials" }
     ]
   },
