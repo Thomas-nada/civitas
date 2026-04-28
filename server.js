@@ -8041,6 +8041,55 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname.startsWith("/ekklesia-proxy/")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": req.headers.origin || "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Credentials": "true",
+      });
+      res.end();
+      return;
+    }
+    const targetPath = url.pathname.replace(/^\/ekklesia-proxy/, "") + (url.search || "");
+    const https = require("https");
+    const forwardHeaders = {
+      "Accept": "application/json",
+      "User-Agent": "civitas-proxy/1.0",
+      "Host": "hydra-voting.intersectmbo.org",
+    };
+    if (req.headers["content-type"]) forwardHeaders["Content-Type"] = req.headers["content-type"];
+    if (req.headers["cookie"]) forwardHeaders["Cookie"] = req.headers["cookie"];
+    const chunks = [];
+    req.on("data", c => chunks.push(c));
+    req.on("end", () => {
+      const body = chunks.length ? Buffer.concat(chunks) : null;
+      if (body && body.length) forwardHeaders["Content-Length"] = body.length;
+      const proxyReq = https.request(
+        { hostname: "hydra-voting.intersectmbo.org", path: targetPath, method: req.method, headers: forwardHeaders },
+        (proxyRes) => {
+          const resHeaders = {
+            "Content-Type": proxyRes.headers["content-type"] || "application/json",
+            "Access-Control-Allow-Origin": req.headers.origin || "*",
+            "Access-Control-Allow-Credentials": "true",
+          };
+          if (proxyRes.headers["set-cookie"]) {
+            resHeaders["Set-Cookie"] = proxyRes.headers["set-cookie"].map(c =>
+              c.replace(/;\s*Domain=[^;]*/i, "").replace(/;\s*Secure/i, "").replace(/;\s*SameSite=[^;]*/i, "; SameSite=Lax")
+            );
+          }
+          res.writeHead(proxyRes.statusCode, resHeaders);
+          proxyRes.pipe(res);
+        }
+      );
+      proxyReq.on("error", () => { res.writeHead(502); res.end("Bad Gateway"); });
+      if (body && body.length) proxyReq.write(body);
+      proxyReq.end();
+    });
+    return;
+  }
+
   serveStatic(req, res);
 });
 
