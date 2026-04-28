@@ -1029,6 +1029,190 @@ function CycleTimeline({ cycle }) {
   );
 }
 
+// ─── Budget Explorer ─────────────────────────────────────────────────────────
+
+const PILLAR_COLORS = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
+  "#10b981", "#3b82f6", "#ef4444", "#14b8a6",
+];
+
+function BudgetExplorer({ allProposals, pillars, pillarById, filterPillar, setFilterPillar, setSearch }) {
+  const [open, setOpen] = useState(true);
+  const [tab, setTab] = useState("pillars"); // "pillars" | "proposers" | "status"
+
+  const total = allProposals.reduce((s, p) => s + (p.metaData?.totalBudget ?? 0), 0);
+  if (!total || allProposals.length === 0) return null;
+
+  // ── Pillar breakdown ──────────────────────────────────────────────────────
+  // A proposal may belong to multiple pillars; split budget equally across them
+  const pillarTotals = {};
+  allProposals.forEach(p => {
+    const pPillars = p.metaData?.strategyFramework?.pillars ?? [];
+    const share = pPillars.length > 0 ? (p.metaData?.totalBudget ?? 0) / pPillars.length : 0;
+    pPillars.forEach(pid => {
+      pillarTotals[pid] = (pillarTotals[pid] ?? 0) + share;
+    });
+  });
+  const pillarRows = Object.entries(pillarTotals)
+    .map(([pid, amt]) => ({ pid, amt, label: pillarById[pid]?.title ?? pid }))
+    .sort((a, b) => b.amt - a.amt);
+
+  // ── Proposer breakdown ────────────────────────────────────────────────────
+  const proposerTotals = {};
+  allProposals.forEach(p => {
+    const name = p.metaData?.proposerDetails?.name || "Unknown";
+    proposerTotals[name] = (proposerTotals[name] ?? 0) + (p.metaData?.totalBudget ?? 0);
+  });
+  const proposerRows = Object.entries(proposerTotals)
+    .map(([name, amt]) => ({ name, amt }))
+    .sort((a, b) => b.amt - a.amt)
+    .slice(0, 10);
+
+  const barMax = tab === "pillars" ? (pillarRows[0]?.amt ?? 1) : (proposerRows[0]?.amt ?? 1);
+
+  const tabStyle = (t) => ({
+    padding: "0.3rem 0.75rem", borderRadius: 6, fontSize: "0.75rem", fontWeight: 600,
+    border: "1px solid",
+    borderColor: tab === t ? "var(--accent)" : "var(--line)",
+    background: tab === t ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "transparent",
+    color: tab === t ? "var(--accent)" : "var(--text-muted)",
+    cursor: "pointer", transition: "all 0.15s",
+  });
+
+  return (
+    <div style={{
+      background: "var(--panel)", border: "1px solid var(--line)",
+      borderRadius: 12, marginBottom: "1rem", overflow: "hidden",
+    }}>
+      {/* Header row */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0.75rem 1rem", background: "transparent", border: "none",
+          cursor: "pointer", color: "var(--text)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: "var(--accent)", flexShrink: 0 }}>
+            <rect x="1" y="8" width="3" height="5" rx="1" fill="currentColor" />
+            <rect x="5.5" y="5" width="3" height="8" rx="1" fill="currentColor" />
+            <rect x="10" y="2" width="3" height="11" rx="1" fill="currentColor" />
+          </svg>
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Budget Explorer
+          </span>
+          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 400 }}>
+            · {formatAda(total)} across {allProposals.length} proposals
+          </span>
+        </span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{
+          color: "var(--text-muted)", transition: "transform 0.2s",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        }}>
+          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{ padding: "0 1rem 1rem" }}>
+          {/* Tab bar */}
+          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem" }}>
+            {[["pillars", "By Pillar"], ["proposers", "By Proposer"]].map(([t, label]) => (
+              <button key={t} style={tabStyle(t)} onClick={() => setTab(t)}>{label}</button>
+            ))}
+          </div>
+
+          {/* Pillar bars */}
+          {tab === "pillars" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {pillarRows.map(({ pid, amt, label }, i) => {
+                const pct = (amt / barMax) * 100;
+                const active = filterPillar === pid;
+                const color = PILLAR_COLORS[i % PILLAR_COLORS.length];
+                return (
+                  <button
+                    key={pid}
+                    onClick={() => setFilterPillar(active ? "" : pid)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "160px 1fr 100px",
+                      alignItems: "center", gap: "0.6rem",
+                      background: active ? "color-mix(in srgb, var(--accent) 8%, transparent)" : "transparent",
+                      border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
+                      borderRadius: 8, padding: "0.45rem 0.6rem",
+                      cursor: "pointer", textAlign: "left", width: "100%",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.75rem", color: "var(--text)", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {label}
+                    </span>
+                    <div style={{ height: 8, background: "var(--line)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "right", whiteSpace: "nowrap" }}>
+                      {formatAda(Math.round(amt))}
+                    </span>
+                  </button>
+                );
+              })}
+              {filterPillar && (
+                <button
+                  onClick={() => setFilterPillar("")}
+                  style={{ alignSelf: "flex-start", fontSize: "0.72rem", color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer", padding: "0.2rem 0", marginTop: "0.1rem" }}
+                >
+                  ✕ Clear pillar filter
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Proposer bars */}
+          {tab === "proposers" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {proposerRows.map(({ name, amt }, i) => {
+                const pct = (amt / barMax) * 100;
+                const color = PILLAR_COLORS[i % PILLAR_COLORS.length];
+                return (
+                  <button
+                    key={name}
+                    onClick={() => setSearch(name)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "160px 1fr 100px",
+                      alignItems: "center", gap: "0.6rem",
+                      background: "transparent", border: "1px solid transparent",
+                      borderRadius: 8, padding: "0.45rem 0.6rem",
+                      cursor: "pointer", textAlign: "left", width: "100%",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 6%, transparent)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <span style={{ fontSize: "0.75rem", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {name}
+                    </span>
+                    <div style={{ height: 8, background: "var(--line)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "right", whiteSpace: "nowrap" }}>
+                      {formatAda(amt)}
+                    </span>
+                  </button>
+                );
+              })}
+              <p style={{ margin: "0.5rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                Click a proposer to search their proposals.
+                {proposerRows.length === 10 && " Showing top 10 by budget."}
+              </p>
+            </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function EkklesiaPage({ voteSlug } = {}) {
@@ -1238,6 +1422,44 @@ export default function EkklesiaPage({ voteSlug } = {}) {
                     <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>{value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Budget Explorer */}
+              <BudgetExplorer
+                allProposals={allProposals}
+                pillars={pillars}
+                pillarById={pillarById}
+                filterPillar={filterPillar}
+                setFilterPillar={setFilterPillar}
+                setSearch={setSearch}
+              />
+
+              {/* Submit notice */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem",
+                padding: "0.65rem 1rem", marginBottom: "1rem",
+                background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10,
+                fontSize: "0.8rem", color: "var(--text-muted)",
+              }}>
+                <span>Want to submit a proposal? Submissions must be made through Intersect's Hydra Voting platform.</span>
+                <a
+                  href="https://hydra-voting.intersectmbo.org/budget-process"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "0.35rem",
+                    padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
+                    background: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap",
+                    transition: "background 0.15s",
+                  }}
+                >
+                  Submit on Hydra
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                    <path d="M2 9L9 2M9 2H4M9 2v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </a>
               </div>
 
               {/* Filters */}
