@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 const CC_ELECTION_TIMELINE_URL = "https://civicscommittee.docs.intersectmbo.org/cc-election-2026-overview";
-const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5,  7, 0, 0, 0);
+const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5,  7, 21, 45, 0);
 const CC_ELECTION_VOTING_END_MS      = Date.UTC(2026, 6, 14, 0, 0, 0);
 const CC_ELECTION_RESULTS_END_MS     = Date.UTC(2026, 6, 17, 0, 0, 0);
 const CC_ELECTION_UPDATE_END_MS      = Date.UTC(2026, 8,  7, 0, 0, 0);
@@ -32,7 +32,8 @@ function getBudgetProcessBanner(nowMs) {
 
 function getCcElectionBanner(nowMs) {
   if (nowMs < CC_ELECTION_REGISTRATION_END_MS) {
-    return <>Candidate registration is open from <strong>8 May 2026</strong> to <strong>7 June 2026</strong>.</>;
+    return <>Candidate registration is open from <strong>8 May 2026 at 21:45 UTC</strong> to <strong>7 June 2026 at 21:45 UTC</strong>.</>;
+
   }
   if (nowMs < CC_ELECTION_VOTING_END_MS) {
     return <>CC Elections voting on the Hydra platform runs from <strong>13 June 2026</strong> to{" "}<strong>13 July 2026</strong>.</>;
