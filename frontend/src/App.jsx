@@ -18,6 +18,7 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
 const RationalesArchivePage = lazy(() => import("./pages/RationalesArchivePage"));
+const BudgetPage = lazy(() => import("./pages/EkklesiaPage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
@@ -303,6 +304,9 @@ export default function App() {
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           {/* <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} /> */}{/* hidden: WIP */}
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
+          <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" />} />
+          <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" />} />
+          <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />

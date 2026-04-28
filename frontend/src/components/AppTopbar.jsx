@@ -12,6 +12,7 @@ const NAV_GROUPS = [
       { to: "/actions", label: "Governance Actions" },
       // { to: "/actions/submit", label: "Submit Governance Action" }, // hidden: WIP
       { to: "/governance/rationales", label: "Rationales Archive" },
+      // { to: "/budget", label: "Cardano Budget" }, // hidden: not yet public
       { to: "/constitution", label: "Read the Cardano Constitution" },
       { to: "/treasury", label: "Treasury" },
       { to: "/surveys", label: "Surveys & Polls" }
