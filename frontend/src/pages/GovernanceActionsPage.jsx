@@ -232,6 +232,10 @@ function eligibleVoteGroups(row) {
   return groups;
 }
 
+function isDrepVoteEligibleAction(row) {
+  return row?.status === "Active" && Boolean(row?.txHash);
+}
+
 function formatAdaCompact(value) {
   return `${Math.round(Number(value || 0)).toLocaleString()} ada`;
 }
@@ -561,6 +565,9 @@ export default function GovernanceActionsPage() {
   const [voteChoice, setVoteChoice] = useState("");
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
+  const [batchVoteIds, setBatchVoteIds] = useState({});
+  const [batchVoteDrafts, setBatchVoteDrafts] = useState({});
+  const [batchVoteModalOpen, setBatchVoteModalOpen] = useState(false);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteNotice, setVoteNotice] = useState("");
   const [voteError, setVoteError] = useState("");
@@ -1088,6 +1095,63 @@ export default function GovernanceActionsPage() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
+  function toggleBatchVoteSelection(row) {
+    if (!isDrepVoteEligibleAction(row)) return;
+    setBatchVoteIds((prev) => {
+      const next = { ...prev };
+      if (next[row.proposalId]) {
+        delete next[row.proposalId];
+        setBatchVoteDrafts((drafts) => {
+          const draftNext = { ...drafts };
+          delete draftNext[row.proposalId];
+          return draftNext;
+        });
+      } else {
+        next[row.proposalId] = true;
+        setBatchVoteDrafts((drafts) => ({
+          ...drafts,
+          [row.proposalId]: drafts[row.proposalId] || { choice: "", rationaleUrl: "" }
+        }));
+      }
+      return next;
+    });
+  }
+
+  function clearBatchVoteSelection() {
+    setBatchVoteIds({});
+    setBatchVoteDrafts({});
+    setBatchVoteModalOpen(false);
+  }
+
+  function selectVisibleDrepActions() {
+    const next = {};
+    for (const row of rows) {
+      if (isDrepVoteEligibleAction(row)) {
+        next[row.proposalId] = true;
+      }
+    }
+    setBatchVoteIds(next);
+    setBatchVoteDrafts((prev) => {
+      const drafts = {};
+      for (const proposalId of Object.keys(next)) {
+        drafts[proposalId] = prev[proposalId] || { choice: "", rationaleUrl: "" };
+      }
+      return drafts;
+    });
+  }
+
+  function updateBatchVoteDraft(proposalId, patch) {
+    setBatchVoteDrafts((prev) => ({
+      ...prev,
+      [proposalId]: {
+        choice: "",
+        rationaleUrl: "",
+        ...(prev[proposalId] || {}),
+        ...patch
+      }
+    }));
+  }
+
   const selected = rows.find((row) => row.proposalId === selectedId);
   const payloadDoc = useMemo(
     () => normalizeActionPayload(selected, proposalMetadataCache[selected?.proposalId || ""] || null),
@@ -1101,10 +1165,50 @@ export default function GovernanceActionsPage() {
     () => Array.from(new Set(rows.map((row) => row.status).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [rows]
   );
+  const selectedBatchVoteRows = useMemo(
+    () => rows.filter((row) => (
+      batchVoteIds[row.proposalId] &&
+      isDrepVoteEligibleAction(row)
+    )),
+    [rows, batchVoteIds]
+  );
+  const batchVoteCount = selectedBatchVoteRows.length;
+  const showBatchVoteColumn = Boolean(wallet?.walletDrep);
 
   const activeCount = rows.filter((row) => row.status === "Active").length;
   const enactedCount = rows.filter((row) => row.status === "Enacted").length;
   const expiringSoonCount = rows.filter((row) => row.isExpiringSoon).length;
+
+  useEffect(() => {
+    setBatchVoteIds((prev) => {
+      const entries = Object.entries(prev);
+      if (!entries.length) return prev;
+      const eligibleIds = new Set(
+        rows
+          .filter(isDrepVoteEligibleAction)
+          .map((row) => row.proposalId)
+      );
+      const next = {};
+      let changed = false;
+      for (const [proposalId, selectedForBatch] of entries) {
+        if (selectedForBatch && eligibleIds.has(proposalId)) next[proposalId] = true;
+        else changed = true;
+      }
+      if (changed) {
+        setBatchVoteDrafts((drafts) => {
+          const draftNext = {};
+          for (const proposalId of Object.keys(next)) {
+            if (drafts[proposalId]) draftNext[proposalId] = drafts[proposalId];
+          }
+          return draftNext;
+        });
+      }
+      return changed ? next : prev;
+    });
+  }, [rows]);
+
+  const batchVoteReadyCount = selectedBatchVoteRows.filter((row) => batchVoteDrafts[row.proposalId]?.choice).length;
+  const batchVoteReady = batchVoteCount > 0 && batchVoteReadyCount === batchVoteCount;
 
   // Reset vote UI when selected action changes
   useEffect(() => {
@@ -1127,6 +1231,24 @@ export default function GovernanceActionsPage() {
       return `https://ipfs.io/ipfs/${url.slice(7)}`;
     }
     return url;
+  }
+
+  async function buildVoteAnchor(rawUrl) {
+    const url = String(rawUrl || "").trim();
+    const rationaleUrlTrimmed = resolveIpfsUrl(url);
+    if (!rationaleUrlTrimmed) return undefined;
+    try {
+      setVoteNotice("Fetching rationale to compute anchor hash...");
+      const res = await fetch(rationaleUrlTrimmed);
+      const text = await res.text();
+      const bytes = new TextEncoder().encode(text);
+      const hashHex = blakejs.blake2bHex(bytes, null, 32);
+      setVoteNotice("");
+      return { url: url || rationaleUrlTrimmed, hash: hashHex };
+    } catch {
+      setVoteNotice("Could not fetch rationale URL - voting without anchor.");
+      return undefined;
+    }
   }
 
   // Start post-vote sync polling — polls /api/sync-status every 20s for up to 5 min
@@ -1178,23 +1300,7 @@ export default function GovernanceActionsPage() {
       }
 
       // 3. Optional rationale anchor (with IPFS resolution)
-      let anchor;
-      const rationaleUrlTrimmed = resolveIpfsUrl(voteRationaleUrl.trim());
-      if (rationaleUrlTrimmed) {
-        try {
-          setVoteNotice("Fetching rationale to compute anchor hash...");
-          const res = await fetch(rationaleUrlTrimmed);
-          const text = await res.text();
-          const bytes = new TextEncoder().encode(text);
-          const hashHex = blakejs.blake2bHex(bytes, null, 32);
-          // Store original URL (may be ipfs://) in anchor, HTTP URL used only for fetching
-          anchor = { url: voteRationaleUrl.trim() || rationaleUrlTrimmed, hash: hashHex };
-          setVoteNotice("");
-        } catch {
-          setVoteNotice("Could not fetch rationale URL — voting without anchor.");
-          anchor = undefined;
-        }
-      }
+      const anchor = await buildVoteAnchor(voteRationaleUrl);
 
       // 4. Build vote transaction
       setVoteNotice("Building transaction...");
@@ -1219,6 +1325,64 @@ export default function GovernanceActionsPage() {
       startVoteSyncPolling(snapshotAtSubmit);
     } catch (e) {
       const msg = e?.message || "Vote transaction failed.";
+      setVoteError(msg);
+      setVoteNotice("");
+    } finally {
+      setVoteSubmitting(false);
+    }
+  }
+
+  async function submitBatchVote() {
+    const rowsToVote = selectedBatchVoteRows.map((row) => ({
+      row,
+      draft: batchVoteDrafts[row.proposalId] || { choice: "", rationaleUrl: "" }
+    }));
+    if (
+      !rowsToVote.length ||
+      !wallet?.walletApi ||
+      !wallet?.walletDrep ||
+      rowsToVote.some((item) => !item.draft.choice)
+    ) return;
+    try {
+      setVoteSubmitting(true);
+      setBatchVoteModalOpen(false);
+      setVoteError("");
+      setVoteNotice("");
+      setVotedTxHash("");
+      setVoteSyncStatus("");
+
+      const drepIdCip105 = wallet.walletDrep.dRepIDCip105;
+
+      if (wallet.walletNetworkId !== 1) {
+        setVoteNotice("Warning: wallet is on testnet. Proceeding anyway...");
+      }
+
+      setVoteNotice(`Building transaction with ${rowsToVote.length} votes...`);
+      const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
+      tx.setNetwork("mainnet");
+      for (const { row, draft } of rowsToVote) {
+        const anchor = await buildVoteAnchor(draft.rationaleUrl);
+        tx.txBuilder.vote(
+          { type: "DRep", drepId: drepIdCip105 },
+          { txHash: row.txHash, txIndex: row.certIndex ?? 0 },
+          { voteKind: draft.choice, ...(anchor ? { anchor } : {}) }
+        );
+      }
+
+      const unsignedTx = await tx.build();
+      setVoteNotice("Please sign the transaction in your wallet...");
+      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
+      setVoteNotice("Submitting to chain...");
+      const txHash = await wallet.walletApi.submitTx(signedTx);
+      setVotedTxHash(txHash);
+      setVoteNotice("");
+      setBatchVoteIds({});
+      setBatchVoteDrafts({});
+
+      const snapshotAtSubmit = String(latestSnapshotRef.current || "");
+      startVoteSyncPolling(snapshotAtSubmit);
+    } catch (e) {
+      const msg = e?.message || "Batch vote transaction failed.";
       setVoteError(msg);
       setVoteNotice("");
     } finally {
@@ -1362,11 +1526,43 @@ export default function GovernanceActionsPage() {
         </div>
       </section>
 
+      {wallet?.walletDrep ? (
+        <section className="batch-vote-toolbar" aria-label="Batch DRep voting controls">
+          <div className="batch-vote-summary">
+            <strong>{batchVoteCount}</strong>
+            <span>{batchVoteCount === 1 ? "action selected" : "actions selected"}</span>
+            {batchVoteCount ? <span>{batchVoteReadyCount}/{batchVoteCount} ready</span> : null}
+          </div>
+          <div className="batch-vote-actions">
+            <button type="button" className="mode-btn" onClick={selectVisibleDrepActions}>
+              Select visible
+            </button>
+            <button type="button" className="mode-btn" onClick={clearBatchVoteSelection} disabled={!batchVoteCount}>
+              Clear
+            </button>
+            <button
+              type="button"
+              className="vote-confirm-submit"
+              disabled={!batchVoteCount || voteSubmitting}
+              onClick={() => {
+                setVoteError("");
+                setVoteNotice("");
+                setVotedTxHash("");
+                setBatchVoteModalOpen(true);
+              }}
+            >
+              Review batch vote
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="layout layout-modal">
         <div className="panel table-panel">
           <table className="mobile-cards-table">
             <thead>
               <tr>
+                {showBatchVoteColumn ? <th className="ga-select-heading">Batch</th> : null}
                 <th>Action ID</th>
                 <th>Title</th>
                 <th>Type</th>
@@ -1380,7 +1576,7 @@ export default function GovernanceActionsPage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={showBatchVoteColumn ? 9 : 8} className="muted">
                     No governance actions match these filters.
                   </td>
                 </tr>
@@ -1391,6 +1587,8 @@ export default function GovernanceActionsPage() {
                   const ccNo = Number(ccStats.no || 0);
                   const spoNotEligible = row.spoRequiredPct === null && row.spoYesAda === 0 && row.spoNoAda === 0;
                   const ccNotEligible = row.ccRequiredPct === null && ccYes === 0 && ccNo === 0;
+                  const drepVoteEligible = isDrepVoteEligibleAction(row);
+                  const batchSelected = Boolean(batchVoteIds[row.proposalId]);
                   const navUrl = `/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`;
                   return (
                     <tr
@@ -1404,6 +1602,22 @@ export default function GovernanceActionsPage() {
                       tabIndex={0}
                       aria-label={`Open details for ${row.actionName}`}
                     >
+                      {showBatchVoteColumn ? (
+                        <td
+                          data-label="Batch"
+                          className="ga-select-cell"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={batchSelected}
+                            disabled={!drepVoteEligible || voteSubmitting}
+                            onChange={() => toggleBatchVoteSelection(row)}
+                            aria-label={`Select ${row.actionName} for batch DRep vote`}
+                          />
+                        </td>
+                      ) : null}
                       <td data-label="Action ID" className="ga-hash-cell">
                         <span className="ga-hash">{formatHashCompact(row.proposalId)}</span>
                       </td>
@@ -1504,6 +1718,78 @@ export default function GovernanceActionsPage() {
                   onClick={submitVote}
                 >
                   Submit {voteChoice} Vote On-Chain
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {batchVoteModalOpen && wallet?.walletDrep && selectedBatchVoteRows.length ? (
+        <div className="image-modal-backdrop" role="presentation" onClick={() => setBatchVoteModalOpen(false)}>
+          <div className="image-modal vote-confirm-modal vote-confirm-modal--batch" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="image-modal-close" onClick={() => setBatchVoteModalOpen(false)}>
+              Cancel
+            </button>
+            <h3 className="rationale-modal-title">Confirm Batch Vote</h3>
+            <div className="vote-confirm-body">
+              <div className="batch-vote-modal-head">
+                <p className="muted">{selectedBatchVoteRows.length} DRep votes in one transaction · {batchVoteReadyCount}/{selectedBatchVoteRows.length} ready</p>
+              </div>
+              <p className="muted">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
+
+              <div className="batch-vote-list" aria-label="Selected governance actions">
+                {selectedBatchVoteRows.map((row) => (
+                  <div key={row.proposalId} className="batch-vote-item">
+                    <div className="batch-vote-item-head">
+                      <strong>{row.actionName}</strong>
+                      <span className="mono">{formatHashCompact(row.proposalId)}</span>
+                    </div>
+                    <div className="batch-vote-item-controls">
+                      <div className="batch-vote-choice-row" role="group" aria-label={`Vote choice for ${row.actionName}`}>
+                        {["Yes", "No", "Abstain"].map((choice) => {
+                          const draft = batchVoteDrafts[row.proposalId] || {};
+                          return (
+                            <button
+                              key={choice}
+                              type="button"
+                              className={`mode-btn${draft.choice === choice ? " active" : ""}`}
+                              onClick={() => updateBatchVoteDraft(row.proposalId, { choice })}
+                            >
+                              {choice}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <label className="vote-rationale-label batch-vote-rationale-label">
+                        Rationale URL (optional)
+                        <input
+                          type="url"
+                          value={batchVoteDrafts[row.proposalId]?.rationaleUrl || ""}
+                          onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleUrl: e.target.value })}
+                          placeholder="https://your-rationale.json  or  ipfs://Qm..."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {wallet.walletNetworkId !== 1 ? (
+                <p className="vote-notice">Wallet is on testnet - vote will be submitted to testnet.</p>
+              ) : null}
+
+              <div className="vote-confirm-actions">
+                <button type="button" className="mode-btn" onClick={() => setBatchVoteModalOpen(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="vote-confirm-submit vote-confirm-submit--yes"
+                  onClick={submitBatchVote}
+                  disabled={voteSubmitting || !batchVoteReady}
+                >
+                  Submit {selectedBatchVoteRows.length} Votes On-Chain
                 </button>
               </div>
             </div>
