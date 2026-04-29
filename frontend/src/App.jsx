@@ -233,18 +233,32 @@ export default function App() {
       setWalletName(found?.displayName || walletKey);
       setWalletMenuOpen(false);
 
-      const [rewardAddresses, netId, lovelace, drep] = await Promise.all([
+      const [rewardAddresses, netId, lovelace] = await Promise.all([
         api.getRewardAddresses(),
         api.getNetworkId(),
         api.getLovelace(),
-        api.getDRep().catch(() => null)
       ]);
+
+      // CIP-95: request DRep extension via raw wallet API (MeshSDK doesn't expose this)
+      let drep = null;
+      try {
+        const rawWallet = window.cardano?.[walletKey];
+        const rawApi = rawWallet
+          ? await rawWallet.enable({ extensions: [{ cip: 95 }] }).catch(() => null)
+          : null;
+        if (rawApi?.cip95) {
+          const pubDRepKey = await rawApi.cip95.getPubDRepKey().catch(() => null);
+          if (pubDRepKey) drep = { pubDRepKey };
+        }
+      } catch {
+        // wallet doesn't support CIP-95 — drep stays null
+      }
 
       setWalletApi(api);
       setWalletRewardAddress(rewardAddresses?.[0] || "");
       setWalletNetworkId(netId);
       setWalletLovelace(lovelace);
-      setWalletDrep(drep?.dRepIDCip105 ? drep : null);
+      setWalletDrep(drep);
     } catch (e) {
       setWalletApi(null);
       setWalletName("");
