@@ -1,16 +1,16 @@
-<!-- url: ipfs://bafkreietvdhrzswhmkmzjtwz7d5vfxhhjednne7xa6bqw265oemrimwjcy -->
+<!-- url: ipfs://bafkreiezubbsvoaa4354wwrllr5wxazyobjc64763kkh32o5767dqqbtv4 -->
 # KtorZ
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
-**Vote:** No
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Vote:** Yes
 **Voter ID:** `64f97568e72ff7e0035b4bae7bb080a10ec6fae5c0f381ed40053a49`
 
 ---
 
-The main offending traits are:
+The terms of the withdrawals are clearly stated and comes with sufficient rationale. One may argue whether such a withdrawal is a "good" use of the treasury (w.r.t Tenet #1), in the sense that this particular withdrawal is about covering the cost of a legal structure that should later benefit the ecosystem but doesn't immediately. I believe it not to be a constitutional matter here, but a question for DReps who seem to have already decided at the time of my vote. 
 
-- The main rationale document isn't content-addressed, and being a malleable URL as per Article II Section 6. Even though that constitutional requirement is a bit redundant due to the presence of a content hash alongside the URL, it is nonetheless required. 
+Note that the proposal contains a few "misprints"/oversights where it mentions for example that the "audit the smart contract that will be built free of charge courtesy of Lucas and Kasey from UTxO Company.", yet then mentions Invariant0 LLC as an auditor, with a cost breakdown. So it is likely an outdated draft that hasn't been properly edited. 
 
-- As per Article 2 Section 7.1, the terms of the withdrawal must also be clearly stated. Yet the period of delivery and refunding conditions aren't quite clear or stated. There are multiple timeframes mentioned in the proposal, but the overall timeline is unclear. 
+Similarly, the proposal refers to the "Amaru contract" in a few places, where I believe it means to say Sundae Labs' Treasury Contracts ( https://github.com/SundaeSwap-finance/treasury-contracts ) which have been used in the past for the first Amaru withdrawal. The rest of the proposal being clear on the capabilities and intent of the smart contract, I believe this is simply a rather awkward "naming issue". 
 
-Also, not as important but still encouraged: the proposal refers to its past budget without explicitly linking to it. To avoid confusion or misinterpretation, I'd advise to always clearly communicate a governance action id or at minima a transaction hash when referring to previous proposals.
+All else considered, the proposal appears constitutional.

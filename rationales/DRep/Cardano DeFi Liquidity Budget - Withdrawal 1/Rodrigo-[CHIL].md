@@ -1,10 +1,10 @@
-<!-- url: https://gateway.pinata.cloud/ipfs/QmUrFPCXT8kaei3CRUBMrFAHXKjC3SdeHiAGxtJz6StJEG -->
+<!-- url: https://gateway.pinata.cloud/ipfs/QmcprmvRDT652M2Kv7cyiG5K4xxb8j3dYUYYBHay6zAAft -->
 # Rodrigo-[CHIL]
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
 **Vote:** Yes
 **Voter ID:** `drep1y2j2q9pcl855969ea9csrhdta6slnamctgzuvuqnnkl6fusqyjy36`
 
 ---
 
-as voted before in the info Action
+The DRep has decided to support this proposal.

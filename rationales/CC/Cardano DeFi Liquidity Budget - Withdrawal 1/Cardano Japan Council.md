@@ -1,10 +1,10 @@
-<!-- url: https://ipfs.blockfrost.dev/ipfs/Qmd1kY8pxR8GgXqT5K3dSToCUF2t9RtEHkoSBd8tEskYnn -->
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmbnCdvpEBMQUoQ9LgfAypGv6XBuomfT7VzDLYeP3DbGZp -->
 # Cardano Japan Council
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
-**Vote:** No
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Vote:** Yes
 **Voter ID:** `725d4d44499865071536d54674b080322bd366be15338db221807b31`
 
 ---
 
-This proposal is determined to be unconstitutional, as it fails to satisfy multiple requirements of the amended Cardano Constitution. First, the off-chain documentation associated with this governance action is hosted on a mutable GitHub URL, such that the contents of the referenced documents remain technically alterable even after submission. However, Article II, Section 6 of the Cardano Constitution explicitly requires that “any document hosted at the referenced URL must be immutable.” Because the proposal relies on documentation that does not meet this immutability requirement at the time of submission, the proposal fails to ensure the verifiability and integrity of the governance action as required by the Constitution. Second, the proposal asserts that the requested Treasury Withdrawal is based on an “approved budget,” citing a previously ratified Stablecoin DeFi Liquidity Budget via a Budget Info Action. Under the amended Constitution, the Budget Info Action has been abolished, and Info Actions no longer possess any legal or constitutional authority to approve budgets. Accordingly, the cited Budget Info Action cannot constitute a valid constitutional basis for an approved budget, and the prerequisite conditions for a Treasury Withdrawal are therefore not met. For these reasons, this proposal does not comply with the amended Cardano Constitution and is thus determined to be unconstitutional.
+This proposal meets the formal requirements for Governance Actions set forth in Article 2, Section 6, Paragraphs 1 and 2 of the Cardano Constitution, and is presented as an immutable off-chain document whose content is uniquely identified by a commit hash. Furthermore, this proposal is a Treasury Withdrawal governance action under Article 2, Section 7 of the Cardano Constitution. In relation to Paragraphs 1, 2, 4, 5, and 6, it includes details regarding the purpose of fund usage, the implementation period, a breakdown of expenses, repayment conditions, the supervising entity, and the audit and management framework. Additionally, under Article 2, Section 7, Paragraph 3 of the Cardano Constitution, the Net Change Limit (Epoch 613 to Epoch 713) (gov_action1m3xx08yv788vfxqh6nfvrjtvmqpwezsy0ggaczctkyjmttc2wmxsq4jsr7q) is in effect, and no conflict with this limit has been identified in relation to this proposal. Therefore, as no conflict with constitutional requirements has been identified, this proposal is deemed constitutional.

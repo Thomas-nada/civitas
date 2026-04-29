@@ -1,10 +1,10 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTZzftN78q4izfD1nZJUfR3R3cpFEA2FpDnHL12Hs2hQK -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmXboCS3tGDVL13ZdTDvgEK5ALm34cTkhBFWGa6CDN5Sc4 -->
 # Minh Le
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
 **Vote:** Yes
 **Voter ID:** `drep1yg6lvx8hrsjgex7f2p5waz5hqmwxzn7u8xljsuastt7s3qckz3maz`
 
 ---
 
-I like this proposal, so vote yes.
+i'm like proposal so i vote yes

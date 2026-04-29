@@ -1,50 +1,44 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR1pEYTELwVLKhYMC9rUq9NoWNRpGFw4X78qQ7gQ9A5rG -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSMgNVANQtYanhNQ7Tdg2PAiQZ1HDSVrvHUtEY6r42E5t -->
 # CardanoYoda (MANDA Pool)
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
 **Vote:** No
 **Voter ID:** `drep1y2m0g4r66pyaw3p7u454wc0p4f0ygm8ueaev0mgd3tvwm7sskqwqp`
 
 ---
 
-As a DRep, I decided to vote NO on the proposal: Cardano DeFi Liquidity Budget - Withdrawal 1
+As a DRep, I decided to vote NO on the proposal: Cardano Defi Liquidity Budget - Withdrawal 1
 
-Rationale for Rejection
+My rationale:
 
-I want to state clearly at the outset that I support the objective of this proposal. Cardano needs deeper and more reliable stablecoin liquidity, and I appreciate the work the team has put into advancing this discussion.
+I appreciate the intention behind this proposal. However, in its current form, I am not able to support it. The reasons are similar to those for rejecting the previous proposal:
 
-My decision to reject this withdrawal is not opposition to the goal, but a concern about the chosen architecture, sequencing, and cost structure.
+gov_action1fvgw27fjpr9c7g582mszzyez0jgkqgjgatzdnyngrg8wwc9kcn3qqxtz8r7
 
-The core issue for me is that this proposal asks DReps to approve a substantial amount of ADA for establishing an off-chain legal entity to deploy liquidity in DeFi. 
+In my opinion, the Cardano Treasury should serve as a source of liquidity for the ecosystem. The direction is right.
 
-Paying approximately 400k ADA to establish and operate a legal entity, including professional directors and ongoing compliance, represents a clear shift away from decentralized, trust-minimized design towards CeFi-style execution. If we are building DeFi, I believe we should first exhaust on-chain solutions and invest Treasury funds into code, protocols, and governance mechanisms rather than importing legacy legal layers as a starting point.
+I still believe that establishing a legal entity in the Cayman Islands is unnecessarily costly. In my opinion, there are cheaper alternatives. The team wants to push this option. They are actively trying to explain it. Even if I accepted it, the costs of directors and supervisors seem high to me.
 
-I fully understand that legal entities are required when interacting with OTC desks, fiat rails, or direct stablecoin issuer minting. However, it has not been convincingly demonstrated that this institutional path is cheaper or more efficient than a trust-minimized, on-chain approach once all costs are considered.
+My primary concern relates to the proportionality between the proposed costs and the expected scope of responsibilities.
 
-When the fixed legal overhead of roughly 400k ADA is added to OTC spreads, operational friction, and ongoing compliance, the institutional route may in fact be more expensive than a well-designed on-chain strategy at the scale currently being discussed. At approximately $32M of deployment, phased DEX and bridge-based execution can plausibly achieve comparable or lower total cost without introducing permanent administrative overhead.
+The proposal does not clearly define the exact role, responsibilities, or time commitment of the directors. In my understanding, the DAO is responsible for making decisions related to stablecoins and allocation, while the legal entity and its directors would act primarily as the formal structure executing those decisions, especially regarding off-chain interactions. 
 
-I am also concerned that we are creating a new legal entity despite already having founding entities that are legal persons. The Cardano Foundation, for example, has publicly indicated plans to use Genesis ADA to mint stablecoins. This raises the question of whether all existing options have been explored and whether these entities have explicitly declined participation. My impression is that they do not wish to bear the legal and operational risk for this program, which is understandable, but that alone does not automatically justify establishing a new, Treasury-funded legal structure without further exploration or explanation.
+If this interpretation is correct, the directors would not be independently managing a complex investment strategy, but rather acting as a governance and legal execution layer on top of decisions made elsewhere. In that case, their role appears primarily supervisory and operational from a legal standpoint, rather than involving active portfolio management or continuous strategic decision-making.
 
-I also believe that all major entities within the Cardano ecosystem share a vested economic interest in preserving ADA in the Treasury and using those funds as efficiently as possible. For that reason, I would expect openness to cooperation and reuse of existing structures wherever feasible. If the ecosystem ultimately decides that a new legal entity must be established, it should be designed as a reusable, shared resource for future initiatives rather than a single-purpose structure created solely for this proposal.
+The financial operations associated with minting stablecoins and allocation to DeFi are relatively straightforward.
 
-Another important point is that the proposal does not specify whether the legal entity is intended to exist only for a single year or to operate on an ongoing basis. While only year-1 costs are budgeted, there is no stated sunset clause, dissolution condition, or estimate of operating expenses for years 2 and beyond. In practice, this means approving not only a one-time expense, but the creation of a recurring cost center with no defined end. This lack of clarity makes it difficult to assess the true long-term commitment being made on behalf of the Treasury.
+In such a setup, a director's compensation of around $50,000 per year seems difficult to justify. This level of compensation is more typical for hedge fund structures, where directors oversee complex investment strategies, active trading, and significant regulatory exposure. Here, the structure appears simpler and more delegated. Based on comparable roles, a more appropriate compensation range would likely be in the range of $10,000 to $25,000 per director. If the intention is for directors to take on a more active or strategic role, this should be clearly specified and justified, including the expected scope of decision-making, liability, and time commitment.
 
-I am also uncomfortable with the way this withdrawal is positioned as the first in a sequence of withdrawals. When I approved the Info Action, I highlighted several shortcomings, as did many other DReps. I expect the team to address them. Before approving this withdrawal, I would like to see a second withdrawal with attachments that would be considered final and binding.
+Another important issue is the lack of transparency regarding the directors themselves. The proposal does not disclose their names, which makes it impossible to properly assess their competence, experience, or suitability for the role. This is particularly relevant given that there are no strict legal requirements in the Cayman Islands regarding formal education, licensing, or specific qualifications for directors. As a result, the quality of governance depends heavily on the individuals appointed. Without knowing who they are, it is difficult to evaluate whether the proposed compensation is appropriate.
 
-I have read the attachments to the first withdrawal, but I am not sure of their status. I give the team credit for addressing some of my concerns.
+I also attempted to identify the candidates based on the descriptions provided. While I was able to form a reasonable assumption about the first candidate, this remains unconfirmed, and I do not consider it appropriate to rely on inference alone. If my assumption is correct, there are aspects of this individual's past business history that would merit clarification. For this reason, I believe the proposal should explicitly disclose the individual's identity and address any relevant history openly, so that voters can make an informed decision.
 
-Under the current governance process, meaningful changes or clarifications can realistically only be acted upon in subsequent proposals/withdrawals. Approving this first withdrawal without visibility into the full set of planned withdrawals effectively pressures voters to approve later ones to avoid stranding sunk costs. Rejecting a later withdrawal after approving the legal entity would likely result in a loss of Treasury funds.
+In the case of the second candidate, I was not able to identify the person with confidence. However, the description suggests involvement in a DeFi market-making entity. Given that this proposal involves deploying stablecoin liquidity to the Cardano ecosystem, this creates a potential conflict of interest. A director in such a position could influence decisions regarding which platforms receive liquidity or how stablecoins are allocated, potentially favoring entities they are already connected with. This does not imply wrongdoing, but it is a material governance risk that should be transparently disclosed and properly managed, for example, through clear conflict-of-interest policies.
 
-This is a systemic governance issue rather than a fault of the team, but it makes it impossible for me to responsibly approve this withdrawal in isolation. I would strongly prefer to see all planned withdrawals submitted with sufficient detail so the entire project can be evaluated coherently.
+If the candidates have active financial or operational ties to Cardano projects that could benefit from the DAO’s decisions, this creates a potential conflict of interest that must be clearly disclosed and properly managed.
 
-Finally, I want to emphasize that I remain supportive of this project and of the broader goal of improving Cardano's liquidity. However, I am not comfortable approving a large upfront expenditure for legal structuring before attempting a trust-minimized, on-chain-first approach.
+For these reasons, I am not comfortable approving the proposal as it stands. This is not a rejection of the idea itself, but rather a request for stronger governance standards, clearer definition of roles (including the relationship between the DAO and the directors), greater transparency, and a more proportionate cost structure.
 
-My understanding is that the legal entity primarily exists to shield the committee from liability and to enable off-chain execution. If decisions were made directly by DReps and execution were limited strictly to on-chain transactions, neither a legal entity nor a committee would be strictly necessary. There are viable paths to bootstrap USDM or USDA liquidity using DeFi-native mechanisms such as DEXs, bridges, and phased deployment without exposing individuals to off-chain liability.
+I am willing to support a revised version of this proposal if the directors are clearly identified, their responsibilities and compensation are justified in relation to the actual scope of work, the interaction between the DAO and the legal entity is clearly defined, and potential conflicts of interest are transparently disclosed and appropriately managed. 
 
-For these reasons, I am rejecting this proposal at this time. I encourage the team to explore an on-chain-first design, clarify the lifetime and cost of any legal entity, and present the full set of withdrawals together.
-
-I remain open to supporting a revised approach that better aligns with decentralized principles while still addressing Cardano's liquidity needs.
-
-I will continue to carefully review the rationales and arguments presented by other dReps and follow the ongoing discussion across community channels and social media. 
-
-Governance decisions of this magnitude benefit from broad scrutiny and diverse perspectives, and I remain open to refining my position should new information, clarifications, or materially different approaches emerge through that process.
+I would like to emphasize that if this proposal is approved, I will decide on the 50M ADA withdrawal independently of this one. I will assess it on its own merits, structure, safeguards, and overall value to the ecosystem.

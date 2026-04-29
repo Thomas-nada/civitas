@@ -1,155 +1,88 @@
-<!-- url: ipfs://bafkreifl3aldhipwml4crt7a67zj3pqk7xkfy4pgf3sqjpconwcf5riuqy -->
+<!-- url: ipfs://bafkreibnvxcwc7cm6j7y7pa2btjsdgn74eztn6hy6hwc6xhyo5kwuzdosi -->
 # SIPO
 
-**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
 **Vote:** Yes
 **Voter ID:** `drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh`
 
 ---
 
-SIPO DRep votes Yes on the proposal “Cardano DeFi Liquidity Budget – Withdrawal 1.”
+SIPO DRep votes YES on Cardano DeFi Liquidity Budget - Withdrawal 1.
 
-I do not evaluate this proposal as a short-term DeFi growth initiative or a TVL-driven spending decision. Instead, we see it as a foundational institutional cost required for Cardano to transition from an experimental DAO ecosystem into a public, institution-grade blockchain infrastructure.
+SIPO previously voted YES on an earlier version of this proposal (January 2026), evaluating it as the first institutional design cost for Cardano's transition from an experimental DAO ecosystem to a public blockchain capable of engaging with states and institutions. This resubmission substantially improves on the prior version with detailed cost breakdowns, explicit refund conditions, and comprehensive constitutional compliance checks. SIPO's position remains consistent and is reinforced by these improvements.
 
+Why SIPO votes YES
 
+1. Consistent with SIPO's prior evaluation
+In January 2026, SIPO voted YES on the earlier version, framing it as foundational institutional infrastructure rather than a short-term DeFi growth initiative. That assessment remains unchanged. This Withdrawal establishes the legal entity, audited smart contract, and governance mechanisms required before the broader 50M ADA liquidity deployment can proceed responsibly. The 800,000 ADA is a setup cost — a prerequisite, not an end in itself.
 
-1. Why this matters now
+2. Substantially improved transparency over the prior submission
+This resubmission addresses concerns about the previous version's level of detail: complete USD-denominated cost breakdown with ADA conversion at $0.25/ADA, six explicit refund scenarios, article-by-article constitutional compliance checklist, director candidate profiles disclosed, and a 6-month delivery deadline with mandatory return of unspent funds.
 
-Across the blockchain industry, many DAO treasuries and DeFi systems remain structurally limited:
-	•	They lack clear legal personality
-	•	Accountability is ambiguous
-	•	Interaction with states, institutions, and regulated entities is difficult or impossible
+3. Cayman Islands Foundation Company is the established industry standard
+MakerDAO, dYdX, Uniswap Foundation, and ENS all use the same Cayman FC structure. The memberless, director-led design aligns with decentralized governance principles while providing legal personality, limited liability, and counterparty capability. The selection of Walkers LLP provides dedicated regulatory staff — a prudent choice for long-term operation.
 
-As a result, DeFi often remains confined to an experimental or semi-private domain.
+4. Smart contract development contributed at zero cost
+The administrating smart contract system is being built free of charge by UTxO Company and Sidan Labs. The 111,000 ADA audit by Invariant0 LLC covers design review, code audit, fix re-audit, and public reporting — appropriate scope for a contract managing public treasury funds.
 
-This proposal directly addresses that bottleneck by combining:
-	•	A legally recognized Foundation Company structure
-	•	On-chain constitutional governance
-	•	dRep-based democratic oversight
+5. Governance structure reflects Cardano's principles
+The 5-of-9 multisig Interim Committee, tDAO oversight with DRep impeachment authority, mandatory monthly reporting, SPO delegation prohibition, and auto-abstain DRep delegation collectively implement the principle that treasury assets are public funds, not discretionary capital.
 
-This is a serious attempt to bridge decentralized governance with real-world institutional requirements.
+6. Proportionate scale
+At 800,000 ADA (0.23% of the 350M ADA NCL), this is a measured expenditure for institutional groundwork covering Year 1 legal costs only.
 
+Expectations
 
+SIPO's YES vote on this Withdrawal does not constitute automatic support for Withdrawal 2 (the 50M ADA liquidity deployment). The two must be evaluated independently.
 
-2. Key reasons for support
+- Withdrawal 2 requires separate, rigorous scrutiny: The 50M ADA deployment into DeFi protocols carries fundamentally different risks — smart contract exploits, impermanent loss, counterparty risk, and treasury principal market exposure.
+- Director and Supervisor appointment transparency: Full public disclosure of appointed directors and Supervisor, including potential conflicts of interest, before fund disbursement.
+- Legal cost actuals vs. budget: Monthly reporting on actual USD invoices paid, ADA conversion rates used, and any variance from budget.
+- Audit report publication: The Invariant0 audit report must be published in full with all critical findings remediated before managing Withdrawal 2 funds.
+- 6-month deadline enforcement: Strict adherence to the delivery window with mandatory return of remaining funds if incomplete.
+- Interim Committee member accountability: All nine members should maintain public accountability commensurate with their fiduciary role over public funds.
 
-(1) Treasury treated as public funds
+SIPO's assessment has not changed since January 2026. This resubmission is a stronger version — more detailed, more transparent, and more constitutionally rigorous. The 800,000 ADA is not a DeFi investment. It is the cost of building the institutional foundation that makes responsible DeFi investment possible.
 
-The proposal clearly frames Treasury assets as public funds, not discretionary capital:
-	•	5-of-9 multisignature control
-	•	dRep authority to appoint, remove, or shut down operations
-	•	Mandatory reporting and independent audits
-	•	No delegation of funds to SPOs
+For these reasons, SIPO DRep votes YES.
 
-This reflects a mature and responsible approach to treasury governance.
 
 
+SIPODRepとして、本提案「Cardano DeFi Liquidity Budget - Withdrawal 1」に賛成（YES）を投じます。
 
-(2) Institutional groundwork, not short-term liquidity
+SIPOは2026年1月に本提案の初回バージョンにYESを投じており、「Cardanoが実験的DAOから、国家や機関と接続可能な公共ブロックチェーンへ移行するための最初の制度設計コスト」と評価しました。今回の再提出は、詳細な費用内訳、明示的な返金条件、包括的な憲法準拠チェックにより、前回バージョンを大幅に改善しています。SIPOの立場は一貫しており、これらの改善によって強化されています。
 
-While this withdrawal does not deploy liquidity directly, it establishes the legal, technical, and governance infrastructure required for future:
-	•	Stablecoin DeFi
-	•	RWA initiatives
-	•	Institution-facing DeFi use cases
+SIPOがYESと判断する理由
 
-The value lies in reusability and precedent, not immediate financial metrics.
+1. SIPOの過去評価との一貫性
+2026年1月、SIPOは本提案の初回バージョンに対し、短期的なDeFi成長施策ではなく基盤的な制度インフラとしてYESを投じました。この評価は変わりません。本Withdrawalは、50M ADA流動性展開を責任を持って進めるために必要な法人、監査済みSmart Contract、ガバナンスメカニズムを確立するものです。800,000 ADAはセットアップコストであり、前提条件です。
 
+2. 前回提出からの大幅な透明性向上
+今回の再提出は前回の詳細不足に対応しています：全法的サービスのUSD建てコスト内訳（$0.25/ADA変換率明示）、6つの返金シナリオ、憲法逐条準拠チェック、取締役候補プロファイル開示、6ヶ月納品期限と未使用資金の返還義務です。
 
+3. Cayman Islands Foundation Companyは確立された業界標準
+MakerDAO、dYdX、Uniswap Foundation、ENSが同じCayman FC構造を採用。メンバーレス・ディレクター主導設計は分散型ガバナンスと整合しつつ、法的人格と有限責任を提供します。Walkers LLPは専任規制対応スタッフを有し、長期運用に合理的です。
 
-(3) A distinctly Cardano approach
+4. Smart Contract開発がゼロコストで貢献
+UTxO CompanyとSidan Labsによる無償開発。Invariant0 LLCの111,000 ADA監査は公的Treasury資金管理コントラクトとして適切な範囲です。
 
-This proposal avoids both extremes:
-	•	Centralized foundation control
-	•	Unaccountable, permissionless DAO spending
+5. ガバナンス構造がCardanoの原則を体現
+5-of-9マルチシグ、tDAO監督、DRep罷免権限、月次報告義務、SPO委任禁止、auto-abstain委任。Treasury資産は公共資金であり裁量的資本ではないという原則を具体化しています。
 
-Instead, it operationalizes Cardano’s long-held principles:
-decentralization with responsibility, autonomy with accountability.
+6. 適切な規模感
+800,000 ADA（NCLの0.23%）はYear 1法的費用のみをカバーする均衡のとれた支出です。
 
-This is a long-term credibility investment, not a short-term optimization.
+期待事項
 
+本Withdrawalへの賛成はWithdrawal 2（50M ADA）の自動的支持を意味しません。
 
+- Withdrawal 2は別途厳格に精査：DeFiプロトコルへの50M ADA展開はSmart Contract脆弱性、インパーマネントロス、カウンターパーティリスク等、根本的に異なるリスクを伴います。
+- 取締役・Supervisor選任の透明性：資金支出前に完全な公開開示を期待します。
+- 法的費用の実績報告：USD請求額、ADA変換レート、予算差異の月次報告を求めます。
+- 監査レポートの完全公開：重大所見はWithdrawal 2資金管理前に是正が必要です。
+- 6ヶ月期限の厳守：未完了分は規定通り返還されるべきです。
+- 全Committee memberの公開的説明責任の維持を期待します。
 
-3. Final position of SIPO DRep
+SIPOの評価は2026年1月以来変わっていません。今回の再提出はより詳細で透明で憲法的に厳密なバージョンです。800,000 ADAはDeFi投資ではなく、責任あるDeFi投資を可能にする制度的基盤の構築コストです。
 
-SIPO DRep views this proposal as:
-
-The first institutional design cost for Cardano’s transition from an experimental DAO ecosystem to a public blockchain capable of engaging with states and institutions.
-
-Just as nations invest early in legal frameworks and public infrastructure before economic returns are visible, Cardano must invest in governance and institutional readiness.
-
-For these reasons, SIPO DRep votes Yes on this proposal.
-
-SIPO DRepは、本提案 「Cardano DeFi Liquidity Budget – Withdrawal 1」 に対して Yes（賛成） を投じます。
-
-本提案を評価するにあたり、私はこれを「短期的なDeFi活性化施策」や「TVLを増やすための支出」としては捉えていません。本提案の本質は、Cardanoが“実験的DAO”の段階を超え、“公共的ブロックチェーン基盤”として機能するための制度設計コストにあると考えています。
-
-
-
-1. なぜ「今」この支出が必要なのか
-
-現在、多くのブロックチェーンやDeFiエコシステムは、オンチェーンでは高度に分散化されている一方で、オフチェーンの現実世界との接続において重大な課題を抱えています。
-	•	DAO Treasuryは存在するが、法的主体が曖昧
-	•	誰が責任を負うのかが明確でない
-	•	国家・機関投資家・規制環境と接続できない
-
-この状況では、DeFiはいつまでも「実験段階」に留まり、公共性や持続性を獲得することができません。
-
-本提案は、こうした構造的課題に対して、
-「法的器（Foundation Company）」「オンチェーン憲法」「dRepによる統治」
-を組み合わせることで、初めて真正面から解決を試みるものです。
-
-
-
-2. 本提案の評価ポイント
-
-（1）公共資金としてのTreasury運用を前提にしている点
-
-本提案は、資金の管理・支出・監査・停止権限をすべて憲法とオンチェーンガバナンスの枠内に置いています。
-	•	5-of-9マルチシグ
-	•	dRepによる任免・停止権
-	•	月次報告と第三者監査
-	•	SPOへの委任禁止
-
-これは、Treasuryを「誰かの裁量資金」ではなく、公共資金として扱う姿勢の明確な表明です。
-
-
-
-（2）「DeFiを制度として成立させる」ための前例になる点
-
-このWithdrawalは流動性そのものを供給するものではありません。
-しかし、**将来のステーブルコインDeFi、RWA、機関向けDeFiを実装するための“土台”**を作ります。
-
-これは単発の支出ではなく、
-	•	今後の公共ファンド
-	•	国際連携
-	•	規制環境下でのDeFi展開
-
-に再利用可能な制度設計の雛形になると考えています。
-
-
-
-（3）Cardanoらしいアプローチである点
-
-本提案は、
-	•	中央集権的な財団モデルでもなく
-	•	無責任な完全放任DAOでもありません
-
-分散と責任、自由と統治を両立させようとするCardanoの思想を、初めて現実的な制度として落とし込んだ試みです。
-
-これは短期的な成果指標では測れませんが、長期的な信認と持続性において非常に重要です。
-
-
-
-3. SIPO DRepとしての結論
-
-SIPO DRepは、本提案を
-
-Cardanoが「実験的DAO」から
-「公共的ブロックチェーン国家」へ移行するための、最初の制度設計コスト
-
-として評価しています。
-
-国家が最初に道路や橋、会計制度を整える際、それがすぐに黒字になるかどうかでは判断しないように、
-この支出もまた「将来にわたって使われ続ける制度を作るか」という観点で判断すべきものです。
-
-以上の理由から、SIPO DRepは本提案に Yes を投じます。
+以上の理由により、SIPO DRepとして本提案に賛成（YES）を投じます。
