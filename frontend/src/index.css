@@ -2267,6 +2267,151 @@ tbody tr.active {
   color: #7c8fa8;
 }
 
+/* Proposal detail vote bars */
+.vbc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.vbc {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 0.65rem 0.85rem;
+}
+
+.vbc-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+}
+
+.vbc-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.vbc-threshold-label {
+  font-size: 0.7rem;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.vbc-bar-wrap {
+  position: relative;
+  margin-bottom: 0.55rem;
+}
+
+.vbc-bar-track {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.vbc-bar-yes {
+  background: var(--mint);
+  transition: width 0.4s ease;
+}
+
+.vbc-bar-no {
+  background: var(--rose);
+  transition: width 0.4s ease;
+}
+
+.vbc-bar-rest {
+  background: rgba(148, 163, 184, 0.18);
+  flex: 1;
+}
+
+.vbc-bar-threshold {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--amber);
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(255, 199, 102, 0.5);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.vbc-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.3rem 1.1rem;
+}
+
+.vbc-no-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vbc-no-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  padding-left: 0.55rem;
+  border-left: 2px solid rgba(255, 111, 125, 0.35);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.vbc-no-breakdown em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.vbc-stat {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.vbc-stat strong {
+  font-weight: 700;
+}
+
+.vbc-stat em {
+  font-style: normal;
+  opacity: 0.65;
+  font-size: 0.7rem;
+}
+
+.vbc-stat--yes strong {
+  color: var(--mint);
+}
+
+.vbc-stat--no strong {
+  color: var(--rose);
+}
+
+.vbc-stat--abs strong {
+  color: var(--amber);
+}
+
+.vbc-stat--rest strong {
+  color: var(--text-muted);
+}
+
+.vbc-stat--yes,
+.vbc-stat--no {
+  color: var(--text);
+}
+
 /* ── Governance Actions table — inline vote bars ─────────────────── */
 .ga-hash-cell {
   width: 84px;
@@ -2964,6 +3109,194 @@ tbody tr.active {
   max-height: calc(90vh - 170px);
   overflow: auto;
   padding-right: 0.15rem;
+}
+
+/* Proposal detail page */
+.pdp-head {
+  padding: 1.5rem 0 1rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.5rem;
+}
+
+.pdp-back {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: 1rem;
+  transition: color 0.15s;
+}
+
+.pdp-back:hover {
+  color: var(--mint);
+}
+
+.pdp-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+
+.pdp-title {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+  line-height: 1.25;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pdp-title-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding-top: 0.2rem;
+}
+
+.pdp-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.pdp-meta-type {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.pdp-meta-item {
+  color: var(--text-muted);
+}
+
+.pdp-meta-strip .pdp-meta-type + .pdp-meta-item::before,
+.pdp-meta-strip .ada-badge + .pdp-meta-item::before,
+.pdp-meta-strip .pdp-meta-item + .pdp-meta-item::before {
+  content: "·";
+  margin-right: 1rem;
+  opacity: 0.4;
+}
+
+.pdp-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 199, 102, 0.15);
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.pdp-action-id {
+  font-size: 0.72rem;
+  margin: 0;
+  opacity: 0.6;
+  word-break: break-all;
+}
+
+.pdp-warning {
+  background: rgba(255, 180, 0, 0.08);
+  border: 1px solid rgba(255, 180, 0, 0.35);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+}
+
+.pdp-metadata-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pdp-meta-section {
+  border-bottom: 1px solid var(--line);
+}
+
+.pdp-meta-section:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.pdp-meta-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0.25rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  list-style: none;
+  user-select: none;
+  gap: 0.5rem;
+}
+
+.pdp-meta-section-title::-webkit-details-marker {
+  display: none;
+}
+
+.pdp-meta-section-title::after {
+  content: "›";
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.pdp-meta-section[open] .pdp-meta-section-title::after {
+  transform: rotate(270deg);
+}
+
+.pdp-meta-section-body {
+  padding: 0 0.25rem 1.1rem;
+}
+
+.pdp-references {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.pdp-references li {
+  line-height: 1.4;
+}
+
+.pdp-anchor-line {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.pdp-role-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.pdp-voter-name {
+  font-weight: 500;
+}
+
+.pdp-voter-id {
+  font-size: 0.68rem;
+  margin-top: 0.12rem;
+}
+
+.pdp-vp {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--mint);
 }
 
 .payload-modal {
