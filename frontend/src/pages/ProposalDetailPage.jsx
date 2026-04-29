@@ -29,6 +29,13 @@ function formatAdaCompact(value) {
   return `${Math.round(Number(value || 0)).toLocaleString()} ada`;
 }
 
+function formatVotePower(role, value) {
+  if (role === "CC") return "-";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return formatAdaCompact(n);
+}
+
 function formatAdaShort(value) {
   const n = Number(value || 0);
   if (!Number.isFinite(n) || n <= 0) return "0";
@@ -478,6 +485,7 @@ export default function ProposalDetailPage() {
             voter: String(actor?.name || actor?.id || "Unknown"),
             voterId: String(actor?.id || ""),
             voterRole: role === "DRep" ? "drep" : role === "CC" ? "constitutional_committee" : "stake_pool",
+            votingPowerAda: role === "CC" ? null : Number(actor?.votingPowerAda || 0),
             vote: String(vote?.vote || ""),
             outcome: String(vote?.outcome || ""),
             voteTxHash: String(vote?.voteTxHash || "").trim(),
@@ -513,6 +521,7 @@ export default function ProposalDetailPage() {
         row.voter,
         row.voterId,
         row.role,
+        row.votingPowerAda,
         row.vote,
         row.outcome,
         row.votedEpoch
@@ -734,6 +743,7 @@ export default function ProposalDetailPage() {
                 <tr>
                   <th>Role</th>
                   <th>Voter</th>
+                  <th>Voting Power</th>
                   <th>Vote</th>
                   <th>Outcome</th>
                   <th>Epoch</th>
@@ -744,7 +754,7 @@ export default function ProposalDetailPage() {
               <tbody>
                 {filteredVotes.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={8} className="muted">
                       {allVotes.length === 0 ? "No votes found for this proposal." : "No votes match the selected filters."}
                     </td>
                   </tr>
@@ -756,6 +766,7 @@ export default function ProposalDetailPage() {
                         <div>{row.voter}</div>
                         {row.voterId ? <div className="muted mono">{row.voterId}</div> : null}
                       </td>
+                      <td data-label="Voting Power">{formatVotePower(row.role, row.votingPowerAda)}</td>
                       <td data-label="Vote">{row.vote || "-"}</td>
                       <td data-label="Outcome">{row.outcome || "-"}</td>
                       <td data-label="Epoch">{row.votedEpoch || "-"}</td>
