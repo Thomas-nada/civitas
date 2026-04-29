@@ -61,6 +61,11 @@ function eligibleVoteGroups(info) {
   return groups;
 }
 
+function hasActiveDrepVotingPower(drep) {
+  const status = String(drep?.status || "").trim().toLowerCase();
+  return status !== "expired" && status !== "retired";
+}
+
 const SPO_FORMULA_TRANSITION_EPOCH = 534;
 const SPO_FORMULA_TRANSITION_GOV_ACTION = "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
 
@@ -86,15 +91,18 @@ function computePieInfo(info, proposalId, payload) {
     else if (allAbstain && (name.includes("abstain") || id.includes("abstain"))) autoAbstainIds.add(drep.id);
   }
 
-  let regularDrepStakeAda = dreps.reduce((s, d) => s + Number(d.votingPowerAda || 0), 0);
+  let regularDrepStakeAda = dreps.reduce((s, d) => (
+    hasActiveDrepVotingPower(d) ? s + Number(d.votingPowerAda || 0) : s
+  ), 0);
   if (knownIds.has(ALWAYS_ABSTAIN_ID)) regularDrepStakeAda -= Number(dreps.find((d) => d.id === ALWAYS_ABSTAIN_ID)?.votingPowerAda || 0);
   if (knownIds.has(ALWAYS_NO_CONFIDENCE_ID)) regularDrepStakeAda -= Number(dreps.find((d) => d.id === ALWAYS_NO_CONFIDENCE_ID)?.votingPowerAda || 0);
   const alwaysAbstainPowerAda = Number(dreps.find((d) => d.id === ALWAYS_ABSTAIN_ID)?.votingPowerAda || 0);
   const alwaysNoConfidencePowerAda = Number(dreps.find((d) => d.id === ALWAYS_NO_CONFIDENCE_ID)?.votingPowerAda || 0);
   const totalActiveStakeAda = Math.max(regularDrepStakeAda, 0) + alwaysNoConfidencePowerAda;
 
-  const drepPs = { yesPowerAda: 0, noPowerAda: 0, abstainActivePowerAda: 0, abstainAutoPowerAda: alwaysAbstainPowerAda };
+  const drepPs = { yesPowerAda: 0, noPowerAda: 0, noConfidencePowerAda: 0, abstainActivePowerAda: 0, abstainAutoPowerAda: alwaysAbstainPowerAda };
   for (const drep of dreps) {
+    if (!hasActiveDrepVotingPower(drep)) continue;
     const vp = Number(drep.votingPowerAda || 0);
     const vote = (drep.votes || []).find((v) => v.proposalId === proposalId);
     if (!vote) continue;
@@ -104,14 +112,19 @@ function computePieInfo(info, proposalId, payload) {
     else if (v === "abstain") {
       if (autoAbstainIds.has(drep.id)) drepPs.abstainAutoPowerAda += vp;
       else drepPs.abstainActivePowerAda += vp;
-    }
+    } else if (v.includes("no_confidence")) drepPs.noConfidencePowerAda += vp;
   }
 
   const govType = String(info?.governanceType || "").toLowerCase();
   const isNoConf = govType.includes("no confidence") || govType.includes("noconfidence");
   const isHardFork = govType.includes("hard fork") || govType.includes("hardfork");
   const yesTotalAda = isNoConf ? drepPs.yesPowerAda + alwaysNoConfidencePowerAda : drepPs.yesPowerAda;
-  const noTotalAda = isNoConf ? drepPs.noPowerAda : drepPs.noPowerAda + alwaysNoConfidencePowerAda;
+  const noTotalAda = drepPs.noPowerAda;
+  const noConfidenceTotalAda = isNoConf ? 0 : drepPs.noConfidencePowerAda + alwaysNoConfidencePowerAda;
+  const drepNotVotedAda = Math.max(
+    totalActiveStakeAda - yesTotalAda - noTotalAda - noConfidenceTotalAda - drepPs.abstainActivePowerAda,
+    0
+  );
 
   // === SPO power ===
   const spoStats = { activeYesPowerAda: 0, activeNoPowerAda: 0, activeAbstainPowerAda: 0, passiveAlwaysAbstainPowerAda: 0, passiveAlwaysNoConfidencePowerAda: 0, passiveNoVotePowerAda: 0 };
@@ -182,6 +195,8 @@ function computePieInfo(info, proposalId, payload) {
     totalActiveStakeAda,
     drepYesPowerAda: yesTotalAda,
     drepNoPowerAda: noTotalAda,
+    drepNoConfidencePowerAda: noConfidenceTotalAda,
+    drepNotVotedPowerAda: drepNotVotedAda,
     drepAbstainActivePowerAda: drepPs.abstainActivePowerAda,
     spoYesAda,
     spoNoAda,
@@ -254,13 +269,17 @@ function VoteMixPie({ group, info }) {
   const drepActiveBaseAda = Number(info?.totalActiveStakeAda || 0);
   const drepYesAda = Number(info?.drepYesPowerAda || 0);
   const drepNoAda = Number(info?.drepNoPowerAda || 0);
+  const drepNoConfidenceAda = Number(info?.drepNoConfidencePowerAda || 0);
   const drepAbstainAda = Number(info?.drepAbstainActivePowerAda || 0);
-  const drepNotVotedAda = Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepAbstainAda, 0);
+  const drepNotVotedAda = Number.isFinite(Number(info?.drepNotVotedPowerAda))
+    ? Number(info?.drepNotVotedPowerAda || 0)
+    : Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepNoConfidenceAda - drepAbstainAda, 0);
   const drepOutcomeBaseAda = Math.max(drepActiveBaseAda - drepAbstainAda, 0);
+  const drepNoSideAda = drepNoAda + drepNoConfidenceAda + drepNotVotedAda;
   const drepYesPct = asActivePct(drepYesAda, drepOutcomeBaseAda);
-  const drepNoPct = asActivePct(drepNoAda, drepOutcomeBaseAda);
+  const drepNoPct = asActivePct(drepNoSideAda, drepOutcomeBaseAda);
   const drepAbstainPct = asActivePct(drepAbstainAda, drepActiveBaseAda);
-  const drepNotVotedPct = asActivePct(drepNotVotedAda, drepOutcomeBaseAda);
+  const drepNotVotedPct = 0;
 
   const spoYesAda = Number(info?.spoYesAda || 0);
   const spoNoWithNotVotedAda = Number(info?.spoNoAda || 0);
@@ -345,7 +364,10 @@ function VoteMixPie({ group, info }) {
           ) : (
             <>
               <p><span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
-              <p><span className="vote-label vote-label-no">No</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
+              <p><span className="vote-label vote-label-no">No side</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoSideAda)})</p>
+              <p><span className="vote-label vote-label-no">No</span> <strong>{formatAdaCompact(drepNoAda)}</strong></p>
+              <p><span className="vote-label vote-label-no">No Confidence</span> <strong>{formatAdaCompact(drepNoConfidenceAda)}</strong></p>
+              <p><span className="vote-label vote-label-not-voted">Not voted</span> <strong>{formatAdaCompact(drepNotVotedAda)}</strong></p>
               <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
             </>
           )}

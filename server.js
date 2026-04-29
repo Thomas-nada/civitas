@@ -2893,12 +2893,13 @@ function buildNomosModelFromKoiosSummary(summary) {
     drepInactive;
   const drepNotVoted = drepNotVotedRaw > 0n ? drepNotVotedRaw : 0n;
   const drepYesTotal = isNoConfidence ? drepActiveYes + drepAlwaysNoConfidence : drepActiveYes;
-  const drepNoTotal = isNoConfidence ? drepActiveNo + drepNotVoted : drepActiveNo + drepAlwaysNoConfidence + drepNotVoted;
+  const drepNoTotal = drepActiveNo;
+  const drepNoConfidenceTotal = isNoConfidence ? 0n : drepAlwaysNoConfidence;
   const drepAbstainTotal = drepActiveAbstain + drepAlwaysAbstain;
-  const drepOutcomeDenominator = drepYesTotal + drepNoTotal;
+  const drepOutcomeDenominator = drepYesTotal + drepNoTotal + drepNoConfidenceTotal + drepNotVoted;
   const drepDistributionDenominator = drepDerivedTotal - drepInactive;
   const drepYesPct = pct2BigInt(drepYesTotal, drepOutcomeDenominator);
-  const drepNoPct = pct2BigInt(drepNoTotal, drepOutcomeDenominator);
+  const drepNoPct = pct2BigInt(drepNoTotal + drepNoConfidenceTotal + drepNotVoted, drepOutcomeDenominator);
   const drepAbstainPct = pct2BigInt(drepAbstainTotal, drepDistributionDenominator);
   const drepNotVotedPct = pct2BigInt(drepNotVoted, drepDistributionDenominator);
 
@@ -2973,6 +2974,7 @@ function buildNomosModelFromKoiosSummary(summary) {
       noLovelace: drepNoTotal.toString(),
       abstainLovelace: drepAbstainTotal.toString(),
       notVotedLovelace: drepNotVoted.toString(),
+      noConfidenceLovelace: drepNoConfidenceTotal.toString(),
       activeYesLovelace: drepActiveYes.toString(),
       activeNoLovelace: drepActiveNo.toString(),
       activeAbstainLovelace: drepActiveAbstain.toString(),
@@ -8061,6 +8063,7 @@ const server = http.createServer(async (req, res) => {
     };
     if (req.headers["content-type"]) forwardHeaders["Content-Type"] = req.headers["content-type"];
     if (req.headers["cookie"]) forwardHeaders["Cookie"] = req.headers["cookie"];
+    if (req.headers["authorization"]) forwardHeaders["Authorization"] = req.headers["authorization"];
     const chunks = [];
     req.on("data", c => chunks.push(c));
     req.on("end", () => {

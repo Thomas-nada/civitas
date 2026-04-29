@@ -39,6 +39,14 @@ function formatEpochDate(epoch) {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+function formatCountdown(msRemaining) {
+  const totalMinutes = Math.max(0, Math.floor(Number(msRemaining || 0) / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return `${days}d:${String(hours).padStart(2, "0")}h:${String(minutes).padStart(2, "0")}m`;
+}
+
 function asPct(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
   return `${round(Number(value))}%`;
@@ -74,6 +82,11 @@ function isHardForkAction(governanceType) {
 function isNoConfidenceAction(governanceType) {
   const t = String(governanceType || "").toLowerCase();
   return t.includes("no confidence") || t.includes("noconfidence");
+}
+
+function hasActiveDrepVotingPower(drep) {
+  const status = String(drep?.status || "").trim().toLowerCase();
+  return status !== "expired" && status !== "retired";
 }
 
 function shouldUseNewSpoFormula(proposalId, submittedEpoch) {
@@ -112,11 +125,91 @@ function deriveStatus(info) {
   return String(info.outcome || "Unknown");
 }
 
-function statusPillClass(status) {
+function statusPillMod(status) {
   const s = String(status || "").toLowerCase();
-  if (s === "enacted" || s === "ratified") return "good";
-  if (s === "dropped") return "low";
-  return "mid";
+  if (s === "active") return "pill--active";
+  if (s === "ratified") return "pill--ratified";
+  if (s === "enacted") return "pill--enacted";
+  if (s === "expired") return "pill--expired";
+  if (s === "dropped") return "pill--dropped";
+  return "pill--unknown";
+}
+
+function formatHashCompact(govActionId) {
+  if (!govActionId) return "—";
+  const bare = govActionId.replace(/^gov_action1/, "");
+  if (bare.length <= 14) return bare;
+  return `${bare.slice(0, 8)}…${bare.slice(-6)}`;
+}
+
+const TYPE_SHORT = {
+  "treasury withdrawal": "Treasury W/D",
+  "treasury withdrawals": "Treasury W/D",
+  "info action": "Info Action",
+  "info": "Info Action",
+  "parameter change": "Param Change",
+  "hard fork": "Hard Fork",
+  "no confidence": "No Confidence",
+  "new committee": "New Committee",
+  "update committee": "Update CC",
+  "constitution": "Constitution",
+};
+
+function shortType(type) {
+  const t = String(type || "").toLowerCase().trim();
+  return TYPE_SHORT[t] || type || "Unknown";
+}
+
+function VoteBarCell({ yesPct, noPct, thresholdPct, notEligible, ccMode, yesCount, noCount, ccElig }) {
+  if (notEligible) return <span className="muted vote-bar-na">N/A</span>;
+  const fmtPct = (value) => `${round(Number(value) || 0)}%`;
+  if (ccMode) {
+    const den = ccElig > 0 ? ccElig : Math.max(yesCount + noCount, 1);
+    const yPct = (yesCount / den) * 100;
+    return (
+      <div className="vote-bar-wrap">
+        <div className="vote-bar-track">
+          <div className="vote-bar-yes" style={{ width: `${Math.min(yPct, 100)}%` }} />
+          {thresholdPct !== null && thresholdPct > 0 && (
+            <div className="vote-bar-threshold" style={{ left: `${Math.min(thresholdPct, 100)}%` }} />
+          )}
+        </div>
+        <div className="vote-bar-text">
+          <span className="vote-bar-yes-txt">Y:{yesCount}</span>
+          <span className="vote-bar-sep">/</span>
+          <span className="vote-bar-no-txt">N:{noCount}</span>
+          {ccElig > 0 && <span className="vote-bar-elig muted"> /{ccElig}</span>}
+        </div>
+      </div>
+    );
+  }
+  const safe = (v) => Math.max(0, Math.min(Number(v) || 0, 100));
+  return (
+    <div className="vote-bar-wrap">
+      <div className="vote-bar-track">
+        <div className="vote-bar-yes" style={{ width: `${safe(yesPct)}%` }} />
+        <div className="vote-bar-no" style={{ width: `${safe(noPct)}%`, left: `${safe(yesPct)}%` }} />
+        {thresholdPct !== null && thresholdPct > 0 && (
+          <div className="vote-bar-threshold" style={{ left: `${Math.min(thresholdPct, 100)}%` }} />
+        )}
+      </div>
+      <div className="vote-bar-text">
+        <span className="vote-bar-yes-txt">{fmtPct(safe(yesPct))}</span>
+        {thresholdPct !== null && thresholdPct > 0 && (
+          <span className="vote-bar-req muted">/{fmtPct(thresholdPct)}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExpiryCountdownPill({ row, nowMs }) {
+  if (!row?.isExpiringSoon || !row?.expirationEpoch) return null;
+  const target = epochToApproxDate(row.expirationEpoch);
+  if (!target) return null;
+  const remainingMs = target.getTime() - Number(nowMs || Date.now());
+  if (remainingMs <= 0) return <span className="expiry-countdown-pill">expires now</span>;
+  return <span className="expiry-countdown-pill">expires in {formatCountdown(remainingMs)}</span>;
 }
 
 function voteSlices(stats) {
@@ -162,13 +255,17 @@ function VoteMixPie({ group, row }) {
   const drepActiveBaseAda = Number(row?.totalActiveStakeAda || 0);
   const drepYesAda = Number(row?.drepYesPowerAda || 0);
   const drepNoAda = Number(row?.drepNoPowerAda || 0);
+  const drepNoConfidenceAda = Number(row?.drepNoConfidencePowerAda || 0);
   const drepAbstainAda = Number(row?.drepAbstainActivePowerAda || 0);
-  const drepNotVotedAda = Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepAbstainAda, 0);
+  const drepNotVotedAda = Number.isFinite(Number(row?.drepNotVotedPowerAda))
+    ? Number(row?.drepNotVotedPowerAda || 0)
+    : Math.max(drepActiveBaseAda - drepYesAda - drepNoAda - drepNoConfidenceAda - drepAbstainAda, 0);
   const drepOutcomeBaseAda = Math.max(drepActiveBaseAda - drepAbstainAda, 0);
+  const drepNoSideAda = drepNoAda + drepNoConfidenceAda + drepNotVotedAda;
   const drepYesPct = asActivePct(drepYesAda, drepOutcomeBaseAda);
-  const drepNoPct = asActivePct(drepNoAda, drepOutcomeBaseAda);
+  const drepNoPct = asActivePct(drepNoSideAda, drepOutcomeBaseAda);
   const drepAbstainPct = asActivePct(drepAbstainAda, drepActiveBaseAda);
-  const drepNotVotedPct = asActivePct(drepNotVotedAda, drepOutcomeBaseAda);
+  const drepNotVotedPct = 0;
 
   // SPO distribution model aligned with cgov/Nomos ledger buckets:
   // - spoNoAda already includes not-voted where the formula requires it.
@@ -262,7 +359,10 @@ function VoteMixPie({ group, row }) {
           ) : (
             <>
               <p><span className="vote-label vote-label-yes">Yes</span> <strong>{asPct(drepYesPct)}</strong> ({formatAdaCompact(drepYesAda)})</p>
-              <p><span className="vote-label vote-label-no">No</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoAda)})</p>
+              <p><span className="vote-label vote-label-no">No side</span> <strong>{asPct(drepNoPct)}</strong> ({formatAdaCompact(drepNoSideAda)})</p>
+              <p><span className="vote-label vote-label-no">No</span> <strong>{formatAdaCompact(drepNoAda)}</strong></p>
+              <p><span className="vote-label vote-label-no">No Confidence</span> <strong>{formatAdaCompact(drepNoConfidenceAda)}</strong></p>
+              <p><span className="vote-label vote-label-not-voted">Not voted</span> <strong>{formatAdaCompact(drepNotVotedAda)}</strong></p>
               <p><span className="vote-label vote-label-abstain">Abstain</span> <strong>{asPct(drepAbstainPct)}</strong> ({formatAdaCompact(drepAbstainAda)})</p>
             </>
           )}
@@ -282,11 +382,15 @@ function VoteMiniPie({ group, row }) {
   const drepBase = Number(row?.totalActiveStakeAda || 0);
   const drepYes = Number(row?.drepYesPowerAda || 0);
   const drepNo = Number(row?.drepNoPowerAda || 0);
+  const drepNoConfidence = Number(row?.drepNoConfidencePowerAda || 0);
   const drepAbstain = Number(row?.drepAbstainActivePowerAda || 0);
+  const drepNotVoted = Number.isFinite(Number(row?.drepNotVotedPowerAda))
+    ? Number(row?.drepNotVotedPowerAda || 0)
+    : Math.max(drepBase - drepYes - drepNo - drepNoConfidence - drepAbstain, 0);
   const drepOutcomeBase = Math.max(drepBase - drepAbstain, 0);
   const drepYesPct = asActivePct(drepYes, drepOutcomeBase);
-  const drepNoPct = asActivePct(drepNo, drepOutcomeBase);
-  const drepNotVotedPct = asActivePct(Math.max(drepBase - drepYes - drepNo - drepAbstain, 0), drepOutcomeBase);
+  const drepNoPct = asActivePct(drepNo + drepNoConfidence + drepNotVoted, drepOutcomeBase);
+  const drepNotVotedPct = 0;
 
   const spoYes = Number(row?.spoYesAda || 0);
   const spoNo = Number(row?.spoNoAda || 0);
@@ -451,6 +555,7 @@ export default function GovernanceActionsPage() {
   const [proposalVotingSummaryCache, setProposalVotingSummaryCache] = useState({});
   const [proposalMetadataLoading, setProposalMetadataLoading] = useState(false);
   const [proposalMetadataError, setProposalMetadataError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
   // --- Voting state (wallet state is global via WalletContext) ---
   const wallet = useContext(WalletContext);
   const [voteChoice, setVoteChoice] = useState("");
@@ -496,6 +601,11 @@ export default function GovernanceActionsPage() {
     onUpdate: () => loadData({ silent: true }),
   });
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const proposalInfo = payload?.proposalInfo || {};
   const drepPowerStats = useMemo(() => {
     const byProposal = new Map();
@@ -507,7 +617,9 @@ export default function GovernanceActionsPage() {
     const alwaysNoConfidencePowerAda = Number(specialDreps?.alwaysNoConfidence?.votingPowerAda || 0);
     const autoAbstainIds = new Set();
     const knownDrepIds = new Set(dreps.map((drep) => drep.id));
-    let regularDrepStakeAda = dreps.reduce((sum, drep) => sum + Number(drep.votingPowerAda || 0), 0);
+    let regularDrepStakeAda = dreps.reduce((sum, drep) => (
+      hasActiveDrepVotingPower(drep) ? sum + Number(drep.votingPowerAda || 0) : sum
+    ), 0);
     if (knownDrepIds.has(alwaysAbstainId)) {
       const row = dreps.find((drep) => drep.id === alwaysAbstainId);
       regularDrepStakeAda -= Number(row?.votingPowerAda || 0);
@@ -532,6 +644,7 @@ export default function GovernanceActionsPage() {
     }
 
     for (const drep of dreps) {
+      if (!hasActiveDrepVotingPower(drep)) continue;
       const vp = Number(drep.votingPowerAda || 0);
       for (const vote of drep.votes || []) {
         const proposalId = vote.proposalId;
@@ -716,17 +829,25 @@ export default function GovernanceActionsPage() {
       const yesTotalAda = isNoConfidence
         ? powerStats.yesPowerAda + Number(drepPowerStats.alwaysNoConfidencePowerAda || 0)
         : powerStats.yesPowerAda;
-      const noTotalAda = isNoConfidence
-        ? powerStats.noPowerAda
-        : powerStats.noPowerAda + Number(drepPowerStats.alwaysNoConfidencePowerAda || 0);
-      const notVotedAda = Math.max(totalActiveStakeAda - yesTotalAda - noTotalAda, 0);
+      const noConfidenceTotalAda = isNoConfidence
+        ? 0
+        : powerStats.noConfidencePowerAda + powerStats.noConfidenceAutoPowerAda;
+      const noTotalAda = powerStats.noPowerAda;
+      const notVotedAda = Math.max(
+        totalActiveStakeAda - yesTotalAda - noTotalAda - noConfidenceTotalAda - powerStats.abstainActivePowerAda,
+        0
+      );
+      const drepOutcomeBaseAda = Math.max(totalActiveStakeAda - powerStats.abstainActivePowerAda, 0);
+      const drepNoSideAda = noTotalAda + noConfidenceTotalAda + notVotedAda;
 
       const nomosYesAda = toNum(nomosDrep?.yesLovelace) / 1_000_000;
       const nomosNoAda = toNum(nomosDrep?.noLovelace) / 1_000_000;
       const nomosAbstainAda = toNum(nomosDrep?.abstainLovelace) / 1_000_000;
       const nomosNotVotedAda = toNum(nomosDrep?.notVotedLovelace) / 1_000_000;
+      const nomosActiveAbstainAda = toNum(nomosDrep?.activeAbstainLovelace) / 1_000_000;
+      const nomosNoConfidenceAda = toNum(nomosDrep?.noConfidenceLovelace ?? nomosDrep?.alwaysNoConfidenceLovelace) / 1_000_000;
       const nomosDelegatedAda = (toNum(nomosDrep?.derivedTotalLovelace) || 0) / 1_000_000;
-      const nomosActiveAda = nomosYesAda + nomosNoAda;
+      const nomosActiveAda = nomosYesAda + nomosNoAda + nomosNoConfidenceAda + nomosNotVotedAda + nomosActiveAbstainAda;
       const nomosSpoYesAda = toNum(nomosSpo?.yesLovelace) / 1_000_000;
       const nomosSpoNoAda = toNum(nomosSpo?.noLovelace) / 1_000_000;
       const nomosSpoAbstainAda = toNum(nomosSpo?.abstainLovelace) / 1_000_000;
@@ -738,8 +859,8 @@ export default function GovernanceActionsPage() {
       const useNomos = Boolean(nomosDrep);
       const drepRequiredPct = toNum(info?.thresholdInfo?.drepRequiredPct);
       const spoRequiredPct = toNum(info?.thresholdInfo?.poolRequiredPct);
-      const drepYesPct = useNomos ? toNum(nomosDrep?.yesPct) : (totalActiveStakeAda > 0 ? (yesTotalAda / totalActiveStakeAda) * 100 : null);
-      const drepNoPct = useNomos ? toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? (noTotalAda / totalActiveStakeAda) * 100 : null);
+      const drepYesPct = useNomos ? toNum(nomosDrep?.yesPct) : (drepOutcomeBaseAda > 0 ? (yesTotalAda / drepOutcomeBaseAda) * 100 : null);
+      const drepNoPct = useNomos ? toNum(nomosDrep?.noPct) : (drepOutcomeBaseAda > 0 ? (drepNoSideAda / drepOutcomeBaseAda) * 100 : null);
       const useNomosSpo = Boolean(nomosSpo);
       const localSpoActiveYesAda = Number(spoStats.activeYesPowerAda || 0);
       const localSpoActiveNoAda = Number(spoStats.activeNoPowerAda || 0);
@@ -871,9 +992,9 @@ export default function GovernanceActionsPage() {
         drepYesPowerAda: useNomos ? nomosYesAda : yesTotalAda,
         drepNoPowerAda: useNomos ? nomosNoAda : noTotalAda,
         drepAbstainPowerAda: useNomos ? nomosAbstainAda : abstainPowerAda,
-        drepAbstainActivePowerAda: useNomos ? toNum(nomosDrep?.activeAbstainLovelace) / 1_000_000 : powerStats.abstainActivePowerAda,
+        drepAbstainActivePowerAda: useNomos ? nomosActiveAbstainAda : powerStats.abstainActivePowerAda,
         drepAbstainAutoPowerAda: useNomos ? toNum(nomosDrep?.alwaysAbstainLovelace) / 1_000_000 : powerStats.abstainAutoPowerAda,
-        drepNoConfidencePowerAda: useNomos ? toNum(nomosDrep?.alwaysNoConfidenceLovelace) / 1_000_000 : powerStats.noConfidencePowerAda + powerStats.noConfidenceAutoPowerAda,
+        drepNoConfidencePowerAda: useNomos ? nomosNoConfidenceAda : noConfidenceTotalAda,
         drepNoConfidenceAutoPowerAda: useNomos ? toNum(nomosDrep?.alwaysNoConfidenceLovelace) / 1_000_000 : powerStats.noConfidenceAutoPowerAda,
         drepYesPowerPct: drepYesPct,
         drepNoPowerPct: drepNoPct,
@@ -882,9 +1003,13 @@ export default function GovernanceActionsPage() {
         drepAbstainPowerPct: useNomos ? toNum(nomosDrep?.abstainPct) : (totalDelegatedStakeAda > 0 ? (abstainPowerAda / totalDelegatedStakeAda) * 100 : null),
         drepAbstainActivePowerPct: totalDelegatedStakeAda > 0 ? (powerStats.abstainActivePowerAda / totalDelegatedStakeAda) * 100 : null,
         drepAbstainAutoPowerPct: useNomos ? (nomosDelegatedAda > 0 ? (toNum(nomosDrep?.alwaysAbstainLovelace) / 1_000_000 / nomosDelegatedAda) * 100 : null) : (totalDelegatedStakeAda > 0 ? (powerStats.abstainAutoPowerAda / totalDelegatedStakeAda) * 100 : null),
-        drepNoConfidencePowerPct: totalActiveStakeAda > 0 ? ((powerStats.noConfidencePowerAda + powerStats.noConfidenceAutoPowerAda) / totalActiveStakeAda) * 100 : null,
+        drepNoConfidencePowerPct: useNomos
+          ? (nomosActiveAda > 0 ? (nomosNoConfidenceAda / nomosActiveAda) * 100 : null)
+          : (totalActiveStakeAda > 0 ? (noConfidenceTotalAda / totalActiveStakeAda) * 100 : null),
         drepNoConfidenceAutoPowerPct: useNomos ? (nomosDelegatedAda > 0 ? (toNum(nomosDrep?.alwaysNoConfidenceLovelace) / 1_000_000 / nomosDelegatedAda) * 100 : null) : (totalDelegatedStakeAda > 0 ? (powerStats.noConfidenceAutoPowerAda / totalDelegatedStakeAda) * 100 : null),
-        drepTurnoutPowerPct: useNomos ? toNum(nomosDrep?.yesPct) + toNum(nomosDrep?.noPct) : (totalActiveStakeAda > 0 ? ((yesTotalAda + noTotalAda) / totalActiveStakeAda) * 100 : null),
+        drepTurnoutPowerPct: useNomos
+          ? (nomosActiveAda > 0 ? ((nomosYesAda + nomosNoAda + nomosNoConfidenceAda) / nomosActiveAda) * 100 : null)
+          : (totalActiveStakeAda > 0 ? ((yesTotalAda + noTotalAda + noConfidenceTotalAda) / totalActiveStakeAda) * 100 : null),
         hasAutoAbstainPower: useNomos ? toNum(nomosDrep?.alwaysAbstainLovelace) > 0 : Number(drepPowerStats.alwaysAbstainPowerAda || 0) > 0,
         spoYesPct,
         spoNoPct,
@@ -1242,57 +1367,98 @@ export default function GovernanceActionsPage() {
           <table className="mobile-cards-table">
             <thead>
               <tr>
-                <th>Action</th>
+                <th>Action ID</th>
+                <th>Title</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Submitted</th>
+                <th>DRep</th>
+                <th>SPO</th>
+                <th>CC</th>
                 <th>Expires</th>
-                <th>Yes / No (active)</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={8} className="muted">
                     No governance actions match these filters.
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => (
-                  <tr
-                    key={row.proposalId}
-                    className={row.isExpiringSoon ? "expiring-soon-row" : ""}
-                    onClick={() => navigate(`/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        navigate(`/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Open details for ${row.actionName}`}
-                  >
-                    <td data-label="Action">{row.actionName}</td>
-                    <td data-label="Type">{row.governanceType}</td>
-                    <td data-label="Status">
-                      {row.status ? <span className={`pill ${statusPillClass(row.status)}`}>{row.status}</span> : ""}
-                      {row.isExpiringSoon ? <span className="pill warn">Expiring in {Math.max(0, Number(row.epochsUntilExpiration || 0))} ep</span> : null}
-                    </td>
-                    <td data-label="Submitted">
-                      {row.submittedEpoch ? <span>Epoch {row.submittedEpoch}</span> : null}
-                      {row.submittedAt ? <div className="muted">{new Date(row.submittedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div> : null}
-                    </td>
-                    <td data-label="Expires">
-                      {row.expirationEpoch ? <span>Epoch {row.expirationEpoch}</span> : <span className="muted">—</span>}
-                      {row.expirationEpoch ? <div className="muted">{formatEpochDate(row.expirationEpoch)}</div> : null}
-                      {row.isExpiringSoon ? <div className="expiring-inline-note">{Math.max(0, Number(row.epochsUntilExpiration || 0))} ep left</div> : null}
-                    </td>
-                    <td data-label="Votes">
-                      <VoteMiniPies row={row} />
-                    </td>
-                  </tr>
-                ))
+                rows.map((row) => {
+                  const ccStats = row.voteStats?.constitutional_committee || {};
+                  const ccYes = Number(ccStats.yes || 0);
+                  const ccNo = Number(ccStats.no || 0);
+                  const spoNotEligible = row.spoRequiredPct === null && row.spoYesAda === 0 && row.spoNoAda === 0;
+                  const ccNotEligible = row.ccRequiredPct === null && ccYes === 0 && ccNo === 0;
+                  const navUrl = `/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`;
+                  return (
+                    <tr
+                      key={row.proposalId}
+                      className={row.isExpiringSoon ? "expiring-soon-row" : ""}
+                      onClick={() => navigate(navUrl)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(navUrl); }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open details for ${row.actionName}`}
+                    >
+                      <td data-label="Action ID" className="ga-hash-cell">
+                        <span className="ga-hash">{formatHashCompact(row.proposalId)}</span>
+                      </td>
+                      <td data-label="Title" className="ga-title-cell">
+                        <div className="ga-title-wrap">
+                          {row.depositAda > 0 && <span className="ada-badge">₳{formatAdaShort(row.depositAda)}</span>}
+                          <span className="ga-title-main">
+                            <span className="ga-title-name">{row.actionName}</span>
+                            <ExpiryCountdownPill row={row} nowMs={nowMs} />
+                          </span>
+                        </div>
+                      </td>
+                      <td data-label="Type" className="ga-type-cell">
+                        <span className="ga-type">{shortType(row.governanceType)}</span>
+                      </td>
+                      <td data-label="Status" className="ga-status-cell">
+                        {row.status ? <span className={`pill ${statusPillMod(row.status)}`}>{row.status}</span> : null}
+                      </td>
+                      <td data-label="DRep">
+                        <VoteBarCell
+                          yesPct={row.drepYesPowerPct}
+                          noPct={row.drepNoPowerPct}
+                          thresholdPct={row.drepRequiredPct}
+                          notEligible={!row.drepRequiredPct && !row.voteStats?.drep?.total}
+                        />
+                      </td>
+                      <td data-label="SPO">
+                        <VoteBarCell
+                          yesPct={row.spoYesPct}
+                          noPct={row.spoNoPct}
+                          thresholdPct={row.spoRequiredPct}
+                          notEligible={spoNotEligible}
+                        />
+                      </td>
+                      <td data-label="CC">
+                        <VoteBarCell
+                          ccMode
+                          yesCount={ccYes}
+                          noCount={ccNo}
+                          ccElig={row.ccEligibleCount}
+                          thresholdPct={row.ccRequiredPct}
+                          notEligible={ccNotEligible}
+                        />
+                      </td>
+                      <td data-label="Expires" className="ga-expires-cell">
+                        {row.expirationEpoch ? (
+                          <>
+                            <div>{formatEpochDate(row.expirationEpoch)}</div>
+                            <div className="muted" style={{ fontSize: "0.7rem" }}>Ep {row.expirationEpoch}</div>
+                          </>
+                        ) : <span className="muted">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
