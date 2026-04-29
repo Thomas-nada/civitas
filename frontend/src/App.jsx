@@ -10,6 +10,8 @@ function isEasterPeriod() {
 }
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { BrowserWallet } from "@meshsdk/core";
+import { bech32 } from "bech32";
+import * as blakejs from "blakejs";
 import AppTopbar from "./components/AppTopbar";
 import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
@@ -248,7 +250,15 @@ export default function App() {
           : null;
         if (rawApi?.cip95) {
           const pubDRepKey = await rawApi.cip95.getPubDRepKey().catch(() => null);
-          if (pubDRepKey) drep = { pubDRepKey };
+          if (pubDRepKey) {
+            // Derive CIP-105 dRepIDCip105: bech32("drep", blake2b-224(pubKey))
+            const keyBytes = Uint8Array.from(
+              pubDRepKey.match(/.{1,2}/g).map((b) => parseInt(b, 16))
+            );
+            const keyHash = blakejs.blake2b(keyBytes, null, 28);
+            const dRepIDCip105 = bech32.encode("drep", bech32.toWords(keyHash), 1000);
+            drep = { pubDRepKey, dRepIDCip105 };
+          }
         }
       } catch {
         // wallet doesn't support CIP-95 — drep stays null
