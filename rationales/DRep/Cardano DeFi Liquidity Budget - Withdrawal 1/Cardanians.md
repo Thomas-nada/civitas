@@ -1,19 +1,26 @@
-<!-- url: ipfs://bafkreiey7mlr3au2myzezkso5hpgimzdgno5lmcycb6fmuzfncaltw4724 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYuYx2opgtnoKmM1xbBDC8KMFHYVG8bsZ8G9eV516PtRq -->
 # Cardanians
 
-**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
 **Vote:** No
 **Voter ID:** `drep1yt4lyf0fwlrz8k6j5evd3rxw0sqp67qkh36su98a97q3qsc0h03y4`
 
 ---
 
-To be clear, I voted YES on the overall 50M ADA DeFi liquidity direction. This NO is about Withdrawal 1 as submitted (800,000 ADA for legal + setup).
+For a ₳1.5M / 6-month “core trading infrastructure” ask, the proposal explains the direction, but it lacks the level of specificity and verifiable delivery standards expected at this budget.
 
-I support building proper rails, but I can’t approve this version because the biggest cost item is the legal structure (up to 664k ADA) while key governance details are still not concrete: directors/supervisors are not named, director fees are “estimated”, and conflicts of interest aren’t transparently addressed.
+What’s missing for a proposal of this size:
 
-I will vote YES on a revised version if it includes:
+1. Milestone acceptance criteria: Each phase should have objective “done” checks (benchmarks, uptime/SLOs, latency targets, load profiles, rollout gates, go/no-go criteria), not just general outputs.
 
-1. Named directors + supervisor (before disbursement)
-2. Explicit COI disclosures + recusal policy
-3. Hard fee caps and clear scope/time commitment for directors
-4. Stronger cost justification for the chosen legal provider(s)
+2. Operational and trust model clarity: Clearly state who operates Hydra heads and production services, what users must trust, failure scenarios (downtime, dispute handling, fund safety), incident response, and runbooks.
+
+3. Security plan proportional to risk: “Security reviews/targeted audits” needs scope, auditor selection plan, timelines, threat model, and explicit in-scope components (on-chain + Hydra integration + infra).
+
+4. Liquidity/adoption mechanics: A credible plan for market quality (market makers, initial pairs, incentive/distribution design if any) rather than KPI targets alone.
+
+5. Budget benchmarking and itemized cost model: Not just a high-level split. Provide an itemized budget with roles + headcount, expected hours/man-days per workstream, rate per man-day, and major non-labor costs (audit quotes/estimates, infra, legal, tooling). Include brief benchmarking against comparable deliverables and typical engineering rates to justify proportionality.
+
+6. Public-goods commitments: If positioned as “core infrastructure,” specify durable ecosystem value (licensing/IP, open interfaces, integration commitments, and a post-funding maintenance plan).
+
+**Resubmission request:** Keep the governance safeguards (multisig, milestone-based releases, return of unused funds), but resubmit with (1) measurable acceptance criteria per phase, (2) explicit trust/risk + ops model, (3) audit scope/vendor plan, (4) credible liquidity/adoption plan, (5) itemized budget with hours/headcount/man-day rates, and (6) concrete public-goods + maintenance commitments.

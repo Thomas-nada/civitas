@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmcbcVeGwQ5BVx53QakM1bgZ5LbarLtVjy1BqteH57xNh5 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmU9vPSxue5JGn7yefnS9TyJ3iqHaCipCwFFUveqTgTyaN -->
 # Dr. Navjit Dhaliwal
 
 **Proposal:** Blockfrost Maintenance and Next Generation Indexing
@@ -7,5 +7,33 @@
 
 ---
 
-Blockfrost is a profitable company. During previous voting rounds, Snek was made to take a loan instead of grant because it was considered as a 'private company'
-Blockfrost is falsely sold by others as critical infrastructure, including from IOG associated members like Phil (who also owns Midgard). Blockfrost is NOT widely used by builders and there are many alternatives that developers use:  Maestro, Koios, Dandelion, Cardanoscan API, Iagon Insights, Dolos, Ogmios, Yaci store. I conducted a Cardano builder poll, as of this msg, the poll stands at: 8% use paid subscription on Blockfrost, 8% use free tier on Blockfrost (which is being asked for in this proposal), 59% use multiple API tools (mentioned earlier), 25% DON'T user Blockfrost. Blockfrost also claimed that 90% of the traffic goes through it's service (the claim was later deleted after I asked them some simple questions). The fact is there is no way to know how many dapps or the % of people using Blockfrost and no way to claim that traffic is going through Blockfrost. This is more a marketing stunt , rather than based on facts. The bottom line is that we shouldn't be funding projects that are profitable and don't give anything back to the treasury. Charles has also stated that projects should give up equity and tokens (when it comes to ecosystem builders), yet this standard is not applied to companies he owns.
+Updating rationale (reason from changing NO to ABSTAIN to NO):
+
+Blockfrost: Cardano Treasury should not be used to subsidize a profitable private company without a clear public return.
+
+We've already seen other private entities held to a different standard. In previous rounds, projects like Snek were pushed toward a loan structure because they were considered a private company. So why is Blockfrost being treated differently?
+
+Blockfrost is also being framed by some as "critical infrastructure." I don't agree with that characterization.
+
+Cardano builders use many alternatives: Maestro, Koios, Dandelion, Cardanoscan API, Iagon Insights, Dolos, Ogmios, Yaci Store and others. This is not a one-provider ecosystem
+
+I even ran a builder poll. At the time of writing, the results were:
+
+- 8% use Blockfrost paid
+- 8% use Blockfrost free tier
+- 59% use multiple API tools
+- 25% don't use Blockfrost at all
+
+That does not support the narrative that Blockfrost is some irreplaceable backbone for Cardano.
+
+Another issue - the proposal leaned on claims around usage and traffic concentration, including the idea that ~90% of traffic flows through Blockfrost. That claim was later deleted after basic questions were asked. The reality is simple - there is no credible public way to verify how many dapps depend on Blockfrost or what percentage of ecosystem traffic runs through it.
+
+That makes the "critical infrastructure" argument look more like marketing than governance-grade evidence
+
+If Treasury funds a private company, there should be a clear benefit flowing back to Treasury and the ecosystem. Equity, tokens, revenue share, hard guarantees, something tangible. We cannot keep socializing cost while privatizing upside
+
+And if the standard is that ecosystem builders should give something back, then that standard should apply equally to EVERYONE - not only to some teams while exceptions are made for companies with the right connections.
+
+We need consistent rules, evidence based claims, and better stewardship of Treasury
+
+That's why I voted NO on Blockfrost.

@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA095-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Pebble + Gerolamo - HLabs 2026 Budget
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Pebble + Gerolamo - HLabs 2026 Budget" (gov_action1ky2j077de82par6f0hny5q56rpnn5hh0csfhrpzeq3hsk7s6vetqquz3scv), pois ela apresenta potencial para fortalecer a infraestrutura do ecossistema Cardano, ao investir em ferramentas desenvolvidas em linguagens amplamente utilizadas, como TypeScript/JavaScript. Essa abordagem contribui para reduzir dependências centralizadas e ampliar o acesso de desenvolvedores, ao utilizar tecnologias mais familiares e acessíveis. A combinação entre manutenção contínua, desenvolvimento de novas soluções — como um light node — e melhorias na experiência de desenvolvimento tende a impulsionar a resiliência, a descentralização e o crescimento sustentável da rede, estando alinhada às metas estratégicas de longo prazo da Cardano. Além disso, consideramos a proposta bem estruturada sob a ótica de governança e responsabilidade no uso dos recursos do tesouro. O texto apresenta mecanismos claros de transparência e controle, incluindo administração via contrato inteligente, prestação de contas pública, auditoria financeira, devolução de saldos remanescentes ao tesouro e uso restrito da contingência exclusivamente para mitigação de volatilidade de mercado.
+[English]
+We chose to vote "YES" on this governance action "Pebble + Gerolamo - HLabs 2026 Budget" (gov_action1ky2j077de82par6f0hny5q56rpnn5hh0csfhrpzeq3hsk7s6vetqquz3scv), as it has the potential to strengthen the Cardano ecosystem infrastructure by investing in tools built with widely adopted programming languages such as TypeScript/JavaScript. This approach helps reduce centralized dependencies and broadens developer accessibility by leveraging more familiar technologies. The combination of ongoing maintenance, new solutions — such as a light node — and improvements to the developer experience can enhance the network’s resilience, decentralization, and sustainable growth, while aligning with Cardano’s long-term strategic goals. Furthermore, we consider the proposal well grounded from a governance and treasury responsibility perspective. It outlines clear mechanisms for transparency and accountability, including smart contract-based fund management, public reporting, financial auditing, the return of unused funds to the treasury, and restricted use of contingency funds solely for mitigating market volatility.

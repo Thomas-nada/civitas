@@ -1,23 +1,27 @@
-<!-- url: ipfs://QmYYE2TmiLiAUzyFcdAYBAXNBsrznBNU4o7BnmBF58E2ji -->
+<!-- url: ipfs://QmXvzDAiNgEpyiQU6hTMaXCJxTY924FVrQmxVd1zZEUATK -->
 # Kostas Panagias
 
 **Proposal:** Pebble + Gerolamo - HLabs 2026 Budget
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1ygc29nv90qqtf7qwlp5eqwnscdmvk5utnul9arfm9eklw9cphfhhu`
 
 ---
 
 A [PDF version][pdf-link] of this rationale is also made available.
 
-[pdf-link]: https://ipfs.io/ipfs/QmStM7nVbn4ME283GeoNeT9NN4wvVNBgpCqhmioxx9WjTK
+[pdf-link]: https://ipfs.io/ipfs/QmR33pxVth3atJhdNHHTSr4gwEUcSbSPfUSG9EUW6sWjoj
 
-My decision is based on a strategic assessment of our current infrastructure landscape and treasury health:
+## Summary
+After deep reflection and additional research, I have decided to vote **YES** on the Harmonic Laboratories proposal. While I initially had reservations regarding the budget, my further research into the unique "serverless" resilience of the Gerolamo node and the onboarding potential of the Pebble language has convinced me of its strategic value for Cardano.
 
-- **Diminishing Returns on Node Diversity**: I have been a vocal supporter of multi-language client diversity, as evidenced by my previous "YES" votes for Amaru (Rust) and Dingo (Go). However, we must ask: how many concurrent node implementations are enough for the current stage of the ecosystem? I believe we are approaching a point of diminishing returns. We should allow our current alternative nodes to materialize and reach production readiness before committing significant funds to a fourth implementation.
+## Transparency & Due Diligence Disclosure
+ I want to be as transparent as possible with my delegators: I am not a technical expert. Recognizing this, I have spent additional time researching this proposal and weighing the rationales of respected DReps whose technical judgment I value. Specifically, the views of **Input Endorsers**, **Cardano Yoda**, **Cerkoryn**, **Varavas**, **Yuta**, **Dave**, and **Chris Cata** were instrumental in helping me navigate the complexities of this action.
+Furthermore, I was approached by the **Harmonic Labs** team to discuss my initial concerns. Our dialogue was productive and allowed me to gain a much deeper understanding of the project’s scope.
 
-- **Budgetary Concerns & Treasury Impact**: An ask of 8,035,714 ADA is a substantial withdrawal. Furthermore, I find the valuation of $225,000 per FTE to be very expensive. As a DRep committed to "justifiable spending", I cannot support such high premium rates at a time when we should be maximizing the "bang for buck" for our delegators.
+## Rationale
+1. **True "Don’t Trust, Verify" for Users**: Gerolamo is a different "beast" because it is a TypeScript implementation capable of running directly in a browser. This allows users and dApp developers to verify the ledger on their own devices rather than relying on 3rd-party APIs. This provides a level of censorship resistance and "serverless" resilience that is currently a missing piece in our ecosystem and more aligned with my self-sovereignty / “power to the edges” philosophy.
+2. **Lowering the Developer Barrier**: I am now convinced that Pebble is a vital "on-ramp”. By offering an imperative programming style familiar to the 17 million JS/TS and Solidity developers, we can onboard talent more effectively than through functional programming alone.
+3. **Clarification on Costs**: My main concern was the high cost of FTEs. The team successfully explained that these figures represent the total revenue distribution required to support a high-level operation - including taxes, benefits, and overhead - rather than just base salaries. To attract and retain the tier of engineering talent required for a node implementation, these rates are a necessary investment.
 
-- **Strategic Timing**: I would be open to reconsidering this request in the future (perhaps in a year’s time). A later date would allow us to evaluate the progress of ongoing node projects and potentially benefit from a more favorable ADA price, which would reduce the total ADA burden on the treasury.
-
-## Note on the Team and Technology
-I want to clarify that this vote is not a reflection on Harmonic Laboratories. I consider the selection of TypeScript for the Gerolamo node and the Pebble language to be a brilliant strategic choice that would undoubtedly lower the barrier for millions of developers. My "No" is strictly a matter of timing and budget, not a lack of faith in the tech or the team’s capabilities.
+## Conclusion
+Cardano needs more than just core infrastructure; it needs tools that make it easy for users to be self-sovereign and for developers to build. This proposal delivers both. While the budget remains a significant ask, I believe the long-term benefits to our decentralization and adoption metrics justify the investment.

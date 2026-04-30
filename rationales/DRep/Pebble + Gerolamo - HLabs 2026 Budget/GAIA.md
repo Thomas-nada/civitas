@@ -1,12 +1,14 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmeTrkd7g1QUpqk3VSpTdV5R5eULPXk6GAfoNigvKnb1bz -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSWPsHruXeE27i9BqjSPRTyK1ZmJFm2xBkkT8f589qdoS -->
 # GAIA
 
 **Proposal:** Pebble + Gerolamo - HLabs 2026 Budget
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1ytxr0lhg5j72wysva9ac2gsn4lck4gyen8ywxkqfchsqg3qs8uy44`
 
 ---
 
-While alternative nodes are important, given current market conditions for Cardano, I have to say no at this time.  Spending needs to be on essentials only right now, and we already have two alternate nodes that are now being funded (and I only said yes to one of them myself). 
+I originally voted no on this proposal only due to the low cost of ADA and the need to prioritize spending, however as it is now clear that IOG intends to raid the treasury every year for funding, alternative nodes are a top priority. 
 
-When the value of ADA is higher ($1 or more), I'd be happy to vote yes for this proposal.
+Without node diversity and a seriously reduced dependence on IOG, IOG will continue to hold the network and treasury hostage.
+
+I therefore see this spending as excellent value and I hope that Pebble + Gerolamo get funded!

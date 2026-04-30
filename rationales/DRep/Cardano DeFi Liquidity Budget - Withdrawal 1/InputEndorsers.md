@@ -1,11 +1,10 @@
-<!-- url: ipfs://bafkreicttgnzpxdmabbqapuhsrmauoqrfug65cqmx4cwcgkwfwdmh5fdgu -->
+<!-- url: ipfs://bafkreibpzd7q6awo3ceetk3itfi7wyta5luj4pwrdk4ph3t6qyypoh6gdu -->
 # InputEndorsers
 
-**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
-**Vote:** Abstain
+**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
+**Vote:** No
 **Voter ID:** `drep1y2hlgh9600zjlt39dh54z7z8d65kahneck8yhh7ugmzc9as0xrzqd`
 
 ---
 
-I voted NO on the preceding budget info action with a rationale and expressed my concerns. A 73% majority of DRep voting power did support it when it was put forward as a budget info action. The proposal was put forward by Elder Millenial who has built SteelSwap - a Cardano DApp (no token!) that I have used most frequently over the years. This also makes me aware that the proposer does have significantly more extensive experience with Cardano DeFi. 
-There is some level of pragmatism that is needed if one is acting as a DRep, as was the case with the Pentad proposal. Specifically, pragmatism here for me means I do not wish to stand in the way of something already approved by more than two-thirds of DReps AND proposed by someone who has built an extremely useful and performant Dex Aggregator for ADA holders/users at a high risk as it was NOT coupled with a token sale. A passive abstain (me avoiding to vote) would effectively be counted as a No vote on this treasury withdrawal. An active abstain (me voting Abstain) does not tilt the balance towards a Yes or a No. It allows other DReps who approved the original budget info action to proceed if the current withdrawal request meets their expectations. Taking into account the proposer's unique contribution and experience with Cardano DeFi - I acknowledge my understanding of the proposal might be incomplete for me to confidently vote NO on the withdrawal. TL;DR: The specific constellation of factors for this treasury withdrawal is such that I do not see a blocking vote from me is merited. I wish the proposing team success.
+I voted no on the Stablecoin DeFi Liquidity Budget info action, I have not changed my mind since so I also vote no on this Treasury Withdrawal. I wish the proposers success and hope that the investment will bear fruit for the Cardano ecosystem. This is a market intervention that is dependent on a number of things going right and the ability to address a cause of the problem that it attempts to resolve. It is a complex proposal. My worry is that - like water, money finds a way of flowing towards an escape point - if it does not want to stay somewhere. The market might end up reverting back to an equilibrium - despite our best efforts to boost liquidity through injections like this. Overall risk associated with this market intervention is too high (from my point of view) for me to vote yes on the Stablecoin DeFi Liquidity Budget withdrawals.

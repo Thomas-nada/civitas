@@ -1,22 +1,15 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbLGC5Ju7TsHLYT6WbUHLqzdD8S897A6p9v6oG3yXNjn2 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVxUJngD733YzZeyCxD3RwWZjLbwjXcR1KJDR9QE8S3ee -->
 # YUTA
 
-**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
 **Vote:** Yes
 **Voter ID:** `drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w`
 
 ---
 
-I will vote YES for [Cardano Defi Liquidity Budget - Withdrawal 1] unless a governance action with better terms is submitted.
+I will vote YES on “Cardano DeFi Liquidity Budget – Withdrawal 1”.
+The reasoning is consistent with my position on the previous information action. While this proposal will not resolve all existing issues, it has the potential to reasonably mitigate some of the current challenges facing the ecosystem. At present, I am not aware of any critical or fatal downsides associated with this proposal.
 
-This is for the same reasons I voted for the Budget Information action. If there is a team capable of better implementation, please submit another governance action before the voting deadline for this governance action. If it is better, I will change my vote.
+「Cardano DeFi Liquidity Budget - Withdrawal 1」にYESを投票します。
 
-While providing liquidity won't solve everything, it could potentially alleviate some concerns.
-
----
-
-私は[Cardano Defi Liquidity Budget - Withdrawal 1]に、より良い条件のガバナンスアクションが提出されない限り、YESを投票します。
-
-Budget情報アクションに投票したのと同様の理由です。 より良い実行ができるチームがいましたら、このガバナンスアクションの投票期限までに、別のガバナンスアクションを提出してください。それがより良い内容であれば、投票を変更します。
-
-流動性の供給が全てのを解決するわけではありませんが、一定の懸念の軽減が進む可能性があります。
+理由は以前のinfo actionと同様で、これが全ての問題を解決するわけではありませんが、少なくとも現状の問題を合理的に軽減できる可能性があります。また、致命的なデメリットを認識していません。

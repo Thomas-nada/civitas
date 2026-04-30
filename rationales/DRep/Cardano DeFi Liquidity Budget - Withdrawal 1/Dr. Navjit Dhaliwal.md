@@ -1,12 +1,15 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmaNG8kV3yBrjMn9MuQdBbeUZqgTfF5rhpU6EijsY9xLZi -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmPFfKwKKtzTbkUnbDjL3G8k8LoLwiyZD2M3orUDGkXMcN -->
 # Dr. Navjit Dhaliwal
 
-**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
 **Vote:** No
 **Voter ID:** `drep1yfya5pwcm2zw0e60c3pkqscq6spge7m0k6jtxkfsymv68gs2z56e5`
 
 ---
 
-The budget is too high for creating a company. 
+This is an unnecessary expense for the ecosystem. 
 
-Marshall Islands or BVI is a more cost effective approach. Caymans is a very expensive jurisdiction and there are little to no advantages of opening in Caymans over the others
+1) The budget is extremely high to setup a company in the first place. In contrast, you can setup a business in the BVI for less than 10k - all inclusive. 
+2) The jurisdiction chosen is not best jurisdiction for DeFi. 
+
+I'm failing to see how this was concluded and selected.
