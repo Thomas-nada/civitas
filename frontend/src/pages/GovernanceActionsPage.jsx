@@ -565,6 +565,8 @@ export default function GovernanceActionsPage() {
   const [voteChoice, setVoteChoice] = useState("");
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
+  const [voteRationaleMode, setVoteRationaleMode] = useState("url"); // "url" | "write"
+  const [voteRationaleText, setVoteRationaleText] = useState("");
   const [batchVoteIds, setBatchVoteIds] = useState({});
   const [batchVoteDrafts, setBatchVoteDrafts] = useState({});
   const [batchVoteModalOpen, setBatchVoteModalOpen] = useState(false);
@@ -1145,7 +1147,9 @@ export default function GovernanceActionsPage() {
       ...prev,
       [proposalId]: {
         choice: "",
+        rationaleMode: "url",
         rationaleUrl: "",
+        rationaleText: "",
         ...(prev[proposalId] || {}),
         ...patch
       }
@@ -1233,6 +1237,19 @@ export default function GovernanceActionsPage() {
     return url;
   }
 
+  async function uploadRationale(text) {
+    setVoteNotice("Uploading rationale to IPFS...");
+    const res = await fetch("/api/upload-rationale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment: text })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "IPFS upload failed.");
+    setVoteNotice("");
+    return { url: data.ipfsUrl, hash: data.contentHash };
+  }
+
   async function buildVoteAnchor(rawUrl) {
     const url = String(rawUrl || "").trim();
     const rationaleUrlTrimmed = resolveIpfsUrl(url);
@@ -1299,8 +1316,10 @@ export default function GovernanceActionsPage() {
         setVoteNotice("Warning: wallet is on testnet. Proceeding anyway...");
       }
 
-      // 3. Optional rationale anchor (with IPFS resolution)
-      const anchor = await buildVoteAnchor(voteRationaleUrl);
+      // 3. Optional rationale anchor
+      const anchor = voteRationaleMode === "write" && voteRationaleText.trim()
+        ? await uploadRationale(voteRationaleText.trim())
+        : await buildVoteAnchor(voteRationaleUrl);
 
       // 4. Build vote transaction
       setVoteNotice("Building transaction...");
@@ -1361,7 +1380,9 @@ export default function GovernanceActionsPage() {
       const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
       tx.setNetwork("mainnet");
       for (const { row, draft } of rowsToVote) {
-        const anchor = await buildVoteAnchor(draft.rationaleUrl);
+        const anchor = draft.rationaleMode === "write" && draft.rationaleText?.trim()
+          ? await uploadRationale(draft.rationaleText.trim())
+          : await buildVoteAnchor(draft.rationaleUrl);
         tx.txBuilder.vote(
           { type: "DRep", drepId: drepIdCip105 },
           { txHash: row.txHash, txIndex: row.certIndex ?? 0 },
@@ -1693,16 +1714,47 @@ export default function GovernanceActionsPage() {
               </div>
               <p className="muted">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
 
-              <label className="vote-rationale-label">
-                Rationale URL (optional — CIP-100 / IPFS supported)
-                <input
-                  type="url"
-                  value={voteRationaleUrl}
-                  onChange={(e) => setVoteRationaleUrl(e.target.value)}
-                  placeholder="https://your-rationale.json  or  ipfs://Qm..."
-                  autoFocus
-                />
-              </label>
+              <div className="vote-rationale-section">
+                <div className="vote-rationale-mode-toggle">
+                  <button
+                    type="button"
+                    className={`mode-btn${voteRationaleMode === "url" ? " active" : ""}`}
+                    onClick={() => setVoteRationaleMode("url")}
+                  >
+                    Provide URL
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-btn${voteRationaleMode === "write" ? " active" : ""}`}
+                    onClick={() => setVoteRationaleMode("write")}
+                  >
+                    Write rationale
+                  </button>
+                </div>
+                {voteRationaleMode === "url" ? (
+                  <label className="vote-rationale-label">
+                    Rationale URL (optional — CIP-100 / IPFS supported)
+                    <input
+                      type="url"
+                      value={voteRationaleUrl}
+                      onChange={(e) => setVoteRationaleUrl(e.target.value)}
+                      placeholder="https://your-rationale.json  or  ipfs://Qm..."
+                      autoFocus
+                    />
+                  </label>
+                ) : (
+                  <label className="vote-rationale-label">
+                    Rationale (uploaded to IPFS as CIP-100 JSON)
+                    <textarea
+                      value={voteRationaleText}
+                      onChange={(e) => setVoteRationaleText(e.target.value)}
+                      placeholder="Write your rationale here..."
+                      rows={6}
+                      autoFocus
+                    />
+                  </label>
+                )}
+              </div>
 
               {wallet.walletNetworkId !== 1 ? (
                 <p className="vote-notice">⚠ Wallet is on testnet — vote will be submitted to testnet.</p>
@@ -1761,15 +1813,45 @@ export default function GovernanceActionsPage() {
                           );
                         })}
                       </div>
-                      <label className="vote-rationale-label batch-vote-rationale-label">
-                        Rationale URL (optional)
-                        <input
-                          type="url"
-                          value={batchVoteDrafts[row.proposalId]?.rationaleUrl || ""}
-                          onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleUrl: e.target.value })}
-                          placeholder="https://your-rationale.json  or  ipfs://Qm..."
-                        />
-                      </label>
+                      <div className="vote-rationale-section">
+                        <div className="vote-rationale-mode-toggle">
+                          <button
+                            type="button"
+                            className={`mode-btn${(batchVoteDrafts[row.proposalId]?.rationaleMode ?? "url") === "url" ? " active" : ""}`}
+                            onClick={() => updateBatchVoteDraft(row.proposalId, { rationaleMode: "url" })}
+                          >
+                            Provide URL
+                          </button>
+                          <button
+                            type="button"
+                            className={`mode-btn${batchVoteDrafts[row.proposalId]?.rationaleMode === "write" ? " active" : ""}`}
+                            onClick={() => updateBatchVoteDraft(row.proposalId, { rationaleMode: "write" })}
+                          >
+                            Write rationale
+                          </button>
+                        </div>
+                        {(batchVoteDrafts[row.proposalId]?.rationaleMode ?? "url") === "url" ? (
+                          <label className="vote-rationale-label batch-vote-rationale-label">
+                            Rationale URL (optional)
+                            <input
+                              type="url"
+                              value={batchVoteDrafts[row.proposalId]?.rationaleUrl || ""}
+                              onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleUrl: e.target.value })}
+                              placeholder="https://your-rationale.json  or  ipfs://Qm..."
+                            />
+                          </label>
+                        ) : (
+                          <label className="vote-rationale-label batch-vote-rationale-label">
+                            Rationale (uploaded to IPFS as CIP-100 JSON)
+                            <textarea
+                              value={batchVoteDrafts[row.proposalId]?.rationaleText || ""}
+                              onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleText: e.target.value })}
+                              placeholder="Write your rationale here..."
+                              rows={4}
+                            />
+                          </label>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

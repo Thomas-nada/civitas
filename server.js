@@ -114,6 +114,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8080);
 const BLOCKFROST_BASE_URL = process.env.BLOCKFROST_BASE_URL || "https://cardano-mainnet.blockfrost.io/api/v0";
 const BLOCKFROST_API_KEY = process.env.BLOCKFROST_API_KEY || "";
+const BLOCKFROST_IPFS_KEY = process.env.BLOCKFROST_IPFS_KEY || "";
 const BLOCKFROST_MAX_RETRIES = Number(process.env.BLOCKFROST_MAX_RETRIES || 3);
 const BLOCKFROST_REQUEST_TIMEOUT_MS = Number(process.env.BLOCKFROST_REQUEST_TIMEOUT_MS || 10000);
 const BLOCKFROST_REQUEST_DELAY_MS = Number(process.env.BLOCKFROST_REQUEST_DELAY_MS || 180);
@@ -7152,6 +7153,116 @@ const server = http.createServer(async (req, res) => {
       json(res, 500, { error: "Failed to update bug report." });
       return;
     }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/upload-rationale") {
+    if (!BLOCKFROST_IPFS_KEY) {
+      json(res, 503, { error: "IPFS upload is not configured on this server." });
+      return;
+    }
+    let body;
+    try {
+      body = await readJsonBody(req, 32 * 1024);
+    } catch {
+      json(res, 400, { error: "Invalid request body." });
+      return;
+    }
+    const comment = String(body?.comment || "").trim();
+    if (!comment) {
+      json(res, 400, { error: "comment is required." });
+      return;
+    }
+    const cip100 = {
+      "@context": {
+        "CIP100": "https://github.com/cardano-foundation/CIPs/blob/master/CIP-0100/README.md#",
+        "hashAlgorithm": "CIP100:hashAlgorithm",
+        "body": {
+          "@id": "CIP100:body",
+          "@context": {
+            "references": {
+              "@id": "CIP100:references",
+              "@container": "@set",
+              "@context": {
+                "GovernanceMetadata": "CIP100:GovernanceMetadataReference",
+                "Other": "CIP100:OtherReference",
+                "label": "CIP100:reference-label",
+                "uri": "CIP100:reference-uri",
+                "referenceHash": {
+                  "@id": "CIP100:referenceHash",
+                  "@context": { "hashDigest": "CIP100:hashDigest", "hashAlgorithm": "CIP100:hashAlgorithm" }
+                }
+              }
+            },
+            "comment": "CIP100:comment",
+            "externalUpdates": {
+              "@id": "CIP100:externalUpdates",
+              "@context": { "title": "CIP100:update-title", "uri": "CIP100:uri" }
+            }
+          }
+        },
+        "authors": {
+          "@id": "CIP100:authors",
+          "@container": "@set",
+          "@context": {
+            "name": "http://xmlns.com/foaf/0.1/name",
+            "witness": {
+              "@id": "CIP100:witness",
+              "@context": {
+                "witnessAlgorithm": "CIP100:witnessAlgorithm",
+                "publicKey": "CIP100:publicKey",
+                "signature": "CIP100:signature"
+              }
+            }
+          }
+        }
+      },
+      "authors": [],
+      "body": { "comment": comment },
+      "hashAlgorithm": "blake2b-256"
+    };
+    const jsonText = JSON.stringify(cip100, null, 2);
+    const contentBytes = Buffer.from(jsonText, "utf8");
+    const contentHash = blake2b256(contentBytes).toString("hex");
+
+    try {
+      const boundary = `----CivitasIPFS${Date.now()}`;
+      const filename = `rationale-${Date.now()}.jsonld`;
+      const preamble = Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: application/ld+json\r\n\r\n`,
+        "utf8"
+      );
+      const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");
+      const multipart = Buffer.concat([preamble, contentBytes, epilogue]);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
+      let ipfsRes;
+      try {
+        ipfsRes = await fetch("https://ipfs.blockfrost.io/api/v0/ipfs/add", {
+          method: "POST",
+          headers: {
+            "project_id": BLOCKFROST_IPFS_KEY,
+            "Content-Type": `multipart/form-data; boundary=${boundary}`
+          },
+          body: multipart,
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      const ipfsBody = await ipfsRes.json();
+      if (!ipfsRes.ok || !ipfsBody?.ipfs_hash) {
+        json(res, 502, { error: "IPFS upload failed.", detail: ipfsBody });
+        return;
+      }
+      json(res, 200, {
+        ipfsUrl: `ipfs://${ipfsBody.ipfs_hash}`,
+        contentHash
+      });
+    } catch (e) {
+      json(res, 500, { error: "IPFS upload error.", detail: e?.message });
+    }
+    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/backfill-epoch-snapshots") {

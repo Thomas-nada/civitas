@@ -4300,8 +4300,26 @@ tbody tr.active {
   margin-bottom: 0.75rem;
 }
 
-.vote-rationale-label input {
+.vote-rationale-label input,
+.vote-rationale-label textarea {
   font-size: 0.82rem;
+  resize: vertical;
+}
+
+.vote-rationale-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vote-rationale-mode-toggle {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.vote-rationale-section .vote-rationale-label {
+  margin-bottom: 0;
 }
 
 .vote-error {
