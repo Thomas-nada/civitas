@@ -853,7 +853,9 @@ function compactProposalInfoForDashboard(proposalInfo) {
       droppedEpoch: Number(info?.droppedEpoch || 0),
       expiredEpoch: Number(info?.expiredEpoch || 0),
       voteStats: info?.voteStats || {},
-      thresholdInfo: info?.thresholdInfo || null
+      thresholdInfo: info?.thresholdInfo || null,
+      txHash: info?.txHash || null,
+      certIndex: info?.certIndex ?? null
     };
   }
   return compact;
