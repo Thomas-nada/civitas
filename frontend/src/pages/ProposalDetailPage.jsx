@@ -524,14 +524,17 @@ export default function ProposalDetailPage() {
     try {
       const params = new URLSearchParams();
       if (snapshotKey) params.set("snapshot", snapshotKey);
-      params.set("view", "all");
-      const res = await fetch(`${API_BASE}/api/accountability?${params.toString()}`);
-      const data = await res.json();
+      params.set("view", "actions");
+      const [res, mRes] = await Promise.all([
+        fetch(`${API_BASE}/api/accountability?${params.toString()}`),
+        fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`)
+      ]);
+      const [data, mData] = await Promise.all([
+        res.json(),
+        mRes.json().catch(() => ({}))
+      ]);
       if (!res.ok) throw new Error(data.error || "Failed to load proposal.");
       setPayload(data);
-
-      const mRes = await fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`);
-      const mData = await mRes.json().catch(() => ({}));
       if (mRes.ok) setMetadata(mData);
     } catch (e) {
       if (!silent) setError(e.message || "Failed to load proposal.");

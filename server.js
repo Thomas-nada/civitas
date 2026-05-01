@@ -422,6 +422,7 @@ const nclRefreshPromises = {};
 const voteRationaleCache = new Map();
 const voteRationaleResultCache = new Map();
 const drepRationaleByProposalVoter = new Map();
+const proposalMetadataCache = new Map(); // proposalId -> { payload, cachedAt }
 const proposalDeltaPollState = new Map();
 const drepProfileRefreshState = new Map();
 let drepRationaleWarmState = {
@@ -7361,6 +7362,12 @@ const server = http.createServer(async (req, res) => {
       json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
       return;
     }
+    const PROPOSAL_METADATA_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+    const cached = proposalMetadataCache.get(proposalId);
+    if (cached && (Date.now() - Number(cached.cachedAt || 0)) < PROPOSAL_METADATA_CACHE_TTL_MS) {
+      json(res, 200, cached.payload);
+      return;
+    }
     try {
       const [rawMetadata, rawDetail] = await Promise.all([
         blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
@@ -7382,7 +7389,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      json(res, 200, {
+      const payload = {
         ok: true,
         proposalId,
         json_metadata: metadata?.json_metadata || null,
@@ -7397,7 +7404,9 @@ const server = http.createServer(async (req, res) => {
         expiredEpoch: rawDetail?.expired_epoch ?? null,
         txHash,
         governanceType: rawDetail?.governance_type ?? null,
-      });
+      };
+      proposalMetadataCache.set(proposalId, { payload, cachedAt: Date.now() });
+      json(res, 200, payload);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal metadata." });
