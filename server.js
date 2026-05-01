@@ -842,6 +842,12 @@ function compactProposalInfoForDashboard(proposalInfo) {
   const source = proposalInfo && typeof proposalInfo === "object" ? proposalInfo : {};
   const compact = {};
   for (const [proposalId, info] of Object.entries(source)) {
+    const gd = info?.governanceDescription;
+    let withdrawalAmountAda = 0;
+    if (gd?.tag === "TreasuryWithdrawals" && Array.isArray(gd?.contents?.[0])) {
+      const lovelace = gd.contents[0].reduce((s, item) => s + Number(Array.isArray(item) ? item[1] : 0), 0);
+      if (lovelace > 0) withdrawalAmountAda = lovelace / 1_000_000;
+    }
     compact[proposalId] = {
       actionName: info?.actionName || proposalId,
       governanceType: info?.governanceType || "Unknown",
@@ -857,7 +863,8 @@ function compactProposalInfoForDashboard(proposalInfo) {
       voteStats: info?.voteStats || {},
       thresholdInfo: info?.thresholdInfo || null,
       txHash: info?.txHash || null,
-      certIndex: info?.certIndex ?? null
+      certIndex: info?.certIndex ?? null,
+      withdrawalAmountAda: withdrawalAmountAda || null
     };
   }
   return compact;

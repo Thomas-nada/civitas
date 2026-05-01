@@ -141,6 +141,7 @@ function formatAdaShort(value) {
 
 function extractTreasuryAmountAda(info) {
   if (!info) return 0;
+  if (Number(info.withdrawalAmountAda || 0) > 0) return Number(info.withdrawalAmountAda);
   const withdrawals = info.metadataJson?.body?.onChain?.withdrawals;
   if (Array.isArray(withdrawals)) {
     const total = withdrawals.reduce((s, r) => s + Number(r?.withdrawalAmount || 0), 0);
