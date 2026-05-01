@@ -256,7 +256,11 @@ export default function App() {
               pubDRepKey.match(/.{1,2}/g).map((b) => parseInt(b, 16))
             );
             const keyHash = blakejs.blake2b(keyBytes, null, 28);
-            const dRepIDCip105 = bech32.encode("drep", bech32.toWords(keyHash), 1000);
+            // CIP-129: prepend 0x22 (key-hash credential type byte) before bech32 encoding
+            const credBytes = new Uint8Array(29);
+            credBytes[0] = 0x22;
+            credBytes.set(keyHash, 1);
+            const dRepIDCip105 = bech32.encode("drep", bech32.toWords(credBytes), 1000);
             drep = { pubDRepKey, dRepIDCip105 };
           }
         }
