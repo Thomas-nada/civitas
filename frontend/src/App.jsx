@@ -269,6 +269,7 @@ export default function App() {
       setWalletNetworkId(netId);
       setWalletLovelace(lovelace);
       setWalletDrep(drep);
+      localStorage.setItem("civitas.wallet", walletKey);
     } catch (e) {
       setWalletApi(null);
       setWalletName("");
@@ -277,6 +278,7 @@ export default function App() {
       setWalletLovelace("");
       setWalletDrep(null);
       setWalletError(e?.message || "Failed to connect wallet.");
+      localStorage.removeItem("civitas.wallet");
     }
   }, [wallets]);
 
@@ -289,7 +291,13 @@ export default function App() {
     setWalletDrep(null);
     setWalletError("");
     setWalletMenuOpen(false);
+    localStorage.removeItem("civitas.wallet");
   }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("civitas.wallet");
+    if (saved) connectWallet(saved).catch(() => localStorage.removeItem("civitas.wallet"));
+  }, [connectWallet]);
 
   const walletContextValue = useMemo(() => ({
     wallets,
