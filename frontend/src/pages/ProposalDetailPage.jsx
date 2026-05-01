@@ -761,10 +761,10 @@ export default function ProposalDetailPage() {
           {countdownStr && (
             <span className="pdp-countdown">{countdownStr} remaining</span>
           )}
-          {info.ratifiedEpoch && <span className="pdp-meta-item">Ratified Ep&nbsp;{info.ratifiedEpoch}</span>}
-          {info.enactedEpoch && <span className="pdp-meta-item">Enacted Ep&nbsp;{info.enactedEpoch}</span>}
-          {info.expiredEpoch && <span className="pdp-meta-item muted">Expired Ep&nbsp;{info.expiredEpoch}</span>}
-          {info.droppedEpoch && <span className="pdp-meta-item muted">Dropped Ep&nbsp;{info.droppedEpoch}</span>}
+          {info.ratifiedEpoch > 0 && <span className="pdp-meta-item">Ratified Ep&nbsp;{info.ratifiedEpoch}</span>}
+          {info.enactedEpoch > 0 && <span className="pdp-meta-item">Enacted Ep&nbsp;{info.enactedEpoch}</span>}
+          {info.expiredEpoch > 0 && <span className="pdp-meta-item muted">Expired Ep&nbsp;{info.expiredEpoch}</span>}
+          {info.droppedEpoch > 0 && <span className="pdp-meta-item muted">Dropped Ep&nbsp;{info.droppedEpoch}</span>}
         </div>
         <p className="mono muted pdp-action-id">{decodedProposalId}</p>
       </section>
