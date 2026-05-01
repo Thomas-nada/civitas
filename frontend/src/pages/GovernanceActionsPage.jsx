@@ -570,6 +570,8 @@ export default function GovernanceActionsPage() {
   const [batchVoteIds, setBatchVoteIds] = useState({});
   const [batchVoteDrafts, setBatchVoteDrafts] = useState({});
   const [batchVoteModalOpen, setBatchVoteModalOpen] = useState(false);
+  const [batchVoteStep, setBatchVoteStep] = useState(0);
+  const [batchVoteMdPreview, setBatchVoteMdPreview] = useState(false);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteNotice, setVoteNotice] = useState("");
   const [voteError, setVoteError] = useState("");
@@ -1569,6 +1571,8 @@ export default function GovernanceActionsPage() {
                 setVoteError("");
                 setVoteNotice("");
                 setVotedTxHash("");
+                setBatchVoteStep(0);
+                setBatchVoteMdPreview(false);
                 setBatchVoteModalOpen(true);
               }}
             >
@@ -1803,107 +1807,159 @@ export default function GovernanceActionsPage() {
         </div>
       ) : null}
 
-      {batchVoteModalOpen && wallet?.walletDrep && selectedBatchVoteRows.length ? (
-        <div className="image-modal-backdrop" role="presentation" onClick={() => setBatchVoteModalOpen(false)}>
-          <div className="image-modal vote-confirm-modal vote-confirm-modal--batch" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="image-modal-close" onClick={() => setBatchVoteModalOpen(false)}>
-              Cancel
-            </button>
-            <h3 className="rationale-modal-title">{selectedBatchVoteRows.length === 1 ? "Confirm Vote" : "Confirm Votes"}</h3>
-            <div className="vote-confirm-body">
-              <div className="batch-vote-modal-head">
-                <p className="muted">{selectedBatchVoteRows.length} {selectedBatchVoteRows.length === 1 ? "vote" : "votes"} in one transaction · {batchVoteReadyCount}/{selectedBatchVoteRows.length} ready</p>
-              </div>
-              <p className="muted">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
+      {batchVoteModalOpen && wallet?.walletDrep && selectedBatchVoteRows.length ? (() => {
+        const total = selectedBatchVoteRows.length;
+        const stepIdx = Math.min(batchVoteStep, total - 1);
+        const row = selectedBatchVoteRows[stepIdx];
+        const draft = batchVoteDrafts[row.proposalId] || {};
+        const rationaleMode = draft.rationaleMode ?? "url";
+        return (
+          <div className="image-modal-backdrop" role="presentation" onClick={() => setBatchVoteModalOpen(false)}>
+            <div className="image-modal vote-confirm-modal vote-confirm-modal--batch" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="image-modal-close" onClick={() => setBatchVoteModalOpen(false)}>
+                Cancel
+              </button>
 
-              <div className="batch-vote-list" aria-label="Selected governance actions">
-                {selectedBatchVoteRows.map((row) => (
-                  <div key={row.proposalId} className="batch-vote-item">
-                    <div className="batch-vote-item-head">
-                      <strong>{row.actionName}</strong>
-                      <span className="mono">{formatHashCompact(row.proposalId)}</span>
+              <div className="batch-step-header">
+                <h3 className="rationale-modal-title">
+                  {total === 1 ? "Confirm Vote" : `Vote ${stepIdx + 1} / ${total}`}
+                </h3>
+                <span className="batch-step-ready">{batchVoteReadyCount}/{total} ready</span>
+              </div>
+
+              <div className="vote-confirm-body">
+                <p className="muted batch-drep-id">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
+
+                <div className="batch-vote-item">
+                  <div className="batch-vote-item-head">
+                    <strong>{row.actionName}</strong>
+                    <span className="mono">{formatHashCompact(row.proposalId)}</span>
+                  </div>
+
+                  <div className="batch-vote-choice-row" role="group" aria-label={`Vote choice for ${row.actionName}`}>
+                    {["Yes", "No", "Abstain"].map((choice) => (
+                      <button
+                        key={choice}
+                        type="button"
+                        className={`mode-btn vote-choice-btn vote-choice-btn--${choice.toLowerCase()}${draft.choice === choice ? " active" : ""}`}
+                        onClick={() => updateBatchVoteDraft(row.proposalId, { choice })}
+                      >
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="vote-rationale-section">
+                    <div className="vote-rationale-mode-toggle">
+                      <button
+                        type="button"
+                        className={`mode-btn${rationaleMode === "url" ? " active" : ""}`}
+                        onClick={() => { updateBatchVoteDraft(row.proposalId, { rationaleMode: "url" }); setBatchVoteMdPreview(false); }}
+                      >
+                        Provide URL
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn${rationaleMode === "write" ? " active" : ""}`}
+                        onClick={() => { updateBatchVoteDraft(row.proposalId, { rationaleMode: "write" }); setBatchVoteMdPreview(false); }}
+                      >
+                        Write rationale
+                      </button>
                     </div>
-                    <div className="batch-vote-item-controls">
-                      <div className="batch-vote-choice-row" role="group" aria-label={`Vote choice for ${row.actionName}`}>
-                        {["Yes", "No", "Abstain"].map((choice) => {
-                          const draft = batchVoteDrafts[row.proposalId] || {};
-                          return (
-                            <button
-                              key={choice}
-                              type="button"
-                              className={`mode-btn${draft.choice === choice ? " active" : ""}`}
-                              onClick={() => updateBatchVoteDraft(row.proposalId, { choice })}
-                            >
-                              {choice}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="vote-rationale-section">
-                        <div className="vote-rationale-mode-toggle">
+
+                    {rationaleMode === "url" ? (
+                      <label className="vote-rationale-label">
+                        Rationale URL (optional)
+                        <input
+                          type="url"
+                          value={draft.rationaleUrl || ""}
+                          onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleUrl: e.target.value })}
+                          placeholder="https://your-rationale.json  or  ipfs://Qm..."
+                        />
+                      </label>
+                    ) : (
+                      <div className="vote-rationale-write">
+                        <div className="vote-rationale-write-tabs">
                           <button
                             type="button"
-                            className={`mode-btn${(batchVoteDrafts[row.proposalId]?.rationaleMode ?? "url") === "url" ? " active" : ""}`}
-                            onClick={() => updateBatchVoteDraft(row.proposalId, { rationaleMode: "url" })}
+                            className={`mode-btn${!batchVoteMdPreview ? " active" : ""}`}
+                            onClick={() => setBatchVoteMdPreview(false)}
                           >
-                            Provide URL
+                            Write
                           </button>
                           <button
                             type="button"
-                            className={`mode-btn${batchVoteDrafts[row.proposalId]?.rationaleMode === "write" ? " active" : ""}`}
-                            onClick={() => updateBatchVoteDraft(row.proposalId, { rationaleMode: "write" })}
+                            className={`mode-btn${batchVoteMdPreview ? " active" : ""}`}
+                            onClick={() => setBatchVoteMdPreview(true)}
                           >
-                            Write rationale
+                            Preview
                           </button>
+                          <span className="vote-rationale-write-hint">Markdown supported · uploaded to IPFS as CIP-100 JSON</span>
                         </div>
-                        {(batchVoteDrafts[row.proposalId]?.rationaleMode ?? "url") === "url" ? (
-                          <label className="vote-rationale-label batch-vote-rationale-label">
-                            Rationale URL (optional)
-                            <input
-                              type="url"
-                              value={batchVoteDrafts[row.proposalId]?.rationaleUrl || ""}
-                              onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleUrl: e.target.value })}
-                              placeholder="https://your-rationale.json  or  ipfs://Qm..."
-                            />
-                          </label>
+                        {batchVoteMdPreview ? (
+                          <div className="vote-rationale-preview">
+                            {draft.rationaleText?.trim()
+                              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.rationaleText}</ReactMarkdown>
+                              : <p className="muted">Nothing to preview yet.</p>
+                            }
+                          </div>
                         ) : (
-                          <label className="vote-rationale-label batch-vote-rationale-label">
-                            Rationale (uploaded to IPFS as CIP-100 JSON)
-                            <textarea
-                              value={batchVoteDrafts[row.proposalId]?.rationaleText || ""}
-                              onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleText: e.target.value })}
-                              placeholder="Write your rationale here..."
-                              rows={4}
-                            />
-                          </label>
+                          <textarea
+                            className="vote-rationale-textarea"
+                            value={draft.rationaleText || ""}
+                            onChange={(e) => updateBatchVoteDraft(row.proposalId, { rationaleText: e.target.value })}
+                            placeholder="Write your rationale here... (Markdown supported)"
+                            rows={10}
+                            autoFocus
+                          />
                         )}
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
 
-              {wallet.walletNetworkId !== 1 ? (
-                <p className="vote-notice">Wallet is on testnet - vote will be submitted to testnet.</p>
-              ) : null}
+                {wallet.walletNetworkId !== 1 ? (
+                  <p className="vote-notice">Wallet is on testnet — vote will be submitted to testnet.</p>
+                ) : null}
 
-              <div className="vote-confirm-actions">
-                <button type="button" className="mode-btn" onClick={() => setBatchVoteModalOpen(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="vote-confirm-submit vote-confirm-submit--yes"
-                  onClick={submitBatchVote}
-                  disabled={voteSubmitting || !batchVoteReady}
-                >
-                  Submit {selectedBatchVoteRows.length === 1 ? "Vote" : `${selectedBatchVoteRows.length} Votes`} On-Chain
-                </button>
+                <div className="vote-confirm-actions batch-step-actions">
+                  <div className="batch-step-nav">
+                    <button
+                      type="button"
+                      className="mode-btn"
+                      onClick={() => { setBatchVoteStep(stepIdx - 1); setBatchVoteMdPreview(false); }}
+                      disabled={stepIdx === 0}
+                    >
+                      ← Prev
+                    </button>
+                    <button
+                      type="button"
+                      className="mode-btn"
+                      onClick={() => { setBatchVoteStep(stepIdx + 1); setBatchVoteMdPreview(false); }}
+                      disabled={stepIdx === total - 1}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                  <div className="batch-step-submit">
+                    <button type="button" className="mode-btn" onClick={() => setBatchVoteModalOpen(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="vote-confirm-submit vote-confirm-submit--yes"
+                      onClick={submitBatchVote}
+                      disabled={voteSubmitting || !batchVoteReady}
+                    >
+                      Submit {total === 1 ? "Vote" : `${total} Votes`} On-Chain
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        );
+      })() : null}
 
     </main>
   );

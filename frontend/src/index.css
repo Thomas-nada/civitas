@@ -4355,7 +4355,7 @@ tbody tr.active {
 }
 
 .vote-confirm-modal--batch {
-  max-width: 780px;
+  max-width: 600px;
 }
 
 .vote-confirm-body {
@@ -4372,32 +4372,34 @@ tbody tr.active {
   margin: 0;
 }
 
-.batch-vote-modal-head {
+/* Step header */
+.batch-step-header {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
 }
 
-.batch-vote-modal-head p {
+.batch-step-header .rationale-modal-title {
   margin: 0;
 }
 
-.batch-vote-list {
-  display: grid;
-  gap: 0.75rem;
-  max-height: 420px;
-  overflow: auto;
-  padding-right: 0.2rem;
+.batch-step-ready {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
+.batch-drep-id {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+/* Single proposal card */
 .batch-vote-item {
   display: grid;
-  gap: 0.55rem;
-  padding: 0.72rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-soft);
+  gap: 0.85rem;
 }
 
 .batch-vote-item-head {
@@ -4406,14 +4408,13 @@ tbody tr.active {
   align-items: start;
   gap: 0.65rem;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 0.52rem;
+  padding-bottom: 0.6rem;
 }
 
 .batch-vote-item strong {
-  min-width: 0;
   color: var(--text);
-  font-size: 0.9rem;
-  line-height: 1.25;
+  font-size: 0.95rem;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
@@ -4422,25 +4423,102 @@ tbody tr.active {
   font-size: 0.78rem;
 }
 
-.batch-vote-item-controls {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.45fr) minmax(260px, 1fr);
-  gap: 0.7rem;
-  align-items: end;
-}
-
 .batch-vote-choice-row {
   display: flex;
+  gap: 0.5rem;
+}
+
+.vote-choice-btn {
+  min-width: 80px;
+}
+
+.vote-choice-btn--yes.active  { background: color-mix(in srgb, var(--mint) 22%, transparent); color: var(--mint); border-color: var(--mint); }
+.vote-choice-btn--no.active   { background: color-mix(in srgb, var(--rose) 22%, transparent); color: var(--rose); border-color: var(--rose); }
+.vote-choice-btn--abstain.active { background: color-mix(in srgb, var(--amber) 22%, transparent); color: var(--amber); border-color: var(--amber); }
+
+/* Rationale write/preview */
+.vote-rationale-write {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.vote-rationale-write-tabs {
+  display: flex;
+  align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
 }
 
-.batch-vote-choice-row .mode-btn {
-  min-width: 74px;
+.vote-rationale-write-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
 }
 
-.batch-vote-rationale-label {
-  margin-bottom: 0;
+.vote-rationale-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.vote-rationale-textarea:focus {
+  outline: none;
+  border-color: var(--mint);
+}
+
+.vote-rationale-preview {
+  min-height: 180px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.vote-rationale-preview p  { margin: 0 0 0.6em; }
+.vote-rationale-preview h1,
+.vote-rationale-preview h2,
+.vote-rationale-preview h3 { margin: 0.8em 0 0.4em; font-size: 1em; }
+.vote-rationale-preview ul,
+.vote-rationale-preview ol  { margin: 0 0 0.6em 1.2em; }
+.vote-rationale-preview code { font-family: monospace; font-size: 0.9em; }
+.vote-rationale-preview blockquote {
+  border-left: 3px solid var(--line);
+  margin: 0 0 0.6em 0;
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Step navigation + submit row */
+.batch-step-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.batch-step-nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.batch-step-submit {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .vote-confirm-badge {
