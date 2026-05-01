@@ -449,15 +449,10 @@ function VoteBarCard({ group, info }) {
       <div className="vbc-stats">
         {isCommittee ? (
           <>
-            <span className="vbc-stat vbc-stat--yes">Constitutional <strong>{yes}</strong></span>
-            <div className="vbc-no-group">
-              <span className="vbc-stat vbc-stat--no">No <strong>{no + ccNotVotedCount}</strong></span>
-              <div className="vbc-no-breakdown">
-                {no > 0 && <span>Unconstitutional <em>{no}</em></span>}
-                {ccNotVotedCount > 0 && <span>Not voted <em>{ccNotVotedCount}</em></span>}
-              </div>
-            </div>
+            {yes > 0 && <span className="vbc-stat vbc-stat--yes">Constitutional <strong>{yes}</strong></span>}
+            {no > 0 && <span className="vbc-stat vbc-stat--no">Unconstitutional <strong>{no}</strong></span>}
             {abstain > 0 && <span className="vbc-stat vbc-stat--abs">Abstain <strong>{abstain}</strong></span>}
+            {ccNotVotedCount > 0 && <span className="vbc-stat vbc-stat--rest">Not voted <strong>{ccNotVotedCount}</strong></span>}
           </>
         ) : isSpo ? (
           <>
