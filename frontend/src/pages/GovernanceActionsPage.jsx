@@ -1578,6 +1578,32 @@ export default function GovernanceActionsPage() {
         </section>
       ) : null}
 
+      {(voteSubmitting || voteNotice || voteError || votedTxHash) ? (
+        <section className="layout">
+          <div className="panel vote-status-panel">
+            {voteSubmitting && !voteNotice && <p className="vote-notice">Submitting vote…</p>}
+            {voteNotice && <p className="vote-notice">{voteNotice}</p>}
+            {voteError && <p className="vote-error">{voteError}</p>}
+            {votedTxHash && (
+              <p className="vote-success">
+                Vote submitted!{" "}
+                <a
+                  href={`https://cardanoscan.io/transaction/${votedTxHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ext-link"
+                >
+                  {votedTxHash.slice(0, 16)}…
+                </a>
+                {voteSyncStatus === "polling" && " Waiting for Civitas to index…"}
+                {voteSyncStatus === "synced" && " Civitas has indexed this vote."}
+                {voteSyncStatus === "timeout" && " (Civitas indexing check timed out — vote is on-chain regardless.)"}
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
       <section className="layout layout-modal">
         <div className="panel table-panel">
           <table className="mobile-cards-table">

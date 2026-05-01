@@ -4340,6 +4340,14 @@ tbody tr.active {
   margin-top: 0.5rem;
 }
 
+.vote-status-panel {
+  padding: 0.75rem 1rem;
+}
+
+.vote-status-panel p {
+  margin: 0;
+}
+
 /* Vote confirmation modal */
 .vote-confirm-modal {
   max-width: 480px;
