@@ -352,9 +352,11 @@ export default function ConstitutionPage() {
                 <section id={section.id} className="constitution-section-block" key={section.id}>
                   {HeadingTag ? <HeadingTag>{section.title}</HeadingTag> : null}
                   {section.content.trim() ? (
-                    <ReactMarkdown className="payload-markdown constitution-markdown" remarkPlugins={[remarkGfm]}>
-                      {section.content}
-                    </ReactMarkdown>
+                    <div className="payload-markdown constitution-markdown">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {section.content}
+                      </ReactMarkdown>
+                    </div>
                   ) : null}
                 </section>
               );

@@ -438,10 +438,22 @@ export default function VoterProfilePage({ actorType }) {
     );
   }
 
-  if (!payload || !actor) {
+  if (!payload) {
     return (
       <main className="page shell">
         <section className="status-row"><p className="muted">Loading voter profile...</p></section>
+      </main>
+    );
+  }
+
+  if (!actor) {
+    return (
+      <main className="page shell">
+        <section className="status-row">
+          <p className="muted">Profile not found for ID: <span className="mono">{decodedId}</span></p>
+          <p className="muted">This DRep may not have voted on any tracked governance actions yet, or the ID format may differ from the snapshot.</p>
+          <p><Link className="inline-link" to={listPath}>Back to DRep list</Link></p>
+        </section>
       </main>
     );
   }
@@ -771,9 +783,11 @@ export default function VoterProfilePage({ actorType }) {
               ) : voteRationaleError[rationaleModal.key] ? (
                 <p className="muted">Rationale error: {voteRationaleError[rationaleModal.key]}</p>
               ) : (
-                <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
-                  {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
-                </ReactMarkdown>
+                <div className="payload-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
           </div>

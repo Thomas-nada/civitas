@@ -18,9 +18,11 @@ class MarkdownErrorBoundary extends Component {
 function SafeMarkdown({ children }) {
   return (
     <MarkdownErrorBoundary source={children}>
-      <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
-        {children}
-      </ReactMarkdown>
+      <div className="payload-markdown">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {children}
+        </ReactMarkdown>
+      </div>
     </MarkdownErrorBoundary>
   );
 }
@@ -960,9 +962,11 @@ export default function ProposalDetailPage() {
               ) : voteRationaleError[rationaleModal.key] ? (
                 <p className="muted">Error: {voteRationaleError[rationaleModal.key]}</p>
               ) : (
-                <ReactMarkdown className="payload-markdown" remarkPlugins={[remarkGfm]}>
-                  {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
-                </ReactMarkdown>
+                <div className="payload-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
           </div>

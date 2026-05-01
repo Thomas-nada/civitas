@@ -471,9 +471,11 @@ export default function RationalesArchivePage() {
                   <dd>{selectedRationale.voteMeta?.voteTxHash || "Unknown"}</dd>
                 </div>
               </dl>
-              <ReactMarkdown className="payload-markdown rationales-archive-markdown" remarkPlugins={[remarkGfm]}>
-                {selectedRationale.body || selectedRationale.raw || "No rationale body text available."}
-              </ReactMarkdown>
+              <div className="payload-markdown rationales-archive-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {selectedRationale.body || selectedRationale.raw || "No rationale body text available."}
+                </ReactMarkdown>
+              </div>
             </>
           ) : null}
           {!loadingRationale && !selectedRationale && !fileError ? (
