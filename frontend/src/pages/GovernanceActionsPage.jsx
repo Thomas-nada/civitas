@@ -1247,7 +1247,7 @@ export default function GovernanceActionsPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || "IPFS upload failed.");
     setVoteNotice("");
-    return { url: data.ipfsUrl, hash: data.contentHash };
+    return { anchorUrl: data.ipfsUrl, anchorDataHash: data.contentHash };
   }
 
   async function buildVoteAnchor(rawUrl) {
@@ -1261,7 +1261,7 @@ export default function GovernanceActionsPage() {
       const bytes = new TextEncoder().encode(text);
       const hashHex = blakejs.blake2bHex(bytes, null, 32);
       setVoteNotice("");
-      return { url: url || rationaleUrlTrimmed, hash: hashHex };
+      return { anchorUrl: url || rationaleUrlTrimmed, anchorDataHash: hashHex };
     } catch {
       setVoteNotice("Could not fetch rationale URL - voting without anchor.");
       return undefined;
