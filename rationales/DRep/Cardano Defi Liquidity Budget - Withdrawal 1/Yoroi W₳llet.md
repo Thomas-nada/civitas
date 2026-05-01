@@ -1,20 +1,26 @@
-<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/DefiLiquidity_.jsonld -->
+<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/Defi_Liquidity.jsonld -->
 # Yoroi W₳llet
 
-**Proposal:** Cardano Defi Liquidity Budget - Withdrawal 1
+**Proposal:** Cardano DeFi Liquidity Budget - Withdrawal 1
 **Vote:** Yes
 **Voter ID:** `drep1ygr9tuapcanc3kpeyy4dc3vmrz9cfe5q7v9wj3x9j0ap3tswtre9j`
 
 ---
 
 Summary
-Yoroi DRep votes YES on Cardano DeFi Liquidity Budget – Withdrawal 1, recognizing it as an initial step toward establishing the foundations for a treasury-backed DeFi liquidity initiative.
+
+Yoroi DRep votes YES on Cardano DeFi Liquidity Budget – Withdrawal 1, as the initial withdrawal under the approved Stablecoin DeFi Liquidity Budget.
+
 Rationale
-• Phased execution design
-The proposal limits this withdrawal to foundational components, prioritizing legal setup, audit readiness, and contract infrastructure before any capital deployment. This sequencing ensures key structures are in place prior to scaling.
-Defined scope with ecosystem participation
-The 800,000 ADA request is tied to specific deliverables, including legal entity formation, audit execution, and multisig contract deployment. Smart contract development is being contributed by ecosystem teams without direct funding, indicating alignment and shared commitment to the initiative.
-• Controlled fund management framework
-Use of a 5-of-9 multisignature Amaru contract introduces distributed oversight and enforces collective authorization, supporting secure and transparent handling of funds.
+
+• Proportionate withdrawal
+This action withdraws 500,000 ADA as an initial tranche, representing a controlled and incremental use of the treasury focused on setup rather than liquidity deployment.
+
+• Defined use of funds with security safeguards
+The requested amount is allocated to specific preparatory work, including legal structuring, administrative smart contract development, and a 75,000 ADA independent audit, reducing operational and security risk before scaling.
+
+• Strong on-chain controls and oversight
+All funds are managed through an Amaru smart contract with a 5 of 9 multisignature approval requirement, milestone-based disbursements, and continued dRep and tDAO oversight.
+
 Conclusion
-Yoroi supports proceeding with this initial withdrawal as a setup step. Progressing beyond this stage should be paired with clearer frameworks for capital deployment, improved transparency on performance, well-defined governance processes, and stronger accountability mechanisms.
+Yoroi supports this withdrawal as a measured implementation step that remains consistent with the scope and intent of the Stablecoin DeFi Liquidity Budget previously approved by Yoroi, and therefore votes Yes.
