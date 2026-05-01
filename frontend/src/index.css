@@ -1680,6 +1680,27 @@ a {
 
 .wallet-menu-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.my-drep-btn {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  color: var(--mint);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.my-drep-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .wallet-trigger {

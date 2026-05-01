@@ -472,6 +472,16 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
                     : "Connect Wallet"}
                 </button>
 
+                {wallet.walletApi && wallet.walletDrep ? (
+                  <Link
+                    to={`/dreps/${encodeURIComponent(wallet.walletDrep.dRepIDCip105)}`}
+                    className="my-drep-btn"
+                    onClick={() => wallet.setWalletMenuOpen(false)}
+                  >
+                    My DRep Profile
+                  </Link>
+                ) : null}
+
                 {wallet.walletMenuOpen ? (
                   <div className="wallet-popover panel">
                     {!wallet.walletApi ? (
