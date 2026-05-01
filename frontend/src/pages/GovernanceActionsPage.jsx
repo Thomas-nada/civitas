@@ -1403,7 +1403,7 @@ export default function GovernanceActionsPage() {
       const snapshotAtSubmit = String(latestSnapshotRef.current || "");
       startVoteSyncPolling(snapshotAtSubmit);
     } catch (e) {
-      const msg = e?.message || "Batch vote transaction failed.";
+      const msg = e?.message || "Vote transaction failed.";
       setVoteError(msg);
       setVoteNotice("");
     } finally {
@@ -1548,7 +1548,7 @@ export default function GovernanceActionsPage() {
       </section>
 
       {wallet?.walletDrep ? (
-        <section className="batch-vote-toolbar" aria-label="Batch DRep voting controls">
+        <section className="batch-vote-toolbar" aria-label="DRep voting controls">
           <div className="batch-vote-summary">
             <strong>{batchVoteCount}</strong>
             <span>{batchVoteCount === 1 ? "action selected" : "actions selected"}</span>
@@ -1572,7 +1572,7 @@ export default function GovernanceActionsPage() {
                 setBatchVoteModalOpen(true);
               }}
             >
-              Review batch vote
+              Review {batchVoteCount === 1 ? "vote" : "votes"}
             </button>
           </div>
         </section>
@@ -1609,7 +1609,7 @@ export default function GovernanceActionsPage() {
           <table className="mobile-cards-table">
             <thead>
               <tr>
-                {showBatchVoteColumn ? <th className="ga-select-heading">Batch</th> : null}
+                {showBatchVoteColumn ? <th className="ga-select-heading">Vote</th> : null}
                 <th>Action ID</th>
                 <th>Title</th>
                 <th>Type</th>
@@ -1661,7 +1661,7 @@ export default function GovernanceActionsPage() {
                             checked={batchSelected}
                             disabled={!drepVoteEligible || voteSubmitting}
                             onChange={() => toggleBatchVoteSelection(row)}
-                            aria-label={`Select ${row.actionName} for batch DRep vote`}
+                            aria-label={`Select ${row.actionName} for DRep vote`}
                           />
                         </td>
                       ) : null}
@@ -1809,10 +1809,10 @@ export default function GovernanceActionsPage() {
             <button type="button" className="image-modal-close" onClick={() => setBatchVoteModalOpen(false)}>
               Cancel
             </button>
-            <h3 className="rationale-modal-title">Confirm Batch Vote</h3>
+            <h3 className="rationale-modal-title">{selectedBatchVoteRows.length === 1 ? "Confirm Vote" : "Confirm Votes"}</h3>
             <div className="vote-confirm-body">
               <div className="batch-vote-modal-head">
-                <p className="muted">{selectedBatchVoteRows.length} DRep votes in one transaction · {batchVoteReadyCount}/{selectedBatchVoteRows.length} ready</p>
+                <p className="muted">{selectedBatchVoteRows.length} {selectedBatchVoteRows.length === 1 ? "vote" : "votes"} in one transaction · {batchVoteReadyCount}/{selectedBatchVoteRows.length} ready</p>
               </div>
               <p className="muted">Voting as DRep: <span className="mono">{wallet.walletDrep.dRepIDCip105}</span></p>
 
@@ -1897,7 +1897,7 @@ export default function GovernanceActionsPage() {
                   onClick={submitBatchVote}
                   disabled={voteSubmitting || !batchVoteReady}
                 >
-                  Submit {selectedBatchVoteRows.length} Votes On-Chain
+                  Submit {selectedBatchVoteRows.length === 1 ? "Vote" : `${selectedBatchVoteRows.length} Votes`} On-Chain
                 </button>
               </div>
             </div>
