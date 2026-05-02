@@ -4845,6 +4845,37 @@ async function buildDeltaSnapshot(base) {
     });
   }
 
+  // --- Phase 3b: Refresh voting power for DReps stuck at 0 ---
+  // DReps that voted while their power was 0 (e.g. newly registered, epoch not yet snapshotted)
+  // are never picked up by Phase 3 because they have no new votes. Refresh them here so their
+  // power updates as soon as Blockfrost has it, without waiting for them to vote again.
+  const zeroPowerDrepIds = Array.from(drepById.values())
+    .filter((row) => Number(row.votingPowerAda || 0) === 0 && !newlyActiveDrepIds.has(row.id))
+    .map((row) => row.id);
+  for (let start = 0; start < zeroPowerDrepIds.length; start += SYNC_BATCH_SIZE) {
+    const batch = zeroPowerDrepIds.slice(start, start + SYNC_BATCH_SIZE);
+    await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
+      const safeId = encodeURIComponent(drepId);
+      const details = await blockfrostGet(`/governance/dreps/${safeId}`).catch(() => null);
+      if (!details) return;
+      const row = drepById.get(drepId);
+      if (!row) return;
+      const power = Math.floor(Number(details.amount || 0) / 1_000_000);
+      if (power === 0) return;
+      row.votingPowerAda = power;
+      const active = details.active === true;
+      const retired = details.retired === true;
+      const expired = details.expired === true;
+      row.active = active;
+      row.retired = retired;
+      row.expired = expired;
+      row.activeEpoch = Number(details.active_epoch || 0) || null;
+      row.lastActiveEpoch = Number(details.last_active_epoch || 0) || null;
+      row.hasScript = details.has_script === true;
+      row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
+    });
+  }
+
   // --- Phase 4: Reassemble snapshot arrays ---
   const dreps = Array.from(drepById.values()).map((row) => {
     // Strip internal _dirty flag
