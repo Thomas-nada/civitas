@@ -8167,6 +8167,60 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── Live DRep lookup (for DReps not yet in the snapshot) ────────────────────
+  if (req.method === "GET" && url.pathname === "/api/drep-live") {
+    const drepId = String(url.searchParams.get("id") || "").trim();
+    if (!drepId) { json(res, 400, { error: "id query parameter is required." }); return; }
+    if (!BLOCKFROST_API_KEY) { json(res, 503, { error: "Blockfrost not configured." }); return; }
+    try {
+      const safeId = encodeURIComponent(drepId);
+      const nowMs = Date.now();
+      const CACHE_TTL_MS = 5 * 60 * 1000;
+      const cached = drepMetaCache[drepId];
+      let detailsValue = cached?.details || null;
+      let metadataValue = cached?.metadata || null;
+      const isFresh = cached && (nowMs - Number(cached.fetchedAt || 0)) < CACHE_TTL_MS;
+      if (!isFresh) {
+        const [detailsRes, metadataRes] = await Promise.allSettled([
+          blockfrostGet(`/governance/dreps/${safeId}`),
+          blockfrostGet(`/governance/dreps/${safeId}/metadata`)
+        ]);
+        detailsValue = detailsRes.status === "fulfilled" ? detailsRes.value : detailsValue;
+        metadataValue = metadataRes.status === "fulfilled" ? metadataRes.value : metadataValue;
+        drepMetaCache[drepId] = { fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
+      }
+      if (!detailsValue) { json(res, 404, { error: "DRep not found on chain." }); return; }
+      const active = detailsValue.active === true;
+      const retired = detailsValue.retired === true;
+      const expired = detailsValue.expired === true;
+      const payloadCache = new Map();
+      const profile = metadataValue ? await resolveDrepProfileFromMetadataEnvelope(metadataValue, payloadCache) : null;
+      let name = metadataValue ? resolveName(metadataValue.json_metadata, drepId) : "";
+      if (!name && profile?.name) name = profile.name;
+      if (!name && metadataValue) name = await resolveDrepNameFromMetadataEnvelope(metadataValue, new Map(), payloadCache);
+      json(res, 200, {
+        id: drepId,
+        name: name || "",
+        status: retired ? "retired" : expired ? "expired" : active ? "active" : "inactive",
+        active,
+        retired,
+        expired,
+        activeEpoch: Number(detailsValue.active_epoch || 0) || null,
+        lastActiveEpoch: Number(detailsValue.last_active_epoch || 0) || null,
+        hasScript: detailsValue.has_script === true,
+        votingPowerAda: Math.floor(Number(detailsValue.amount || 0) / 1_000_000),
+        transparencyScore: metadataValue ? computeTransparencyScore(metadataValue) : 20,
+        profile: profile || { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] },
+        votes: [],
+        consistency: 0,
+        totalEligibleVotes: 0
+      });
+    } catch (e) {
+      json(res, 502, { error: e?.message || "Failed to fetch live DRep data." });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith("/api/")) {
     json(res, 404, { error: "Not Found" });
     return;

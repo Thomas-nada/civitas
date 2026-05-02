@@ -178,6 +178,8 @@ export default function VoterProfilePage({ actorType }) {
   const snapshot = String(searchParams.get("snapshot") || "").trim();
   const decodedId = decodeURIComponent(String(actorId || "")).trim();
   const [payload, setPayload] = useState(null);
+  const [liveActor, setLiveActor] = useState(null);
+  const [liveLoading, setLiveLoading] = useState(false);
   const [error, setError] = useState("");
   const [imageOpen, setImageOpen] = useState(false);
   const [rationaleModal, setRationaleModal] = useState({ open: false, key: "", title: "", proposalId: "" });
@@ -213,10 +215,25 @@ export default function VoterProfilePage({ actorType }) {
 
   const proposalInfo = payload?.proposalInfo || {};
   const actors = useMemo(() => actorList(payload, actorType), [payload, actorType]);
-  const actor = useMemo(() => {
+  const actorFromSnapshot = useMemo(() => {
     const target = decodedId.toLowerCase();
     return actors.find((row) => String(row?.id || "").trim().toLowerCase() === target) || null;
   }, [actors, decodedId]);
+
+  // For DReps not yet in the snapshot (newly registered, no votes), fall back to a live Blockfrost lookup.
+  useEffect(() => {
+    if (actorType !== "drep" || !payload || actorFromSnapshot) return;
+    let cancelled = false;
+    setLiveLoading(true);
+    fetch(`${API_BASE}/api/drep-live?id=${encodeURIComponent(decodedId)}`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled && data?.id) setLiveActor(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLiveLoading(false); });
+    return () => { cancelled = true; };
+  }, [actorType, payload, actorFromSnapshot, decodedId]);
+
+  const actor = actorFromSnapshot || liveActor;
 
   const voteRows = useMemo(() => {
     if (!actor) return [];
@@ -447,11 +464,18 @@ export default function VoterProfilePage({ actorType }) {
   }
 
   if (!actor) {
+    if (liveLoading) {
+      return (
+        <main className="page shell">
+          <section className="status-row"><p className="muted">Loading voter profile...</p></section>
+        </main>
+      );
+    }
     return (
       <main className="page shell">
         <section className="status-row">
           <p className="muted">Profile not found for ID: <span className="mono">{decodedId}</span></p>
-          <p className="muted">This DRep may not have voted on any tracked governance actions yet, or the ID format may differ from the snapshot.</p>
+          <p className="muted">This DRep has not voted on any tracked governance actions yet.</p>
           <p><Link className="inline-link" to={listPath}>Back to DRep list</Link></p>
         </section>
       </main>
