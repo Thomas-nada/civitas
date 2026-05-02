@@ -933,7 +933,9 @@ export default function ProposalDetailPage() {
                       <td data-label="Voting Power">
                         {row.votingPowerAda > 0
                           ? <span className="pdp-vp">₳{formatAdaShort(row.votingPowerAda)}</span>
-                          : <span className="muted">—</span>}
+                          : row.role === "CC"
+                            ? <span className="muted">—</span>
+                            : <span className="muted pdp-vp-pending" title="Voting power is 0 in the current epoch snapshot. New DRep registrations take 2 epochs to appear.">₳0</span>}
                       </td>
                       <td data-label="Epoch">{row.votedEpoch || "—"}</td>
                       <td data-label="Rationale">
