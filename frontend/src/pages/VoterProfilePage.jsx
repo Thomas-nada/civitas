@@ -220,9 +220,13 @@ export default function VoterProfilePage({ actorType }) {
     return actors.find((row) => String(row?.id || "").trim().toLowerCase() === target) || null;
   }, [actors, decodedId]);
 
-  // For DReps not yet in the snapshot (newly registered, no votes), fall back to a live Blockfrost lookup.
+  // For DReps not yet in the snapshot, or in snapshot but with 0 voting power (newly registered mid-epoch),
+  // fall back to a live Blockfrost lookup to get their current voting power.
+  const snapshotHasZeroPower = actorFromSnapshot !== null && Number(actorFromSnapshot?.votingPowerAda || 0) === 0;
   useEffect(() => {
-    if (actorType !== "drep" || !payload || actorFromSnapshot) return;
+    if (actorType !== "drep" || !payload) return;
+    // Skip when snapshot already has a non-zero power — no live fetch needed.
+    if (actorFromSnapshot && Number(actorFromSnapshot.votingPowerAda || 0) > 0) return;
     let cancelled = false;
     setLiveLoading(true);
     fetch(`${API_BASE}/api/drep-live?id=${encodeURIComponent(decodedId)}`)
@@ -233,7 +237,14 @@ export default function VoterProfilePage({ actorType }) {
     return () => { cancelled = true; };
   }, [actorType, payload, actorFromSnapshot, decodedId]);
 
-  const actor = actorFromSnapshot || liveActor;
+  // When snapshot has 0 power but live data has non-zero, merge the live power in.
+  const actor = useMemo(() => {
+    if (!actorFromSnapshot) return liveActor;
+    if (liveActor && Number(liveActor.votingPowerAda || 0) > 0 && snapshotHasZeroPower) {
+      return { ...actorFromSnapshot, votingPowerAda: liveActor.votingPowerAda };
+    }
+    return actorFromSnapshot;
+  }, [actorFromSnapshot, liveActor, snapshotHasZeroPower]);
 
   const voteRows = useMemo(() => {
     if (!actor) return [];
