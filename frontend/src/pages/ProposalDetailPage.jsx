@@ -1,4 +1,5 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import ReactMarkdown from "react-markdown";
@@ -576,6 +577,16 @@ export default function ProposalDetailPage() {
         governanceType: snapshotInfo?.governanceType ?? metadata?.governanceType ?? null,
       }
     : null;
+
+  const seoTitle = info?.actionName
+    ? info.governanceType
+      ? `${info.actionName} — ${info.governanceType}`
+      : info.actionName
+    : "Governance Proposal";
+  const seoDesc = info?.actionName
+    ? `Vote breakdown, DRep rationales, and outcome for "${info.actionName}" — a Cardano ${info.governanceType || "governance"} proposal.`
+    : "Detailed voting breakdown, DRep and SPO rationales, and outcome for a Cardano governance proposal.";
+  useSeoMeta({ title: seoTitle, description: seoDesc });
 
   const payloadDoc = useMemo(
     () => normalizeActionPayload({ ...(info || {}), actionName: info?.actionName || decodedProposalId }, metadata || null),

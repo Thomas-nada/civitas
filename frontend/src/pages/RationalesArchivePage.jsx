@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -172,6 +173,10 @@ async function fetchMarkdown(entry, signal) {
 }
 
 export default function RationalesArchivePage() {
+  useSeoMeta({
+    title: "Rationales Archive",
+    description: "Browse DRep and SPO vote rationales on Cardano governance actions — searchable by proposal type, voter, and decision."
+  });
   const [archive, setArchive] = useState({ actions: [], counts: Object.fromEntries(CATEGORIES.map((category) => [category, 0])) });
   const [metadata, setMetadata] = useState({ actionsByName: new Map(), votesByName: new Map(), votesById: new Map() });
   const [selectedCategory, setSelectedCategory] = useState("All");

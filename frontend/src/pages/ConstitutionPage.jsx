@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -98,6 +99,10 @@ function parseConstitutionMarkdown(markdown) {
 }
 
 export default function ConstitutionPage() {
+  useSeoMeta({
+    title: "Cardano Constitution",
+    description: "Read and search the full Cardano Constitution, ratified on-chain. Navigate by section, verify hash integrity, and compare versions."
+  });
   const [selectedVersionId, setSelectedVersionId] = useState("current");
   const [docsByVersion, setDocsByVersion] = useState({});
   const [searchQuery, setSearchQuery] = useState("");

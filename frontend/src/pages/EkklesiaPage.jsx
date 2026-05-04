@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { useNavigate, useParams } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 
@@ -1216,6 +1217,10 @@ function BudgetExplorer({ allProposals, pillars, pillarById, filterPillar, setFi
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function EkklesiaPage({ voteSlug } = {}) {
+  useSeoMeta({
+    title: "Cardano Budget 2026",
+    description: "Track the Cardano 2026 on-chain budget vote — proposal breakdown, DRep participation, and live voting results."
+  });
   const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
   const { proposalId: urlProposalId } = useParams();
   const navigate = useNavigate();

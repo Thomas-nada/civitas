@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 
 function fmtAda(value) {
   const n = Number(value || 0);
@@ -16,6 +17,10 @@ function fmtPct(value) {
 }
 
 export default function NclPage() {
+  useSeoMeta({
+    title: "Net Change Limit",
+    description: "Track Cardano's Net Change Limit (NCL) — the maximum treasury withdrawal allowed per epoch — and current treasury balance."
+  });
   const [period, setPeriod] = useState("current");
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);

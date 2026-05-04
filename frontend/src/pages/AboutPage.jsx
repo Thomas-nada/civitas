@@ -1,6 +1,11 @@
 import { Link } from "react-router-dom";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 
 export default function AboutPage() {
+  useSeoMeta({
+    title: "About",
+    description: "Learn why Civitas was built — making Cardano governance transparent, accessible, and accountable for DReps, SPOs, and ada holders."
+  });
 
   return (
     <main className="shell">

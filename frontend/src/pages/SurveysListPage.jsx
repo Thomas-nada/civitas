@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 
@@ -88,6 +89,10 @@ function SurveyCard({ survey }) {
 const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
 
 export default function SurveysListPage() {
+  useSeoMeta({
+    title: "Governance Surveys",
+    description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power."
+  });
   const { walletApi } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);

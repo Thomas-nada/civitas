@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 
 const tocGroups = [
   {
@@ -583,6 +584,10 @@ cardano-cli conway transaction submit --tx-file authorize/tx.json`
 ];
 
 export default function GuidePage() {
+  useSeoMeta({
+    title: "Governance Guide",
+    description: "A practical guide to Cardano governance: how DRep voting works, proposal types, SPO roles, Constitutional Committee duties, and how to participate."
+  });
   const [history, setHistory] = useState([]);
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [activeSection, setActiveSection] = useState("cardano-governance");

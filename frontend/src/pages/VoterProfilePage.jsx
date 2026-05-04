@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Transaction } from "@meshsdk/core";
 import ReactMarkdown from "react-markdown";
@@ -245,6 +246,15 @@ export default function VoterProfilePage({ actorType }) {
     }
     return actorFromSnapshot;
   }, [actorFromSnapshot, liveActor, snapshotHasZeroPower]);
+
+  const actorLabel = actorType === "drep" ? "DRep" : actorType === "spo" ? "SPO" : "Committee Member";
+  const actorDisplayName = actor?.name || (actor?.id ? `${String(actor.id).slice(0, 14)}…` : null);
+  useSeoMeta({
+    title: actorDisplayName ? `${actorDisplayName} — ${actorLabel} Profile` : `${actorLabel} Profile`,
+    description: actorDisplayName
+      ? `Voting history, participation rate, accountability score, and rationale coverage for ${actorLabel} ${actorDisplayName} on Cardano.`
+      : `Cardano ${actorLabel} voting history, accountability score, and rationale coverage.`
+  });
 
   const voteRows = useMemo(() => {
     if (!actor) return [];

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 
 function fmtDate(iso) {
   if (!iso) return "Unknown";
@@ -8,6 +9,7 @@ function fmtDate(iso) {
 }
 
 export default function BugsPage() {
+  useSeoMeta({ title: "Bug Reports" });
   const [tokenInput, setTokenInput] = useState("");
   const [token, setToken] = useState(() => {
     try {

@@ -9,9 +9,8 @@ function isEasterPeriod() {
   return now >= start && now <= end;
 }
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { BrowserWallet } from "@meshsdk/core";
-import { bech32 } from "bech32";
-import * as blakejs from "blakejs";
+// MeshSDK, bech32, and blakejs are loaded lazily on first wallet interaction
+// to keep them out of the initial JS bundle and improve page load performance.
 import AppTopbar from "./components/AppTopbar";
 import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
@@ -208,16 +207,22 @@ export default function App() {
   };
 
   // ── Global Wallet State ──────────────────────────────────────────────────
-  const [wallets] = useState(() => {
-    try {
-      return BrowserWallet.getInstalledWallets().map((w) => ({
-        key: w.id,
-        displayName: w.name || w.id
-      }));
-    } catch {
-      return [];
-    }
-  });
+  // Wallet list is populated lazily after MeshSDK loads, keeping it out of
+  // the initial JS bundle for better page-load performance.
+  const [wallets, setWallets] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    import("@meshsdk/core").then(({ BrowserWallet }) => {
+      if (cancelled) return;
+      try {
+        setWallets(BrowserWallet.getInstalledWallets().map((w) => ({
+          key: w.id,
+          displayName: w.name || w.id
+        })));
+      } catch { /* no wallet extensions installed */ }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [walletApi, setWalletApi] = useState(null);
   const [walletName, setWalletName] = useState("");
   const [walletRewardAddress, setWalletRewardAddress] = useState("");
@@ -230,6 +235,12 @@ export default function App() {
   const connectWallet = useCallback(async (walletKey) => {
     try {
       setWalletError("");
+      // Lazy-load MeshSDK, bech32, and blakejs only when the user connects a wallet.
+      const [{ BrowserWallet }, { bech32 }, blakejs] = await Promise.all([
+        import("@meshsdk/core"),
+        import("bech32"),
+        import("blakejs")
+      ]);
       const api = await BrowserWallet.enable(walletKey);
       const found = wallets.find((w) => w.key === walletKey);
       setWalletName(found?.displayName || walletKey);

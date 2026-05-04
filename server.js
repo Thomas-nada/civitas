@@ -112,6 +112,7 @@ function parseUtcHourList(input, fallback) {
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8080);
+const CANONICAL_URL = (process.env.CANONICAL_URL || "").replace(/\/+$/, ""); // e.g. https://civitas.gov
 const BLOCKFROST_BASE_URL = process.env.BLOCKFROST_BASE_URL || "https://cardano-mainnet.blockfrost.io/api/v0";
 const BLOCKFROST_API_KEY = process.env.BLOCKFROST_API_KEY || "";
 const BLOCKFROST_IPFS_KEY = process.env.BLOCKFROST_IPFS_KEY || "";
@@ -6163,6 +6164,187 @@ function startScheduler() {
   setTimeout(runStartupSync, SYNC_STARTUP_DELAY_MS);
 }
 
+/**
+ * Build page-specific SEO metadata from the in-memory snapshot.
+ * Returns { title, description, canonicalPath, jsonLd }.
+ */
+function resolveSeoForPath(pathname) {
+  const base = CANONICAL_URL || "";
+  const canonicalPath = pathname.split("?")[0];
+  const canonicalHref = `${base}${canonicalPath}`;
+
+  // ── Proposal detail: /actions/:proposalId ─────────────────────────────────
+  const proposalMatch = canonicalPath.match(/^\/actions\/(.+)$/);
+  if (proposalMatch) {
+    const pid = decodeURIComponent(proposalMatch[1]);
+    const info = snapshot.proposalInfo?.[pid] || null;
+    const name = info?.actionName || null;
+    const gtype = info?.governanceType || "Governance Proposal";
+    const title = name ? `${name} — ${gtype} | Civitas` : `${gtype} | Civitas`;
+    const description = name
+      ? `Vote breakdown, DRep rationales, and outcome for "${name}" — a Cardano ${gtype} proposal.`
+      : `Detailed voting breakdown, DRep and SPO rationales, and outcome for a Cardano governance proposal.`;
+    const jsonLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Governance Actions", item: `${base}/actions` },
+            { "@type": "ListItem", position: 2, name: name || pid, item: canonicalHref }
+          ]
+        },
+        name ? {
+          "@type": "CreativeWork",
+          name,
+          description: `Cardano ${gtype} governance proposal`,
+          url: canonicalHref,
+          about: { "@type": "Thing", name: "Cardano Blockchain Governance" }
+        } : null
+      ].filter(Boolean)
+    });
+    return { title, description, canonicalHref, jsonLd };
+  }
+
+  // ── DRep profile: /dreps/:actorId ─────────────────────────────────────────
+  const drepMatch = canonicalPath.match(/^\/dreps\/(.+)$/);
+  if (drepMatch) {
+    const aid = decodeURIComponent(drepMatch[1]);
+    const drep = (snapshot.dreps || []).find((d) => d.id === aid) || null;
+    const name = drep?.name || null;
+    const display = name || `${aid.slice(0, 14)}…`;
+    const title = `${display} — DRep Profile | Civitas`;
+    const description = `Voting history, accountability score, and rationale coverage for Cardano DRep ${display}.`;
+    const jsonLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "DRep Dashboard", item: `${base}/dreps` },
+            { "@type": "ListItem", position: 2, name: display, item: canonicalHref }
+          ]
+        },
+        {
+          "@type": "Person",
+          name: display,
+          identifier: aid,
+          url: canonicalHref,
+          description: "Cardano Delegated Representative (DRep)"
+        }
+      ]
+    });
+    return { title, description, canonicalHref, jsonLd };
+  }
+
+  // ── SPO profile: /spos/:actorId ───────────────────────────────────────────
+  const spoMatch = canonicalPath.match(/^\/spos\/(.+)$/);
+  if (spoMatch) {
+    const aid = decodeURIComponent(spoMatch[1]);
+    const spo = (snapshot.spos || []).find((s) => s.id === aid) || null;
+    const name = spo?.name || null;
+    const display = name || `${aid.slice(0, 14)}…`;
+    const title = `${display} — SPO Profile | Civitas`;
+    const description = `Governance voting history and accountability score for Cardano Stake Pool ${display}.`;
+    const jsonLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "SPO Dashboard", item: `${base}/spos` },
+        { "@type": "ListItem", position: 2, name: display, item: canonicalHref }
+      ]
+    });
+    return { title, description, canonicalHref, jsonLd };
+  }
+
+  // ── Committee profile: /committee/:actorId ────────────────────────────────
+  const ccMatch = canonicalPath.match(/^\/committee\/(.+)$/);
+  if (ccMatch) {
+    const aid = decodeURIComponent(ccMatch[1]);
+    const member = (snapshot.committeeMembers || []).find((m) => m.id === aid) || null;
+    const name = member?.name || null;
+    const display = name || `${aid.slice(0, 14)}…`;
+    const title = `${display} — Committee Member Profile | Civitas`;
+    const description = `Constitutionality votes, participation rate, and accountability for CC member ${display}.`;
+    const jsonLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Constitutional Committee", item: `${base}/committee` },
+        { "@type": "ListItem", position: 2, name: display, item: canonicalHref }
+      ]
+    });
+    return { title, description, canonicalHref, jsonLd };
+  }
+
+  // ── Static routes ─────────────────────────────────────────────────────────
+  const staticMeta = {
+    "/":           { title: "Governance Actions | Civitas", description: "All active and historical Cardano governance proposals — filter by type, status, and voting outcome." },
+    "/actions":    { title: "Governance Actions | Civitas", description: "All active and historical Cardano governance proposals — filter by type, status, and voting outcome." },
+    "/dreps":      { title: "DRep Dashboard | Civitas", description: "Browse all Cardano Delegated Representatives — voting records, accountability scores, rationale coverage, and delegation stats." },
+    "/spos":       { title: "SPO Dashboard | Civitas", description: "Cardano Stake Pool Operator governance participation — voting records, accountability scores, and delegation status." },
+    "/committee":  { title: "Constitutional Committee | Civitas", description: "Cardano Constitutional Committee member voting records, constitutionality assessments, and participation metrics." },
+    "/treasury":   { title: "Treasury | Civitas", description: "Monitor Cardano treasury withdrawal proposals, net change limit status, and enacted budget transactions." },
+    "/stats":      { title: "Governance Statistics | Civitas", description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients." },
+    "/constitution":{ title: "Cardano Constitution | Civitas", description: "Read and search the full Cardano Constitution, ratified on-chain. Navigate by section, verify hash integrity, and compare versions." },
+    "/budget":     { title: "Cardano Budget 2026 | Civitas", description: "Track the Cardano 2026 on-chain budget vote — proposal breakdown, DRep participation, and live voting results." },
+    "/surveys":    { title: "Governance Surveys | Civitas", description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power." },
+    "/guide":      { title: "Governance Guide | Civitas", description: "A practical guide to Cardano governance: DRep voting, proposal types, SPO roles, Constitutional Committee duties, and how to participate." },
+    "/about":      { title: "About Civitas | Civitas", description: "Learn why Civitas was built — making Cardano governance transparent, accessible, and accountable." },
+    "/ncl":        { title: "Net Change Limit | Civitas", description: "Track Cardano's Net Change Limit and current treasury balance." },
+  };
+  const meta = staticMeta[canonicalPath] || {
+    title: "Civitas — Cardano Governance Dashboard",
+    description: "Track Cardano governance proposals, DRep voting records, SPO participation, and Constitutional Committee decisions in real time."
+  };
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Civitas",
+    description: "Cardano governance tracking dashboard",
+    url: `${base}/`
+  });
+  return { title: meta.title, description: meta.description, canonicalHref, jsonLd };
+}
+
+/**
+ * Inject SEO meta tags into the SPA index.html for a given request path.
+ * Replaces <title>, <meta name="description">, OG/Twitter tags, canonical link,
+ * and injects a JSON-LD <script> block.
+ */
+function injectSeoMeta(requestUrl, html) {
+  try {
+    const pathname = requestUrl.split("?")[0];
+    const { title, description, canonicalHref, jsonLd } = resolveSeoForPath(pathname);
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    let out = html;
+    // Replace <title>
+    out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+    // Replace meta description
+    out = out.replace(/(<meta\s+name="description"\s+content=")[^"]*(")/i, `$1${esc(description)}$2`);
+    // Replace OG title
+    out = out.replace(/(<meta\s+property="og:title"\s+content=")[^"]*(")/i, `$1${esc(title)}$2`);
+    // Replace OG description
+    out = out.replace(/(<meta\s+property="og:description"\s+content=")[^"]*(")/i, `$1${esc(description)}$2`);
+    // Replace OG url
+    out = out.replace(/(<meta\s+property="og:url"\s+content=")[^"]*(")/i, `$1${esc(canonicalHref)}$2`);
+    // Replace twitter title
+    out = out.replace(/(<meta\s+name="twitter:title"\s+content=")[^"]*(")/i, `$1${esc(title)}$2`);
+    // Replace twitter description
+    out = out.replace(/(<meta\s+name="twitter:description"\s+content=")[^"]*(")/i, `$1${esc(description)}$2`);
+    // Replace canonical href
+    out = out.replace(/(<link\s+rel="canonical"\s+href=")[^"]*(")/i, `$1${esc(canonicalHref)}$2`);
+    // Inject JSON-LD before </head>
+    if (jsonLd) {
+      out = out.replace("</head>", `  <script type="application/ld+json">${jsonLd}</script>\n</head>`);
+    }
+    return out;
+  } catch {
+    return html; // never break serving on injection errors
+  }
+}
+
 function serveStatic(req, res) {
   const root = fs.existsSync(path.join(FRONTEND_DIST_PATH, "index.html")) ? FRONTEND_DIST_PATH : __dirname;
   let requestPath = req.url === "/" ? "/index.html" : req.url;
@@ -6198,8 +6380,13 @@ function serveStatic(req, res) {
           res.end("Not Found");
           return;
         }
+        // ── Server-side meta injection ──────────────────────────────────────
+        // Inject page-specific <title>, <meta>, and JSON-LD into the HTML
+        // before sending it so crawlers and social bots see real metadata
+        // without needing to execute JavaScript.
+        const injected = injectSeoMeta(req.url, idxContent.toString("utf8"));
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
-        res.end(idxContent);
+        res.end(injected);
       });
       return;
     }
@@ -8254,6 +8441,65 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname.startsWith("/api/")) {
     json(res, 404, { error: "Not Found" });
+    return;
+  }
+
+  // ── robots.txt ─────────────────────────────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/robots.txt") {
+    const sitemapLine = CANONICAL_URL ? `Sitemap: ${CANONICAL_URL}/sitemap.xml\n` : "";
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" });
+    res.end(`User-agent: *\nAllow: /\nDisallow: /api/\n${sitemapLine}`);
+    return;
+  }
+
+  // ── sitemap.xml ─────────────────────────────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/sitemap.xml") {
+    const base = CANONICAL_URL || "";
+    const lastmod = snapshot.generatedAt
+      ? new Date(snapshot.generatedAt).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const staticRoutes = [
+      { path: "/", freq: "hourly", priority: "1.0" },
+      { path: "/actions", freq: "hourly", priority: "0.9" },
+      { path: "/dreps", freq: "daily", priority: "0.8" },
+      { path: "/spos", freq: "daily", priority: "0.8" },
+      { path: "/committee", freq: "daily", priority: "0.8" },
+      { path: "/treasury", freq: "daily", priority: "0.7" },
+      { path: "/stats", freq: "daily", priority: "0.7" },
+      { path: "/constitution", freq: "weekly", priority: "0.7" },
+      { path: "/budget", freq: "daily", priority: "0.7" },
+      { path: "/surveys", freq: "daily", priority: "0.6" },
+      { path: "/guide", freq: "weekly", priority: "0.6" },
+      { path: "/about", freq: "monthly", priority: "0.5" },
+    ];
+
+    const urlTag = ({ loc, lastmod: lm, freq, priority }) =>
+      `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lm || lastmod}</lastmod>\n    <changefreq>${freq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+
+    const staticTags = staticRoutes.map((r) => urlTag({ loc: `${base}${r.path}`, freq: r.freq, priority: r.priority }));
+
+    const proposalTags = Object.keys(snapshot.proposalInfo || {}).map((pid) =>
+      urlTag({ loc: `${base}/actions/${encodeURIComponent(pid)}`, freq: "daily", priority: "0.8" })
+    );
+
+    const drepTags = (snapshot.dreps || []).map((d) =>
+      urlTag({ loc: `${base}/dreps/${encodeURIComponent(d.id)}`, freq: "weekly", priority: "0.6" })
+    );
+
+    const spoTags = (snapshot.spos || []).map((s) =>
+      urlTag({ loc: `${base}/spos/${encodeURIComponent(s.id)}`, freq: "weekly", priority: "0.5" })
+    );
+
+    const ccTags = (snapshot.committeeMembers || []).map((m) =>
+      urlTag({ loc: `${base}/committee/${encodeURIComponent(m.id)}`, freq: "weekly", priority: "0.5" })
+    );
+
+    const allTags = [...staticTags, ...proposalTags, ...drepTags, ...spoTags, ...ccTags].join("\n");
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${allTags}\n</urlset>`;
+
+    res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+    res.end(xml);
     return;
   }
 

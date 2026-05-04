@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useNavigate } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import { Transaction } from "@meshsdk/core";
@@ -543,6 +544,10 @@ function normalizeActionPayload(selected, liveMetadata) {
 }
 
 export default function GovernanceActionsPage() {
+  useSeoMeta({
+    title: "Governance Actions",
+    description: "All active and historical Cardano governance proposals — filter by type, status, and voting outcome. Track DRep, SPO, and CC votes in real time."
+  });
   const navigate = useNavigate();
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const snapshotKey = queryParams.get("snapshot") || "";

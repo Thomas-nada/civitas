@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import {
@@ -26,6 +27,10 @@ function fmtPct(value) {
 }
 
 export default function TreasuryPage() {
+  useSeoMeta({
+    title: "Treasury",
+    description: "Monitor Cardano treasury withdrawal proposals, net change limit status, and enacted budget transactions."
+  });
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

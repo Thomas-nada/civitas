@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { WalletContext } from "../context/WalletContext";
@@ -366,6 +367,10 @@ export default function SurveyDetailPage() {
   const responses = data?.responses ?? [];
   const tally = data?.tally ?? {};
   const details = survey?.details ?? {};
+  useSeoMeta({
+    title: details.title ? `${details.title} — Survey` : "Governance Survey",
+    description: details.description || "On-chain Cardano governance survey weighted by stake and voting power."
+  });
   const questions = details.questions ?? [];
   const roles = Object.keys(details.roleWeighting ?? {});
   const currentEpoch = approxCurrentEpoch();

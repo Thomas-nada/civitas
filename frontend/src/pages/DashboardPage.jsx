@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Transaction, resolveStakeKeyHash } from "@meshsdk/core";
 import { hexToBech32 } from "@meshsdk/core-cst";
 import { useNavigate } from "react-router-dom";
@@ -446,6 +447,14 @@ export default function DashboardPage({ actorType }) {
   const isDrep = actorType === "drep";
   const isSpo = actorType === "spo";
   const isCommittee = !isDrep && !isSpo;
+  useSeoMeta({
+    title: isDrep ? "DRep Dashboard" : isSpo ? "SPO Dashboard" : "Constitutional Committee",
+    description: isDrep
+      ? "Browse all Cardano Delegated Representatives — voting records, accountability scores, rationale coverage, and delegation stats."
+      : isSpo
+        ? "Cardano Stake Pool Operator governance participation — voting records, accountability scores, and delegation status."
+        : "Cardano Constitutional Committee member voting records, constitutionality assessments, and participation metrics."
+  });
   const navigate = useNavigate();
   const actorLabel = isDrep ? "DRep" : isSpo ? "Stake Pool" : "Committee Member";
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line,
@@ -668,6 +669,10 @@ function CcVoteTypesBySeatBar({ rows }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function StatsPage() {
+  useSeoMeta({
+    title: "Governance Statistics",
+    description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients."
+  });
   const [raw, setRaw]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);

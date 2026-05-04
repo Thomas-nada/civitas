@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 
 const version = "v1.1";
 const changelog = [
@@ -13,6 +14,7 @@ const changelog = [
 ];
 
 export default function AboutChangelogPage() {
+  useSeoMeta({ title: "Changelog" });
   return (
     <main className="shell">
       <section className="landing-section">
