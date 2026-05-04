@@ -660,9 +660,9 @@ function CommentsSection({ proposalId, walletApi, walletRewardAddress }) {
 
 // ─── Share Row ────────────────────────────────────────────────────────────────
 
-function ShareRow({ proposalId, title }) {
+function ShareRow({ proposalId, title, basePath }) {
   const [copied, setCopied] = useState(false);
-  const url = `${window.location.origin}/budget/${proposalId}`;
+  const url = `${window.location.origin}${basePath}/${proposalId}`;
   const text = `${title} — via @CivitasExplorer`;
 
   function copyLink() {
@@ -746,7 +746,7 @@ function ShareRow({ proposalId, title }) {
 
 // ─── Proposal Detail Page ─────────────────────────────────────────────────────
 
-function ProposalDetail({ proposal, cycleName, pillarById, onBack, walletApi, walletRewardAddress, commentCount }) {
+function ProposalDetail({ proposal, cycleName, pillarById, onBack, walletApi, walletRewardAddress, commentCount, basePath }) {
   const d = proposal;
   const md = d?.metaData || {};
   const wps = md.proposalDetails?.workPackages || [];
@@ -795,7 +795,7 @@ function ProposalDetail({ proposal, cycleName, pillarById, onBack, walletApi, wa
             </span>
           )}
         </div>
-        <ShareRow proposalId={d._id} title={d.title} />
+        <ShareRow proposalId={d._id} title={d.title} basePath={basePath} />
       </div>
 
       {/* Key Details card */}
@@ -1216,11 +1216,7 @@ function BudgetExplorer({ allProposals, pillars, pillarById, filterPillar, setFi
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function EkklesiaPage({ voteSlug } = {}) {
-  useSeoMeta({
-    title: "Cardano Budget 2026",
-    description: "Track the Cardano 2026 on-chain budget vote — proposal breakdown, DRep participation, and live voting results."
-  });
+export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
   const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
   const { proposalId: urlProposalId } = useParams();
   const navigate = useNavigate();
@@ -1251,9 +1247,13 @@ export default function EkklesiaPage({ voteSlug } = {}) {
       .then(data => {
         const list = Array.isArray(data) ? data : (data?.data ?? []);
         const match = voteSlug
-          ? (list.find(v => v.slug === voteSlug) ?? list[0])
+          ? list.find(v => v.slug === voteSlug)  // strict — never fall back to wrong cycle
           : list[0];
-        if (match) setCycle(match);
+        if (match) {
+          setCycle(match);
+        } else if (voteSlug) {
+          setCycleError(`Vote cycle "${voteSlug}" not found.`);
+        }
       })
       .catch(e => { if (e.name !== "AbortError") setCycleError(e.message || "Failed to load."); })
       .finally(() => setCycleLoading(false));
@@ -1293,7 +1293,7 @@ export default function EkklesiaPage({ voteSlug } = {}) {
     setSelected(p);
     setDetailFull(null);
     setDetailLoading(true);
-    if (!skipNav) navigate(`/budget/${p._id}`, { replace: false });
+    if (!skipNav) navigate(`${basePath}/${p._id}`, { replace: false });
     pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     try {
       const data = await apiFetch(`/proposals/${p._id}`);
@@ -1308,7 +1308,7 @@ export default function EkklesiaPage({ voteSlug } = {}) {
   const closeProposal = useCallback(() => {
     setSelected(null);
     setDetailFull(null);
-    navigate("/budget", { replace: false });
+    navigate(basePath, { replace: false });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [navigate]);
 
@@ -1365,7 +1365,13 @@ export default function EkklesiaPage({ voteSlug } = {}) {
 
   const totalBudgetRequested = proposals.reduce((s, p) => s + (p.metaData?.totalBudget ?? 0), 0);
   const displayDetail = detailFull ?? selected;
-  const cycleName = cycle?.description || "Cardano Budget Process";
+  const cycleName = cycle?.description || cycle?.title || "Proposals";
+
+  // Dynamic SEO from cycle data
+  useSeoMeta({
+    title: cycle?.title || cycleName,
+    description: cycle?.description || `Track ${cycleName} — proposal breakdown, participation, and live voting results.`
+  });
 
   return (
     <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
@@ -1401,6 +1407,7 @@ export default function EkklesiaPage({ voteSlug } = {}) {
             walletApi={walletApi}
             walletRewardAddress={walletRewardAddress}
             commentCount={selected.commentCount || 0}
+            basePath={basePath}
           />
         )
       )}
@@ -1450,33 +1457,35 @@ export default function EkklesiaPage({ voteSlug } = {}) {
                 setSearch={setSearch}
               />
 
-              {/* Submit notice */}
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem",
-                padding: "0.65rem 1rem", marginBottom: "1rem",
-                background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10,
-                fontSize: "0.8rem", color: "var(--text-muted)",
-              }}>
-                <span>Want to submit a proposal? Submissions must be made through Intersect's Hydra Voting platform.</span>
-                <a
-                  href="https://hydra-voting.intersectmbo.org/budget-process"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: "0.35rem",
-                    padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
-                    background: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                    border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
-                    color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap",
-                    transition: "background 0.15s",
-                  }}
-                >
-                  Submit on Hydra
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                    <path d="M2 9L9 2M9 2H4M9 2v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </a>
-              </div>
+              {/* Submit notice — only shown when the cycle has a submission window URL */}
+              {cycle?.submissionStartDate && new Date() <= new Date(cycle.submissionEndDate || cycle.submissionStartDate) && (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem",
+                  padding: "0.65rem 1rem", marginBottom: "1rem",
+                  background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10,
+                  fontSize: "0.8rem", color: "var(--text-muted)",
+                }}>
+                  <span>Want to submit? Submissions are made through Intersect's Hydra Voting platform.</span>
+                  <a
+                    href={`https://hydra-voting.intersectmbo.org/${cycle.form || "budget-process"}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "0.35rem",
+                      padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
+                      background: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
+                      color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    Submit on Hydra
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                      <path d="M2 9L9 2M9 2H4M9 2v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </a>
+                </div>
+              )}
 
               {/* Filters */}
               <div style={{

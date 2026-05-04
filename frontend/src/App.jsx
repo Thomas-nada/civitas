@@ -351,9 +351,12 @@ export default function App() {
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           {/* <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} /> */}{/* hidden: WIP */}
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
-          <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" />} />
-          <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" />} />
+          <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
+          <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
+          {/* CC election — slug to be confirmed once live on Ekklesia API */}
+          <Route path="/cc-election" element={<BudgetPage voteSlug="cc-election-2026" basePath="/cc-election" />} />
+          <Route path="/cc-election/:proposalId" element={<BudgetPage voteSlug="cc-election-2026" basePath="/cc-election" />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />
