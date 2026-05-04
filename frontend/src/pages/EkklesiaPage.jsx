@@ -1267,7 +1267,7 @@ export default function EkklesiaPage({ voteSlug } = {}) {
     setProposalsLoading(true);
     setProposalsError("");
     try {
-      const data = await apiFetch(`/proposals?vote=${voteId}`, { signal: ctrl.signal });
+      const data = await apiFetch(`/proposals?vote=${voteId}&limit=200`, { signal: ctrl.signal });
       setAllProposals(Array.isArray(data) ? data : (data?.data ?? []));
     } catch (e) {
       if (e.name !== "AbortError") setProposalsError(e.message || "Failed to load proposals.");
