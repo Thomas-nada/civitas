@@ -1267,8 +1267,19 @@ export default function EkklesiaPage({ voteSlug } = {}) {
     setProposalsLoading(true);
     setProposalsError("");
     try {
-      const data = await apiFetch(`/proposals?vote=${voteId}&limit=200`, { signal: ctrl.signal });
-      setAllProposals(Array.isArray(data) ? data : (data?.data ?? []));
+      // Fetch all pages (API max limit=100 per page)
+      const PAGE_SIZE = 100;
+      let page = 1;
+      let all = [];
+      while (true) {
+        const data = await apiFetch(`/proposals?vote=${voteId}&limit=${PAGE_SIZE}&page=${page}`, { signal: ctrl.signal });
+        const rows = Array.isArray(data) ? data : (data?.data ?? []);
+        all = all.concat(rows);
+        const meta = data?.meta;
+        if (!meta?.hasNextPage || rows.length < PAGE_SIZE) break;
+        page++;
+      }
+      setAllProposals(all);
     } catch (e) {
       if (e.name !== "AbortError") setProposalsError(e.message || "Failed to load proposals.");
     } finally {
