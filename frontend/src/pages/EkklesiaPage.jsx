@@ -47,7 +47,14 @@ async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...opts });
   if (!res.ok) {
     let msg;
-    try { const j = await res.json(); msg = j?.message || j?.error || res.statusText; } catch { msg = res.statusText; }
+    try {
+      const j = await res.json();
+      const validation = j?.errors || j?.validationErrors || j?.details;
+      const validationMsg = validation ? ` ${JSON.stringify(validation)}` : "";
+      msg = `${j?.message || j?.error || res.statusText}${validationMsg}`;
+    } catch {
+      msg = res.statusText;
+    }
     throw new Error(`${res.status} — ${msg}`);
   }
   return res.json();
@@ -148,7 +155,7 @@ function SectionHeading({ children }) {
 // Renders inline markdown: **bold**, *italic*, `code`, [text](url)
 function renderInline(text) {
   const parts = [];
-  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[([^\]]+)\]\((https?:\/\/[^\)]+)\))/g;
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[([^\]]+)\]\((https?:\/\/[^)]+)\))/g;
   let last = 0, m, key = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
@@ -174,12 +181,12 @@ function RichText({ text }) {
       {blocks.map((block, bi) => {
         const lines = block.split("\n");
         // Detect bullet list block
-        const isList = lines.every(l => /^[\-\*\•]\s/.test(l.trim()) || l.trim() === "");
+        const isList = lines.every(l => /^[-*•]\s/.test(l.trim()) || l.trim() === "");
         if (isList) {
           return (
             <ul key={bi} style={{ margin: 0, paddingLeft: "1.3rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
               {lines.filter(l => l.trim()).map((l, i) => (
-                <li key={i} style={s}>{renderInline(l.replace(/^[\-\*\•]\s*/, ""))}</li>
+                <li key={i} style={s}>{renderInline(l.replace(/^[-*•]\s*/, ""))}</li>
               ))}
             </ul>
           );
@@ -230,7 +237,7 @@ function ExternalLinks({ links }) {
 
 // ─── Key Details Card ─────────────────────────────────────────────────────────
 
-function KeyDetailsCard({ proposal, pillarById }) {
+function KeyDetailsCard({ proposal }) {
   const d = proposal;
   const md = d?.metaData || {};
 
@@ -658,6 +665,1260 @@ function CommentsSection({ proposalId, walletApi, walletRewardAddress }) {
   );
 }
 
+// ─── Proposal Form Helpers ───────────────────────────────────────────────────
+
+function newWp() {
+  return { name: "", initiativeType: "", typeOfProposal: "", cannotBreakIntoMilestones: false, summary: "", coreObjectives: [""], milestones: [], budgetBreakdown: [], expectedValue: "", metric: "", supportingDocuments: [newLink()] };
+}
+function newMilestone() { return { name: "", duration: "", deliverables: "", acceptanceCriteria: "" }; }
+function newBudgetRow() { return { costCategory: "", name: "", quantity: "", unitPrice: "", total: "" }; }
+function newLink() { return { title: "", url: "" }; }
+
+function normalizeOwnerValue(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function proposalOwnerValues(p) {
+  const md = p?.metaData || {};
+  return [
+    p?.userId,
+    p?.owner,
+    p?.ownerId,
+    p?.createdBy,
+    p?.createdById,
+    p?.submittedBy,
+    p?.submittedById,
+    p?.submitter,
+    p?.signerAddress,
+    p?.proposerId,
+    md.userId,
+    md.owner,
+    md.ownerId,
+    md.createdBy,
+    md.submittedBy,
+    md.submitter,
+    md.signerAddress,
+    md.submissionSignerAddress,
+    md.proposerId,
+    md.proposerDetails?.walletAddress,
+    md.proposerDetails?.rewardAddress,
+  ].map(normalizeOwnerValue).filter(Boolean);
+}
+
+function proposalOwnedByWallet(p, walletRewardAddress) {
+  if (p?.canEdit === true || p?.ownedByMe === true || p?.isMine === true) return true;
+  const wallet = normalizeOwnerValue(walletRewardAddress);
+  if (!wallet) return false;
+  return proposalOwnerValues(p).includes(wallet);
+}
+
+// ─── My Proposals Panel ──────────────────────────────────────────────────────
+
+function MyProposalsPanel({ cycle, walletApi, walletRewardAddress, onClose, onEdit }) {
+  const [authed, setAuthed] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [myProposals, setMyProposals] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+
+  useEffect(() => {
+    const fn = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  async function fetchMine() {
+    if (!cycle?._id || !walletRewardAddress) return;
+    setLoading(true);
+    setError("");
+    try {
+      const proposer = encodeURIComponent(walletRewardAddress);
+      const data = await apiFetch(`/proposals?vote=${cycle._id}&proposer=${proposer}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100`);
+      const rows = Array.isArray(data) ? data : (data?.data ?? []);
+      const ownedRows = rows.filter(p => proposalOwnedByWallet(p, walletRewardAddress));
+      const hasOwnershipSignals = rows.some(p =>
+        p?.canEdit === true ||
+        p?.ownedByMe === true ||
+        p?.isMine === true ||
+        proposalOwnerValues(p).length > 0
+      );
+      if (rows.length > 0 && ownedRows.length === 0 && !hasOwnershipSignals) {
+        setMyProposals([]);
+        setError("The Ekklesia API returned proposals without ownership data, so edit/delete controls are hidden.");
+      } else {
+        setMyProposals(ownedRows);
+      }
+      setAuthed(true);
+    } catch (e) {
+      const msg = String(e.message || "");
+      if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
+        setAuthed(false);
+      } else {
+        setError(e.message || "Failed to load proposals.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Try on open — succeeds silently if session cookie is still valid
+  useEffect(() => { fetchMine(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleAuth() {
+    if (!walletApi || !walletRewardAddress) return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const signerAddress = String(walletRewardAddress || "").trim();
+      const signType = getSignerType(signerAddress);
+      const nonceRes = await apiFetch("/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signerAddress, signType }) });
+      const dataHex = nonceRes?.dataHex ?? nonceRes?.data?.dataHex;
+      const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
+      const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
+      if (!payloadHex) throw new Error("No nonce returned from server.");
+      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signerAddress;
+      const signature = await walletApi.signData(payloadHex, signAddress, false);
+      await apiFetch("/session", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signerAddress, signature, signType }) });
+      setAuthed(true);
+      fetchMine();
+    } catch (e) {
+      setAuthError(e.message || "Authentication failed.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleDelete(proposal) {
+    if (!proposalOwnedByWallet(proposal, walletRewardAddress)) {
+      alert("This proposal is not marked as yours, so Civitas will not delete it.");
+      return;
+    }
+    const id = proposal?._id;
+    if (!window.confirm("Delete this proposal? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await apiFetch(`/proposals/${id}`, { method: "DELETE" });
+      setMyProposals(ps => ps.filter(p => p._id !== id));
+    } catch (e) {
+      alert(e.message || "Failed to delete proposal.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }} onClick={onClose}>
+      <div style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.25rem", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>My Proposals</h2>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "1.2rem", lineHeight: 1, padding: "0.2rem" }}>✕</button>
+        </div>
+        <div style={{ overflowY: "auto", flex: 1, padding: "1.25rem" }}>
+          {!walletApi ? (
+            <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>Connect your wallet using the button in the top bar to view your proposals.</p>
+          ) : !authed ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-muted)" }}>Sign in with your wallet to view your proposals.</p>
+              <button onClick={handleAuth} disabled={authLoading} className="btn-outline" style={{ alignSelf: "flex-start" }}>
+                {authLoading ? "Signing…" : "Sign in with Wallet"}
+              </button>
+              {authError && <p style={{ color: "var(--red, #f87171)", fontSize: "0.82rem", margin: 0 }}>{authError}</p>}
+            </div>
+          ) : loading ? (
+            <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>Loading your proposals…</p>
+          ) : error ? (
+            <p style={{ color: "var(--red, #f87171)", fontSize: "0.85rem", margin: 0 }}>{error}</p>
+          ) : myProposals.length === 0 ? (
+            <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>You haven't submitted any proposals yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {myProposals.map(p => (
+                <div key={p._id} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "0.85rem 1rem", background: "var(--panel)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.9rem", flex: 1 }}>{p.title || "Untitled"}</span>
+                    <span className={`pill ${statusPillClass(p.status)}`} style={{ fontSize: "0.68rem", flexShrink: 0 }}>{p.status || "draft"}</span>
+                  </div>
+                  {p.summary && <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.summary}</p>}
+                  {p.metaData?.totalBudget != null && <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--accent)" }}>₳ {Number(p.metaData.totalBudget).toLocaleString()}</p>}
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.2rem" }}>
+                    <button onClick={() => proposalOwnedByWallet(p, walletRewardAddress) && onEdit(p)} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.25rem 0.65rem" }}>Edit</button>
+                    <button onClick={() => handleDelete(p)} disabled={deletingId === p._id}
+                      style={{ background: "transparent", border: "1px solid color-mix(in srgb, var(--red, #f87171) 40%, transparent)", borderRadius: 7, padding: "0.25rem 0.65rem", fontSize: "0.78rem", color: "var(--red, #f87171)", cursor: "pointer" }}>
+                      {deletingId === p._id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Submit Proposal Modal ───────────────────────────────────────────────────
+
+function SubmitProposalModal({ cycle, pillars, walletApi, walletRewardAddress, onClose, onSuccess, initialData, variant = "modal" }) {
+  const isPage = variant === "page";
+  // ── Auth
+  const [authed, setAuthed] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  // ── Draft state
+  const [draftId, setDraftId] = useState(() => initialData?._id || null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+
+  // §1 Proposal Overview
+  const [title, setTitle] = useState(() => initialData?.title || "");
+  const [summary, setSummary] = useState(() => initialData?.summary || "");
+  const [trackRecord, setTrackRecord] = useState(() => initialData?.metaData?.trackRecord || "");
+  const [duration, setDuration] = useState(() => initialData?.metaData?.estimatedDuration != null ? String(initialData.metaData.estimatedDuration) : "");
+
+  // §2 Alignment
+  const [selectedPillars, setSelectedPillars] = useState(() => initialData?.metaData?.strategyFramework?.pillars || []);
+  const [pillarRationale, setPillarRationale] = useState(() => initialData?.metaData?.strategyFramework?.pillarRationale || "");
+  const [kpiAlignment, setKpiAlignment] = useState(() => initialData?.metaData?.strategyFramework?.kpiAlignment || "");
+
+  // §3 Proposer
+  const [proposerName, setProposerName] = useState(() => initialData?.metaData?.proposerDetails?.name || "");
+  const [proposerLinks, setProposerLinks] = useState(() => {
+    const existing = initialData?.metaData?.proposerDetails?.links;
+    return existing?.length ? existing : [newLink()];
+  });
+  const [contactEmail, setContactEmail] = useState(() => initialData?.metaData?.proposerDetails?.email || "");
+
+  // §4 Proposal Details
+  const [adaUsdRate, setAdaUsdRate] = useState(() => {
+    const rate = initialData?.metaData?.proposalDetails?.conversionRate ?? initialData?.metaData?.conversionRate ?? initialData?.metaData?.adaUsdRate;
+    return rate != null ? String(rate) : "";
+  });
+  const [workPackages, setWorkPackages] = useState(() => {
+    const existing = initialData?.metaData?.proposalDetails?.workPackages;
+    if (existing?.length) return existing.map(wp => ({
+      name: wp.name || "", initiativeType: wp.initiativeType || "",
+      typeOfProposal: wp.typeOfProposal || "",
+      cannotBreakIntoMilestones: Boolean(wp.cannotBreakIntoMilestones),
+      summary: wp.summary || "",
+      coreObjectives: wp.coreObjectives?.length ? wp.coreObjectives : [""],
+      milestones: (wp.milestones || []).map(m => ({ name: m.name || "", duration: m.duration != null ? String(m.duration) : "", deliverables: m.deliverables || "", acceptanceCriteria: m.acceptanceCriteria || "" })),
+      budgetBreakdown: (wp.budgetBreakdown || []).map(r => ({ costCategory: r.costCategory || "", name: r.name || "", quantity: r.quantity != null ? String(r.quantity) : "", unitPrice: r.unitPrice != null ? String(r.unitPrice) : "", total: r.total != null ? String(r.total) : "" })),
+      expectedValue: wp.expectedValue || "", metric: wp.metric || "",
+      supportingDocuments: wp.supportingDocuments?.length ? wp.supportingDocuments : [newLink()],
+    }));
+    return [newWp()];
+  });
+
+  // §5 Budget Administration
+  const [budget, setBudget] = useState(() => initialData?.metaData?.totalBudget != null ? String(initialData.metaData.totalBudget) : "");
+  const [administrator, setAdministrator] = useState(() => {
+    const admin = initialData?.metaData?.administrator;
+    if (!admin || admin === "Yes" || admin === "Intersect") return "Intersect";
+    if (admin === "No" || admin === "Other") return "Other";
+    return "Other";
+  });
+  const [otherAdministrator, setOtherAdministrator] = useState(() => initialData?.metaData?.otherAdministrator || "");
+  const [intersectFeeAgreed, setIntersectFeeAgreed] = useState(() => Boolean(initialData?.metaData?.intersectAdministratorFeeConsent || initialData?.metaData?.intersectFeeAgreed));
+  const [partyType, setPartyType] = useState(() => initialData?.metaData?.contractingParty?.legalEntityType || initialData?.metaData?.partyType || "");
+  const [legalEntityName, setLegalEntityName] = useState(() => initialData?.metaData?.contractingParty?.legalEntityName || "");
+  const [legalEntityRegistrationNumber, setLegalEntityRegistrationNumber] = useState(() => initialData?.metaData?.contractingParty?.legalEntityRegistrationNumber || "");
+  const [legalEntityCountry, setLegalEntityCountry] = useState(() => initialData?.metaData?.contractingParty?.legalEntityCountry || "");
+  const [legalEntityAddressLine1, setLegalEntityAddressLine1] = useState(() => initialData?.metaData?.contractingParty?.legalEntityAddressLine1 || "");
+  const [legalEntityAddressLine2, setLegalEntityAddressLine2] = useState(() => initialData?.metaData?.contractingParty?.legalEntityAddressLine2 || "");
+  const [legalEntityAddressLine3, setLegalEntityAddressLine3] = useState(() => initialData?.metaData?.contractingParty?.legalEntityAddressLine3 || "");
+  const [govtIssuedIdNumber, setGovtIssuedIdNumber] = useState(() => initialData?.metaData?.contractingParty?.govtIssuedIdNumber || "");
+  const [countryOfResidence, setCountryOfResidence] = useState(() => initialData?.metaData?.contractingParty?.countryOfResidence || "");
+  const [residentialAddressLine1, setResidentialAddressLine1] = useState(() => initialData?.metaData?.contractingParty?.residentialAddressLine1 || "");
+  const [residentialAddressLine2, setResidentialAddressLine2] = useState(() => initialData?.metaData?.contractingParty?.residentialAddressLine2 || "");
+  const [residentialAddressLine3, setResidentialAddressLine3] = useState(() => initialData?.metaData?.contractingParty?.residentialAddressLine3 || "");
+  const [primaryContactName, setPrimaryContactName] = useState(() => initialData?.metaData?.primaryContact?.name || "");
+  const [primaryContactEmail, setPrimaryContactEmail] = useState(() => initialData?.metaData?.primaryContact?.email || "");
+  const [signatoryTitle, setSignatoryTitle] = useState(() => initialData?.metaData?.signatoryContact?.title || initialData?.metaData?.authorizedSignatory?.title || "");
+  const [signatoryName, setSignatoryName] = useState(() => initialData?.metaData?.signatoryContact?.name || initialData?.metaData?.authorizedSignatory?.name || "");
+  const [signatoryEmail, setSignatoryEmail] = useState(() => initialData?.metaData?.signatoryContact?.email || initialData?.metaData?.authorizedSignatory?.email || "");
+  const [signatoryAuthorized, setSignatoryAuthorized] = useState(() => Boolean(initialData?.metaData?.signatoryContact?.authorization || initialData?.metaData?.authorizedSignatory?.authorized));
+  const [kycSubmitted, setKycSubmitted] = useState(() => {
+    const submitted = initialData?.metaData?.kycInfo?.submitted ?? initialData?.metaData?.kycSubmitted;
+    if (submitted === true || String(submitted).toLowerCase() === "yes") return "yes";
+    if (submitted === false || String(submitted).toLowerCase() === "no") return "no";
+    return "";
+  });
+  const [kycEmail, setKycEmail] = useState(() => initialData?.metaData?.kycInfo?.email || "");
+  const [thirdPartyAssurers, setThirdPartyAssurers] = useState(() => initialData?.metaData?.thirdPartyAssurers || "");
+
+  // §6 Budget Summary
+  const [treasuryRepaymentYesNo, setTreasuryRepaymentYesNo] = useState(() => {
+    const v = initialData?.metaData?.treasuryRepaymentYesNo;
+    if (v === true || v === "yes") return "yes";
+    if (v === false || v === "no") return "no";
+    return "";
+  });
+  const [treasuryRepayment, setTreasuryRepayment] = useState(() => initialData?.metaData?.treasuryRepayment || "");
+  const [treasuryRepaymentCircumstances, setTreasuryRepaymentCircumstances] = useState(() => initialData?.metaData?.treasuryRepaymentCircumstances || "");
+  const [priorFunding, setPriorFunding] = useState(() => initialData?.metaData?.priorFunding || "");
+  const [independentAudits, setIndependentAudits] = useState(() => initialData?.metaData?.independentAudits || "");
+
+  // §7 Supporting Info
+  const [supportingInfoLinks, setSupportingInfoLinks] = useState(() => initialData?.metaData?.supportingInfoLinks || []);
+
+  // §8 Donation
+  const [donationHash, setDonationHash] = useState(() => initialData?.metaData?.treasuryDonationTxHash || initialData?.metaData?.donationHash || "");
+  const [donationConfirmed, setDonationConfirmed] = useState(() => Boolean(initialData?.metaData?.treasuryDonationConfirmed || initialData?.metaData?.donation?.confirmed));
+
+  // §9 Legal
+  const [declName, setDeclName] = useState(() => initialData?.metaData?.legalDeclarations?.submitterName || initialData?.metaData?.declaration?.name || "");
+  const [declEmail, setDeclEmail] = useState(() => initialData?.metaData?.legalDeclarations?.submitterEmail || initialData?.metaData?.declaration?.email || "");
+  const [declRole, setDeclRole] = useState(() => initialData?.metaData?.legalDeclarations?.submitterRole || initialData?.metaData?.declaration?.role || "");
+  const [legalAuth1, setLegalAuth1] = useState(() => Boolean(initialData?.metaData?.legalDeclarations?.authorizationEntity || initialData?.metaData?.legalAuthorization?.authorizedToSubmit));
+  const [legalAuth2, setLegalAuth2] = useState(() => Boolean(initialData?.metaData?.legalDeclarations?.authorizationAttestation || initialData?.metaData?.legalAuthorization?.informationAccurate));
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const fn = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  async function handleAuth() {
+    if (!walletApi || !walletRewardAddress) return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const signerAddress = String(walletRewardAddress || "").trim();
+      const signType = getSignerType(signerAddress);
+      const nonceRes = await apiFetch("/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signerAddress, signType }),
+      });
+      const dataHex = nonceRes?.dataHex ?? nonceRes?.data?.dataHex;
+      const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
+      const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
+      if (!payloadHex) throw new Error("No nonce returned from server.");
+      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signerAddress;
+      const signature = await walletApi.signData(payloadHex, signAddress, false);
+      await apiFetch("/session", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signerAddress, signature, signType }),
+      });
+      setAuthed(true);
+    } catch (e) {
+      setAuthError(e.message || "Authentication failed.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  function buildProposalPayload(status = "live") {
+    const clean = (v) => String(v || "").trim();
+    const optional = (v) => clean(v) || undefined;
+    const numberOrBlank = (v) => clean(v) ? Number(v) : "";
+    const yesNo = (v) => v === "yes" ? "Yes" : v === "no" ? "No" : "";
+    const cleanLinks = (arr) => arr
+      .filter(l => clean(l.url))
+      .map(l => ({ title: clean(l.title) || clean(l.url), url: clean(l.url) }));
+    const cleanWorkPackages = workPackages
+      .filter(wp => clean(wp.name) || clean(wp.summary) || wp.budgetBreakdown.some(r => clean(r.name)))
+      .map(wp => ({
+        name: clean(wp.name),
+        ...(clean(wp.initiativeType) ? { initiativeType: clean(wp.initiativeType) } : {}),
+        ...(clean(wp.typeOfProposal) ? { typeOfProposal: clean(wp.typeOfProposal) } : {}),
+        ...(wp.cannotBreakIntoMilestones ? { cannotBreakIntoMilestones: true } : {}),
+        ...(clean(wp.summary) ? { summary: clean(wp.summary) } : {}),
+        ...(wp.coreObjectives.map(clean).filter(Boolean).length > 0 ? { coreObjectives: wp.coreObjectives.map(clean).filter(Boolean) } : {}),
+        ...(wp.milestones.length > 0 ? {
+          milestones: wp.milestones
+            .filter(m => clean(m.name) || clean(m.deliverables) || clean(m.acceptanceCriteria))
+            .map(m => ({
+              name: clean(m.name),
+              ...(m.duration ? { duration: Number(m.duration) } : {}),
+              ...(clean(m.deliverables) ? { deliverables: clean(m.deliverables) } : {}),
+              ...(clean(m.acceptanceCriteria) ? { acceptanceCriteria: clean(m.acceptanceCriteria) } : {}),
+            })),
+        } : {}),
+        ...(wp.budgetBreakdown.length > 0 ? {
+          budgetBreakdown: wp.budgetBreakdown
+            .filter(r => clean(r.costCategory) || clean(r.name))
+            .map(r => ({
+              costCategory: clean(r.costCategory),
+              name: clean(r.name),
+              quantity: Number(r.quantity) || 0,
+              unitPrice: Number(r.unitPrice) || 0,
+              total: Number(r.total) || 0,
+            })),
+        } : {}),
+        ...(clean(wp.expectedValue) ? { expectedValue: clean(wp.expectedValue) } : {}),
+        ...(clean(wp.metric) ? { metric: clean(wp.metric) } : {}),
+        ...(wp.supportingDocuments.some(l => clean(l.url)) ? { supportingDocuments: cleanLinks(wp.supportingDocuments) } : {}),
+      }));
+    const workPackageTotal = cleanWorkPackages.reduce((sum, wp) => (
+      sum + (wp.budgetBreakdown || []).reduce((rowSum, row) => rowSum + (Number(row.total) || 0), 0)
+    ), 0);
+    const requestedBudget = budget ? Number(budget) : workPackageTotal;
+    const totalBudget = Math.round(clean(administrator) === "Intersect" ? requestedBudget * 1.03 : requestedBudget);
+
+    return {
+      voteId: cycle._id,
+      status,
+      title: clean(title) || "Untitled proposal",
+      summary: clean(summary),
+      metaData: {
+        totalBudget,
+        trackRecord: clean(trackRecord),
+        estimatedDuration: numberOrBlank(duration),
+        treasuryDonationTxHash: clean(donationHash),
+        treasuryDonationConfirmed: donationConfirmed,
+        administrator: clean(administrator),
+        intersectAdministratorFeeConsent: intersectFeeAgreed,
+        otherAdministrator: clean(administrator) === "Other" ? clean(otherAdministrator) : "",
+        contractingParty: {
+          legalEntityType: clean(partyType),
+          legalEntityName: clean(legalEntityName),
+          legalEntityRegistrationNumber: clean(legalEntityRegistrationNumber),
+          legalEntityCountry: clean(legalEntityCountry),
+          legalEntityAddressLine1: clean(legalEntityAddressLine1),
+          legalEntityAddressLine2: clean(legalEntityAddressLine2),
+          legalEntityAddressLine3: clean(legalEntityAddressLine3),
+          govtIssuedIdNumber: clean(govtIssuedIdNumber),
+          countryOfResidence: clean(countryOfResidence),
+          residentialAddressLine1: clean(residentialAddressLine1),
+          residentialAddressLine2: clean(residentialAddressLine2),
+          residentialAddressLine3: clean(residentialAddressLine3),
+        },
+        primaryContact: {
+          name: clean(primaryContactName),
+          email: clean(primaryContactEmail),
+        },
+        signatoryContact: {
+          title: clean(signatoryTitle),
+          name: clean(signatoryName),
+          email: clean(signatoryEmail),
+          authorization: signatoryAuthorized,
+        },
+        kycInfo: {
+          submitted: yesNo(kycSubmitted),
+          email: clean(kycEmail),
+        },
+        ...(clean(thirdPartyAssurers) ? { thirdPartyAssurers: clean(thirdPartyAssurers) } : {}),
+        ...(clean(walletRewardAddress) ? { submissionSignerAddress: clean(walletRewardAddress) } : {}),
+        proposerDetails: {
+          name: clean(proposerName),
+          email: clean(contactEmail),
+          ...(clean(walletRewardAddress) ? { rewardAddress: clean(walletRewardAddress) } : {}),
+          links: cleanLinks(proposerLinks),
+        },
+        strategyFramework: {
+          pillars: selectedPillars,
+          pillarRationale: clean(pillarRationale),
+          kpiAlignment: clean(kpiAlignment),
+        },
+        priorFunding: optional(priorFunding) || "",
+        independentAudits: optional(independentAudits) || "",
+        treasuryRepaymentYesNo: yesNo(treasuryRepaymentYesNo),
+        treasuryRepayment: optional(treasuryRepayment) || "",
+        treasuryRepaymentCircumstances: optional(treasuryRepaymentCircumstances) || "",
+        supportingInfoLinks: cleanLinks(supportingInfoLinks),
+        proposalDetails: {
+          conversionRate: numberOrBlank(adaUsdRate),
+          workPackages: cleanWorkPackages,
+        },
+        legalDeclarations: {
+          submitterName: clean(declName),
+          submitterEmail: clean(declEmail),
+          submitterRole: clean(declRole),
+          authorizationEntity: legalAuth1,
+          authorizationAttestation: legalAuth2,
+        },
+      },
+    };
+  }
+
+  async function saveProposal(status = "draft") {
+    const body = buildProposalPayload(status);
+    const path = draftId ? `/proposals/${draftId}` : "/proposals";
+    const method = draftId ? "PUT" : "POST";
+    const res = await apiFetch(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const id = res?._id || res?.data?._id || res?.proposal?._id;
+    if (id) setDraftId(id);
+    return res;
+  }
+
+  async function handleSaveDraft() {
+    setDraftSaving(true);
+    setDraftSaved(false);
+    setSubmitError("");
+    try {
+      await saveProposal("draft");
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2500);
+    } catch (e) {
+      setSubmitError(e.message || "Failed to save draft.");
+    } finally {
+      setDraftSaving(false);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!title.trim() || !summary.trim()) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await saveProposal("live");
+      setDone(true);
+      if (!isPage) onSuccess?.();
+    } catch (e) {
+      setSubmitError(e.message || "Failed to submit proposal.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Work package helpers
+  function updateWp(i, patch) { setWorkPackages(wps => wps.map((w, j) => j === i ? { ...w, ...patch } : w)); }
+  function updateWpObj(i, key, patch) { setWorkPackages(wps => wps.map((w, j) => j === i ? { ...w, [key]: w[key].map((x, k) => k === patch.i ? { ...x, ...patch.v } : x) } : w)); }
+  function addToWp(i, key, val) { setWorkPackages(wps => wps.map((w, j) => j === i ? { ...w, [key]: [...w[key], val] } : w)); }
+  function removeFromWp(i, key, k) { setWorkPackages(wps => wps.map((w, j) => j === i ? { ...w, [key]: w[key].filter((_, m) => m !== k) } : w)); }
+  function updateBudgetRow(wi, ri, patch) { setWorkPackages(wps => wps.map((w, j) => { if (j !== wi) return w; const row = { ...w.budgetBreakdown[ri], ...patch }; row.total = (Number(row.quantity) || 0) * (Number(row.unitPrice) || 0); return { ...w, budgetBreakdown: w.budgetBreakdown.map((r, k) => k === ri ? row : r) }; })); }
+
+  function togglePillar(id) {
+    setSelectedPillars(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  const inp = {
+    width: "100%", padding: "0.62rem 0.72rem", borderRadius: 7,
+    border: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg) 88%, var(--panel) 12%)",
+    color: "var(--text)", fontSize: "0.86rem", boxSizing: "border-box",
+    outline: "none",
+  };
+  const ta = { ...inp, resize: "vertical", minHeight: 120, lineHeight: 1.55 };
+  const lbl = { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.74rem", fontWeight: 700, marginBottom: "0.34rem", color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase" };
+  const hint = { margin: "0.05rem 0 0.55rem", color: "var(--text-muted)", fontSize: "0.76rem", lineHeight: 1.5 };
+  const addBtn = { background: "var(--mint)", border: "1px solid var(--mint)", borderRadius: 7, padding: "0.36rem 0.72rem", fontSize: "0.78rem", color: "#031311", fontWeight: 700, cursor: "pointer" };
+  const ghostBtn = { background: "transparent", border: "1px dashed var(--line)", borderRadius: 7, padding: "0.36rem 0.72rem", fontSize: "0.78rem", color: "var(--text-muted)", cursor: "pointer" };
+  const remBtn = { background: "transparent", border: "none", cursor: "pointer", color: "var(--red, #f87171)", fontSize: "0.78rem", padding: "0.2rem 0.4rem", flexShrink: 0 };
+  const section = {
+    border: "1px solid var(--line)",
+    borderRadius: isPage ? 8 : 10,
+    background: isPage ? "color-mix(in srgb, var(--panel) 76%, var(--bg) 24%)" : "color-mix(in srgb, var(--panel) 86%, var(--bg) 14%)",
+    boxShadow: isPage ? "none" : "0 12px 28px rgba(0,0,0,0.13)",
+    padding: isPage ? "0.95rem 1rem 1.05rem" : "1.05rem 1.15rem",
+    marginBottom: "0",
+    display: "flex",
+    flexDirection: "column",
+    gap: isPage ? "0.78rem" : "0.9rem",
+  };
+  const sectionHead = { display: "flex", alignItems: "center", gap: "0.65rem" };
+  const sectionTitle = { margin: 0, fontSize: "0.98rem", fontWeight: 800, letterSpacing: "-0.01em" };
+  const fieldGroup = { display: "flex", flexDirection: "column", gap: "0.18rem" };
+  const toolBar = {
+    display: "flex", gap: "0.28rem", alignItems: "center",
+    padding: "0.35rem", border: "1px solid var(--line)",
+    borderBottom: "none", borderRadius: "7px 7px 0 0", background: "color-mix(in srgb, var(--bg) 72%, var(--panel) 28%)",
+  };
+  const toolBtn = {
+    width: 25, height: 25, borderRadius: 5, border: "1px solid var(--line)",
+    background: "var(--bg)", color: "var(--text-muted)", fontSize: "0.75rem",
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  };
+
+  function Field({ label, children, help, count }) {
+    return (
+      <div style={fieldGroup}>
+        <label style={lbl}>
+          <span>{label}</span>
+          {count && <span style={{ color: "var(--text-muted)", fontWeight: 500, fontSize: "0.68rem" }}>{count}</span>}
+        </label>
+        {help && <p style={hint}>{help}</p>}
+        {children}
+      </div>
+    );
+  }
+
+  function FormSection({ id, number, title, order, children }) {
+    return (
+      <section id={id} className={isPage ? "ekk-submit-section" : undefined} style={{ ...section, gridColumn: isPage ? 2 : "auto", ...(order != null ? { order } : {}) }}>
+        <div style={sectionHead}>
+          <span style={{
+            width: 28, height: 28, borderRadius: 8,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: "color-mix(in srgb, var(--accent) 16%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+            color: "var(--accent)", fontSize: "0.75rem", fontWeight: 800,
+            flexShrink: 0,
+          }}>{number}</span>
+          <h3 style={sectionTitle}>{title}</h3>
+        </div>
+        {children}
+      </section>
+    );
+  }
+
+  function SectionRail() {
+    const items = [
+      ["overview", "1", "Proposal Overview"],
+      ["strategy", "2", "Strategy"],
+      ["proposer", "3", "Proposer"],
+      ["details", "4", "Proposal Details"],
+      ["work-packages", "5", "Work Packages"],
+      ["administration", "6", "Budget Administration"],
+      ["summary", "7", "Budget Summary"],
+      ["supporting", "8", "Other Supporting Info"],
+      ["donation", "9", "Treasury Donation"],
+      ["legal", "10", "Legal Declarations"],
+    ];
+    return (
+      <aside className="ekk-submit-rail" style={{ gridColumn: 1, order: 0 }}>
+        <p style={{ margin: "0 0 0.65rem", color: "var(--text-muted)", fontSize: "0.68rem", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 800 }}>
+          Proposal Flow
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+          {items.map(([id, n, label]) => (
+            <a key={id} href={`#${id}`} style={{ display: "grid", gridTemplateColumns: "24px 1fr", gap: "0.45rem", alignItems: "center", padding: "0.32rem 0.2rem", color: "var(--text-muted)", fontSize: "0.78rem", textDecoration: "none" }}>
+              <span style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.68rem", color: "var(--accent)" }}>{n}</span>
+              <span>{label}</span>
+            </a>
+          ))}
+        </div>
+      </aside>
+    );
+  }
+
+  function RichTextarea({ value, onChange, rows = 5, placeholder, maxLength, ...rest }) {
+    return (
+      <div>
+        <div style={toolBar} aria-hidden="true">
+          {["B", "I", "U", "H", "•", "1.", "[]"].map(x => <span key={x} style={toolBtn}>{x}</span>)}
+        </div>
+        <textarea
+          value={value}
+          onChange={onChange}
+          rows={rows}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          {...rest}
+          style={{ ...ta, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
+        />
+      </div>
+    );
+  }
+
+  function RadioRow({ name, value, current, onChange, label }) {
+    return (
+      <label style={{ display: "flex", gap: "0.5rem", alignItems: "center", color: "var(--text)", fontSize: "0.82rem", cursor: "pointer" }}>
+        <input type="radio" name={name} checked={current === value} onChange={() => onChange(value)}
+          style={{ width: 15, height: 15, margin: 0, flexShrink: 0, cursor: "pointer", accentColor: "var(--mint)" }} />
+        {label}
+      </label>
+    );
+  }
+
+  function LinkList({ links, setLinks, placeholder = "https://…" }) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+        {links.map((l, i) => (
+          <div key={i} style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+            <input value={l.title} onChange={e => setLinks(ls => ls.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+              placeholder="Label" style={{ ...inp, width: 120, flexShrink: 0 }} />
+            <input value={l.url} onChange={e => setLinks(ls => ls.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
+              placeholder={placeholder} style={inp} />
+            <button type="button" onClick={() => setLinks(ls => ls.filter((_, j) => j !== i))} style={remBtn}>✕</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setLinks(ls => [...ls, newLink()])} style={{ ...addBtn, alignSelf: "flex-start" }}>+ Add Link</button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={isPage ? { width: "100%" } : {
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000, padding: "1rem",
+      }}
+      onClick={isPage ? undefined : onClose}
+    >
+      <div
+        style={{
+          background: "var(--bg)", border: isPage ? "none" : "1px solid var(--line)", borderRadius: isPage ? 0 : 14,
+          width: "100%", maxWidth: isPage ? 1120 : 700, maxHeight: isPage ? "none" : "92vh",
+          display: "flex", flexDirection: "column", boxShadow: isPage ? "none" : "0 24px 64px rgba(0,0,0,0.4)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {!isPage && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "1rem 1.25rem", borderBottom: "1px solid var(--line)", flexShrink: 0,
+          }}>
+            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{draftId ? "Edit Proposal" : "Submit a Proposal"}</h2>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "1.2rem", lineHeight: 1, padding: "0.2rem" }}>✕</button>
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={{ overflowY: isPage ? "visible" : "auto", flex: 1, padding: isPage ? "0" : "1.25rem" }}>
+          {done ? (
+            <div style={{ textAlign: "center", padding: "2rem 0" }}>
+              <p style={{ fontSize: "2rem", margin: "0 0 0.75rem" }}>✓</p>
+              <p style={{ fontWeight: 700, fontSize: "1rem", margin: "0 0 0.5rem" }}>Proposal submitted!</p>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0 }}>Your proposal has been submitted and will appear in the list shortly.</p>
+              {isPage && (
+                <button type="button" onClick={onSuccess} className="btn-outline" style={{ marginTop: "1rem", fontWeight: 600, padding: "0.5rem 1.25rem" }}>
+                  Back to Budget
+                </button>
+              )}
+            </div>
+          ) : !walletApi ? (
+            <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem", maxWidth: 520 }}>
+              <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>Connect your wallet using the button in the top bar to submit a proposal.</p>
+            </div>
+          ) : !authed ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem", maxWidth: 520 }}>
+              <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-muted)" }}>Sign in with your wallet to continue editing and saving proposal drafts.</p>
+              <button onClick={handleAuth} disabled={authLoading} className="btn-outline" style={{ alignSelf: "flex-start" }}>
+                {authLoading ? "Signing…" : "Sign in with Wallet"}
+              </button>
+              {authError && <p style={{ color: "var(--red, #f87171)", fontSize: "0.82rem", margin: 0 }}>{authError}</p>}
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className={isPage ? "ekk-submit-form" : undefined} style={isPage ? undefined : { display: "flex", flexDirection: "column" }}>
+              {isPage && <SectionRail />}
+              <FormSection id="overview" number="1" title="Proposal Overview" order={1}>
+                <Field label="Proposal Title *" count={`${title.length}/100`}>
+                  <input value={title} onChange={e => setTitle(e.target.value)} required maxLength={100} placeholder="Proposal title" style={inp} />
+                </Field>
+                <div>
+                  <h4 style={{ margin: "0 0 0.25rem", fontSize: "1rem", fontWeight: 800 }}>Please describe your whole proposal at a high level</h4>
+                  <p style={hint}>Provide a high-level overview of the problem, proposed solution, and the value your overall proposal provides with reference to Cardano's vision. This is the first thing DReps will see.</p>
+                  <Field label="Executive Summary *" count={`${summary.length}/2000`}>
+                    <RichTextarea value={summary} onChange={e => setSummary(e.target.value)} required rows={5} maxLength={2000} placeholder="Describe your whole proposal at a high level..." />
+                  </Field>
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 0.25rem", fontSize: "1rem", fontWeight: 800 }}>Why are you the best suited to deliver this work?</h4>
+                  <p style={hint}>Describe relevant experience, expertise, delivery history and any supporting credentials.</p>
+                  <Field label="Track Record" count={`${trackRecord.length}/5000`}>
+                    <RichTextarea value={trackRecord} onChange={e => setTrackRecord(e.target.value)} rows={4} maxLength={5000} placeholder="Enter track record here" />
+                  </Field>
+                </div>
+                <Field
+                  label="Estimated Duration (in months)"
+                  help="Provide an estimated duration from start to completion. For ongoing operations, specify the number of months this budget covers."
+                >
+                  <div style={{ display: "flex", alignItems: "center", maxWidth: 220 }}>
+                    <input type="number" min="1" max="60" value={duration} onChange={e => setDuration(e.target.value)} placeholder="12" style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0 }} />
+                    <span style={{ padding: "0.62rem 0.75rem", border: "1px solid var(--line)", borderLeft: "none", borderRadius: "0 7px 7px 0", color: "var(--text-muted)", fontSize: "0.78rem" }}>months</span>
+                  </div>
+                </Field>
+              </FormSection>
+
+              <FormSection id="strategy" number="2" title="Alignment to Strategy Framework" order={2}>
+                <div>
+                  <h4 style={{ margin: "0 0 0.2rem", fontSize: "0.93rem", fontWeight: 800 }}>To which strategic pillar does your proposal align the most?</h4>
+                  <p style={hint}>Select one or more strategic pillars that your proposal supports. You must select at least one.</p>
+                </div>
+              {pillars.length > 0 && (
+                <div>
+                  <label style={lbl}>Strategic Pillars</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.5rem" }}>
+                    {pillars.map(p => {
+                      const active = selectedPillars.includes(p._id);
+                      return (
+                        <button type="button" key={p._id} onClick={() => togglePillar(p._id)} style={{
+                          padding: "0.75rem 0.85rem", borderRadius: 9, fontSize: "0.8rem",
+                          border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
+                          background: active ? "color-mix(in srgb, var(--accent) 12%, var(--bg))" : "color-mix(in srgb, var(--bg) 72%, var(--panel) 28%)",
+                          color: "var(--text)", cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+                        }}>
+                          <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.66rem", marginBottom: "0.25rem" }}>{p.title?.match(/Pillar\s*\d+/i)?.[0] || "Strategic pillar"}</span>
+                          <strong>{p.title?.replace(/^Pillar\s*\d+:\s*/i, "") || p.title}</strong>
+                          {p.description && <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.73rem", lineHeight: 1.45, marginTop: "0.28rem" }}>{p.description}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+                <Field label="Why have you selected those pillars?" count={`${pillarRationale.length}/10000`}>
+                  <RichTextarea value={pillarRationale} onChange={e => setPillarRationale(e.target.value)} rows={5} maxLength={10000} placeholder="Explain why you chose those pillars." />
+                </Field>
+                <Field label="Alignment to KPIs" count={`${kpiAlignment.length}/10000`} help="Explain the specific actions, methodologies, or expected impact of your proposal against the Cardano Strategy Framework KPIs.">
+                  <RichTextarea value={kpiAlignment} onChange={e => setKpiAlignment(e.target.value)} rows={5} maxLength={10000} placeholder="Explain specific actions, methodologies, or expected impact per KPI." />
+                </Field>
+              </FormSection>
+
+              <FormSection id="proposer" number="3" title="Proposer" order={3}>
+                <Field label="Proposer Public Name *" count={`${proposerName.length}/50`} help="This is the name that will be publicly displayed. For individual submissions use your full name; for company submissions use the company name.">
+                  <input value={proposerName} onChange={e => setProposerName(e.target.value)} maxLength={50} placeholder="Your name or company name" style={{ ...inp, maxWidth: 320 }} />
+                </Field>
+                <Field label="Primary Contact Email *" count={`${contactEmail.length}/254`} help="This email will be used for all proposal-submission related communications.">
+                  <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={254} placeholder="Enter email address" style={{ ...inp, maxWidth: 320 }} />
+                </Field>
+                <Field label="Social Media / Website Links" help="Add public links such as your website, Twitter/X, LinkedIn, GitHub, or other relevant profiles.">
+                  <LinkList links={proposerLinks} setLinks={setProposerLinks} />
+                </Field>
+              </FormSection>
+
+              <FormSection id="details" number="4" title="Proposal Details" order={4}>
+                <Field label="ADA/USD conversion rate *" help="Specify the ADA/USD conversion rate used for all USD cost estimates contained within this proposal. Note: This rate is for reference only; actual ADA amounts govern all treasury interactions.">
+                  <div style={{ display: "flex", alignItems: "center", maxWidth: 260 }}>
+                    <input type="number" min="0" step="0.0001" value={adaUsdRate} onChange={e => setAdaUsdRate(e.target.value)} placeholder="0.25" style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0 }} />
+                    <span style={{ padding: "0.62rem 0.75rem", border: "1px solid var(--line)", borderLeft: "none", borderRadius: "0 7px 7px 0", color: "var(--text-muted)", fontSize: "0.78rem" }}>USD / ADA</span>
+                  </div>
+                </Field>
+              </FormSection>
+
+              <FormSection id="administration" number="6" title="Budget Administration" order={6}>
+              <Field label="Who will be the Administrator for this budget proposal if approved?" help="Cardano's Constitution requires each Treasury Withdrawal to specify an Administrator and a third-party auditor. Intersect is the default administrator.">
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", alignSelf: "flex-start" }}>
+                  <RadioRow name="administrator" value="Intersect" current={administrator} onChange={setAdministrator} label="Intersect" />
+                  <RadioRow name="administrator" value="Other" current={administrator} onChange={setAdministrator} label="Other" />
+                </div>
+              </Field>
+              {administrator === "Intersect" && (
+                <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                  <input type="checkbox" checked={intersectFeeAgreed} onChange={e => setIntersectFeeAgreed(e.target.checked)} style={{ marginTop: "0.15rem" }} />
+                  I consent to Intersect acting as Administrator and understand this may include an administration fee and milestone-based fund disbursement.
+                </label>
+              )}
+              {administrator === "Other" && (
+                <div>
+                  <label style={lbl}>Details about other administrator</label>
+                  <textarea value={otherAdministrator} onChange={e => setOtherAdministrator(e.target.value)} rows={3}
+                    placeholder="Specify who will administer this proposal if approved…" style={ta} />
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+                <div>
+                  <label style={lbl}>Contracting Party Type</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.3rem" }}>
+                    <RadioRow name="partyType" value="company" current={partyType} onChange={setPartyType} label="Company / Legal Entity" />
+                    <RadioRow name="partyType" value="individual" current={partyType} onChange={setPartyType} label="Individual" />
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>KYC/KYB Submitted</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.3rem" }}>
+                    <RadioRow name="kycSubmitted" value="yes" current={kycSubmitted} onChange={setKycSubmitted} label="Yes" />
+                    <RadioRow name="kycSubmitted" value="no" current={kycSubmitted} onChange={setKycSubmitted} label="No" />
+                  </div>
+                </div>
+              </div>
+              {partyType === "company" && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+                  <div>
+                    <label style={lbl}>Legal Entity Name</label>
+                    <input value={legalEntityName} onChange={e => setLegalEntityName(e.target.value)} placeholder="Registered company name" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Registration Number</label>
+                    <input value={legalEntityRegistrationNumber} onChange={e => setLegalEntityRegistrationNumber(e.target.value)} placeholder="Tax ID / registration number" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Country of Incorporation</label>
+                    <input value={legalEntityCountry} onChange={e => setLegalEntityCountry(e.target.value)} placeholder="Jurisdiction" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Registered Address Line 1</label>
+                    <input value={legalEntityAddressLine1} onChange={e => setLegalEntityAddressLine1(e.target.value)} placeholder="Address line 1" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Registered Address Line 2</label>
+                    <input value={legalEntityAddressLine2} onChange={e => setLegalEntityAddressLine2(e.target.value)} placeholder="Address line 2" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Registered Address Line 3</label>
+                    <input value={legalEntityAddressLine3} onChange={e => setLegalEntityAddressLine3(e.target.value)} placeholder="Address line 3" style={inp} />
+                  </div>
+                </div>
+              )}
+              {partyType === "individual" && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+                  <div>
+                    <label style={lbl}>Government-issued ID number</label>
+                    <input value={govtIssuedIdNumber} onChange={e => setGovtIssuedIdNumber(e.target.value)} placeholder="ID / passport number" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Country of Residence</label>
+                    <input value={countryOfResidence} onChange={e => setCountryOfResidence(e.target.value)} placeholder="Country" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Residential Address Line 1</label>
+                    <input value={residentialAddressLine1} onChange={e => setResidentialAddressLine1(e.target.value)} placeholder="Address line 1" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Residential Address Line 2</label>
+                    <input value={residentialAddressLine2} onChange={e => setResidentialAddressLine2(e.target.value)} placeholder="Address line 2" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Residential Address Line 3</label>
+                    <input value={residentialAddressLine3} onChange={e => setResidentialAddressLine3(e.target.value)} placeholder="Address line 3" style={inp} />
+                  </div>
+                </div>
+              )}
+              {kycSubmitted === "no" && (
+                <div>
+                  <label style={lbl}>KYC/KYB Contact Email</label>
+                  <p style={{ ...hint, marginTop: 0 }}>Please provide an email address so Intersect can contact you to initiate the KYC/KYB process.</p>
+                  <input type="email" value={kycEmail} onChange={e => setKycEmail(e.target.value)} placeholder="kyc@example.com" style={inp} />
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+                <div>
+                  <label style={lbl}>Primary Contact Name</label>
+                  <input value={primaryContactName} onChange={e => setPrimaryContactName(e.target.value)} placeholder="Contact name" style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Primary Contact Email</label>
+                  <input type="email" value={primaryContactEmail} onChange={e => setPrimaryContactEmail(e.target.value)} placeholder="contact@example.com" style={inp} />
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+                <div>
+                  <label style={lbl}>Authorized Signatory Title</label>
+                  <input value={signatoryTitle} onChange={e => setSignatoryTitle(e.target.value)} placeholder="e.g. Director" style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Authorized Signatory Name</label>
+                  <input value={signatoryName} onChange={e => setSignatoryName(e.target.value)} placeholder="Full name" style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Authorized Signatory Email</label>
+                  <input type="email" value={signatoryEmail} onChange={e => setSignatoryEmail(e.target.value)} placeholder="signatory@example.com" style={inp} />
+                </div>
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                <input type="checkbox" checked={signatoryAuthorized} onChange={e => setSignatoryAuthorized(e.target.checked)} style={{ marginTop: "0.15rem" }} />
+                I confirm that the named authorized signatory has the authority to enter into binding agreements on behalf of the contracting party in relation to this proposal.
+              </label>
+              <div>
+                <label style={lbl}>Third Party Assurers</label>
+                <p style={{ ...hint, marginTop: 0 }}>If you have identified or engaged any preferred third-party assurers or auditors for this proposal, please list them here.</p>
+                <textarea value={thirdPartyAssurers} onChange={e => setThirdPartyAssurers(e.target.value)} rows={2}
+                  placeholder="List any preferred or confirmed third party assurers…" style={ta} />
+              </div>
+              </FormSection>
+
+              {/* ── Supporting Links ──────────────────────────────────── */}
+              <FormSection id="summary" number="7" title="Budget Summary" order={7}>
+              {/* Auto-calculated budget table from work packages */}
+              {workPackages.some(wp => wp.budgetBreakdown.some(r => Number(r.total) > 0)) && (
+                <div>
+                  <label style={lbl}>Work Package Cost Summary</label>
+                  <div style={{ overflowX: "auto", marginTop: "0.4rem" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                      <thead>
+                        <tr style={{ background: "var(--panel)", borderBottom: "1px solid var(--line)" }}>
+                          <th style={{ padding: "0.5rem 0.6rem", textAlign: "left", fontWeight: 700, color: "var(--text)" }}>Work Package</th>
+                          <th style={{ padding: "0.5rem 0.6rem", textAlign: "right", fontWeight: 700, color: "var(--text)" }}>ADA Cost</th>
+                          <th style={{ padding: "0.5rem 0.6rem", textAlign: "right", fontWeight: 700, color: "var(--text)" }}>USD Equivalent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {workPackages.map((wp, wi) => {
+                          const wpTotal = wp.budgetBreakdown.reduce((s, r) => s + (Number(r.total) || 0), 0);
+                          const usd = adaUsdRate ? (wpTotal * Number(adaUsdRate)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+                          return wpTotal > 0 ? (
+                            <tr key={wi} style={{ borderBottom: "1px solid var(--line)" }}>
+                              <td style={{ padding: "0.45rem 0.6rem", color: "var(--text)" }}>WP{wi + 1}: {wp.name || "Untitled"}</td>
+                              <td style={{ padding: "0.45rem 0.6rem", textAlign: "right", color: "var(--text)" }}>₳ {wpTotal.toLocaleString()}</td>
+                              <td style={{ padding: "0.45rem 0.6rem", textAlign: "right", color: "var(--text-muted)" }}>${usd}</td>
+                            </tr>
+                          ) : null;
+                        })}
+                        {(() => {
+                          const grandTotal = workPackages.reduce((s, wp) => s + wp.budgetBreakdown.reduce((rs, r) => rs + (Number(r.total) || 0), 0), 0);
+                          const grandUsd = adaUsdRate ? (grandTotal * Number(adaUsdRate)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+                          return (
+                            <tr style={{ borderTop: "2px solid var(--line)", fontWeight: 700 }}>
+                              <td style={{ padding: "0.45rem 0.6rem", color: "var(--text)" }}>Total</td>
+                              <td style={{ padding: "0.45rem 0.6rem", textAlign: "right", color: "var(--text)" }}>₳ {grandTotal.toLocaleString()}</td>
+                              <td style={{ padding: "0.45rem 0.6rem", textAlign: "right", color: "var(--text-muted)" }}>${grandUsd}</td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              <Field label="Will any portion of the requested funds be returned to the Cardano Treasury?">
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.3rem" }}>
+                  <RadioRow name="treasuryRepaymentYesNo" value="yes" current={treasuryRepaymentYesNo} onChange={setTreasuryRepaymentYesNo} label="Yes" />
+                  <RadioRow name="treasuryRepaymentYesNo" value="no" current={treasuryRepaymentYesNo} onChange={setTreasuryRepaymentYesNo} label="No" />
+                </div>
+              </Field>
+              {treasuryRepaymentYesNo === "yes" && (
+                <>
+                  <Field label="Treasury Repayment Details">
+                    <textarea value={treasuryRepayment} onChange={e => setTreasuryRepayment(e.target.value)} rows={2}
+                      placeholder="Describe the repayment plan…" style={ta} />
+                  </Field>
+                  <Field label="Circumstances for Repayment">
+                    <textarea value={treasuryRepaymentCircumstances} onChange={e => setTreasuryRepaymentCircumstances(e.target.value)} rows={2}
+                      placeholder="Under what circumstances would repayment apply?" style={ta} />
+                  </Field>
+                </>
+              )}
+              <Field label="Prior Funding" count={`${priorFunding.length}/10000`} help="List any prior funding received from Catalyst, treasury withdrawals, Intersect programs, or related ecosystem grants. Enter 'N/A' if none.">
+                <RichTextarea value={priorFunding} onChange={e => setPriorFunding(e.target.value)} rows={4} maxLength={10000} placeholder="Enter details or N/A" />
+              </Field>
+              <Field label="Independent Audits" count={`${independentAudits.length}/10000`} help="Describe any independent audits that will be conducted for this proposal.">
+                <RichTextarea value={independentAudits} onChange={e => setIndependentAudits(e.target.value)} rows={3} maxLength={10000} placeholder="Enter details or N/A" />
+              </Field>
+              </FormSection>
+
+              <FormSection id="supporting" number="8" title="Other Supporting Info" order={8}>
+              <p style={{ margin: "0 0 0.65rem", color: "var(--text-muted)", fontSize: "0.82rem", lineHeight: 1.55 }}>
+                Add any additional supporting links relevant to this proposal — such as research papers, prior work, GitHub repositories, presentations, or other evidence.
+              </p>
+              <LinkList links={supportingInfoLinks} setLinks={setSupportingInfoLinks} placeholder="https://…" />
+              </FormSection>
+
+              {/* ── Work Packages ─────────────────────────────────────── */}
+              <FormSection id="work-packages" number="5" title="Work Packages" order={5}>
+              {workPackages.map((wp, wi) => (
+                <div key={wi} style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 0.9rem", background: "var(--panel)", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.88rem", flex: 1 }}>WP{wi + 1}: {wp.name || "Untitled"}</span>
+                    <button type="button" onClick={() => setWorkPackages(wps => wps.filter((_, j) => j !== wi))} style={remBtn}>Remove</button>
+                  </div>
+                  <div style={{ padding: "0.9rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <div>
+                      <label style={lbl}>Work Package Name *</label>
+                      <input value={wp.name} onChange={e => updateWp(wi, { name: e.target.value })} placeholder="Work package name" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Type of Proposal</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.3rem" }}>
+                        <RadioRow name={`typeOfProposal-${wi}`} value="Technical" current={wp.typeOfProposal} onChange={v => updateWp(wi, { typeOfProposal: v })} label="Technical" />
+                        <RadioRow name={`typeOfProposal-${wi}`} value="Non-technical" current={wp.typeOfProposal} onChange={v => updateWp(wi, { typeOfProposal: v })} label="Non-technical" />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Initiative Type</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.3rem" }}>
+                        <RadioRow name={`initiativeType-${wi}`} value="New Initiative" current={wp.initiativeType} onChange={v => updateWp(wi, { initiativeType: v })} label="New Initiative" />
+                        <RadioRow name={`initiativeType-${wi}`} value="Maintenance" current={wp.initiativeType} onChange={v => updateWp(wi, { initiativeType: v })} label="Maintenance" />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Summary *</label>
+                      <textarea value={wp.summary} onChange={e => updateWp(wi, { summary: e.target.value })} rows={3} placeholder="Describe this work package…" style={ta} />
+                    </div>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                      <input type="checkbox" checked={wp.cannotBreakIntoMilestones} onChange={e => updateWp(wi, { cannotBreakIntoMilestones: e.target.checked })} style={{ marginTop: "0.15rem" }} />
+                      This work package cannot be broken down into milestones
+                    </label>
+
+                    {/* Core Objectives */}
+                    <div>
+                      <label style={lbl}>Core Objectives</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                        {wp.coreObjectives.map((obj, oi) => (
+                          <div key={oi} style={{ display: "flex", gap: "0.4rem" }}>
+                            <input value={obj} onChange={e => updateWp(wi, { coreObjectives: wp.coreObjectives.map((x, k) => k === oi ? e.target.value : x) })}
+                              placeholder={`Objective ${oi + 1}`} style={inp} />
+                            <button type="button" onClick={() => updateWp(wi, { coreObjectives: wp.coreObjectives.filter((_, k) => k !== oi) })} style={remBtn}>✕</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => updateWp(wi, { coreObjectives: [...wp.coreObjectives, ""] })} style={addBtn}>+ Add objective</button>
+                      </div>
+                    </div>
+
+                    {/* Milestones */}
+                    <div>
+                      <label style={lbl}>Milestones</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        {wp.milestones.map((m, mi) => (
+                          <div key={mi} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "0.65rem 0.8rem", background: "var(--panel)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <span style={{ fontWeight: 600, fontSize: "0.82rem", flex: 1 }}>M{mi + 1}: {m.name || "Untitled"}</span>
+                              <button type="button" onClick={() => removeFromWp(wi, "milestones", mi)} style={remBtn}>Remove</button>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0.5rem" }}>
+                              <div>
+                                <label style={lbl}>Name</label>
+                                <input value={m.name} onChange={e => updateWpObj(wi, "milestones", { i: mi, v: { name: e.target.value } })} placeholder="Milestone name" style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Duration (weeks)</label>
+                                <input type="number" min="1" value={m.duration} onChange={e => updateWpObj(wi, "milestones", { i: mi, v: { duration: e.target.value } })} placeholder="e.g. 4" style={{ ...inp, width: 90 }} />
+                              </div>
+                            </div>
+                            <div>
+                              <label style={lbl}>Deliverables</label>
+                              <textarea value={m.deliverables} onChange={e => updateWpObj(wi, "milestones", { i: mi, v: { deliverables: e.target.value } })} rows={2} placeholder="What will be delivered?" style={ta} />
+                            </div>
+                            <div>
+                              <label style={lbl}>Acceptance Criteria</label>
+                              <textarea value={m.acceptanceCriteria} onChange={e => updateWpObj(wi, "milestones", { i: mi, v: { acceptanceCriteria: e.target.value } })} rows={2} placeholder="How will success be measured?" style={ta} />
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => addToWp(wi, "milestones", newMilestone())} style={addBtn}>+ Add milestone</button>
+                      </div>
+                    </div>
+
+                    {/* Budget Breakdown */}
+                    <div>
+                      <label style={lbl}>Budget Breakdown</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                        {wp.budgetBreakdown.map((r, ri) => (
+                          <div key={ri} style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(120px, 1fr) 72px 92px 92px auto", gap: "0.35rem", alignItems: "center", minWidth: 620 }}>
+                            <input value={r.costCategory} onChange={e => updateBudgetRow(wi, ri, { costCategory: e.target.value })} placeholder="Category" style={inp} />
+                            <input value={r.name} onChange={e => updateBudgetRow(wi, ri, { name: e.target.value })} placeholder="Item" style={inp} />
+                            <input type="number" min="0" value={r.quantity} onChange={e => updateBudgetRow(wi, ri, { quantity: e.target.value })} placeholder="Qty" style={inp} />
+                            <input type="number" min="0" value={r.unitPrice} onChange={e => updateBudgetRow(wi, ri, { unitPrice: e.target.value })} placeholder="Unit ₳" style={inp} />
+                            <input value={r.total} readOnly placeholder="Total" style={{ ...inp, background: "var(--panel)", color: "var(--text-muted)" }} />
+                            <button type="button" onClick={() => removeFromWp(wi, "budgetBreakdown", ri)} style={remBtn}>✕</button>
+                          </div>
+                        ))}
+                        {wp.budgetBreakdown.length > 0 && (
+                          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", textAlign: "right", paddingRight: "2rem" }}>
+                            Total: ₳ {wp.budgetBreakdown.reduce((s, r) => s + (Number(r.total) || 0), 0).toLocaleString()}
+                          </div>
+                        )}
+                        <button type="button" onClick={() => addToWp(wi, "budgetBreakdown", newBudgetRow())} style={addBtn}>+ Add budget item</button>
+                      </div>
+                    </div>
+
+                    {/* Success Metrics */}
+                    <div>
+                      <label style={lbl}>Expected Value</label>
+                      <textarea value={wp.expectedValue} onChange={e => updateWp(wi, { expectedValue: e.target.value })} rows={2} placeholder="What value does this work package deliver?" style={ta} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Success Metrics</label>
+                      <textarea value={wp.metric} onChange={e => updateWp(wi, { metric: e.target.value })} rows={2} placeholder="How will success be measured?" style={ta} />
+                    </div>
+
+                    {/* WP Supporting Docs */}
+                    <div>
+                      <label style={lbl}>Supporting Documents</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        {wp.supportingDocuments.map((l, li) => (
+                          <div key={li} style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                            <input value={l.title} onChange={e => updateWpObj(wi, "supportingDocuments", { i: li, v: { title: e.target.value } })} placeholder="Label" style={{ ...inp, width: 120, flexShrink: 0 }} />
+                            <input value={l.url} onChange={e => updateWpObj(wi, "supportingDocuments", { i: li, v: { url: e.target.value } })} placeholder="https://…" style={inp} />
+                            <button type="button" onClick={() => removeFromWp(wi, "supportingDocuments", li)} style={remBtn}>✕</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => addToWp(wi, "supportingDocuments", newLink())} style={addBtn}>+ Add document</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => setWorkPackages(wps => [...wps, newWp()])} style={{ ...addBtn, padding: "0.5rem", width: "100%" }}>
+                + Add Work Package
+              </button>
+              </FormSection>
+
+              {/* ── Donation & Legal ──────────────────────────────────── */}
+              <FormSection id="donation" number="9" title="Treasury Donation" order={9}>
+              <p style={{ margin: "0 0 0.75rem", color: "var(--text-muted)", fontSize: "0.82rem", lineHeight: 1.55 }}>
+                A voluntary donation to the Cardano Treasury may be made to support the ecosystem. If you have made a donation, please provide the transaction hash below.
+              </p>
+              <div>
+                <label style={lbl}>Donation Transaction Hash</label>
+                <input value={donationHash} onChange={e => setDonationHash(e.target.value)} placeholder="Transaction hash, if applicable" style={inp} />
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                <input type="checkbox" checked={donationConfirmed} onChange={e => setDonationConfirmed(e.target.checked)} style={{ marginTop: "0.15rem" }} />
+                I confirm that the donation transaction has been submitted to the Cardano blockchain.
+              </label>
+              </FormSection>
+              <FormSection id="legal" number="10" title="Legal Declarations" order={10}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", color: "var(--text-muted)", fontSize: "0.76rem", lineHeight: 1.6 }}>
+                {[
+                  ["Data Protection", "The proposer acknowledges and consents that the data submitted within this proposal form may be shared with relevant stakeholders as required for the purposes of evaluation, DRep voting, contracting, and treasury withdrawal execution. The proposer confirms they have the right to share any personal or organizational data included in this submission."],
+                  ["Anti-Bribery and Anti-Corruption", "The proposer confirms that no bribes, improper payments, kickbacks, or other inducements have been offered or received in connection with this proposal, and that the proposal is submitted in full compliance with applicable anti-bribery and anti-corruption laws."],
+                  ["Proposal Authenticity and Intellectual Property", "The proposer confirms that this proposal is original, that the information provided is accurate to the best of their knowledge and belief, and that the execution of the proposed work will not infringe the intellectual property rights of any third party."],
+                  ["Conflicts with Existing Obligations", "The proposer confirms that entering into any contract arising from this proposal would not violate or conflict with any existing obligations, agreements, or duties owed to any other party."],
+                  ["Compliance with Laws and Regulations", "The proposer confirms compliance with all applicable local, national, and international laws and regulations relevant to the proposed activities, including but not limited to export control laws, data protection regulations, and applicable financial regulations."],
+                  ["Sanctions / Restricted Parties", "The proposer confirms that neither the proposing entity nor any of its principals, beneficial owners, employees, or subcontractors engaged in this proposal are subject to any sanctions administered by relevant authorities, including but not limited to OFAC, EU, UN, or UK sanctions lists."],
+                  ["No Contract Formation / Limitation of Liability", "The submission of this proposal does not create any binding obligation or entitlement to an award of contract or funding. Intersect and the Cardano community reserve the right to accept or reject any proposal at their sole discretion without liability."],
+                ].map(([t, text], i) => (
+                  <p key={t} style={{ margin: 0 }}><strong style={{ color: "var(--text)" }}>{i + 1}. {t}</strong><br />{text}</p>
+                ))}
+              </div>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: "0.85rem" }}>
+                <p style={{ margin: "0 0 0.65rem", fontWeight: 700, fontSize: "0.85rem", color: "var(--text)" }}>Declaration of Submitter</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+                  <div>
+                    <label style={lbl}>Full Name *</label>
+                    <input value={declName} onChange={e => setDeclName(e.target.value)} placeholder="Full name of submitter" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Email Address *</label>
+                    <input type="email" value={declEmail} onChange={e => setDeclEmail(e.target.value)} placeholder="name@example.com" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Role / Capacity *</label>
+                    <input value={declRole} onChange={e => setDeclRole(e.target.value)} placeholder="e.g. Director, Founder, Representative" style={inp} />
+                  </div>
+                </div>
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                <input type="checkbox" checked={legalAuth1} onChange={e => setLegalAuth1(e.target.checked)} style={{ marginTop: "0.15rem" }} />
+                I confirm that I am duly authorized to submit this proposal on behalf of the proposing entity, and that the entity is legally permitted to enter into agreements in connection with this proposal.
+              </label>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                <input type="checkbox" checked={legalAuth2} onChange={e => setLegalAuth2(e.target.checked)} style={{ marginTop: "0.15rem" }} />
+                I confirm that all information provided in this submission is true, accurate, and complete to the best of my knowledge, and I accept the declarations set out above.
+              </label>
+              </FormSection>
+
+              {(submitError || draftSaved) && (
+                <div className={isPage ? "ekk-submit-status" : undefined} style={{ order: 11 }}>
+                  {submitError && <p style={{ color: "var(--red, #f87171)", fontSize: "0.82rem", margin: 0 }}>{submitError}</p>}
+                  {draftSaved && <p style={{ color: "var(--accent)", fontSize: "0.82rem", margin: 0 }}>Draft saved.</p>}
+                </div>
+              )}
+
+              <div className={isPage ? "ekk-submit-actions" : undefined} style={{
+                position: isPage ? "sticky" : "static",
+                bottom: 0,
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
+                padding: "0.9rem 0",
+                borderTop: "1px solid var(--line)",
+                background: "color-mix(in srgb, var(--bg) 94%, transparent)",
+                backdropFilter: "blur(8px)",
+                zIndex: 2,
+                order: 11,
+              }}>
+                <button type="button" onClick={handleSaveDraft} disabled={draftSaving || submitting}
+                  className="btn-outline" style={{ fontWeight: 600, padding: "0.5rem 1.25rem" }}>
+                  {draftSaving ? "Saving..." : "Save Draft"}
+                </button>
+                <button type="submit" disabled={submitting || !title.trim() || !summary.trim()}
+                  className="btn-outline" style={{ fontWeight: 600, padding: "0.5rem 1.25rem" }}>
+                  {submitting ? "Submitting..." : "Submit Proposal"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Share Row ────────────────────────────────────────────────────────────────
 
 function ShareRow({ proposalId, title, basePath }) {
@@ -799,7 +2060,7 @@ function ProposalDetail({ proposal, cycleName, pillarById, onBack, walletApi, wa
       </div>
 
       {/* Key Details card */}
-      <KeyDetailsCard proposal={d} pillarById={pillarById} />
+      <KeyDetailsCard proposal={d} />
 
       {/* ── Proposal Overview ─────────────────────────────────────────── */}
       {d.summary && (
@@ -1037,7 +2298,7 @@ const PILLAR_COLORS = [
   "#10b981", "#3b82f6", "#ef4444", "#14b8a6",
 ];
 
-function BudgetExplorer({ allProposals, pillars, pillarById, filterPillar, setFilterPillar, setSearch }) {
+function BudgetExplorer({ allProposals, pillarById, filterPillar, setFilterPillar, setSearch }) {
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState("pillars"); // "pillars" | "proposers" | "status"
 
@@ -1216,6 +2477,126 @@ function BudgetExplorer({ allProposals, pillars, pillarById, filterPillar, setFi
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+export function EkklesiaSubmitPage({ voteSlug = "cardano-budget-2026", basePath = "/budget" } = {}) {
+  const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
+  const { proposalId } = useParams();
+  const navigate = useNavigate();
+  const [cycle, setCycle] = useState(null);
+  const [cycleLoading, setCycleLoading] = useState(true);
+  const [cycleError, setCycleError] = useState("");
+  const [initialData, setInitialData] = useState(null);
+  const [proposalLoading, setProposalLoading] = useState(Boolean(proposalId));
+  const [proposalError, setProposalError] = useState("");
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setCycleLoading(true);
+    setCycleError("");
+    apiFetch("/votes", { signal: ctrl.signal })
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        const match = list.find(v => v.slug === voteSlug);
+        if (match) setCycle(match);
+        else setCycleError(`Vote cycle "${voteSlug}" not found.`);
+      })
+      .catch(e => { if (e.name !== "AbortError") setCycleError(e.message || "Failed to load vote cycle."); })
+      .finally(() => setCycleLoading(false));
+    return () => ctrl.abort();
+  }, [voteSlug]);
+
+  useEffect(() => {
+    if (!proposalId) {
+      setInitialData(null);
+      setProposalLoading(false);
+      setProposalError("");
+      return;
+    }
+    const ctrl = new AbortController();
+    setProposalLoading(true);
+    setProposalError("");
+    apiFetch(`/proposals/${proposalId}`, { signal: ctrl.signal })
+      .then(data => setInitialData(data?.data ?? data))
+      .catch(e => { if (e.name !== "AbortError") setProposalError(e.message || "Failed to load proposal draft."); })
+      .finally(() => setProposalLoading(false));
+    return () => ctrl.abort();
+  }, [proposalId]);
+
+  const cycleName = cycle?.description || cycle?.title || "Cardano Budget 2026";
+  useSeoMeta({
+    title: proposalId ? `Edit Proposal - ${cycleName}` : `Submit Proposal - ${cycleName}`,
+    description: `Create or edit a ${cycleName} proposal draft through the Ekklesia budget API.`
+  });
+
+  const goBack = () => navigate(basePath);
+
+  return (
+    <main className="shell ekk-submit-page" style={{ padding: "1.15rem 1rem 2.5rem", maxWidth: 1180, margin: "0 auto" }}>
+      <header className="ekk-submit-head" style={{
+        marginBottom: "1rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+        flexWrap: "wrap",
+      }}>
+        <div>
+        <button
+          type="button"
+          onClick={goBack}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "0.35rem",
+            background: "transparent", border: "none", cursor: "pointer",
+            color: "var(--text-muted)", fontSize: "0.83rem", padding: "0 0 0.8rem",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Budget proposals
+        </button>
+        <h1 style={{ margin: 0, fontSize: "1.65rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
+          {proposalId ? "Edit Proposal" : "Submit a Proposal"}
+        </h1>
+        <p style={{ margin: "0.45rem 0 0", color: "var(--text-muted)", fontSize: "0.86rem" }}>
+          {cycleName}
+        </p>
+        </div>
+        <div style={{
+          border: "1px solid var(--line)",
+          borderRadius: 8,
+          background: "color-mix(in srgb, var(--panel) 80%, var(--bg) 20%)",
+          padding: "0.65rem 0.8rem",
+          minWidth: 190,
+        }}>
+          <p style={{ margin: "0 0 0.18rem", color: "var(--text-muted)", fontSize: "0.68rem", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 800 }}>Mode</p>
+          <p style={{ margin: 0, fontSize: "0.84rem", fontWeight: 700 }}>{proposalId ? "Editing draft" : "New draft"}</p>
+        </div>
+      </header>
+
+      {cycleLoading || proposalLoading ? (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "2rem", textAlign: "center" }}>
+          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading submission form...</p>
+        </div>
+      ) : cycleError || proposalError ? (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1rem" }}>
+          <p style={{ color: "var(--red, #f87171)", fontSize: "0.85rem", margin: 0 }}>{cycleError || proposalError}</p>
+        </div>
+      ) : (
+        <SubmitProposalModal
+          variant="page"
+          cycle={cycle}
+          pillars={cycle?.metaData?.strategyFramework?.pillars ?? []}
+          walletApi={walletApi}
+          walletRewardAddress={walletRewardAddress}
+          initialData={initialData}
+          onClose={goBack}
+          onSuccess={goBack}
+        />
+      )}
+    </main>
+  );
+}
+
 export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
   const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
   const { proposalId: urlProposalId } = useParams();
@@ -1237,6 +2618,7 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
   const [selected, setSelected] = useState(null);
   const [detailFull, setDetailFull] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [myProposalsOpen, setMyProposalsOpen] = useState(false);
 
   const proposalAbortRef = useRef(null);
   const pageTopRef = useRef(null);
@@ -1258,7 +2640,7 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
       .catch(e => { if (e.name !== "AbortError") setCycleError(e.message || "Failed to load."); })
       .finally(() => setCycleLoading(false));
     return () => ctrl.abort();
-  }, []);
+  }, [voteSlug]);
 
   const fetchProposals = useCallback(async (voteId) => {
     proposalAbortRef.current?.abort();
@@ -1303,14 +2685,14 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
     } finally {
       setDetailLoading(false);
     }
-  }, [navigate]);
+  }, [basePath, navigate]);
 
   const closeProposal = useCallback(() => {
     setSelected(null);
     setDetailFull(null);
     navigate(basePath, { replace: false });
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [navigate]);
+  }, [basePath, navigate]);
 
   // Auto-open proposal when URL contains an ID (direct link or browser back/forward)
   useEffect(() => {
@@ -1450,14 +2832,13 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
               {/* Budget Explorer */}
               <BudgetExplorer
                 allProposals={allProposals}
-                pillars={pillars}
                 pillarById={pillarById}
                 filterPillar={filterPillar}
                 setFilterPillar={setFilterPillar}
                 setSearch={setSearch}
               />
 
-              {/* Submit notice — only shown when the cycle has a submission window URL */}
+              {/* Submit notice — shown during submission window */}
               {cycle?.submissionStartDate && new Date() <= new Date(cycle.submissionEndDate || cycle.submissionStartDate) && (
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem",
@@ -1465,25 +2846,34 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
                   background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10,
                   fontSize: "0.8rem", color: "var(--text-muted)",
                 }}>
-                  <span>Want to submit? Submissions are made through Intersect's Hydra Voting platform.</span>
-                  <a
-                    href={`https://hydra-voting.intersectmbo.org/${cycle.form || "budget-process"}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "0.35rem",
-                      padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
-                      background: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                      border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
-                      color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap",
-                      transition: "background 0.15s",
-                    }}
-                  >
-                    Submit on Hydra
-                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                      <path d="M2 9L9 2M9 2H4M9 2v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </a>
+                  <span>{walletApi ? "Ready to submit your proposal?" : "Want to submit a proposal? Connect your wallet first."}</span>
+                  <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => navigate(`${basePath}/submit`)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "0.35rem",
+                        padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
+                        background: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                        border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
+                        color: "var(--accent)", cursor: "pointer", whiteSpace: "nowrap",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      Submit a Proposal
+                    </button>
+                    <button
+                      onClick={() => setMyProposalsOpen(true)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "0.35rem",
+                        padding: "0.35rem 0.75rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
+                        background: "transparent",
+                        border: "1px solid var(--line)",
+                        color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      My Proposals
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1544,6 +2934,19 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
             </>
           )}
         </div>
+      )}
+
+      {myProposalsOpen && (
+        <MyProposalsPanel
+          cycle={cycle}
+          walletApi={walletApi}
+          walletRewardAddress={walletRewardAddress}
+          onClose={() => setMyProposalsOpen(false)}
+          onEdit={(proposal) => {
+            setMyProposalsOpen(false);
+            navigate(`${basePath}/submit/${proposal._id}`);
+          }}
+        />
       )}
     </main>
   );

@@ -59,7 +59,7 @@ export default function InfoBanner() {
           <p className="budget-process-banner-title">Intersect Facilitated Cardano Budget Process</p>
           <p>{budgetProcessBanner}</p>
         </div>
-        <a className="budget-process-banner-link" href="https://hydra-voting.intersectmbo.org/budget-process" target="_blank" rel="noreferrer">
+        <a className="budget-process-banner-link" href="/budget">
           View Budget Process
         </a>
       </article>

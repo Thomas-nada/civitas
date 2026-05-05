@@ -6376,6 +6376,92 @@ tbody tr.active {
   padding: 1rem;
 }
 
+/* Civitas proposal submission page */
+.ekk-submit-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.ekk-submit-page::before {
+  content: "";
+  position: absolute;
+  inset: -0.4rem -0.6rem 0;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
+  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.22);
+}
+
+.ekk-submit-head {
+  padding: 0.2rem 0.15rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.ekk-submit-form {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 0.78rem;
+  align-items: start;
+}
+
+.ekk-submit-rail {
+  position: sticky;
+  top: calc(218px + 0.75rem);
+  align-self: start;
+  padding: 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 68%, transparent);
+}
+
+.ekk-submit-rail a {
+  border-radius: 7px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ekk-submit-rail a:hover,
+.ekk-submit-rail a:focus-visible {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--mint) 9%, transparent);
+  outline: none;
+}
+
+.ekk-submit-section {
+  scroll-margin-top: 1rem;
+}
+
+.ekk-submit-status,
+.ekk-submit-actions {
+  grid-column: 2;
+}
+
+.ekk-submit-section h4 {
+  line-height: 1.2;
+}
+
+@media (max-width: 920px) {
+  .ekk-submit-page::before {
+    inset: -0.25rem -0.35rem 0;
+  }
+
+  .ekk-submit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ekk-submit-rail {
+    position: static;
+    display: none;
+  }
+
+  .ekk-submit-section,
+  .ekk-submit-status,
+  .ekk-submit-actions {
+    grid-column: 1 !important;
+  }
+}
+
 @media (max-width: 1120px) {
   .ekk-workspace.has-detail {
     grid-template-columns: 1fr;

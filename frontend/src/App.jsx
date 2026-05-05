@@ -20,6 +20,7 @@ const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage")
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
 const RationalesArchivePage = lazy(() => import("./pages/RationalesArchivePage"));
 const BudgetPage = lazy(() => import("./pages/EkklesiaPage"));
+const BudgetSubmitPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ default: m.EkklesiaSubmitPage })));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
@@ -351,6 +352,8 @@ export default function App() {
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           {/* <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} /> */}{/* hidden: WIP */}
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
+          <Route path="/budget/submit" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
+          <Route path="/budget/submit/:proposalId" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
