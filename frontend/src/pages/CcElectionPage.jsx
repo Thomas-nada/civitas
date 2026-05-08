@@ -1308,7 +1308,7 @@ export default function CcElectionPage() {
                 {submissionOpen && !votingOpen && <span style={{ padding: "0.2rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: "color-mix(in srgb,#fbbf24 12%,transparent)", border: "1px solid color-mix(in srgb,#fbbf24 35%,transparent)", color: "#fbbf24", letterSpacing: "0.05em" }}>NOMINATIONS OPEN</span>}
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
-                {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Nominations</button>}
+                {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Candidacy</button>}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                     {submissionOpen ? "Submit Nomination" : "Start Draft"}
