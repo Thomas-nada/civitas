@@ -885,7 +885,7 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
 
 // ─── Admin Nominations Panel ──────────────────────────────────────────────────
 
-function AdminNominationsPanel({ cycle, onClose, onView }) {
+function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
   const [nominations, setNominations] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState("");
@@ -913,6 +913,7 @@ function AdminNominationsPanel({ cycle, onClose, onView }) {
           page++;
         }
         setNominations(all);
+        onAdminConfirmed?.();
       } catch (e) {
         if (e.name !== "AbortError") setError(e.message || "Failed to load.");
       } finally { setLoading(false); }
@@ -1083,7 +1084,6 @@ export default function CcElectionPage() {
   const [isAdmin,           setIsAdmin]           = useState(false);
   const [authLoading,       setAuthLoading]       = useState(false);
   const [authError,         setAuthError]         = useState("");
-  const [sessionDebug,      setSessionDebug]      = useState(null);
 
   useEffect(() => { setAuthed(false); setIsAdmin(false); setAuthError(""); }, [walletApi]);
 
@@ -1091,14 +1091,8 @@ export default function CcElectionPage() {
     if (!walletApi || authLoading) return;
     setAuthLoading(true); setAuthError("");
     try {
-      const res = await doWalletAuth(walletApi, walletRewardAddress);
-      setSessionDebug(res);
+      await doWalletAuth(walletApi, walletRewardAddress);
       setAuthed(true);
-      const admin = res?.isAdmin ?? res?.data?.isAdmin
-        ?? (res?.role === "admin" || res?.data?.role === "admin")
-        ?? (Array.isArray(res?.roles) && res.roles.includes("admin"))
-        ?? false;
-      setIsAdmin(Boolean(admin));
     } catch (e) {
       setAuthError(e.message || "Sign-in failed.");
     } finally {
@@ -1193,7 +1187,8 @@ export default function CcElectionPage() {
       {adminPanelOpen && cycle && (
         <AdminNominationsPanel cycle={cycle}
           onClose={() => setAdminPanelOpen(false)}
-          onView={nom => openCandidate(nom)} />
+          onView={nom => openCandidate(nom)}
+          onAdminConfirmed={() => setIsAdmin(true)} />
       )}
 
       {/* ── Detail view ─────────────────────────── */}
@@ -1236,12 +1231,7 @@ export default function CcElectionPage() {
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Signed in</span>
                 )}
                 {authError && <span style={{ fontSize: "0.75rem", color: "var(--red,#f87171)" }}>{authError}</span>}
-                {sessionDebug !== null && (
-                  <pre style={{ fontSize: "0.65rem", color: "var(--text-muted)", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "0.4rem 0.6rem", maxWidth: 400, overflowX: "auto", margin: 0 }}>
-                    {JSON.stringify(sessionDebug, null, 2)}
-                  </pre>
-                )}
-                {isAdmin && cycle && (
+                {authed && cycle && (
                   <button onClick={() => setAdminPanelOpen(true)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", background: "color-mix(in srgb,#f59e0b 8%,transparent)", color: "#f59e0b", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
                     All Nominations
                   </button>
