@@ -213,8 +213,7 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
 
   const coldKey  = md.coldCredentialHash || "";
   const credType = md.coldCredentialType || md.credentialType || "";
-  const isReadableRegion = v => v && !/^[0-9a-f]{16,}$/i.test(v);
-  const region   = isReadableRegion(td.geographicRegion) ? td.geographicRegion : isReadableRegion(md.geographicRegion) ? md.geographicRegion : "";
+  const region   = resolveRegion(td.geographicRegion) || resolveRegion(md.geographicRegion);
   const poolId   = td.poolId             || md.poolId           || "";
   const drepId   = td.drepId             || md.drepId           || "";
 
@@ -365,7 +364,7 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
             {members.map((m, i) => {
               const mName   = m.fullNameOrAlias || m.name || `Member ${i + 1}`;
               const mInit   = mName.split(/\s+/).slice(0,2).map(w => w[0] || "").join("").toUpperCase() || "?";
-              const mRegion = isReadableRegion(m.geographicRegion) ? m.geographicRegion : "";
+              const mRegion = resolveRegion(m.geographicRegion);
               const mPool   = m.poolId  || "";
               const mDrep   = m.drepId  || "";
               const mLinks  = [
@@ -517,6 +516,27 @@ function LinkList({ links, setLinks }) {
 
 const REGIONS = ["Africa", "Asia-Pacific", "Caribbean", "Central America & Mexico", "Eastern Europe", "Latin America", "Middle East", "North America", "Oceania", "South Asia", "Southeast Asia", "Western Europe", "Other / Global"];
 
+const REGION_ID_MAP = {
+  "69fdd609097eb3121a64b4d3": "Africa",
+  "69fdd609097eb3121a64b4d4": "Asia-Pacific",
+  "69fdd609097eb3121a64b4d5": "Caribbean",
+  "69fdd609097eb3121a64b4d6": "Central America & Mexico",
+  "69fdd609097eb3121a64b4d7": "Eastern Europe",
+  "69fdd609097eb3121a64b4d8": "Latin America",
+  "69fdd609097eb3121a64b4d9": "Middle East",
+  "69fdd609097eb3121a64b4da": "North America",
+  "69fdd609097eb3121a64b4db": "Oceania",
+  "69fdd609097eb3121a64b4dd": "South Asia",
+  "69fdd609097eb3121a64b4de": "Southeast Asia",
+  "69fdd609097eb3121a64b4df": "Western Europe",
+  "69fdd609097eb3121a64b4dc": "Other / Global",
+};
+
+function resolveRegion(v) {
+  if (!v) return "";
+  return REGION_ID_MAP[v] || (REGIONS.includes(v) ? v : "");
+}
+
 function RegionSelect({ value, onChange }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
@@ -623,7 +643,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
   const [fullName,         setFullName]         = useState(() => initialData?.title || itd.fullNameOrAlias || itd.organisationName || itd.consortiumName || "");
   const [contactEmail,     setContactEmail]     = useState(() => itd.contactEmail || "");
   const [contactPerson,    setContactPerson]    = useState(() => itd.contactPerson || "");
-  const [geographicRegion, setGeographicRegion] = useState(() => itd.geographicRegion || "");
+  const [geographicRegion, setGeographicRegion] = useState(() => resolveRegion(itd.geographicRegion) || "");
   const [poolId,           setPoolId]           = useState(() => itd.poolId || "");
   const [drepId,           setDrepId]           = useState(() => itd.drepId || "");
   const [xUsername,        setXUsername]        = useState(() => itd.xUsername || "");
@@ -658,7 +678,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
     const mapped = m.map(mem => ({
       ...emptyMem(),
       name: mem.fullNameOrAlias || "",
-      geographicRegion: mem.geographicRegion || "",
+      geographicRegion: resolveRegion(mem.geographicRegion) || "",
       poolId: mem.poolId || "",
       drepId: mem.drepId || "",
       xUsername: mem.xUsername || "",
