@@ -133,8 +133,11 @@ function ElectionTimeline({ cycle }) {
 
 // ─── Candidate helpers ─────────────────────────────────────────────────────────
 
-function getTrack(c) { return String(c?.metaData?.applicantType || c?.metaData?.track || c?.applicantType || "").toLowerCase(); }
-function getCandidateName(c) { return c?.title || c?.metaData?.fullName || c?.metaData?.organisationName || c?.metaData?.consortiumName || c?.metaData?.applicantName || "Unnamed Candidate"; }
+function getTrack(c) { return String(c?.metaData?.track || c?.metaData?.applicantType || c?.applicantType || "").toLowerCase(); }
+function getCandidateName(c) {
+  const md = c?.metaData || {};
+  return c?.title || md.individual?.fullNameOrAlias || md.organisation?.organisationName || md.consortium?.consortiumName || md.fullName || "Unnamed Candidate";
+}
 
 // ─── Candidate Card ──────────────────────────────────────────────────────────
 
@@ -194,29 +197,43 @@ function DetailField({ label, value }) {
 function CandidateDetail({ candidate, onBack, isAdmin = false }) {
   const md    = candidate?.metaData || {};
   const track = getTrack(candidate);
+  const td    = md[track] || {};  // track-specific sub-object
   const name  = getCandidateName(candidate);
-  const links = [...(md.links || []), ...(md.socialLinks || [])].filter((l, i, a) => l?.url && a.findIndex(x => x.url === l.url) === i);
-  const coldKey = md.coldCredentialHash || md.coldKey || "";
-  const credType = md.credentialType || "";
+
+  const links = [
+    td.xUsername        && { title: "X / Twitter", url: `https://x.com/${td.xUsername}` },
+    td.linkedinUsername && { title: "LinkedIn",    url: `https://linkedin.com/in/${td.linkedinUsername}` },
+    td.website          && { title: "Website",     url: td.website },
+    ...(Array.isArray(td.otherLinks) ? td.otherLinks : []),
+    ...(Array.isArray(md.links) ? md.links : []),
+  ].filter(Boolean).filter((l, i, a) => l?.url && a.findIndex(x => x.url === l.url) === i);
+
+  const coldKey  = md.coldCredentialHash || "";
+  const credType = md.coldCredentialType || md.credentialType || "";
+  const region   = td.geographicRegion   || md.geographicRegion || "";
+  const poolId   = td.poolId             || md.poolId           || "";
+  const drepId   = td.drepId             || md.drepId           || "";
 
   const govFields = [
-    ["Professional Background",          md.professionalBackground || md.areasOfExpertise],
-    ["Governance Experience",             md.governanceExperience],
-    ["Brief Biography",                   md.biography || md.organisationDescription],
-    ["Cardano Contributions",             md.cardanoContributions || md.memberContributions],
-    ["Motivation",                        md.motivation],
-    ["Views on Decentralised Governance", md.decentralisationViews || md.decentralisationPerspective || md.decentralisationImportance],
-    ["Constitutional Interpretation",     md.constitutionalInterpretation],
-    ["Unique Perspective / Skills",       md.uniquePerspective || md.uniqueStrengths],
-    ["Transparency & Communication Plan", md.transparencyPlan || md.transparencyApproach],
-    ["Internal Decision-Making Process",  md.internalDecisionMaking],
+    ["Professional Background",          td.professionalBackground || td.organisationalAreasOfExpertise || md.professionalBackground],
+    ["Governance Experience",             td.governanceExperience   || md.governanceExperience],
+    ["Brief Biography",                   td.briefBiography         || td.organisationDescription       || md.biography],
+    ["Cardano Contributions",             td.contributionsToCardano || md.cardanoContributions],
+    ["Motivation",                        td.motivation             || md.motivation],
+    ["Views on Decentralised Governance", td.decentralisedGovernanceImportance || md.decentralisationViews],
+    ["Constitutional Interpretation",     td.constitutionalInterpretation      || md.constitutionalInterpretation],
+    ["Unique Perspective / Skills",       td.perspectiveYouWouldBring          || md.uniquePerspective],
+    ["Transparency & Communication Plan", td.transparencyApproach              || md.transparencyPlan],
+    ["Internal Decision-Making Process",  td.internalDecisionMakingProcess     || md.internalDecisionMaking],
   ].filter(([, v]) => v);
 
   const adminFields = [
-    ["Contact Email",      md.contactEmail],
-    ["Contact Person",     md.contactPerson],
-    ["Conflict of Interest", md.conflictOfInterest],
+    ["Contact Email",        td.contactEmail              || md.contactEmail],
+    ["Contact Person",       td.contactPerson             || md.contactPerson],
+    ["Conflict of Interest", td.conflictOfInterestStatement || md.conflictOfInterest],
   ].filter(([, v]) => v);
+
+  const members = md.consortium?.members || md.members || [];
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto" }}>
@@ -232,15 +249,15 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
             <StatusBadge status={candidate.status} />
           </div>
           <h1 style={{ margin: "0 0 0.5rem", fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{name}</h1>
-          {(candidate.summary || md.biography) && <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-muted)", lineHeight: 1.65 }}>{candidate.summary || md.biography}</p>}
+          {(candidate.summary || td.briefBiography || md.biography) && <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-muted)", lineHeight: 1.65 }}>{candidate.summary || td.briefBiography || md.biography}</p>}
         </div>
 
         {/* Meta row */}
-        {(md.geographicRegion || md.poolId || md.drepId) && (
+        {(region || poolId || drepId) && (
           <div style={{ padding: "0.75rem 1.4rem", borderBottom: "1px solid var(--line)", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-            {md.geographicRegion && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Region: <strong style={{ color: "var(--text)" }}>{md.geographicRegion}</strong></span>}
-            {md.poolId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Pool: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{md.poolId}</code></span>}
-            {md.drepId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>DRep: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{md.drepId}</code></span>}
+            {region && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Region: <strong style={{ color: "var(--text)" }}>{region}</strong></span>}
+            {poolId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Pool: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{poolId}</code></span>}
+            {drepId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>DRep: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{drepId}</code></span>}
           </div>
         )}
 
@@ -273,15 +290,15 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
       )}
 
       {/* Consortium members */}
-      {md.members?.length > 0 && (
+      {members.length > 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem 1.4rem", marginBottom: "1rem" }}>
-          <p style={{ margin: "0 0 0.75rem", fontWeight: 700, fontSize: "0.88rem" }}>Consortium Members ({md.members.length})</p>
+          <p style={{ margin: "0 0 0.75rem", fontWeight: 700, fontSize: "0.88rem" }}>Consortium Members ({members.length})</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {md.members.map((m, i) => (
+            {members.map((m, i) => (
               <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "0.75rem 0.9rem" }}>
-                <p style={{ margin: "0 0 0.2rem", fontWeight: 600, fontSize: "0.88rem" }}>{m.name || `Member ${i + 1}`}</p>
+                <p style={{ margin: "0 0 0.2rem", fontWeight: 600, fontSize: "0.88rem" }}>{m.fullNameOrAlias || m.name || `Member ${i + 1}`}</p>
                 {m.role && <p style={{ margin: "0 0 0.2rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>{m.role}</p>}
-                {m.bio && <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.55 }}>{m.bio}</p>}
+                {(m.briefBiography || m.bio) && <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.55 }}>{m.briefBiography || m.bio}</p>}
               </div>
             ))}
           </div>
@@ -289,11 +306,6 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
       )}
 
       {/* Admin-only private fields */}
-      {isAdmin && (
-        <pre style={{ fontSize: "0.65rem", color: "var(--text-muted)", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "0.75rem 1rem", overflowX: "auto", marginBottom: "1rem" }}>
-          {JSON.stringify({ candidate_keys: Object.keys(candidate || {}), metaData: candidate?.metaData }, null, 2)}
-        </pre>
-      )}
       {isAdmin && adminFields.length > 0 && (
         <div style={{ border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", borderRadius: 12, background: "color-mix(in srgb,#f59e0b 5%,transparent)", padding: "1.1rem 1.4rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
@@ -418,48 +430,61 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
   const [done,        setDone]        = useState(false);
 
   const md = initialData?.metaData || {};
-  const initTrack = () => String(md.applicantType || md.track || "individual").toLowerCase();
-
-  // Track
+  const initTrack = () => String(md.track || md.applicantType || "individual").toLowerCase();
   const [track, setTrack] = useState(initTrack);
 
-  // §1 – shared identity fields
-  const [fullName,         setFullName]         = useState(() => initialData?.title || md.fullName || md.organisationName || md.consortiumName || "");
-  const [contactEmail,     setContactEmail]     = useState(() => md.contactEmail || "");
-  const [contactPerson,    setContactPerson]    = useState(() => md.contactPerson || "");
-  const [geographicRegion, setGeographicRegion] = useState(() => md.geographicRegion || "");
-  const [poolId,           setPoolId]           = useState(() => md.poolId || "");
-  const [drepId,           setDrepId]           = useState(() => md.drepId || "");
-  const [links,            setLinks]            = useState(() => md.links?.length ? md.links : [{ title: "", url: "" }]);
-  const [orgDescription,   setOrgDescription]   = useState(() => md.organisationDescription || "");
+  // Track-specific sub-object from saved data
+  const itd = md[initTrack()] || {};
+
+  // §1 – identity
+  const [fullName,         setFullName]         = useState(() => initialData?.title || itd.fullNameOrAlias || itd.organisationName || itd.consortiumName || "");
+  const [contactEmail,     setContactEmail]     = useState(() => itd.contactEmail || "");
+  const [contactPerson,    setContactPerson]    = useState(() => itd.contactPerson || "");
+  const [geographicRegion, setGeographicRegion] = useState(() => itd.geographicRegion || "");
+  const [poolId,           setPoolId]           = useState(() => itd.poolId || "");
+  const [drepId,           setDrepId]           = useState(() => itd.drepId || "");
+  const [links,            setLinks]            = useState(() => {
+    const sl = [
+      itd.xUsername        && { title: "X / Twitter", url: `https://x.com/${itd.xUsername}` },
+      itd.linkedinUsername && { title: "LinkedIn",    url: `https://linkedin.com/in/${itd.linkedinUsername}` },
+      itd.website          && { title: "Website",     url: itd.website },
+      ...(Array.isArray(itd.otherLinks) ? itd.otherLinks.filter(l => l?.url) : []),
+    ].filter(Boolean);
+    return sl.length ? sl : [{ title: "", url: "" }];
+  });
+  const [orgDescription,   setOrgDescription]   = useState(() => itd.organisationDescription || "");
 
   // §2 – background
-  const [professionalBackground, setProfessionalBackground] = useState(() => md.professionalBackground || md.areasOfExpertise || "");
-  const [governanceExperience,   setGovernanceExperience]   = useState(() => md.governanceExperience || "");
+  const [professionalBackground, setProfessionalBackground] = useState(() => itd.professionalBackground || itd.organisationalAreasOfExpertise || "");
+  const [governanceExperience,   setGovernanceExperience]   = useState(() => itd.governanceExperience || "");
 
   // §3 – governance statement
-  const [biography,                setBiography]                = useState(() => md.biography || initialData?.summary || "");
-  const [conflictOfInterest,       setConflictOfInterest]       = useState(() => md.conflictOfInterest || "");
-  const [cardanoContributions,     setCardanoContributions]     = useState(() => md.cardanoContributions || md.memberContributions || "");
-  const [motivation,               setMotivation]               = useState(() => md.motivation || "");
-  const [decentralisationViews,    setDecentralisationViews]    = useState(() => md.decentralisationViews || md.decentralisationPerspective || md.decentralisationImportance || "");
-  const [constitutionalInterp,     setConstitutionalInterp]     = useState(() => md.constitutionalInterpretation || "");
-  const [uniquePerspective,        setUniquePerspective]        = useState(() => md.uniquePerspective || md.uniqueStrengths || "");
-  const [transparencyPlan,         setTransparencyPlan]         = useState(() => md.transparencyPlan || md.transparencyApproach || "");
-  const [internalDecisionMaking,   setInternalDecisionMaking]   = useState(() => md.internalDecisionMaking || "");
+  const [biography,              setBiography]              = useState(() => itd.briefBiography || initialData?.summary || "");
+  const [conflictOfInterest,     setConflictOfInterest]     = useState(() => itd.conflictOfInterestStatement || "");
+  const [cardanoContributions,   setCardanoContributions]   = useState(() => itd.contributionsToCardano || "");
+  const [motivation,             setMotivation]             = useState(() => itd.motivation || "");
+  const [decentralisationViews,  setDecentralisationViews]  = useState(() => itd.decentralisedGovernanceImportance || "");
+  const [constitutionalInterp,   setConstitutionalInterp]   = useState(() => itd.constitutionalInterpretation || "");
+  const [uniquePerspective,      setUniquePerspective]      = useState(() => itd.perspectiveYouWouldBring || "");
+  const [transparencyPlan,       setTransparencyPlan]       = useState(() => itd.transparencyApproach || "");
+  const [internalDecisionMaking, setInternalDecisionMaking] = useState(() => itd.internalDecisionMakingProcess || md.consortium?.internalDecisionMakingProcess || "");
 
   // §4 – cold credentials
-  const [coldCredentialHash, setColdCredentialHash] = useState(() => md.coldCredentialHash || md.coldKey || "");
-  const [credentialType,     setCredentialType]     = useState(() => md.credentialType || "Key Credential");
+  const [coldCredentialHash, setColdCredentialHash] = useState(() => md.coldCredentialHash || "");
+  const [credentialType,     setCredentialType]     = useState(() => md.coldCredentialType || "Key Credential");
 
   // §5 – consortium members
-  const [members, setMembers] = useState(() => md.members?.length ? md.members : [{ name: "", role: "", bio: "" }, { name: "", role: "", bio: "" }]);
+  const [members, setMembers] = useState(() => {
+    const m = md.consortium?.members || [];
+    const mapped = m.map(mem => ({ name: mem.fullNameOrAlias || "", role: "", bio: mem.briefBiography || "" }));
+    return mapped.length >= 2 ? mapped : [{ name: "", role: "", bio: "" }, { name: "", role: "", bio: "" }];
+  });
 
   // §6 – declarations
-  const [declAccuracy,   setDeclAccuracy]   = useState(false);
+  const [declAccuracy,   setDeclAccuracy]   = useState(() => Boolean(md.declarationAgreement?.accuracyPublicVisibilityConsent));
   const [declPublic,     setDeclPublic]     = useState(false);
-  const [declVouching,   setDeclVouching]   = useState(false);
-  const [declTerms,      setDeclTerms]      = useState(false);
+  const [declVouching,   setDeclVouching]   = useState(() => Boolean(md.declarationAgreement?.memberIdentityVouching));
+  const [declTerms,      setDeclTerms]      = useState(() => Boolean(md.declarationAgreement?.termsAndConditionsAgreement));
 
   async function handleAuth() {
     setAuthLoading(true); setAuthError("");
@@ -470,61 +495,71 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   function buildPayload(status = "draft") {
     const clean = v => String(v || "").trim();
-    const cleanLinks = links.filter(l => clean(l.url)).map(l => ({ title: clean(l.title) || clean(l.url), url: clean(l.url) }));
 
-    const base = {
+    // Map generic links list to social-specific fields
+    let xUsername = "", linkedinUsername = "", website = "";
+    const otherLinks = [];
+    links.filter(l => clean(l.url)).forEach(l => {
+      const url = clean(l.url);
+      if (!xUsername && (url.includes("x.com/") || url.includes("twitter.com/")))
+        xUsername = url.split("/").filter(Boolean).pop() || "";
+      else if (!linkedinUsername && url.includes("linkedin.com/in/"))
+        linkedinUsername = url.split("/in/").pop()?.replace(/\/$/, "") || "";
+      else if (!website)
+        website = url;
+      else
+        otherLinks.push({ title: clean(l.title) || url, url });
+    });
+
+    const sharedGov = {
+      xUsername, linkedinUsername, website, otherLinks,
+      conflictOfInterestStatement:      clean(conflictOfInterest),
+      contributionsToCardano:           clean(cardanoContributions),
+      motivation:                       clean(motivation),
+      decentralisedGovernanceImportance: clean(decentralisationViews),
+      constitutionalInterpretation:     clean(constitutionalInterp),
+      perspectiveYouWouldBring:         clean(uniquePerspective),
+      transparencyApproach:             clean(transparencyPlan),
+    };
+
+    const emptyGov = { xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "", contributionsToCardano: "", motivation: "", decentralisedGovernanceImportance: "", constitutionalInterpretation: "", perspectiveYouWouldBring: "", transparencyApproach: "" };
+    const emptyMember = { fullNameOrAlias: "", geographicRegion: "", briefBiography: "", professionalBackground: "", governanceExperience: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "" };
+
+    return {
       voteId: cycle._id,
       status,
       title: clean(fullName) || "Unnamed Candidate",
       summary: clean(biography) || clean(orgDescription),
       metaData: {
-        applicantType: track,
+        track,
         coldCredentialHash: clean(coldCredentialHash),
-        credentialType: clean(credentialType),
-        links: cleanLinks,
-        contactEmail: clean(contactEmail),
-        motivation: clean(motivation),
-        cardanoContributions: clean(cardanoContributions),
-        decentralisationViews: clean(decentralisationViews),
-        constitutionalInterpretation: clean(constitutionalInterp),
-        uniquePerspective: clean(uniquePerspective),
-        transparencyPlan: clean(transparencyPlan),
-        conflictOfInterest: clean(conflictOfInterest),
+        coldCredentialType: clean(credentialType),
+        declarationAgreement: {
+          accuracyPublicVisibilityConsent: declAccuracy && declPublic,
+          termsAndConditionsAgreement:     declTerms,
+          memberIdentityVouching:          declVouching,
+        },
+        individual: track === "individual" ? {
+          fullNameOrAlias: clean(fullName), contactEmail: clean(contactEmail),
+          geographicRegion: clean(geographicRegion), poolId: clean(poolId), drepId: clean(drepId),
+          professionalBackground: clean(professionalBackground), governanceExperience: clean(governanceExperience),
+          briefBiography: clean(biography), ...sharedGov,
+        } : { fullNameOrAlias: "", contactEmail: "", geographicRegion: "", poolId: "", drepId: "", professionalBackground: "", governanceExperience: "", briefBiography: "", ...emptyGov },
+        organisation: track === "organisation" ? {
+          organisationName: clean(fullName), organisationDescription: clean(orgDescription),
+          geographicRegion: clean(geographicRegion), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
+          poolId: clean(poolId), drepId: clean(drepId),
+          organisationalAreasOfExpertise: clean(professionalBackground), governanceExperience: clean(governanceExperience),
+          ...sharedGov,
+        } : { organisationName: "", organisationDescription: "", geographicRegion: "", contactPerson: "", contactEmail: "", poolId: "", drepId: "", organisationalAreasOfExpertise: "", governanceExperience: "", ...emptyGov },
+        consortium: track === "consortium" ? {
+          consortiumName: clean(fullName), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
+          internalDecisionMakingProcess: clean(internalDecisionMaking),
+          members: members.map(m => ({ ...emptyMember, fullNameOrAlias: clean(m.name), briefBiography: clean(m.bio) })),
+          ...sharedGov,
+        } : { consortiumName: "", contactPerson: "", contactEmail: "", internalDecisionMakingProcess: "", members: [emptyMember, emptyMember], ...emptyGov },
       },
     };
-
-    if (track === "individual") {
-      Object.assign(base.metaData, {
-        fullName: clean(fullName),
-        geographicRegion: clean(geographicRegion),
-        poolId: clean(poolId),
-        drepId: clean(drepId),
-        professionalBackground: clean(professionalBackground),
-        governanceExperience: clean(governanceExperience),
-        biography: clean(biography),
-      });
-    } else if (track === "organisation") {
-      Object.assign(base.metaData, {
-        organisationName: clean(fullName),
-        organisationDescription: clean(orgDescription),
-        geographicRegion: clean(geographicRegion),
-        contactPerson: clean(contactPerson),
-        poolId: clean(poolId),
-        drepId: clean(drepId),
-        areasOfExpertise: clean(professionalBackground),
-        governanceExperience: clean(governanceExperience),
-      });
-    } else {
-      Object.assign(base.metaData, {
-        consortiumName: clean(fullName),
-        contactPerson: clean(contactPerson),
-        memberContributions: clean(cardanoContributions),
-        internalDecisionMaking: clean(internalDecisionMaking),
-        members: members.filter(m => clean(m.name)).map(m => ({ name: clean(m.name), role: clean(m.role), bio: clean(m.bio) })),
-      });
-    }
-
-    return base;
   }
 
   async function saveDraft() {
