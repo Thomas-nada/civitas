@@ -213,7 +213,8 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
 
   const coldKey  = md.coldCredentialHash || "";
   const credType = md.coldCredentialType || md.credentialType || "";
-  const region   = td.geographicRegion   || md.geographicRegion || "";
+  const isReadableRegion = v => v && !/^[0-9a-f]{16,}$/i.test(v);
+  const region   = isReadableRegion(td.geographicRegion) ? td.geographicRegion : isReadableRegion(md.geographicRegion) ? md.geographicRegion : "";
   const poolId   = td.poolId             || md.poolId           || "";
   const drepId   = td.drepId             || md.drepId           || "";
 
@@ -364,7 +365,7 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
             {members.map((m, i) => {
               const mName   = m.fullNameOrAlias || m.name || `Member ${i + 1}`;
               const mInit   = mName.split(/\s+/).slice(0,2).map(w => w[0] || "").join("").toUpperCase() || "?";
-              const mRegion = m.geographicRegion || "";
+              const mRegion = isReadableRegion(m.geographicRegion) ? m.geographicRegion : "";
               const mPool   = m.poolId  || "";
               const mDrep   = m.drepId  || "";
               const mLinks  = [
