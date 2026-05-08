@@ -21,6 +21,7 @@ const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceAc
 const RationalesArchivePage = lazy(() => import("./pages/RationalesArchivePage"));
 const BudgetPage = lazy(() => import("./pages/EkklesiaPage"));
 const BudgetSubmitPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ default: m.EkklesiaSubmitPage })));
+const CcElectionPage = lazy(() => import("./pages/CcElectionPage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
@@ -357,9 +358,8 @@ export default function App() {
           <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
-          {/* CC election — slug to be confirmed once live on Ekklesia API */}
-          <Route path="/cc-election" element={<BudgetPage voteSlug="cc-election-2026" basePath="/cc-election" />} />
-          <Route path="/cc-election/:proposalId" element={<BudgetPage voteSlug="cc-election-2026" basePath="/cc-election" />} />
+          <Route path="/cc-election" element={<CcElectionPage />} />
+          <Route path="/cc-election/:candidateId" element={<CcElectionPage />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />
