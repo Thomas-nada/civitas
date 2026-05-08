@@ -1083,6 +1083,7 @@ export default function CcElectionPage() {
   const [isAdmin,           setIsAdmin]           = useState(false);
   const [authLoading,       setAuthLoading]       = useState(false);
   const [authError,         setAuthError]         = useState("");
+  const [sessionDebug,      setSessionDebug]      = useState(null);
 
   useEffect(() => { setAuthed(false); setIsAdmin(false); setAuthError(""); }, [walletApi]);
 
@@ -1091,6 +1092,7 @@ export default function CcElectionPage() {
     setAuthLoading(true); setAuthError("");
     try {
       const res = await doWalletAuth(walletApi, walletRewardAddress);
+      setSessionDebug(res);
       setAuthed(true);
       const admin = res?.isAdmin ?? res?.data?.isAdmin
         ?? (res?.role === "admin" || res?.data?.role === "admin")
@@ -1234,6 +1236,11 @@ export default function CcElectionPage() {
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Signed in</span>
                 )}
                 {authError && <span style={{ fontSize: "0.75rem", color: "var(--red,#f87171)" }}>{authError}</span>}
+                {sessionDebug !== null && (
+                  <pre style={{ fontSize: "0.65rem", color: "var(--text-muted)", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "0.4rem 0.6rem", maxWidth: 400, overflowX: "auto", margin: 0 }}>
+                    {JSON.stringify(sessionDebug, null, 2)}
+                  </pre>
+                )}
                 {isAdmin && cycle && (
                   <button onClick={() => setAdminPanelOpen(true)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", background: "color-mix(in srgb,#f59e0b 8%,transparent)", color: "#f59e0b", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
                     All Nominations
