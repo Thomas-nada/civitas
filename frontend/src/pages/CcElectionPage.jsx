@@ -883,6 +883,112 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
   );
 }
 
+// ─── Admin Nominations Panel ──────────────────────────────────────────────────
+
+function AdminNominationsPanel({ cycle, onClose, onView }) {
+  const [nominations, setNominations] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [query,       setQuery]       = useState("");
+
+  useEffect(() => {
+    const fn = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!cycle?._id) return;
+    const ctrl = new AbortController();
+    setLoading(true); setError("");
+    (async () => {
+      try {
+        let page = 1, all = [];
+        while (true) {
+          const data = await apiFetch(`/proposals?vote=${cycle._id}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`, { signal: ctrl.signal });
+          const rows = Array.isArray(data) ? data : (data?.data ?? []);
+          all = all.concat(rows);
+          if (!data?.meta?.hasNextPage || rows.length < 100) break;
+          page++;
+        }
+        setNominations(all);
+      } catch (e) {
+        if (e.name !== "AbortError") setError(e.message || "Failed to load.");
+      } finally { setLoading(false); }
+    })();
+    return () => ctrl.abort();
+  }, [cycle]);
+
+  const filtered = nominations.filter(n => {
+    if (statusFilter !== "all" && n.status !== statusFilter) return false;
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const counts = { draft: 0, live: 0, withdrawn: 0 };
+  nominations.forEach(n => { if (counts[n.status] !== undefined) counts[n.status]++; });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }} onClick={onClose}>
+      <div style={{ background: "var(--bg)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 14, width: "100%", maxWidth: 700, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,.5)" }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.25rem", borderBottom: "1px solid var(--line)", flexShrink: 0, gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#f59e0b", background: "color-mix(in srgb,#f59e0b 15%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 4, padding: "0.15rem 0.45rem" }}>Admin</span>
+            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>All Nominations</h2>
+            {!loading && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{nominations.length} total · {counts.draft} draft · {counts.live} live · {counts.withdrawn} withdrawn</span>}
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "1.2rem", lineHeight: 1, padding: "0.2rem", flexShrink: 0 }}>✕</button>
+        </div>
+
+        {/* Filters */}
+        <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--line)", display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", flexShrink: 0 }}>
+          <input type="search" placeholder="Search by name or address…" value={query} onChange={e => setQuery(e.target.value)}
+            style={{ flex: 1, minWidth: 160, padding: "0.4rem 0.65rem", border: "1px solid var(--line)", borderRadius: 7, background: "var(--panel)", color: "var(--text)", fontSize: "0.82rem" }} />
+          {["all", "draft", "live", "withdrawn"].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              style={{ padding: "0.3rem 0.65rem", borderRadius: 20, fontSize: "0.73rem", fontWeight: 600, border: "1px solid", cursor: "pointer",
+                borderColor: statusFilter === s ? "#f59e0b" : "var(--line)",
+                background: statusFilter === s ? "color-mix(in srgb,#f59e0b 12%,transparent)" : "transparent",
+                color: statusFilter === s ? "#f59e0b" : "var(--text-muted)" }}>
+              {s === "all" ? `All (${nominations.length})` : `${s.charAt(0).toUpperCase() + s.slice(1)} (${counts[s] ?? 0})`}
+            </button>
+          ))}
+        </div>
+
+        {/* List */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "0.75rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+          {loading ? (
+            <p className="muted" style={{ fontSize: "0.85rem", margin: "0.5rem 0" }}>Loading…</p>
+          ) : error ? (
+            <p style={{ color: "var(--red,#f87171)", fontSize: "0.85rem", margin: 0 }}>{error}</p>
+          ) : filtered.length === 0 ? (
+            <p className="muted" style={{ fontSize: "0.85rem", margin: "0.5rem 0" }}>No nominations match.</p>
+          ) : filtered.map(n => (
+            <div key={n._id} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "0.8rem 1rem", background: "var(--panel)", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                  <TrackBadge type={getTrack(n)} />
+                  <StatusBadge status={n.status} />
+                  <span style={{ fontWeight: 600, fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getCandidateName(n)}</span>
+                </div>
+                {n.proposer && <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.proposer}</p>}
+                <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
+              </div>
+              <button onClick={() => { onClose(); onView(n); }} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.28rem 0.7rem", flexShrink: 0 }}>View</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Submit Page (export) ────────────────────────────────────────────────────
 
 export function CcElectionSubmitPage() {
@@ -972,6 +1078,7 @@ export default function CcElectionPage() {
   const [filterType,        setFilterType]        = useState("");
   const [sort,              setSort]              = useState("submittedAt");
   const [myNomOpen,         setMyNomOpen]         = useState(false);
+  const [adminPanelOpen,    setAdminPanelOpen]    = useState(false);
   const [authed,            setAuthed]            = useState(false);
   const [isAdmin,           setIsAdmin]           = useState(false);
   const [authLoading,       setAuthLoading]       = useState(false);
@@ -1081,6 +1188,11 @@ export default function CcElectionPage() {
           onClose={() => setMyNomOpen(false)}
           onEdit={nom => navigate(`${BASE_PATH}/submit/${nom._id}`)} />
       )}
+      {adminPanelOpen && cycle && (
+        <AdminNominationsPanel cycle={cycle}
+          onClose={() => setAdminPanelOpen(false)}
+          onView={nom => openCandidate(nom)} />
+      )}
 
       {/* ── Detail view ─────────────────────────── */}
       {selected && (
@@ -1122,6 +1234,11 @@ export default function CcElectionPage() {
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Signed in</span>
                 )}
                 {authError && <span style={{ fontSize: "0.75rem", color: "var(--red,#f87171)" }}>{authError}</span>}
+                {isAdmin && cycle && (
+                  <button onClick={() => setAdminPanelOpen(true)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", background: "color-mix(in srgb,#f59e0b 8%,transparent)", color: "#f59e0b", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
+                    All Nominations
+                  </button>
+                )}
                 {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Nominations</button>}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
