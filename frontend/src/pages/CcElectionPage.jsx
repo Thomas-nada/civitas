@@ -290,7 +290,7 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
       )}
 
       {/* Consortium members */}
-      {members.length > 0 && (
+      {track === "consortium" && members.length > 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem 1.4rem", marginBottom: "1rem" }}>
           <p style={{ margin: "0 0 0.75rem", fontWeight: 700, fontSize: "0.88rem" }}>Consortium Members ({members.length})</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
