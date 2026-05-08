@@ -944,8 +944,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
                     )}
                   </div>
                   <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                    <Field label="Full Name / Alias" required>
-                      <input value={m.name} onChange={e => upd({ name: e.target.value })} placeholder="Full name or alias" style={inp} />
+                    <Field label="Full Name / Alias" required count={`${m.name.length}/100`}>
+                      <input value={m.name} onChange={e => upd({ name: e.target.value })} maxLength={100} placeholder="Full name or alias" style={inp} />
                     </Field>
                     <Field label="Geographic Region">
                       <RegionSelect value={m.geographicRegion} onChange={v => upd({ geographicRegion: v })} />
@@ -954,7 +954,16 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
                       <Field label="Pool ID"><input value={m.poolId} onChange={e => upd({ poolId: e.target.value })} placeholder="pool1…" style={inp} /></Field>
                       <Field label="DRep ID"><input value={m.drepId} onChange={e => upd({ drepId: e.target.value })} placeholder="drep1…" style={inp} /></Field>
                     </div>
-                    <Field label="Brief Biography" count={`${m.bio.length}/2000`}>
+                    <div>
+                      <label style={{ ...lbl, marginBottom: "0.5rem" }}>Social & Profile Links</label>
+                      <SocialLinksFields
+                        xUsername={m.xUsername} onX={v => upd({ xUsername: v })}
+                        linkedinUsername={m.linkedinUsername} onLinkedin={v => upd({ linkedinUsername: v })}
+                        website={m.website} onWebsite={v => upd({ website: v })}
+                        otherLinks={m.otherLinks} onOtherLinks={v => upd({ otherLinks: v })}
+                      />
+                    </div>
+                    <Field label="Brief Biography" required count={`${m.bio.length}/2000`}>
                       <textarea value={m.bio} onChange={e => upd({ bio: e.target.value })} maxLength={2000} rows={3} placeholder="Brief biography…" style={ta} />
                     </Field>
                     <Field label="Professional Background" count={`${m.professionalBackground.length}/2000`}>
@@ -966,15 +975,6 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
                     <Field label="Conflict of Interest" count={`${m.conflictOfInterest.length}/2000`}>
                       <textarea value={m.conflictOfInterest} onChange={e => upd({ conflictOfInterest: e.target.value })} maxLength={2000} rows={2} placeholder="Disclose any conflicts of interest, or leave blank…" style={ta} />
                     </Field>
-                    <div>
-                      <label style={{ ...lbl, marginBottom: "0.5rem" }}>Social & Professional Links</label>
-                      <SocialLinksFields
-                        xUsername={m.xUsername} onX={v => upd({ xUsername: v })}
-                        linkedinUsername={m.linkedinUsername} onLinkedin={v => upd({ linkedinUsername: v })}
-                        website={m.website} onWebsite={v => upd({ website: v })}
-                        otherLinks={m.otherLinks} onOtherLinks={v => upd({ otherLinks: v })}
-                      />
-                    </div>
                   </div>
                 </div>
               );
