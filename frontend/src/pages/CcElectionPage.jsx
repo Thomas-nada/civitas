@@ -221,6 +221,7 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
     ["Professional Background",          td.professionalBackground || td.organisationalAreasOfExpertise || md.professionalBackground],
     ["Governance Experience",             td.governanceExperience   || md.governanceExperience],
     ["Brief Biography",                   td.briefBiography         || td.organisationDescription       || md.biography],
+    ["Conflict of Interest",              td.conflictOfInterestStatement || md.conflictOfInterest],
     ["Cardano Contributions",             td.contributionsToCardano || md.cardanoContributions],
     ["Motivation",                        td.motivation             || md.motivation],
     ["Views on Decentralised Governance", td.decentralisedGovernanceImportance || md.decentralisationViews],
@@ -231,9 +232,8 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
   ].filter(([, v]) => v);
 
   const adminFields = [
-    ["Contact Email",        td.contactEmail              || md.contactEmail],
-    ["Contact Person",       td.contactPerson             || md.contactPerson],
-    ["Conflict of Interest", td.conflictOfInterestStatement || md.conflictOfInterest],
+    ["Contact Email",  td.contactEmail  || md.contactEmail],
+    ["Contact Person", td.contactPerson || md.contactPerson],
   ].filter(([, v]) => v);
 
   const members = md.consortium?.members || md.members || [];
@@ -470,6 +470,43 @@ function LinkList({ links, setLinks }) {
   );
 }
 
+const REGIONS = ["Africa", "Asia-Pacific", "Caribbean", "Central America & Mexico", "Eastern Europe", "Latin America", "Middle East", "North America", "Oceania", "South Asia", "Southeast Asia", "Western Europe", "Other / Global"];
+
+function RegionSelect({ value, onChange }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ ...inp, appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", paddingRight: "2.25rem", cursor: "pointer" }}>
+      <option value="">No region (optional)</option>
+      {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+    </select>
+  );
+}
+
+function SocialLinksFields({ xUsername, onX, linkedinUsername, onLinkedin, website, onWebsite, otherLinks, onOtherLinks }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <Field label="X / Twitter">
+        <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+          <span style={{ padding: "0.6rem 0.75rem", background: "var(--panel)", borderRight: "1px solid var(--line)", fontSize: "0.82rem", color: "var(--text-muted)", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>x.com/</span>
+          <input value={xUsername} onChange={e => onX(e.target.value)} maxLength={100} placeholder="username" style={{ ...inp, border: "none", borderRadius: 0, flex: 1 }} />
+        </div>
+      </Field>
+      <Field label="LinkedIn">
+        <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+          <span style={{ padding: "0.6rem 0.75rem", background: "var(--panel)", borderRight: "1px solid var(--line)", fontSize: "0.82rem", color: "var(--text-muted)", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>linkedin.com/in/</span>
+          <input value={linkedinUsername} onChange={e => onLinkedin(e.target.value)} maxLength={100} placeholder="username" style={{ ...inp, border: "none", borderRadius: 0, flex: 1 }} />
+        </div>
+      </Field>
+      <Field label="Website">
+        <input value={website} onChange={e => onWebsite(e.target.value)} placeholder="https://example.com" style={inp} />
+      </Field>
+      <Field label="Additional Links">
+        <LinkList links={otherLinks} setLinks={onOtherLinks} />
+      </Field>
+    </div>
+  );
+}
+
 // ─── Track Selector ───────────────────────────────────────────────────────────
 
 function TrackSelector({ value, onChange }) {
@@ -544,15 +581,10 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
   const [geographicRegion, setGeographicRegion] = useState(() => itd.geographicRegion || "");
   const [poolId,           setPoolId]           = useState(() => itd.poolId || "");
   const [drepId,           setDrepId]           = useState(() => itd.drepId || "");
-  const [links,            setLinks]            = useState(() => {
-    const sl = [
-      itd.xUsername        && { title: "X / Twitter", url: `https://x.com/${itd.xUsername}` },
-      itd.linkedinUsername && { title: "LinkedIn",    url: `https://linkedin.com/in/${itd.linkedinUsername}` },
-      itd.website          && { title: "Website",     url: itd.website },
-      ...(Array.isArray(itd.otherLinks) ? itd.otherLinks.filter(l => l?.url) : []),
-    ].filter(Boolean);
-    return sl.length ? sl : [{ title: "", url: "" }];
-  });
+  const [xUsername,        setXUsername]        = useState(() => itd.xUsername || "");
+  const [linkedinUsername, setLinkedinUsername] = useState(() => itd.linkedinUsername || "");
+  const [website,          setWebsite]          = useState(() => itd.website || "");
+  const [otherLinks,       setOtherLinks]       = useState(() => Array.isArray(itd.otherLinks) ? itd.otherLinks.filter(l => l?.url) : []);
   const [orgDescription,   setOrgDescription]   = useState(() => itd.organisationDescription || "");
 
   // §2 – background
@@ -575,10 +607,25 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
   const [credentialType,     setCredentialType]     = useState(() => md.coldCredentialType || "Key Credential");
 
   // §5 – consortium members
+  const emptyMem = () => ({ name: "", geographicRegion: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], bio: "", professionalBackground: "", governanceExperience: "", conflictOfInterest: "" });
   const [members, setMembers] = useState(() => {
     const m = md.consortium?.members || [];
-    const mapped = m.map(mem => ({ name: mem.fullNameOrAlias || "", role: "", bio: mem.briefBiography || "" }));
-    return mapped.length >= 2 ? mapped : [{ name: "", role: "", bio: "" }, { name: "", role: "", bio: "" }];
+    const mapped = m.map(mem => ({
+      ...emptyMem(),
+      name: mem.fullNameOrAlias || "",
+      geographicRegion: mem.geographicRegion || "",
+      poolId: mem.poolId || "",
+      drepId: mem.drepId || "",
+      xUsername: mem.xUsername || "",
+      linkedinUsername: mem.linkedinUsername || "",
+      website: mem.website || "",
+      otherLinks: Array.isArray(mem.otherLinks) ? mem.otherLinks.filter(l => l?.url) : [],
+      bio: mem.briefBiography || "",
+      professionalBackground: mem.professionalBackground || "",
+      governanceExperience: mem.governanceExperience || "",
+      conflictOfInterest: mem.conflictOfInterestStatement || "",
+    }));
+    return mapped.length >= 2 ? mapped : [emptyMem(), emptyMem()];
   });
 
   // §6 – declarations
@@ -596,31 +643,18 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   function buildPayload(status = "draft") {
     const clean = v => String(v || "").trim();
-
-    // Map generic links list to social-specific fields
-    let xUsername = "", linkedinUsername = "", website = "";
-    const otherLinks = [];
-    links.filter(l => clean(l.url)).forEach(l => {
-      const url = clean(l.url);
-      if (!xUsername && (url.includes("x.com/") || url.includes("twitter.com/")))
-        xUsername = url.split("/").filter(Boolean).pop() || "";
-      else if (!linkedinUsername && url.includes("linkedin.com/in/"))
-        linkedinUsername = url.split("/in/").pop()?.replace(/\/$/, "") || "";
-      else if (!website)
-        website = url;
-      else
-        otherLinks.push({ title: clean(l.title) || url, url });
-    });
+    const cleanLinks = arr => (arr || []).filter(l => clean(l.url)).map(l => ({ title: clean(l.title) || clean(l.url), url: clean(l.url) }));
 
     const sharedGov = {
-      xUsername, linkedinUsername, website, otherLinks,
-      conflictOfInterestStatement:      clean(conflictOfInterest),
-      contributionsToCardano:           clean(cardanoContributions),
-      motivation:                       clean(motivation),
+      xUsername: clean(xUsername), linkedinUsername: clean(linkedinUsername),
+      website: clean(website), otherLinks: cleanLinks(otherLinks),
+      conflictOfInterestStatement:       clean(conflictOfInterest),
+      contributionsToCardano:            clean(cardanoContributions),
+      motivation:                        clean(motivation),
       decentralisedGovernanceImportance: clean(decentralisationViews),
-      constitutionalInterpretation:     clean(constitutionalInterp),
-      perspectiveYouWouldBring:         clean(uniquePerspective),
-      transparencyApproach:             clean(transparencyPlan),
+      constitutionalInterpretation:      clean(constitutionalInterp),
+      perspectiveYouWouldBring:          clean(uniquePerspective),
+      transparencyApproach:              clean(transparencyPlan),
     };
 
     const emptyGov = { xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "", contributionsToCardano: "", motivation: "", decentralisedGovernanceImportance: "", constitutionalInterpretation: "", perspectiveYouWouldBring: "", transparencyApproach: "" };
@@ -656,7 +690,17 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         consortium: track === "consortium" ? {
           consortiumName: clean(fullName), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
           internalDecisionMakingProcess: clean(internalDecisionMaking),
-          members: members.map(m => ({ ...emptyMember, fullNameOrAlias: clean(m.name), briefBiography: clean(m.bio) })),
+          members: members.map(m => ({
+            ...emptyMember,
+            fullNameOrAlias: clean(m.name), geographicRegion: clean(m.geographicRegion),
+            poolId: clean(m.poolId), drepId: clean(m.drepId),
+            xUsername: clean(m.xUsername), linkedinUsername: clean(m.linkedinUsername),
+            website: clean(m.website), otherLinks: cleanLinks(m.otherLinks),
+            briefBiography: clean(m.bio),
+            professionalBackground: clean(m.professionalBackground),
+            governanceExperience: clean(m.governanceExperience),
+            conflictOfInterestStatement: clean(m.conflictOfInterest),
+          })),
           ...sharedGov,
         } : { consortiumName: "", contactPerson: "", contactEmail: "", internalDecisionMakingProcess: "", members: [emptyMember, emptyMember], ...emptyGov },
       },
@@ -782,15 +826,13 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="you@example.com" style={{ ...inp, maxWidth: 360 }} />
           </Field>
           <Field label="Geographic Region" help="The region you primarily represent (optional).">
-            <input value={geographicRegion} onChange={e => setGeographicRegion(e.target.value)} placeholder="e.g. Europe, Africa, Asia-Pacific" style={{ ...inp, maxWidth: 320 }} />
+            <RegionSelect value={geographicRegion} onChange={setGeographicRegion} />
           </Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <Field label="Pool ID" help="Your stake pool ID, if applicable."><input value={poolId} onChange={e => setPoolId(e.target.value)} placeholder="pool1…" style={inp} /></Field>
             <Field label="DRep ID"  help="Your DRep ID, if applicable."><input value={drepId}  onChange={e => setDrepId(e.target.value)}  placeholder="drep1…" style={inp} /></Field>
           </div>
-          <Field label="Social & Professional Links" help="Website, Twitter/X, LinkedIn, GitHub, etc.">
-            <LinkList links={links} setLinks={setLinks} />
-          </Field>
+          <SocialLinksFields xUsername={xUsername} onX={setXUsername} linkedinUsername={linkedinUsername} onLinkedin={setLinkedinUsername} website={website} onWebsite={setWebsite} otherLinks={otherLinks} onOtherLinks={setOtherLinks} />
         </FormSection>
       )}
 
@@ -803,7 +845,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             <textarea value={orgDescription} onChange={e => setOrgDescription(e.target.value)} maxLength={1000} rows={3} placeholder="Brief description of your organisation…" style={ta} />
           </Field>
           <Field label="Geographic Region">
-            <input value={geographicRegion} onChange={e => setGeographicRegion(e.target.value)} placeholder="e.g. Europe, Africa, Asia-Pacific" style={{ ...inp, maxWidth: 320 }} />
+            <RegionSelect value={geographicRegion} onChange={setGeographicRegion} />
           </Field>
           <Field label="Contact Person" required private><input value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Name of primary contact" style={{ ...inp, maxWidth: 360 }} /></Field>
           <Field label="Contact Email"  required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@org.com" style={{ ...inp, maxWidth: 360 }} /></Field>
@@ -811,7 +853,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             <Field label="Pool ID"><input value={poolId} onChange={e => setPoolId(e.target.value)} placeholder="pool1…" style={inp} /></Field>
             <Field label="DRep ID"><input value={drepId}  onChange={e => setDrepId(e.target.value)} placeholder="drep1…" style={inp} /></Field>
           </div>
-          <Field label="Social Links"><LinkList links={links} setLinks={setLinks} /></Field>
+          <SocialLinksFields xUsername={xUsername} onX={setXUsername} linkedinUsername={linkedinUsername} onLinkedin={setLinkedinUsername} website={website} onWebsite={setWebsite} otherLinks={otherLinks} onOtherLinks={setOtherLinks} />
         </FormSection>
       )}
 
@@ -820,17 +862,17 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           <Field label="Consortium Name" required><input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Consortium name" style={inp} /></Field>
           <Field label="Contact Person"  required private><input value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Primary contact name" style={{ ...inp, maxWidth: 360 }} /></Field>
           <Field label="Contact Email"   required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@example.com" style={{ ...inp, maxWidth: 360 }} /></Field>
-          <Field label="Social & Public Links"><LinkList links={links} setLinks={setLinks} /></Field>
+          <SocialLinksFields xUsername={xUsername} onX={setXUsername} linkedinUsername={linkedinUsername} onLinkedin={setLinkedinUsername} website={website} onWebsite={setWebsite} otherLinks={otherLinks} onOtherLinks={setOtherLinks} />
         </FormSection>
       )}
 
       {currentKey === "background" && (
         <FormSection number={step + 1} title="Background & Expertise">
-          <Field label={track === "individual" ? "Professional Background" : "Areas of Expertise"} required count={`${professionalBackground.length}/3000`}>
-            {govTA(professionalBackground, setProfessionalBackground, "Describe your professional background and areas of expertise…")}
+          <Field label={track === "individual" ? "Professional Background" : "Areas of Expertise"} required count={`${professionalBackground.length}/2000`}>
+            {govTA(professionalBackground, setProfessionalBackground, "Describe your professional background and areas of expertise…", 2000)}
           </Field>
-          <Field label="Governance Experience" required count={`${governanceExperience.length}/3000`} help="Experience with governance at any level — Cardano, corporate, civic, or other.">
-            {govTA(governanceExperience, setGovernanceExperience, "Describe your governance experience…")}
+          <Field label="Governance Experience" required count={`${governanceExperience.length}/2000`} help="Experience with governance at any level — Cardano, corporate, civic, or other.">
+            {govTA(governanceExperience, setGovernanceExperience, "Describe your governance experience…", 2000)}
           </Field>
         </FormSection>
       )}
@@ -842,30 +884,30 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
               {govTA(biography, setBiography, "Write your biography…", 2000)}
             </Field>
           )}
-          <Field label="Conflict of Interest" private help="Disclose any potential conflicts. Leave blank if none." count={`${conflictOfInterest.length}/2000`}>
+          <Field label="Conflict of Interest" help="Disclose any potential conflicts. Leave blank if none." count={`${conflictOfInterest.length}/2000`}>
             {govTA(conflictOfInterest, setConflictOfInterest, "Disclose any conflicts of interest, or leave blank…", 2000)}
           </Field>
-          <Field label={track === "consortium" ? "Member Contributions to Cardano" : "Cardano Contributions"} required count={`${cardanoContributions.length}/3000`}>
-            {govTA(cardanoContributions, setCardanoContributions, "Describe your contributions to the Cardano ecosystem…")}
+          <Field label={track === "consortium" ? "Member Contributions to Cardano" : "Cardano Contributions"} required count={`${cardanoContributions.length}/2000`}>
+            {govTA(cardanoContributions, setCardanoContributions, "Describe your contributions to the Cardano ecosystem…", 2000)}
           </Field>
-          <Field label="Motivation" required count={`${motivation.length}/3000`} help="Why are you running for the Constitutional Committee?">
-            {govTA(motivation, setMotivation, "Explain your motivation for standing as a CC member…")}
+          <Field label="Motivation" required count={`${motivation.length}/2000`} help="Why are you running for the Constitutional Committee?">
+            {govTA(motivation, setMotivation, "Explain your motivation for standing as a CC member…", 2000)}
           </Field>
-          <Field label={track === "consortium" ? "Importance of Decentralisation" : "Views on Decentralised Governance"} required count={`${decentralisationViews.length}/3000`}>
-            {govTA(decentralisationViews, setDecentralisationViews, "Describe your views on decentralised governance…")}
+          <Field label={track === "consortium" ? "Importance of Decentralisation" : "Views on Decentralised Governance"} required count={`${decentralisationViews.length}/2000`}>
+            {govTA(decentralisationViews, setDecentralisationViews, "Describe your views on decentralised governance…", 2000)}
           </Field>
-          <Field label="Constitutional Interpretation Approach" required count={`${constitutionalInterp.length}/3000`} help="How would you interpret the Cardano Constitution when reviewing governance actions?">
-            {govTA(constitutionalInterp, setConstitutionalInterp, "Describe your approach to interpreting the Constitution…")}
+          <Field label="Constitutional Interpretation Approach" required count={`${constitutionalInterp.length}/2000`} help="How would you interpret the Cardano Constitution when reviewing governance actions?">
+            {govTA(constitutionalInterp, setConstitutionalInterp, "Describe your approach to interpreting the Constitution…", 2000)}
           </Field>
-          <Field label={track === "consortium" ? "Unique Strengths" : "Unique Perspective / Skills"} required count={`${uniquePerspective.length}/3000`}>
-            {govTA(uniquePerspective, setUniquePerspective, "What unique perspective or skills do you bring…")}
+          <Field label={track === "consortium" ? "Unique Strengths" : "Unique Perspective / Skills"} required count={`${uniquePerspective.length}/2000`}>
+            {govTA(uniquePerspective, setUniquePerspective, "What unique perspective or skills do you bring…", 2000)}
           </Field>
-          <Field label="Transparency & Communication Plan" required count={`${transparencyPlan.length}/3000`} help="How will you communicate your decisions and reasoning to the community?">
-            {govTA(transparencyPlan, setTransparencyPlan, "Describe your transparency and communication approach…")}
+          <Field label="Transparency & Communication Plan" required count={`${transparencyPlan.length}/2000`} help="How will you communicate your decisions and reasoning to the community?">
+            {govTA(transparencyPlan, setTransparencyPlan, "Describe your transparency and communication approach…", 2000)}
           </Field>
           {track === "consortium" && (
-            <Field label="Internal Decision-Making Process" required count={`${internalDecisionMaking.length}/3000`} help="How does your consortium reach consensus on governance votes?">
-              {govTA(internalDecisionMaking, setInternalDecisionMaking, "Describe how your consortium makes decisions…")}
+            <Field label="Internal Decision-Making Process" required count={`${internalDecisionMaking.length}/2000`} help="How does your consortium reach consensus on governance votes?">
+              {govTA(internalDecisionMaking, setInternalDecisionMaking, "Describe how your consortium makes decisions…", 2000)}
             </Field>
           )}
         </FormSection>
@@ -889,22 +931,55 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
       {currentKey === "members" && (
         <FormSection number={step + 1} title="Consortium Members">
           <p style={hint}>Minimum 2 members required. All member profiles are publicly visible.</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {members.map((m, i) => (
-              <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "0.85rem 1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>Member {i + 1}</span>
-                  {members.length > 2 && (
-                    <button type="button" onClick={() => setMembers(ms => ms.filter((_, j) => j !== i))}
-                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.8rem" }}>Remove</button>
-                  )}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+            {members.map((m, i) => {
+              const upd = patch => setMembers(ms => ms.map((x, j) => j === i ? { ...x, ...patch } : x));
+              return (
+                <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--line)", background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>Member {i + 1}</span>
+                    {members.length > 2 && (
+                      <button type="button" onClick={() => setMembers(ms => ms.filter((_, j) => j !== i))}
+                        style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.8rem" }}>Remove</button>
+                    )}
+                  </div>
+                  <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                    <Field label="Full Name / Alias" required>
+                      <input value={m.name} onChange={e => upd({ name: e.target.value })} placeholder="Full name or alias" style={inp} />
+                    </Field>
+                    <Field label="Geographic Region">
+                      <RegionSelect value={m.geographicRegion} onChange={v => upd({ geographicRegion: v })} />
+                    </Field>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                      <Field label="Pool ID"><input value={m.poolId} onChange={e => upd({ poolId: e.target.value })} placeholder="pool1…" style={inp} /></Field>
+                      <Field label="DRep ID"><input value={m.drepId} onChange={e => upd({ drepId: e.target.value })} placeholder="drep1…" style={inp} /></Field>
+                    </div>
+                    <Field label="Brief Biography" count={`${m.bio.length}/2000`}>
+                      <textarea value={m.bio} onChange={e => upd({ bio: e.target.value })} maxLength={2000} rows={3} placeholder="Brief biography…" style={ta} />
+                    </Field>
+                    <Field label="Professional Background" count={`${m.professionalBackground.length}/2000`}>
+                      <textarea value={m.professionalBackground} onChange={e => upd({ professionalBackground: e.target.value })} maxLength={2000} rows={3} placeholder="Professional background and expertise…" style={ta} />
+                    </Field>
+                    <Field label="Governance Experience" count={`${m.governanceExperience.length}/2000`}>
+                      <textarea value={m.governanceExperience} onChange={e => upd({ governanceExperience: e.target.value })} maxLength={2000} rows={3} placeholder="Governance experience at any level…" style={ta} />
+                    </Field>
+                    <Field label="Conflict of Interest" count={`${m.conflictOfInterest.length}/2000`}>
+                      <textarea value={m.conflictOfInterest} onChange={e => upd({ conflictOfInterest: e.target.value })} maxLength={2000} rows={2} placeholder="Disclose any conflicts of interest, or leave blank…" style={ta} />
+                    </Field>
+                    <div>
+                      <label style={{ ...lbl, marginBottom: "0.5rem" }}>Social & Professional Links</label>
+                      <SocialLinksFields
+                        xUsername={m.xUsername} onX={v => upd({ xUsername: v })}
+                        linkedinUsername={m.linkedinUsername} onLinkedin={v => upd({ linkedinUsername: v })}
+                        website={m.website} onWebsite={v => upd({ website: v })}
+                        otherLinks={m.otherLinks} onOtherLinks={v => upd({ otherLinks: v })}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <input value={m.name} onChange={e => setMembers(ms => ms.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Full name *" style={inp} />
-                <input value={m.role} onChange={e => setMembers(ms => ms.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="Role within consortium" style={inp} />
-                <textarea value={m.bio} onChange={e => setMembers(ms => ms.map((x, j) => j === i ? { ...x, bio: e.target.value } : x))} rows={2} placeholder="Brief bio / background" style={ta} />
-              </div>
-            ))}
-            <button type="button" onClick={() => setMembers(ms => [...ms, { name: "", role: "", bio: "" }])}
+              );
+            })}
+            <button type="button" onClick={() => setMembers(ms => [...ms, emptyMem()])}
               style={{ alignSelf: "flex-start", padding: "0.4rem 0.85rem", border: "1px dashed var(--line)", borderRadius: 7, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.82rem" }}>
               + Add Member
             </button>
