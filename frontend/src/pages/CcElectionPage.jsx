@@ -1081,11 +1081,16 @@ export default function CcElectionPage() {
   const [myNomOpen,         setMyNomOpen]         = useState(false);
   const [adminPanelOpen,    setAdminPanelOpen]    = useState(false);
   const [authed,            setAuthed]            = useState(false);
-  const [isAdmin,           setIsAdmin]           = useState(false);
+  const [isAdmin,           setIsAdmin]           = useState(() => sessionStorage.getItem("civitas_cc_admin") === "1");
   const [authLoading,       setAuthLoading]       = useState(false);
   const [authError,         setAuthError]         = useState("");
 
-  useEffect(() => { setAuthed(false); setIsAdmin(false); setAuthError(""); }, [walletApi]);
+  useEffect(() => {
+    setAuthed(false);
+    setIsAdmin(false);
+    sessionStorage.removeItem("civitas_cc_admin");
+    setAuthError("");
+  }, [walletApi]);
 
   async function handlePageAuth() {
     if (!walletApi || authLoading) return;
@@ -1188,7 +1193,7 @@ export default function CcElectionPage() {
         <AdminNominationsPanel cycle={cycle}
           onClose={() => setAdminPanelOpen(false)}
           onView={nom => openCandidate(nom)}
-          onAdminConfirmed={() => setIsAdmin(true)} />
+          onAdminConfirmed={() => { setIsAdmin(true); sessionStorage.setItem("civitas_cc_admin", "1"); }} />
       )}
 
       {/* ── Detail view ─────────────────────────── */}
