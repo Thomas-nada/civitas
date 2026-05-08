@@ -289,6 +289,11 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
       )}
 
       {/* Admin-only private fields */}
+      {isAdmin && (
+        <pre style={{ fontSize: "0.65rem", color: "var(--text-muted)", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "0.75rem 1rem", overflowX: "auto", marginBottom: "1rem" }}>
+          {JSON.stringify({ candidate_keys: Object.keys(candidate || {}), metaData: candidate?.metaData }, null, 2)}
+        </pre>
+      )}
       {isAdmin && adminFields.length > 0 && (
         <div style={{ border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", borderRadius: 12, background: "color-mix(in srgb,#f59e0b 5%,transparent)", padding: "1.1rem 1.4rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
