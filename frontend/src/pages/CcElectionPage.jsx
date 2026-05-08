@@ -532,9 +532,18 @@ const REGION_ID_MAP = {
   "69fdd609097eb3121a64b4dc": "Other / Global",
 };
 
+const REGION_LABEL_TO_ID = Object.fromEntries(
+  Object.entries(REGION_ID_MAP).map(([id, label]) => [label, id])
+);
+
 function resolveRegion(v) {
   if (!v) return "";
   return REGION_ID_MAP[v] || (REGIONS.includes(v) ? v : "");
+}
+
+function regionToId(v) {
+  if (!v) return "";
+  return REGION_LABEL_TO_ID[v] || v;
 }
 
 function RegionSelect({ value, onChange }) {
@@ -741,13 +750,13 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         },
         individual: track === "individual" ? {
           fullNameOrAlias: clean(fullName), contactEmail: clean(contactEmail),
-          geographicRegion: clean(geographicRegion), poolId: clean(poolId), drepId: clean(drepId),
+          geographicRegion: regionToId(geographicRegion), poolId: clean(poolId), drepId: clean(drepId),
           professionalBackground: clean(professionalBackground), governanceExperience: clean(governanceExperience),
           briefBiography: clean(biography), ...sharedGov,
         } : { fullNameOrAlias: "", contactEmail: "", geographicRegion: "", poolId: "", drepId: "", professionalBackground: "", governanceExperience: "", briefBiography: "", ...emptyGov },
         organisation: track === "organisation" ? {
           organisationName: clean(fullName), organisationDescription: clean(orgDescription),
-          geographicRegion: clean(geographicRegion), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
+          geographicRegion: regionToId(geographicRegion), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
           poolId: clean(poolId), drepId: clean(drepId),
           organisationalAreasOfExpertise: clean(professionalBackground), governanceExperience: clean(governanceExperience),
           ...sharedGov,
@@ -757,7 +766,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           internalDecisionMakingProcess: clean(internalDecisionMaking),
           members: members.map(m => ({
             ...emptyMember,
-            fullNameOrAlias: clean(m.name), geographicRegion: clean(m.geographicRegion),
+            fullNameOrAlias: clean(m.name), geographicRegion: regionToId(m.geographicRegion),
             poolId: clean(m.poolId), drepId: clean(m.drepId),
             xUsername: clean(m.xUsername), linkedinUsername: clean(m.linkedinUsername),
             website: clean(m.website), otherLinks: cleanLinks(m.otherLinks),
