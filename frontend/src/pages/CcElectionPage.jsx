@@ -413,6 +413,26 @@ function TrackSelector({ value, onChange }) {
   );
 }
 
+// ─── Step Indicator ──────────────────────────────────────────────────────────
+
+function StepIndicator({ current, total, label }) {
+  return (
+    <div style={{ marginBottom: "1.75rem" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "0.55rem" }}>
+        <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+          Step {current + 1} of {total}
+        </span>
+        <span style={{ fontSize: "0.92rem", fontWeight: 700 }}>{label}</span>
+      </div>
+      <div style={{ display: "flex", gap: 3 }}>
+        {Array.from({ length: total }, (_, i) => (
+          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= current ? "var(--accent,#5eead4)" : "var(--line)", transition: "background .25s" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Nomination Form ──────────────────────────────────────────────────────────
 
 function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, onSuccess }) {
@@ -596,6 +616,42 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   const declOk = declAccuracy && declPublic && declTerms && (track !== "consortium" || declVouching);
 
+  const submissionOpen = cycle ? new Date() >= new Date(cycle.submissionStartDate) && new Date() <= new Date(cycle.submissionEndDate) : false;
+
+  const govTA = (val, set, ph, maxLen = 3000) => (
+    <textarea value={val} onChange={e => set(e.target.value)} maxLength={maxLen} rows={5} placeholder={ph} style={ta} />
+  );
+
+  // ── Wizard step management ──
+  const stepKeys = useMemo(() => {
+    if (track === "consortium") return ["track", "identity", "governance", "credentials", "members", "declaration"];
+    return ["track", "identity", "background", "governance", "credentials", "declaration"];
+  }, [track]);
+
+  const stepLabels = useMemo(() => ({
+    track: "Candidate Track",
+    identity: track === "individual" ? "Identity & Contact" : track === "organisation" ? "Organisation Details" : "Consortium Details",
+    background: "Background & Expertise",
+    governance: track === "consortium" ? "Consortium Governance" : track === "individual" ? "Biography & Governance" : "Governance Statement",
+    credentials: "Cold Credentials",
+    members: "Consortium Members",
+    declaration: "Declaration & Agreement",
+  }), [track]);
+
+  const [step, setStep] = useState(0);
+  const currentKey = stepKeys[step];
+  const isLastStep = step === stepKeys.length - 1;
+
+  function goNext() {
+    if (authed) saveDraft();
+    setStep(s => Math.min(s + 1, stepKeys.length - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function goBack() {
+    setStep(s => Math.max(0, s - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   if (done) {
     return (
       <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
@@ -606,15 +662,9 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
     );
   }
 
-  const submissionOpen = cycle ? new Date() >= new Date(cycle.submissionStartDate) && new Date() <= new Date(cycle.submissionEndDate) : false;
-
-  const govTA = (val, set, ph, maxLen = 3000) => (
-    <textarea value={val} onChange={e => set(e.target.value)} maxLength={maxLen} rows={5} placeholder={ph} style={ta} />
-  );
-
   return (
     <div>
-      {/* Wallet auth notice */}
+      {/* Wallet auth — always visible at top */}
       {!walletApi && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1.1rem", background: "var(--panel)", marginBottom: "1.25rem" }}>
           <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>Connect your wallet using the button in the top bar to save and submit.</p>
@@ -630,15 +680,20 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </div>
       )}
 
-      {/* Track */}
-      <FormSection number="0" title="Candidate Track">
-        <p style={hint}>Select the track that best describes your candidacy.</p>
-        <TrackSelector value={track} onChange={v => { setTrack(v); setMembers(ms => ms.length >= 2 ? ms : [{ name: "", role: "", bio: "" }, { name: "", role: "", bio: "" }]); }} />
-      </FormSection>
+      {/* Step progress indicator */}
+      <StepIndicator current={step} total={stepKeys.length} label={stepLabels[currentKey]} />
 
-      {/* §1 — Identity */}
-      {track === "individual" && (
-        <FormSection number="1" title="Identity & Contact">
+      {/* ── Step content ── */}
+
+      {currentKey === "track" && (
+        <FormSection number={step + 1} title="Candidate Track">
+          <p style={hint}>Select the track that best describes your candidacy.</p>
+          <TrackSelector value={track} onChange={v => { setTrack(v); setMembers(ms => ms.length >= 2 ? ms : [{ name: "", role: "", bio: "" }, { name: "", role: "", bio: "" }]); }} />
+        </FormSection>
+      )}
+
+      {currentKey === "identity" && track === "individual" && (
+        <FormSection number={step + 1} title="Identity & Contact">
           <Field label="Full Name / Alias" required help="Your publicly displayed name.">
             <input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Your name or public alias" style={inp} />
           </Field>
@@ -650,7 +705,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           </Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <Field label="Pool ID" help="Your stake pool ID, if applicable."><input value={poolId} onChange={e => setPoolId(e.target.value)} placeholder="pool1…" style={inp} /></Field>
-            <Field label="DRep ID"  help="Your DRep ID, if applicable.">       <input value={drepId}  onChange={e => setDrepId(e.target.value)}  placeholder="drep1…" style={inp} /></Field>
+            <Field label="DRep ID"  help="Your DRep ID, if applicable."><input value={drepId}  onChange={e => setDrepId(e.target.value)}  placeholder="drep1…" style={inp} /></Field>
           </div>
           <Field label="Social & Professional Links" help="Website, Twitter/X, LinkedIn, GitHub, etc.">
             <LinkList links={links} setLinks={setLinks} />
@@ -658,8 +713,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </FormSection>
       )}
 
-      {track === "organisation" && (
-        <FormSection number="1" title="Organisation Details">
+      {currentKey === "identity" && track === "organisation" && (
+        <FormSection number={step + 1} title="Organisation Details">
           <Field label="Organisation Name" required help="Publicly displayed name of your organisation.">
             <input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Organisation name" style={inp} />
           </Field>
@@ -679,8 +734,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </FormSection>
       )}
 
-      {track === "consortium" && (
-        <FormSection number="1" title="Consortium Details">
+      {currentKey === "identity" && track === "consortium" && (
+        <FormSection number={step + 1} title="Consortium Details">
           <Field label="Consortium Name" required><input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Consortium name" style={inp} /></Field>
           <Field label="Contact Person"  required private><input value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Primary contact name" style={{ ...inp, maxWidth: 360 }} /></Field>
           <Field label="Contact Email"   required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@example.com" style={{ ...inp, maxWidth: 360 }} /></Field>
@@ -688,9 +743,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </FormSection>
       )}
 
-      {/* §2 — Background (individual + organisation only) */}
-      {(track === "individual" || track === "organisation") && (
-        <FormSection number="2" title={track === "individual" ? "Background & Expertise" : "Background & Expertise"}>
+      {currentKey === "background" && (
+        <FormSection number={step + 1} title="Background & Expertise">
           <Field label={track === "individual" ? "Professional Background" : "Areas of Expertise"} required count={`${professionalBackground.length}/3000`}>
             {govTA(professionalBackground, setProfessionalBackground, "Describe your professional background and areas of expertise…")}
           </Field>
@@ -700,58 +754,59 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </FormSection>
       )}
 
-      {/* §3 — Governance Statement */}
-      <FormSection number={track === "consortium" ? "2" : "3"} title={track === "consortium" ? "Consortium Governance Statement" : track === "individual" ? "Biography & Governance Statement" : "Governance Statement"}>
-        {track === "individual" && (
-          <Field label="Brief Biography" required count={`${biography.length}/2000`} help="Who you are — background, community involvement, Cardano journey.">
-            {govTA(biography, setBiography, "Write your biography…", 2000)}
+      {currentKey === "governance" && (
+        <FormSection number={step + 1} title={track === "consortium" ? "Consortium Governance Statement" : track === "individual" ? "Biography & Governance Statement" : "Governance Statement"}>
+          {track === "individual" && (
+            <Field label="Brief Biography" required count={`${biography.length}/2000`} help="Who you are — background, community involvement, Cardano journey.">
+              {govTA(biography, setBiography, "Write your biography…", 2000)}
+            </Field>
+          )}
+          <Field label="Conflict of Interest" private help="Disclose any potential conflicts. Leave blank if none." count={`${conflictOfInterest.length}/2000`}>
+            {govTA(conflictOfInterest, setConflictOfInterest, "Disclose any conflicts of interest, or leave blank…", 2000)}
           </Field>
-        )}
-        <Field label="Conflict of Interest" private help="Disclose any potential conflicts. Leave blank if none." count={`${conflictOfInterest.length}/2000`}>
-          {govTA(conflictOfInterest, setConflictOfInterest, "Disclose any conflicts of interest, or leave blank…", 2000)}
-        </Field>
-        <Field label={track === "consortium" ? "Member Contributions to Cardano" : "Cardano Contributions"} required count={`${cardanoContributions.length}/3000`}>
-          {govTA(cardanoContributions, setCardanoContributions, "Describe your contributions to the Cardano ecosystem…")}
-        </Field>
-        <Field label="Motivation" required count={`${motivation.length}/3000`} help="Why are you running for the Constitutional Committee?">
-          {govTA(motivation, setMotivation, "Explain your motivation for standing as a CC member…")}
-        </Field>
-        <Field label={track === "consortium" ? "Importance of Decentralisation" : "Views on Decentralised Governance"} required count={`${decentralisationViews.length}/3000`}>
-          {govTA(decentralisationViews, setDecentralisationViews, "Describe your views on decentralised governance…")}
-        </Field>
-        <Field label="Constitutional Interpretation Approach" required count={`${constitutionalInterp.length}/3000`} help="How would you interpret the Cardano Constitution when reviewing governance actions?">
-          {govTA(constitutionalInterp, setConstitutionalInterp, "Describe your approach to interpreting the Constitution…")}
-        </Field>
-        <Field label={track === "consortium" ? "Unique Strengths" : "Unique Perspective / Skills"} required count={`${uniquePerspective.length}/3000`}>
-          {govTA(uniquePerspective, setUniquePerspective, "What unique perspective or skills do you bring…")}
-        </Field>
-        <Field label="Transparency & Communication Plan" required count={`${transparencyPlan.length}/3000`} help="How will you communicate your decisions and reasoning to the community?">
-          {govTA(transparencyPlan, setTransparencyPlan, "Describe your transparency and communication approach…")}
-        </Field>
-        {track === "consortium" && (
-          <Field label="Internal Decision-Making Process" required count={`${internalDecisionMaking.length}/3000`} help="How does your consortium reach consensus on governance votes?">
-            {govTA(internalDecisionMaking, setInternalDecisionMaking, "Describe how your consortium makes decisions…")}
+          <Field label={track === "consortium" ? "Member Contributions to Cardano" : "Cardano Contributions"} required count={`${cardanoContributions.length}/3000`}>
+            {govTA(cardanoContributions, setCardanoContributions, "Describe your contributions to the Cardano ecosystem…")}
           </Field>
-        )}
-      </FormSection>
+          <Field label="Motivation" required count={`${motivation.length}/3000`} help="Why are you running for the Constitutional Committee?">
+            {govTA(motivation, setMotivation, "Explain your motivation for standing as a CC member…")}
+          </Field>
+          <Field label={track === "consortium" ? "Importance of Decentralisation" : "Views on Decentralised Governance"} required count={`${decentralisationViews.length}/3000`}>
+            {govTA(decentralisationViews, setDecentralisationViews, "Describe your views on decentralised governance…")}
+          </Field>
+          <Field label="Constitutional Interpretation Approach" required count={`${constitutionalInterp.length}/3000`} help="How would you interpret the Cardano Constitution when reviewing governance actions?">
+            {govTA(constitutionalInterp, setConstitutionalInterp, "Describe your approach to interpreting the Constitution…")}
+          </Field>
+          <Field label={track === "consortium" ? "Unique Strengths" : "Unique Perspective / Skills"} required count={`${uniquePerspective.length}/3000`}>
+            {govTA(uniquePerspective, setUniquePerspective, "What unique perspective or skills do you bring…")}
+          </Field>
+          <Field label="Transparency & Communication Plan" required count={`${transparencyPlan.length}/3000`} help="How will you communicate your decisions and reasoning to the community?">
+            {govTA(transparencyPlan, setTransparencyPlan, "Describe your transparency and communication approach…")}
+          </Field>
+          {track === "consortium" && (
+            <Field label="Internal Decision-Making Process" required count={`${internalDecisionMaking.length}/3000`} help="How does your consortium reach consensus on governance votes?">
+              {govTA(internalDecisionMaking, setInternalDecisionMaking, "Describe how your consortium makes decisions…")}
+            </Field>
+          )}
+        </FormSection>
+      )}
 
-      {/* §4 — Cold Credentials */}
-      <FormSection number={track === "consortium" ? "3" : "4"} title="Cold Credentials">
-        <p style={hint}>You must generate a CC cold key before submission. See the <a href="https://docs.intersectmbo.org/cardano/constitutional-committee/cc-election-2026/cold-credential-guide" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Cold Credential Guide</a>.</p>
-        <Field label="Cold Credential Hash" required help="Your cc_cold1… credential hash.">
-          <input value={coldCredentialHash} onChange={e => setColdCredentialHash(e.target.value)} placeholder="cc_cold1…" style={inp} />
-        </Field>
-        <Field label="Credential Type" required>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.2rem" }}>
-            <RadioRow name="credType" value="Key Credential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
-            <RadioRow name="credType" value="Script Credential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
-          </div>
-        </Field>
-      </FormSection>
+      {currentKey === "credentials" && (
+        <FormSection number={step + 1} title="Cold Credentials">
+          <p style={hint}>You must generate a CC cold key before submission. See the <a href="https://docs.intersectmbo.org/cardano/constitutional-committee/cc-election-2026/cold-credential-guide" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Cold Credential Guide</a>.</p>
+          <Field label="Cold Credential Hash" required help="Your cc_cold1… credential hash.">
+            <input value={coldCredentialHash} onChange={e => setColdCredentialHash(e.target.value)} placeholder="cc_cold1…" style={inp} />
+          </Field>
+          <Field label="Credential Type" required>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.2rem" }}>
+              <RadioRow name="credType" value="Key Credential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
+              <RadioRow name="credType" value="Script Credential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
+            </div>
+          </Field>
+        </FormSection>
+      )}
 
-      {/* §5 — Consortium Members */}
-      {track === "consortium" && (
-        <FormSection number="4" title="Consortium Members">
+      {currentKey === "members" && (
+        <FormSection number={step + 1} title="Consortium Members">
           <p style={hint}>Minimum 2 members required. All member profiles are publicly visible.</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {members.map((m, i) => (
@@ -776,48 +831,70 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         </FormSection>
       )}
 
-      {/* §Last — Declaration */}
-      <FormSection number={track === "consortium" ? "5" : "5"} title="Declaration & Agreement">
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
-            <input type="checkbox" checked={declAccuracy} onChange={e => setDeclAccuracy(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
-            I confirm that all information provided in this application is accurate and complete to the best of my knowledge.
-          </label>
-          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
-            <input type="checkbox" checked={declPublic} onChange={e => setDeclPublic(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
-            I consent to my application (excluding private fields) being publicly visible on the CC Election platform.
-          </label>
-          {track === "consortium" && (
+      {currentKey === "declaration" && (
+        <FormSection number={step + 1} title="Declaration & Agreement">
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
             <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
-              <input type="checkbox" checked={declVouching} onChange={e => setDeclVouching(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
-              I declare that all consortium members listed have consented to their participation and public visibility in this application (Member Identity Vouching).
+              <input type="checkbox" checked={declAccuracy} onChange={e => setDeclAccuracy(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
+              I confirm that all information provided in this application is accurate and complete to the best of my knowledge.
             </label>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
+              <input type="checkbox" checked={declPublic} onChange={e => setDeclPublic(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
+              I consent to my application (excluding private fields) being publicly visible on the CC Election platform.
+            </label>
+            {track === "consortium" && (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
+                <input type="checkbox" checked={declVouching} onChange={e => setDeclVouching(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
+                I declare that all consortium members listed have consented to their participation and public visibility in this application (Member Identity Vouching).
+              </label>
+            )}
+            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
+              <input type="checkbox" checked={declTerms} onChange={e => setDeclTerms(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
+              I accept the <a href="https://hydra-voting.intersectmbo.org/terms" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Terms & Conditions</a> and the <a href="https://docs.intersectmbo.org/cardano/constitutional-committee/code-of-conduct" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Code of Conduct</a> for CC candidates.
+            </label>
+          </div>
+        </FormSection>
+      )}
+
+      {submitError && <p style={{ color: "var(--red,#f87171)", fontSize: "0.83rem", margin: "0.5rem 0" }}>{submitError}</p>}
+
+      {/* Navigation bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--line)" }}>
+        <div>
+          {step > 0 && (
+            <button type="button" onClick={goBack}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.6rem 1rem", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.85rem" }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Back
+            </button>
           )}
-          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
-            <input type="checkbox" checked={declTerms} onChange={e => setDeclTerms(e.target.checked)} style={{ marginTop: "0.18rem", accentColor: "var(--accent,#5eead4)", flexShrink: 0 }} />
-            I accept the <a href="https://hydra-voting.intersectmbo.org/terms" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Terms & Conditions</a> and the <a href="https://docs.intersectmbo.org/cardano/constitutional-committee/code-of-conduct" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Code of Conduct</a> for CC candidates.
-          </label>
         </div>
-      </FormSection>
-
-      {submitError && <p style={{ color: "var(--red,#f87171)", fontSize: "0.83rem", margin: "0 0 1rem" }}>{submitError}</p>}
-
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
-        {authed && (
-          <button type="button" onClick={saveDraft} disabled={draftSaving}
-            style={{ padding: "0.6rem 1.1rem", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: draftSaved ? "var(--accent,#5eead4)" : "var(--text-muted)", cursor: "pointer", fontSize: "0.85rem" }}>
-            {draftSaving ? "Saving…" : draftSaved ? "Draft saved ✓" : "Save Draft"}
-          </button>
-        )}
-        {submissionOpen && (
-          <button type="button" onClick={() => handleSubmit("live")} disabled={!authed || submitting || !declOk}
-            style={{ padding: "0.65rem 1.4rem", borderRadius: 8, border: "none", background: authed && declOk ? "var(--accent,#5eead4)" : "var(--panel)", color: authed && declOk ? "#0a0f1a" : "var(--text-muted)", fontWeight: 700, fontSize: "0.88rem", cursor: authed && declOk ? "pointer" : "not-allowed" }}>
-            {submitting ? "Submitting…" : "Submit Nomination"}
-          </button>
-        )}
-        {!submissionOpen && (
-          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Submission window opens {formatDate(cycle?.submissionStartDate)}</span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {authed && (
+            <button type="button" onClick={saveDraft} disabled={draftSaving}
+              style={{ padding: "0.6rem 1rem", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: draftSaved ? "var(--accent,#5eead4)" : "var(--text-muted)", cursor: "pointer", fontSize: "0.82rem" }}>
+              {draftSaving ? "Saving…" : draftSaved ? "Saved ✓" : "Save Draft"}
+            </button>
+          )}
+          {!isLastStep ? (
+            <button type="button" onClick={goNext}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.65rem 1.25rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer" }}>
+              Continue
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          ) : (
+            <>
+              {submissionOpen ? (
+                <button type="button" onClick={() => handleSubmit("live")} disabled={!authed || submitting || !declOk}
+                  style={{ padding: "0.65rem 1.4rem", borderRadius: 8, border: "none", background: authed && declOk ? "var(--accent,#5eead4)" : "var(--panel)", color: authed && declOk ? "#0a0f1a" : "var(--text-muted)", fontWeight: 700, fontSize: "0.88rem", cursor: authed && declOk ? "pointer" : "not-allowed" }}>
+                  {submitting ? "Submitting…" : "Submit Nomination"}
+                </button>
+              ) : (
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Submission opens {formatDate(cycle?.submissionStartDate)}</span>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
