@@ -823,7 +823,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             <input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Your name or public alias" style={inp} />
           </Field>
           <Field label="Contact Email" required private help="Used for election communications. Not publicly displayed.">
-            <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="you@example.com" style={{ ...inp, maxWidth: 360 }} />
+            <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={254} placeholder="you@example.com" style={{ ...inp, maxWidth: 360 }} />
           </Field>
           <Field label="Geographic Region" help="The region you primarily represent (optional).">
             <RegionSelect value={geographicRegion} onChange={setGeographicRegion} />
@@ -848,7 +848,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             <RegionSelect value={geographicRegion} onChange={setGeographicRegion} />
           </Field>
           <Field label="Contact Person" required private><input value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Name of primary contact" style={{ ...inp, maxWidth: 360 }} /></Field>
-          <Field label="Contact Email"  required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@org.com" style={{ ...inp, maxWidth: 360 }} /></Field>
+          <Field label="Contact Email"  required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={254} placeholder="contact@org.com" style={{ ...inp, maxWidth: 360 }} /></Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <Field label="Pool ID"><input value={poolId} onChange={e => setPoolId(e.target.value)} placeholder="pool1…" style={inp} /></Field>
             <Field label="DRep ID"><input value={drepId}  onChange={e => setDrepId(e.target.value)} placeholder="drep1…" style={inp} /></Field>
@@ -861,7 +861,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
         <FormSection number={step + 1} title="Consortium Details">
           <Field label="Consortium Name" required><input value={fullName} onChange={e => setFullName(e.target.value)} maxLength={100} placeholder="Consortium name" style={inp} /></Field>
           <Field label="Contact Person"  required private><input value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Primary contact name" style={{ ...inp, maxWidth: 360 }} /></Field>
-          <Field label="Contact Email"   required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contact@example.com" style={{ ...inp, maxWidth: 360 }} /></Field>
+          <Field label="Contact Email"   required private><input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={254} placeholder="contact@example.com" style={{ ...inp, maxWidth: 360 }} /></Field>
           <SocialLinksFields xUsername={xUsername} onX={setXUsername} linkedinUsername={linkedinUsername} onLinkedin={setLinkedinUsername} website={website} onWebsite={setWebsite} otherLinks={otherLinks} onOtherLinks={setOtherLinks} />
         </FormSection>
       )}
@@ -916,8 +916,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
       {currentKey === "credentials" && (
         <FormSection number={step + 1} title="Cold Credentials">
           <p style={hint}>You must generate a CC cold key before submission. See the <a href="https://docs.intersectmbo.org/cardano/constitutional-committee/cc-election-2026/cold-credential-guide" target="_blank" rel="noreferrer" style={{ color: "var(--accent,#5eead4)" }}>Cold Credential Guide</a>.</p>
-          <Field label="Cold Credential Hash" required help="Your cc_cold1… credential hash.">
-            <input value={coldCredentialHash} onChange={e => setColdCredentialHash(e.target.value)} placeholder="cc_cold1…" style={inp} />
+          <Field label="Cold Credential Hash" required help="Your cc_cold1… credential hash." count={`${coldCredentialHash.length}/61`}>
+            <input value={coldCredentialHash} onChange={e => setColdCredentialHash(e.target.value)} maxLength={61} placeholder="cc_cold1…" style={inp} />
           </Field>
           <Field label="Credential Type" required>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.2rem" }}>
