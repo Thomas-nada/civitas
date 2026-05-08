@@ -47,10 +47,11 @@ async function doWalletAuth(walletApi, walletRewardAddress) {
   if (!payloadHex) throw new Error("No nonce returned from server.");
   const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signerAddress;
   const signature = await walletApi.signData(payloadHex, signAddress, false);
-  await apiFetch("/session", {
+  const res = await apiFetch("/session", {
     method: "PUT", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ signerAddress, signature, signType }),
   });
+  return res;
 }
 
 // ─── Shared UI pieces ─────────────────────────────────────────────────────────
@@ -190,7 +191,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function CandidateDetail({ candidate, onBack }) {
+function CandidateDetail({ candidate, onBack, isAdmin = false }) {
   const md    = candidate?.metaData || {};
   const track = getTrack(candidate);
   const name  = getCandidateName(candidate);
@@ -208,8 +209,13 @@ function CandidateDetail({ candidate, onBack }) {
     ["Constitutional Interpretation",     md.constitutionalInterpretation],
     ["Unique Perspective / Skills",       md.uniquePerspective || md.uniqueStrengths],
     ["Transparency & Communication Plan", md.transparencyPlan || md.transparencyApproach],
-    ["Conflict of Interest",              md.conflictOfInterest],
     ["Internal Decision-Making Process",  md.internalDecisionMaking],
+  ].filter(([, v]) => v);
+
+  const adminFields = [
+    ["Contact Email",      md.contactEmail],
+    ["Contact Person",     md.contactPerson],
+    ["Conflict of Interest", md.conflictOfInterest],
   ].filter(([, v]) => v);
 
   return (
@@ -230,9 +236,8 @@ function CandidateDetail({ candidate, onBack }) {
         </div>
 
         {/* Meta row */}
-        {(md.geographicRegion || md.poolId || md.drepId || md.contactPerson) && (
+        {(md.geographicRegion || md.poolId || md.drepId) && (
           <div style={{ padding: "0.75rem 1.4rem", borderBottom: "1px solid var(--line)", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-            {md.contactPerson && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Contact: <strong style={{ color: "var(--text)" }}>{md.contactPerson}</strong></span>}
             {md.geographicRegion && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Region: <strong style={{ color: "var(--text)" }}>{md.geographicRegion}</strong></span>}
             {md.poolId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Pool: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{md.poolId}</code></span>}
             {md.drepId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>DRep: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{md.drepId}</code></span>}
@@ -269,7 +274,7 @@ function CandidateDetail({ candidate, onBack }) {
 
       {/* Consortium members */}
       {md.members?.length > 0 && (
-        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem 1.4rem" }}>
+        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem 1.4rem", marginBottom: "1rem" }}>
           <p style={{ margin: "0 0 0.75rem", fontWeight: 700, fontSize: "0.88rem" }}>Consortium Members ({md.members.length})</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {md.members.map((m, i) => (
@@ -280,6 +285,17 @@ function CandidateDetail({ candidate, onBack }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Admin-only private fields */}
+      {isAdmin && adminFields.length > 0 && (
+        <div style={{ border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", borderRadius: 12, background: "color-mix(in srgb,#f59e0b 5%,transparent)", padding: "1.1rem 1.4rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#f59e0b", background: "color-mix(in srgb,#f59e0b 15%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 4, padding: "0.15rem 0.45rem" }}>Admin only</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Private fields — not visible to the public</span>
+          </div>
+          {adminFields.map(([label, val]) => <DetailField key={label} label={label} value={val} />)}
         </div>
       )}
     </div>
@@ -956,6 +972,30 @@ export default function CcElectionPage() {
   const [filterType,        setFilterType]        = useState("");
   const [sort,              setSort]              = useState("submittedAt");
   const [myNomOpen,         setMyNomOpen]         = useState(false);
+  const [authed,            setAuthed]            = useState(false);
+  const [isAdmin,           setIsAdmin]           = useState(false);
+  const [authLoading,       setAuthLoading]       = useState(false);
+  const [authError,         setAuthError]         = useState("");
+
+  useEffect(() => { setAuthed(false); setIsAdmin(false); setAuthError(""); }, [walletApi]);
+
+  async function handlePageAuth() {
+    if (!walletApi || authLoading) return;
+    setAuthLoading(true); setAuthError("");
+    try {
+      const res = await doWalletAuth(walletApi, walletRewardAddress);
+      setAuthed(true);
+      const admin = res?.isAdmin ?? res?.data?.isAdmin
+        ?? (res?.role === "admin" || res?.data?.role === "admin")
+        ?? (Array.isArray(res?.roles) && res.roles.includes("admin"))
+        ?? false;
+      setIsAdmin(Boolean(admin));
+    } catch (e) {
+      setAuthError(e.message || "Sign-in failed.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -1054,7 +1094,7 @@ export default function CcElectionPage() {
               <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading candidate…</p>
             </div>
           </div>
-        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} />
+        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} isAdmin={isAdmin} />
       )}
 
       {/* ── List view ───────────────────────────── */}
@@ -1067,7 +1107,21 @@ export default function CcElectionPage() {
                 {votingOpen && <span style={{ padding: "0.2rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: "color-mix(in srgb,var(--accent,#5eead4) 12%,transparent)", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 35%,transparent)", color: "var(--accent,#5eead4)", letterSpacing: "0.05em" }}>VOTING OPEN</span>}
                 {submissionOpen && !votingOpen && <span style={{ padding: "0.2rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: "color-mix(in srgb,#fbbf24 12%,transparent)", border: "1px solid color-mix(in srgb,#fbbf24 35%,transparent)", color: "#fbbf24", letterSpacing: "0.05em" }}>NOMINATIONS OPEN</span>}
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+                {walletApi && !authed && (
+                  <button onClick={handlePageAuth} disabled={authLoading} className="btn-outline" style={{ fontSize: "0.82rem" }}>
+                    {authLoading ? "Signing in…" : "Sign in"}
+                  </button>
+                )}
+                {authed && isAdmin && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.3rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.05em", background: "color-mix(in srgb,#f59e0b 12%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", color: "#f59e0b" }}>
+                    ★ ADMIN
+                  </span>
+                )}
+                {authed && !isAdmin && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Signed in</span>
+                )}
+                {authError && <span style={{ fontSize: "0.75rem", color: "var(--red,#f87171)" }}>{authError}</span>}
                 {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Nominations</button>}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
