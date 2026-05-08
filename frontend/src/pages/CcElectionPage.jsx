@@ -54,6 +54,18 @@ async function doWalletAuth(walletApi, walletRewardAddress) {
   return res;
 }
 
+// Triggers a re-render at the exact moment a future date arrives (e.g. submissionStartDate).
+function useAutoRefreshAt(dateStr) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!dateStr) return;
+    const ms = new Date(dateStr) - Date.now();
+    if (ms <= 0 || ms > 2 * 60 * 60 * 1000) return; // only schedule if within 2 hours
+    const id = setTimeout(() => setTick(t => t + 1), ms);
+    return () => clearTimeout(id);
+  }, [dateStr]);
+}
+
 // ─── Shared UI pieces ─────────────────────────────────────────────────────────
 
 function ExternalLinkIcon() {
@@ -813,6 +825,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
     finally { setSubmitting(false); }
   }
 
+  useAutoRefreshAt(cycle?.submissionStartDate);
+
   const declOk = declAccuracy && declPublic && declTerms && (track !== "consortium" || declVouching);
 
   const submissionOpen = cycle ? new Date() >= new Date(cycle.submissionStartDate) && new Date() <= new Date(cycle.submissionEndDate) : false;
@@ -1497,6 +1511,8 @@ export default function CcElectionPage() {
       return new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0);
     });
   }, [allCandidates, filterType, search, sort]);
+
+  useAutoRefreshAt(cycle?.submissionStartDate);
 
   const now = new Date();
   const submissionOpen = cycle ? now >= new Date(cycle.submissionStartDate) && now <= new Date(cycle.submissionEndDate) : false;
