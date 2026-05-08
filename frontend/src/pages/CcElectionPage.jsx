@@ -1119,31 +1119,6 @@ export default function CcElectionPage() {
   const [filterType,        setFilterType]        = useState("");
   const [sort,              setSort]              = useState("submittedAt");
   const [myNomOpen,         setMyNomOpen]         = useState(false);
-  const [adminPanelOpen,    setAdminPanelOpen]    = useState(false);
-  const [authed,            setAuthed]            = useState(false);
-  const [isAdmin,           setIsAdmin]           = useState(() => sessionStorage.getItem("civitas_cc_admin") === "1");
-  const [authLoading,       setAuthLoading]       = useState(false);
-  const [authError,         setAuthError]         = useState("");
-
-  useEffect(() => {
-    setAuthed(false);
-    setIsAdmin(false);
-    sessionStorage.removeItem("civitas_cc_admin");
-    setAuthError("");
-  }, [walletApi]);
-
-  async function handlePageAuth() {
-    if (!walletApi || authLoading) return;
-    setAuthLoading(true); setAuthError("");
-    try {
-      await doWalletAuth(walletApi, walletRewardAddress);
-      setAuthed(true);
-    } catch (e) {
-      setAuthError(e.message || "Sign-in failed.");
-    } finally {
-      setAuthLoading(false);
-    }
-  }
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -1229,14 +1204,8 @@ export default function CcElectionPage() {
           onClose={() => setMyNomOpen(false)}
           onEdit={nom => navigate(`${BASE_PATH}/submit/${nom._id}`)} />
       )}
-      {adminPanelOpen && cycle && (
-        <AdminNominationsPanel cycle={cycle}
-          onClose={() => setAdminPanelOpen(false)}
-          onView={nom => openCandidate(nom)}
-          onAdminConfirmed={() => { setIsAdmin(true); sessionStorage.setItem("civitas_cc_admin", "1"); }} />
-      )}
 
-      {/* ── Detail view ─────────────────────────── */}
+{/* ── Detail view ─────────────────────────── */}
       {selected && (
         detailLoading ? (
           <div style={{ maxWidth: 780, margin: "0 auto" }}>
@@ -1248,7 +1217,7 @@ export default function CcElectionPage() {
               <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading candidate…</p>
             </div>
           </div>
-        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} isAdmin={isAdmin} />
+        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} />
       )}
 
       {/* ── List view ───────────────────────────── */}
@@ -1262,25 +1231,6 @@ export default function CcElectionPage() {
                 {submissionOpen && !votingOpen && <span style={{ padding: "0.2rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: "color-mix(in srgb,#fbbf24 12%,transparent)", border: "1px solid color-mix(in srgb,#fbbf24 35%,transparent)", color: "#fbbf24", letterSpacing: "0.05em" }}>NOMINATIONS OPEN</span>}
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
-                {walletApi && !authed && (
-                  <button onClick={handlePageAuth} disabled={authLoading} className="btn-outline" style={{ fontSize: "0.82rem" }}>
-                    {authLoading ? "Signing in…" : "Sign in"}
-                  </button>
-                )}
-                {authed && isAdmin && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.3rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.05em", background: "color-mix(in srgb,#f59e0b 12%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", color: "#f59e0b" }}>
-                    ★ ADMIN
-                  </span>
-                )}
-                {authed && !isAdmin && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Signed in</span>
-                )}
-                {authError && <span style={{ fontSize: "0.75rem", color: "var(--red,#f87171)" }}>{authError}</span>}
-                {authed && cycle && (
-                  <button onClick={() => setAdminPanelOpen(true)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", background: "color-mix(in srgb,#f59e0b 8%,transparent)", color: "#f59e0b", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
-                    All Nominations
-                  </button>
-                )}
                 {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Nominations</button>}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
@@ -1360,6 +1310,176 @@ export default function CcElectionPage() {
             </>
           )}
         </div>
+      )}
+    </main>
+  );
+}
+
+// ─── Admin Page (/ccadmin) ───────────────────────────────────────────────────
+
+export function CcAdminPage() {
+  const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
+
+  const [cycle,        setCycle]        = useState(null);
+  const [cycleLoading, setCycleLoading] = useState(true);
+  const [authed,       setAuthed]       = useState(false);
+  const [authLoading,  setAuthLoading]  = useState(false);
+  const [authError,    setAuthError]    = useState("");
+  const [nominations,  setNominations]  = useState([]);
+  const [nomLoading,   setNomLoading]   = useState(false);
+  const [nomError,     setNomError]     = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [query,        setQuery]        = useState("");
+  const [selected,     setSelected]     = useState(null);
+  const [detailFull,   setDetailFull]   = useState(null);
+  const [detailLoading,setDetailLoading]= useState(false);
+
+  useEffect(() => {
+    apiFetch("/votes")
+      .then(data => { const list = Array.isArray(data) ? data : (data?.data ?? []); const m = list.find(v => v.slug === VOTE_SLUG); if (m) setCycle(m); })
+      .catch(() => {}).finally(() => setCycleLoading(false));
+  }, []);
+
+  useEffect(() => { setAuthed(false); setNominations([]); setSelected(null); setAuthError(""); }, [walletApi]);
+
+  async function handleAuth() {
+    setAuthLoading(true); setAuthError("");
+    try { await doWalletAuth(walletApi, walletRewardAddress); setAuthed(true); fetchAll(cycle); }
+    catch (e) { setAuthError(e.message || "Sign-in failed."); }
+    finally { setAuthLoading(false); }
+  }
+
+  async function fetchAll(c) {
+    if (!c?._id) return;
+    setNomLoading(true); setNomError("");
+    try {
+      let page = 1, all = [];
+      while (true) {
+        const data = await apiFetch(`/proposals?vote=${c._id}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`);
+        const rows = Array.isArray(data) ? data : (data?.data ?? []);
+        all = all.concat(rows);
+        if (!data?.meta?.hasNextPage || rows.length < 100) break;
+        page++;
+      }
+      setNominations(all);
+    } catch (e) { setNomError(e.message || "Failed to load. You may not have admin access."); }
+    finally { setNomLoading(false); }
+  }
+
+  async function openDetail(nom) {
+    setSelected(nom); setDetailFull(null); setDetailLoading(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    try { const d = await apiFetch(`/proposals/${nom._id}`); setDetailFull(d?.data ?? d); }
+    catch { setDetailFull(nom); }
+    finally { setDetailLoading(false); }
+  }
+
+  const counts = { draft: 0, live: 0, withdrawn: 0 };
+  nominations.forEach(n => { if (counts[n.status] !== undefined) counts[n.status]++; });
+
+  const filtered = nominations.filter(n => {
+    if (statusFilter !== "all" && n.status !== statusFilter) return false;
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const amber = { bg: "color-mix(in srgb,#f59e0b 8%,transparent)", border: "color-mix(in srgb,#f59e0b 35%,transparent)", text: "#f59e0b" };
+  const badge = { fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: amber.text, background: "color-mix(in srgb,#f59e0b 15%,transparent)", border: `1px solid ${amber.border}`, borderRadius: 4, padding: "0.15rem 0.45rem" };
+
+  if (selected) {
+    const display = detailFull ?? selected;
+    return (
+      <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          <button onClick={() => { setSelected(null); setDetailFull(null); }} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.83rem", padding: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Back to all nominations
+          </button>
+          <span style={badge}>Admin</span>
+        </div>
+        {detailLoading ? (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "2.5rem", textAlign: "center" }}>
+            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading…</p>
+          </div>
+        ) : (
+          <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} />
+        )}
+      </main>
+    );
+  }
+
+  return (
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 860, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        <span style={badge}>Admin</span>
+        <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.02em" }}>CC Election — Admin</h1>
+      </div>
+
+      {!walletApi ? (
+        <div style={{ border: `1px solid ${amber.border}`, borderRadius: 12, background: amber.bg, padding: "3rem 2rem", textAlign: "center" }}>
+          <p style={{ margin: "0 0 0.35rem", fontWeight: 700 }}>Connect your wallet</p>
+          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Use the Connect Wallet button in the top bar, then sign in below.</p>
+        </div>
+      ) : !authed ? (
+        <div style={{ border: `1px solid ${amber.border}`, borderRadius: 12, background: amber.bg, padding: "2rem", display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "flex-start" }}>
+          <p style={{ margin: 0, fontSize: "0.88rem" }}>Sign in with your wallet to access admin tools.</p>
+          <button onClick={handleAuth} disabled={authLoading || cycleLoading}
+            style={{ padding: "0.55rem 1.2rem", borderRadius: 8, border: `1px solid ${amber.border}`, background: amber.bg, color: amber.text, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
+            {authLoading ? "Signing in…" : "Sign in with Wallet"}
+          </button>
+          {authError && <p style={{ margin: 0, color: "var(--red,#f87171)", fontSize: "0.82rem" }}>{authError}</p>}
+        </div>
+      ) : (
+        <>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            {[["Total", nominations.length], ["Draft", counts.draft], ["Live", counts.live], ["Withdrawn", counts.withdrawn]].map(([label, val]) => (
+              <div key={label} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "0.75rem 0.9rem" }}>
+                <p style={{ margin: "0 0 0.2rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
+                <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>{nomLoading ? "…" : val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+            <input type="search" placeholder="Search by name or wallet address…" value={query} onChange={e => setQuery(e.target.value)}
+              style={{ flex: 1, minWidth: 200, padding: "0.5rem 0.75rem", border: "1px solid var(--line)", borderRadius: 8, background: "var(--panel)", color: "var(--text)", fontSize: "0.85rem" }} />
+            {["all", "draft", "live", "withdrawn"].map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                style={{ padding: "0.35rem 0.75rem", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, border: "1px solid", cursor: "pointer",
+                  borderColor: statusFilter === s ? amber.text : "var(--line)",
+                  background: statusFilter === s ? amber.bg : "transparent",
+                  color: statusFilter === s ? amber.text : "var(--text-muted)" }}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* List */}
+          {nomLoading && <p className="muted" style={{ fontSize: "0.85rem" }}>Loading nominations…</p>}
+          {nomError && <p style={{ color: "var(--red,#f87171)", fontSize: "0.85rem" }}>{nomError}</p>}
+          {!nomLoading && !nomError && filtered.length === 0 && <p className="muted" style={{ fontSize: "0.85rem" }}>No nominations match.</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {filtered.map(n => (
+              <div key={n._id} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "0.85rem 1.1rem", background: "var(--panel)", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
+                    <TrackBadge type={getTrack(n)} />
+                    <StatusBadge status={n.status} />
+                    <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{getCandidateName(n)}</span>
+                  </div>
+                  {n.proposer && <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.proposer}</p>}
+                  <p style={{ margin: "0.1rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
+                </div>
+                <button onClick={() => openDetail(n)} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.28rem 0.7rem", flexShrink: 0 }}>View</button>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </main>
   );
