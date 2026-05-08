@@ -360,20 +360,64 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
       {track === "consortium" && members.length > 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 16, background: "var(--panel)", padding: "1.75rem", marginBottom: "1.25rem" }}>
           <SectionLabel>Consortium Members</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {members.map((m, i) => {
-              const mName = m.fullNameOrAlias || m.name || `Member ${i + 1}`;
-              const mInit = mName.split(/\s+/).slice(0,2).map(w => w[0] || "").join("").toUpperCase() || "?";
+              const mName   = m.fullNameOrAlias || m.name || `Member ${i + 1}`;
+              const mInit   = mName.split(/\s+/).slice(0,2).map(w => w[0] || "").join("").toUpperCase() || "?";
+              const mRegion = m.geographicRegion || "";
+              const mPool   = m.poolId  || "";
+              const mDrep   = m.drepId  || "";
+              const mLinks  = [
+                m.xUsername        && { title: "X / Twitter", url: `https://x.com/${m.xUsername}` },
+                m.linkedinUsername && { title: "LinkedIn",    url: `https://linkedin.com/in/${m.linkedinUsername}` },
+                m.website          && { title: "Website",     url: m.website },
+                ...(Array.isArray(m.otherLinks) ? m.otherLinks : []),
+              ].filter(Boolean).filter(l => l?.url);
+              const mGovFields = [
+                ["Brief Biography",          m.briefBiography],
+                ["Professional Background",  m.professionalBackground],
+                ["Governance Experience",    m.governanceExperience],
+                ["Conflict of Interest",     m.conflictOfInterestStatement],
+              ].filter(([, v]) => v);
               return (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "1rem", padding: "1rem 1.1rem", border: "1px solid var(--line)", borderRadius: 12, background: "var(--bg)" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: tc.bg, border: `1.5px solid ${tc.border}`, color: tc.text, fontSize: "0.82rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {mInit}
+                <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", background: "var(--bg)" }}>
+                  {/* Member header */}
+                  <div style={{ padding: "1rem 1.1rem", display: "flex", alignItems: "flex-start", gap: "0.9rem" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: tc.bg, border: `1.5px solid ${tc.border}`, color: tc.text, fontSize: "0.82rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {mInit}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: "0 0 0.4rem", fontWeight: 700, fontSize: "0.92rem" }}>{mName}</p>
+                      {(mRegion || mPool || mDrep) && (
+                        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: mLinks.length ? "0.5rem" : 0 }}>
+                          {mRegion && <span style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem", borderRadius: 5, background: "var(--panel)", border: "1px solid var(--line)" }}><span style={{ color: "var(--text-muted)" }}>Region </span>{mRegion}</span>}
+                          {mPool   && <span style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem", borderRadius: 5, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--accent,#5eead4)", fontFamily: "monospace" }}><span style={{ color: "var(--text-muted)", fontFamily: "inherit" }}>Pool </span>{mPool}</span>}
+                          {mDrep   && <span style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem", borderRadius: 5, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--accent,#5eead4)", fontFamily: "monospace" }}><span style={{ color: "var(--text-muted)", fontFamily: "inherit" }}>DRep </span>{mDrep}</span>}
+                        </div>
+                      )}
+                      {mLinks.length > 0 && (
+                        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                          {mLinks.map((l, li) => (
+                            <a key={li} href={l.url} target="_blank" rel="noreferrer"
+                              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.73rem", color: "var(--accent,#5eead4)", textDecoration: "none", padding: "0.22rem 0.6rem", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 30%,transparent)", borderRadius: 20, background: "color-mix(in srgb,var(--accent,#5eead4) 6%,transparent)" }}>
+                              <ExternalLinkIcon />{l.title}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 0.1rem", fontWeight: 700, fontSize: "0.9rem" }}>{mName}</p>
-                    {m.role && <p style={{ margin: "0 0 0.3rem", fontSize: "0.75rem", color: tc.text, fontWeight: 600 }}>{m.role}</p>}
-                    {(m.briefBiography || m.bio) && <p style={{ margin: 0, fontSize: "0.81rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{m.briefBiography || m.bio}</p>}
-                  </div>
+                  {/* Member governance fields */}
+                  {mGovFields.length > 0 && (
+                    <div style={{ borderTop: "1px solid var(--line)", padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: 0 }}>
+                      {mGovFields.map(([label, val], fi) => (
+                        <div key={label} style={fi < mGovFields.length - 1 ? { paddingBottom: "1rem", marginBottom: "1rem", borderBottom: "1px solid var(--line)" } : {}}>
+                          <p style={{ margin: "0 0 0.4rem", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase", color: tc.text, opacity: 0.85 }}>{label}</p>
+                          <RichText text={val} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
