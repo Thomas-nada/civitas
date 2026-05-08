@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -27,9 +27,7 @@ function readCache(key) {
 function writeCache(key, data) {
   try {
     window.localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
-  } catch {
-    // Best-effort browser cache.
-  }
+  } catch {}
 }
 
 function encodePathPart(value) {
@@ -58,7 +56,7 @@ function formatDateTime(value) {
 }
 
 function parseVote(text) {
-  const match = String(text || "").match(/\*{0,2}vote\*{0,2}\s*[:\-\u2013]\s*(.+)/i);
+  const match = String(text || "").match(/\*{0,2}vote\*{0,2}\s*[:\-–]\s*(.+)/i);
   if (!match) return "Unknown";
   const raw = match[1].replace(/\*+/g, "").trim().toLowerCase();
   if (raw.startsWith("yes")) return "Yes";
@@ -80,7 +78,7 @@ function stripArchiveMetadata(text) {
   for (const line of lines) {
     if (/^\s*---+\s*$/.test(line)) continue;
     if (/^\s*#\s+/.test(line)) continue;
-    if (/^\s*\*{0,2}(proposal|voter|vote|drep\s*id|spo\s*id|cc\s*id|id)\*{0,2}\s*[:\-\u2013]/i.test(line)) continue;
+    if (/^\s*\*{0,2}(proposal|voter|vote|drep\s*id|spo\s*id|cc\s*id|id)\*{0,2}\s*[:\-–]/i.test(line)) continue;
     if (/^\s*`?[a-z]+1[a-z0-9]{30,}`?\s*$/i.test(line)) continue;
     body.push(line);
   }
@@ -96,18 +94,12 @@ function fileFromTreePath(path) {
   const file = fileParts.join("/");
   if (!CATEGORIES.includes(category) || !/\.md$/i.test(file) || file === "README.md") return null;
   const voter = cleanFileName(file);
-  return {
-    category,
-    action,
-    file,
-    voter,
-    key: `${category}/${action}/${file}`
-  };
+  return { category, action, file, voter, key: `${category}/${action}/${file}` };
 }
 
 function buildArchiveIndex(files) {
   const actionMap = new Map();
-  const counts = Object.fromEntries(CATEGORIES.map((category) => [category, 0]));
+  const counts = Object.fromEntries(CATEGORIES.map((c) => [c, 0]));
   const participantKeys = new Set();
 
   for (const file of files) {
@@ -117,7 +109,7 @@ function buildArchiveIndex(files) {
       actionMap.set(file.action, {
         action: file.action,
         files: [],
-        counts: Object.fromEntries(CATEGORIES.map((category) => [category, 0]))
+        counts: Object.fromEntries(CATEGORIES.map((c) => [c, 0]))
       });
     }
     const action = actionMap.get(file.action);
@@ -172,15 +164,23 @@ async function fetchMarkdown(entry, signal) {
   return data;
 }
 
+function votePillClass(vote) {
+  if (vote === "Yes") return "good";
+  if (vote === "No") return "low";
+  return "mid";
+}
+
 export default function RationalesArchivePage() {
   useSeoMeta({
     title: "Rationales Archive",
     description: "Browse DRep and SPO vote rationales on Cardano governance actions — searchable by proposal type, voter, and decision."
   });
-  const [archive, setArchive] = useState({ actions: [], counts: Object.fromEntries(CATEGORIES.map((category) => [category, 0])) });
+
+  const [archive, setArchive] = useState({ actions: [], counts: Object.fromEntries(CATEGORIES.map((c) => [c, 0])) });
   const [metadata, setMetadata] = useState({ actionsByName: new Map(), votesByName: new Map(), votesById: new Map() });
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedAction, setSelectedAction] = useState("");
+  const [selectedVoter, setSelectedVoter] = useState(null); // voter name string, null = action mode
   const [query, setQuery] = useState("");
   const [selectedFileKey, setSelectedFileKey] = useState("");
   const [selectedRationale, setSelectedRationale] = useState(null);
@@ -190,10 +190,17 @@ export default function RationalesArchivePage() {
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
 
+  // Shared filter/sort state for both action mode and voter mode
+  const [listFilter, setListFilter] = useState(""); // voter name in action mode, action name in voter mode
+  const [voteFilter, setVoteFilter] = useState("All");
+  const [fileSort, setFileSort] = useState("name");
+  const [fileVotes, setFileVotes] = useState(new Map());
+  const loadedVoteKeysRef = useRef(new Set());
+  const preloadControllerRef = useRef(null);
+
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
-
     async function loadIndex() {
       setLoadingIndex(true);
       setError("");
@@ -206,17 +213,12 @@ export default function RationalesArchivePage() {
         if (!cancelled) setLoadingIndex(false);
       }
     }
-
     loadIndex();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
+    return () => { cancelled = true; controller.abort(); };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadMetadata() {
       setLoadingMetadata(true);
       try {
@@ -229,8 +231,7 @@ export default function RationalesArchivePage() {
           const actionName = String(info?.actionName || "").trim();
           if (!actionName) continue;
           actionsByName.set(normalizeKey(actionName), {
-            proposalId,
-            actionName,
+            proposalId, actionName,
             governanceType: info?.governanceType || "",
             submittedAt: info?.submittedAt || null,
             txHash: info?.txHash || "",
@@ -249,9 +250,7 @@ export default function RationalesArchivePage() {
               const actionName = String(proposal?.actionName || "").trim();
               if (!actionName) continue;
               const meta = {
-                category,
-                voterName,
-                voterId,
+                category, voterName, voterId,
                 proposalId: vote?.proposalId || "",
                 actionName,
                 voteTxHash: vote?.voteTxHash || "",
@@ -265,7 +264,6 @@ export default function RationalesArchivePage() {
             }
           }
         };
-
         addRows(data?.dreps, "DRep");
         addRows(data?.committeeMembers, "CC");
         addRows(data?.spos, "SPO");
@@ -277,13 +275,11 @@ export default function RationalesArchivePage() {
         if (!cancelled) setLoadingMetadata(false);
       }
     }
-
     loadMetadata();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
+  // Actions filtered by search query + category
   const visibleActions = useMemo(() => {
     const q = query.trim().toLowerCase();
     return archive.actions.filter((action) => {
@@ -293,12 +289,33 @@ export default function RationalesArchivePage() {
     });
   }, [archive.actions, query, selectedCategory]);
 
+  // Voters matching the search query
+  const matchingVoters = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const voterMap = new Map();
+    for (const action of archive.actions) {
+      for (const file of action.files) {
+        if (selectedCategory !== "All" && file.category !== selectedCategory) continue;
+        if (!file.voter.toLowerCase().includes(q)) continue;
+        const key = normalizeKey(file.voter);
+        if (!voterMap.has(key)) voterMap.set(key, { voter: file.voter, total: 0, counts: {} });
+        const entry = voterMap.get(key);
+        entry.total++;
+        entry.counts[file.category] = (entry.counts[file.category] || 0) + 1;
+      }
+    }
+    return Array.from(voterMap.values()).sort((a, b) => a.voter.localeCompare(b.voter));
+  }, [query, archive.actions, selectedCategory]);
+
   const selectedActionEntry = useMemo(() => {
+    if (selectedVoter) return null;
     if (!selectedAction) return visibleActions[0] || null;
     return visibleActions.find((item) => item.action === selectedAction) || visibleActions[0] || null;
-  }, [selectedAction, visibleActions]);
+  }, [selectedVoter, selectedAction, visibleActions]);
 
-  const files = useMemo(() => {
+  // Files for the selected action (action mode)
+  const actionFiles = useMemo(() => {
     const action = selectedActionEntry;
     if (!action) return [];
     const actionMeta = metadata.actionsByName.get(normalizeKey(action.action)) || null;
@@ -310,6 +327,98 @@ export default function RationalesArchivePage() {
         voteMeta: metadata.votesByName.get(`${file.category}|${normalizeKey(file.action)}|${normalizeKey(file.voter)}`) || null
       }));
   }, [metadata, selectedActionEntry, selectedCategory]);
+
+  // Files for the selected voter across all actions (voter mode)
+  const voterFiles = useMemo(() => {
+    if (!selectedVoter) return [];
+    const q = normalizeKey(selectedVoter);
+    const results = [];
+    for (const action of archive.actions) {
+      for (const file of action.files) {
+        if (normalizeKey(file.voter) !== q) continue;
+        if (selectedCategory !== "All" && file.category !== selectedCategory) continue;
+        const actionMeta = metadata.actionsByName.get(normalizeKey(action.action)) || null;
+        const voteMeta = metadata.votesByName.get(`${file.category}|${normalizeKey(file.action)}|${normalizeKey(file.voter)}`) || null;
+        results.push({ ...file, actionMeta, voteMeta });
+      }
+    }
+    return results;
+  }, [selectedVoter, archive.actions, metadata, selectedCategory]);
+
+  const baseFiles = selectedVoter ? voterFiles : actionFiles;
+
+  // Pre-load votes for the current view
+  useEffect(() => {
+    const filesToLoad = selectedVoter ? voterFiles : (selectedActionEntry?.files || []);
+    if (!filesToLoad.length) return;
+
+    preloadControllerRef.current?.abort();
+    const controller = new AbortController();
+    preloadControllerRef.current = controller;
+
+    for (const file of filesToLoad) {
+      if (loadedVoteKeysRef.current.has(file.key)) continue;
+      loadedVoteKeysRef.current.add(file.key);
+      fetchMarkdown(file, controller.signal)
+        .then((data) => {
+          if (!controller.signal.aborted) {
+            setFileVotes((prev) => { const m = new Map(prev); m.set(data.key, data.vote); return m; });
+          }
+        })
+        .catch(() => { loadedVoteKeysRef.current.delete(file.key); });
+    }
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVoter, selectedActionEntry?.action]);
+
+  // Reset list controls when the view changes
+  useEffect(() => {
+    setListFilter("");
+    setVoteFilter("All");
+  }, [selectedVoter, selectedActionEntry?.action, selectedCategory]);
+
+  // Vote counts (respects list filter but not vote filter — for chip labels)
+  const voteCounts = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    let base = baseFiles;
+    if (q) {
+      base = selectedVoter
+        ? base.filter((f) => f.action.toLowerCase().includes(q))
+        : base.filter((f) => f.voter.toLowerCase().includes(q));
+    }
+    const counts = { All: base.length, Yes: 0, No: 0, Abstain: 0 };
+    for (const f of base) {
+      const vote = fileVotes.get(f.key);
+      if (vote === "Yes") counts.Yes++;
+      else if (vote === "No") counts.No++;
+      else if (vote === "Abstain") counts.Abstain++;
+    }
+    return counts;
+  }, [baseFiles, listFilter, fileVotes, selectedVoter]);
+
+  // Filtered + sorted files for the middle panel
+  const displayFiles = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    let result = baseFiles;
+
+    if (q) {
+      result = selectedVoter
+        ? result.filter((f) => f.action.toLowerCase().includes(q))
+        : result.filter((f) => f.voter.toLowerCase().includes(q));
+    }
+    if (voteFilter !== "All") result = result.filter((f) => fileVotes.get(f.key) === voteFilter);
+
+    const voteOrder = { Yes: 0, No: 1, Abstain: 2 };
+    return [...result].sort((a, b) => {
+      if (fileSort === "vote") {
+        const va = voteOrder[fileVotes.get(a.key)] ?? 3;
+        const vb = voteOrder[fileVotes.get(b.key)] ?? 3;
+        return va - vb || (selectedVoter ? a.action.localeCompare(b.action) : a.voter.localeCompare(b.voter));
+      }
+      if (fileSort === "date") return (b.voteMeta?.votedAtUnix || 0) - (a.voteMeta?.votedAtUnix || 0);
+      return selectedVoter ? a.action.localeCompare(b.action) : a.voter.localeCompare(b.voter);
+    });
+  }, [baseFiles, listFilter, voteFilter, fileSort, fileVotes, selectedVoter]);
 
   const uniqueParticipantCount = useMemo(() => {
     if (Number(archive.participantCount || 0) > 0) return Number(archive.participantCount || 0);
@@ -346,16 +455,25 @@ export default function RationalesArchivePage() {
     }
   }, [metadata]);
 
+  // Clear reader when the view changes
   useEffect(() => {
     setSelectedRationale(null);
     setSelectedFileKey("");
     setFileError("");
-  }, [selectedActionEntry?.action, selectedCategory]);
+  }, [selectedVoter, selectedActionEntry?.action, selectedCategory]);
 
+  // Auto-select first item when the list changes
   useEffect(() => {
-    if (!files.length || selectedFileKey) return;
-    selectRationale(files[0]);
-  }, [files, selectRationale, selectedFileKey]);
+    if (!displayFiles.length || selectedFileKey) return;
+    selectRationale(displayFiles[0]);
+  }, [displayFiles, selectRationale, selectedFileKey]);
+
+  const voterActionCount = useMemo(
+    () => new Set(voterFiles.map((f) => f.action)).size,
+    [voterFiles]
+  );
+
+  const showSectionLabels = visibleActions.length > 0 && matchingVoters.length > 0;
 
   return (
     <main className="shell rationales-archive-page">
@@ -387,64 +505,230 @@ export default function RationalesArchivePage() {
 
       <section className="controls rationales-archive-controls">
         <label>
-          Search archive
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search governance actions..." />
+          Search
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by governance action or voter name..."
+          />
         </label>
-        <label>
-          Governance body
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
-            <option value="All">All bodies</option>
-            {CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
+        <div className="rationales-archive-category-pills">
+          <span>Governance body</span>
+          <div className="rationales-archive-pill-group">
+            {["All", ...CATEGORIES].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={`rationales-archive-cat-pill${selectedCategory === cat ? " active" : ""}`}
+                onClick={() => setSelectedCategory(cat)}
+              >
+                {cat}
+              </button>
             ))}
-          </select>
-        </label>
-        <label>
-          Governance action
-          <select value={selectedActionEntry?.action || ""} onChange={(e) => setSelectedAction(e.target.value)}>
-            {visibleActions.length === 0 ? <option value="">No matching actions</option> : null}
-            {visibleActions.map((entry) => (
-              <option key={entry.action} value={entry.action}>
-                {entry.action}
-              </option>
-            ))}
-          </select>
-        </label>
+          </div>
+        </div>
       </section>
 
       <section className="status-row">
         <p className="muted">
           {loadingIndex || loadingMetadata
             ? "Loading rationale archive..."
-            : error || `${visibleActions.length.toLocaleString()} governance actions in this view; ${files.length.toLocaleString()} rationales for the selected action.`}
+            : error || (() => {
+                if (selectedVoter) return `Showing ${displayFiles.length} rationale${displayFiles.length !== 1 ? "s" : ""} by ${selectedVoter}`;
+                return `${visibleActions.length.toLocaleString()} governance actions · ${displayFiles.length.toLocaleString()} rationales shown`;
+              })()}
         </p>
       </section>
 
       <section className="rationales-archive-layout">
-        <aside className="panel rationales-archive-list" aria-label="Rationale files">
-          <div className="rationales-archive-list-head">
-            <h2>{selectedCategory === "All" ? "All Bodies" : selectedCategory}</h2>
-            <p className="muted">{selectedActionEntry?.action || "Select a governance action."}</p>
+        {/* Actions + Voters panel */}
+        <aside className="panel rationales-archive-actions" aria-label="Governance actions and voters">
+          <div className="rationales-archive-actions-head">
+            <h2>{query.trim() ? "Results" : "Actions"}</h2>
+            <p className="muted">
+              {loadingIndex ? "Loading..." : `${visibleActions.length} action${visibleActions.length !== 1 ? "s" : ""}${matchingVoters.length ? ` · ${matchingVoters.length} voter${matchingVoters.length !== 1 ? "s" : ""}` : ""}`}
+            </p>
           </div>
 
-          {files.length === 0 ? <p className="muted">No fetchable rationale files are listed for this action and body.</p> : null}
-          <div className="rationales-archive-file-list">
-            {files.map((file) => (
-              <button
-                type="button"
-                key={file.key}
-                className={`rationales-archive-file${selectedFileKey === file.key ? " active" : ""}`}
-                onClick={() => selectRationale(file)}
-              >
-                <span>{file.voter}</span>
-                <small>{file.category} | {file.voteMeta?.votedAt ? formatDateTime(file.voteMeta.votedAt) : file.actionMeta?.proposalId || "metadata pending"}</small>
-              </button>
-            ))}
+          <div className="rationales-archive-action-list">
+            {/* Governance actions section */}
+            {visibleActions.length > 0 && (
+              <>
+                {showSectionLabels && (
+                  <p className="rationales-archive-results-label">
+                    Governance Actions <span>{visibleActions.length}</span>
+                  </p>
+                )}
+                {visibleActions.map((entry) => (
+                  <button
+                    key={entry.action}
+                    type="button"
+                    className={`rationales-archive-action-item${!selectedVoter && selectedActionEntry?.action === entry.action ? " active" : ""}`}
+                    onClick={() => {
+                      setSelectedVoter(null);
+                      setSelectedAction(entry.action);
+                    }}
+                  >
+                    <span>{entry.action}</span>
+                    <small>
+                      {CATEGORIES.filter((cat) => (entry.counts[cat] || 0) > 0)
+                        .map((cat) => `${cat} ${entry.counts[cat]}`)
+                        .join(" · ")}
+                    </small>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Voters section */}
+            {matchingVoters.length > 0 && (
+              <>
+                {showSectionLabels && (
+                  <p className="rationales-archive-results-label rationales-archive-results-label--voter">
+                    Voters <span>{matchingVoters.length}</span>
+                  </p>
+                )}
+                {matchingVoters.map((v) => (
+                  <button
+                    key={v.voter}
+                    type="button"
+                    className={`rationales-archive-action-item rationales-archive-action-item--voter${selectedVoter === v.voter ? " active" : ""}`}
+                    onClick={() => {
+                      setSelectedVoter(v.voter);
+                      setSelectedRationale(null);
+                      setSelectedFileKey("");
+                    }}
+                  >
+                    <span>{v.voter}</span>
+                    <small>
+                      {CATEGORIES.filter((cat) => (v.counts[cat] || 0) > 0)
+                        .map((cat) => `${cat} ${v.counts[cat]}`)
+                        .join(" · ")}
+                      {" · "}
+                      {v.total} rationale{v.total !== 1 ? "s" : ""}
+                    </small>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {visibleActions.length === 0 && matchingVoters.length === 0 && !loadingIndex && (
+              <p className="muted">No matching actions or voters.</p>
+            )}
           </div>
         </aside>
 
+        {/* Rationales list panel */}
+        <aside className="panel rationales-archive-list" aria-label="Rationale files">
+          <div className="rationales-archive-list-head">
+            {selectedVoter ? (
+              <>
+                <div className="rationales-archive-voter-head">
+                  <button
+                    type="button"
+                    className="rationales-archive-back-btn"
+                    onClick={() => setSelectedVoter(null)}
+                    title="Back to actions"
+                  >
+                    ←
+                  </button>
+                  <div>
+                    <h2>{selectedVoter}</h2>
+                    <p className="muted">
+                      {displayFiles.length !== voterFiles.length
+                        ? `${displayFiles.length} of ${voterFiles.length} rationales`
+                        : `${voterFiles.length} rationale${voterFiles.length !== 1 ? "s" : ""} across ${voterActionCount} action${voterActionCount !== 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>{selectedActionEntry?.action || "Select a governance action."}</h2>
+                <p className="muted">
+                  {displayFiles.length !== actionFiles.length
+                    ? `${displayFiles.length} of ${actionFiles.length} rationales`
+                    : `${actionFiles.length} rationale${actionFiles.length !== 1 ? "s" : ""}`}
+                </p>
+              </>
+            )}
+          </div>
+
+          {baseFiles.length > 0 && (
+            <div className="rationales-archive-list-controls">
+              <input
+                type="search"
+                placeholder={selectedVoter ? "Filter by action..." : "Search voters..."}
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                aria-label={selectedVoter ? "Filter by action" : "Search voters"}
+              />
+              <div className="rationales-archive-vote-chips">
+                {["All", "Yes", "No", "Abstain"].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`rationales-archive-vote-chip vote-${v.toLowerCase()}${voteFilter === v ? " active" : ""}`}
+                    onClick={() => setVoteFilter(v)}
+                    title={v === "All" ? `All ${voteCounts.All} rationales` : `${voteCounts[v]} voted ${v}`}
+                  >
+                    {v}
+                    {v !== "All" && voteCounts[v] > 0
+                      ? <span className="vote-chip-count">{voteCounts[v]}</span>
+                      : null}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={fileSort}
+                onChange={(e) => setFileSort(e.target.value)}
+                aria-label="Sort rationales"
+                className="rationales-archive-sort-select"
+              >
+                <option value="name">{selectedVoter ? "Action A–Z" : "Voter A–Z"}</option>
+                <option value="vote">By vote</option>
+                <option value="date">By date</option>
+              </select>
+            </div>
+          )}
+
+          {baseFiles.length === 0 && !selectedVoter && (
+            <p className="muted">No fetchable rationale files are listed for this action and body.</p>
+          )}
+          {baseFiles.length > 0 && displayFiles.length === 0 && (
+            <p className="muted">No rationales match the current filters.</p>
+          )}
+
+          <div className="rationales-archive-file-list">
+            {displayFiles.map((file) => {
+              const vote = fileVotes.get(file.key);
+              return (
+                <button
+                  type="button"
+                  key={file.key}
+                  className={`rationales-archive-file${selectedFileKey === file.key ? " active" : ""}`}
+                  onClick={() => selectRationale(file)}
+                >
+                  <div className="rationales-archive-file-row">
+                    <span>{selectedVoter ? file.action : file.voter}</span>
+                    {vote && vote !== "Unknown"
+                      ? <span className={`pill ${votePillClass(vote)}`}>{vote}</span>
+                      : null}
+                  </div>
+                  <small>
+                    {file.category}
+                    {" · "}
+                    {file.voteMeta?.votedAt
+                      ? formatDateTime(file.voteMeta.votedAt)
+                      : file.actionMeta?.proposalId || "metadata pending"}
+                  </small>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        {/* Reader panel */}
         <article className="panel rationales-archive-reader">
           {fileError ? <p className="muted">{fileError}</p> : null}
           {loadingRationale ? <p className="muted">Loading rationale...</p> : null}
@@ -456,7 +740,7 @@ export default function RationalesArchivePage() {
                   <h2>{selectedRationale.voter}</h2>
                   <p className="muted">{selectedRationale.action}</p>
                 </div>
-                <span className="pill mid">{selectedRationale.vote}</span>
+                <span className={`pill ${votePillClass(selectedRationale.vote)}`}>{selectedRationale.vote}</span>
               </div>
               <dl className="rationales-archive-meta">
                 <div>
