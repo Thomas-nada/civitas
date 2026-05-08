@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 
-const CC_ELECTION_TIMELINE_URL = "https://civicscommittee.docs.intersectmbo.org/cc-election-2026-overview";
 const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5,  7, 21, 45, 0);
 const CC_ELECTION_VOTING_END_MS      = Date.UTC(2026, 6, 14, 0, 0, 0);
 const CC_ELECTION_RESULTS_END_MS     = Date.UTC(2026, 6, 17, 0, 0, 0);
@@ -68,8 +67,8 @@ export default function InfoBanner() {
           <p className="budget-process-banner-title">Intersect facilitated CC Elections</p>
           <p>{ccElectionBanner}</p>
         </div>
-        <a className="budget-process-banner-link" href={CC_ELECTION_TIMELINE_URL} target="_blank" rel="noreferrer">
-          View CC Election Overview
+        <a className="budget-process-banner-link" href="/cc-election">
+          View CC Elections
         </a>
       </article>
     </section>
