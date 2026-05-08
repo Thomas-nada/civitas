@@ -197,8 +197,11 @@ function DetailField({ label, value }) {
 function CandidateDetail({ candidate, onBack, isAdmin = false }) {
   const md    = candidate?.metaData || {};
   const track = getTrack(candidate);
-  const td    = md[track] || {};  // track-specific sub-object
+  const td    = md[track] || {};
   const name  = getCandidateName(candidate);
+  const tc    = TRACK_COLORS[track] || { bg: "var(--panel)", border: "var(--line)", text: "var(--text-muted)" };
+
+  const initials = name.split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?";
 
   const links = [
     td.xUsername        && { title: "X / Twitter", url: `https://x.com/${td.xUsername}` },
@@ -235,84 +238,162 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
 
   const members = md.consortium?.members || md.members || [];
 
+  const SectionLabel = ({ children }) => (
+    <p style={{ margin: "0 0 1.25rem", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+      <span style={{ flex: 1, height: 1, background: "var(--line)", display: "inline-block" }} />
+      {children}
+      <span style={{ flex: 1, height: 1, background: "var(--line)", display: "inline-block" }} />
+    </p>
+  );
+
+  const GovField = ({ label, value }) => value ? (
+    <div style={{ paddingBottom: "1.5rem", marginBottom: "1.5rem", borderBottom: "1px solid var(--line)" }}>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.67rem", fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase", color: tc.text, opacity: 0.85 }}>{label}</p>
+      <RichText text={value} />
+    </div>
+  ) : null;
+
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto" }}>
-      <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.83rem", padding: "0 0 1.25rem" }}>
+    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      {/* Back */}
+      <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.82rem", padding: "0 0 1.5rem", transition: "color .15s" }}
+        onMouseEnter={e => e.currentTarget.style.color = "var(--text)"} onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
         Back to candidates
       </button>
 
-      <div style={{ border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", background: "var(--panel)", marginBottom: "1rem" }}>
-        <div style={{ padding: "1.25rem 1.4rem", borderBottom: "1px solid var(--line)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
-            <TrackBadge type={track} />
-            <StatusBadge status={candidate.status} />
+      {/* Hero card */}
+      <div style={{ border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden", background: "var(--panel)", marginBottom: "1.25rem" }}>
+        {/* Accent bar */}
+        <div style={{ height: 3, background: `linear-gradient(90deg, ${tc.text} 0%, transparent 100%)`, opacity: 0.7 }} />
+
+        <div style={{ padding: "1.75rem 1.75rem 1.5rem" }}>
+          {/* Avatar + name */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem", marginBottom: "1.25rem" }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: tc.bg, border: `2px solid ${tc.border}`, color: tc.text, fontSize: "1.3rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, letterSpacing: "-0.02em" }}>
+              {initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0, paddingTop: "0.1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                <TrackBadge type={track} />
+                <StatusBadge status={candidate.status} />
+              </div>
+              <h1 style={{ margin: 0, fontSize: "1.65rem", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.15 }}>{name}</h1>
+            </div>
           </div>
-          <h1 style={{ margin: "0 0 0.5rem", fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{name}</h1>
-          {(candidate.summary || td.briefBiography || md.biography) && <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-muted)", lineHeight: 1.65 }}>{candidate.summary || td.briefBiography || md.biography}</p>}
+
+          {/* Summary */}
+          {(candidate.summary || td.briefBiography || md.biography) && (
+            <p style={{ margin: "0 0 1.25rem", fontSize: "0.9rem", color: "var(--text-muted)", lineHeight: 1.75, borderLeft: `3px solid ${tc.border}`, paddingLeft: "0.9rem" }}>
+              {candidate.summary || td.briefBiography || md.biography}
+            </p>
+          )}
+
+          {/* Meta chips */}
+          {(region || poolId || drepId) && (
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: links.length > 0 ? "0.85rem" : 0 }}>
+              {region && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", padding: "0.25rem 0.65rem", borderRadius: 6, background: "var(--bg)", border: "1px solid var(--line)", color: "var(--text)" }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}>Region</span> {region}
+                </span>
+              )}
+              {poolId && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", padding: "0.25rem 0.65rem", borderRadius: 6, background: "var(--bg)", border: "1px solid var(--line)", color: "var(--accent,#5eead4)", fontFamily: "monospace" }}>
+                  <span style={{ color: "var(--text-muted)", fontFamily: "inherit", fontSize: "0.68rem" }}>Pool</span> {poolId}
+                </span>
+              )}
+              {drepId && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", padding: "0.25rem 0.65rem", borderRadius: 6, background: "var(--bg)", border: "1px solid var(--line)", color: "var(--accent,#5eead4)", fontFamily: "monospace" }}>
+                  <span style={{ color: "var(--text-muted)", fontFamily: "inherit", fontSize: "0.68rem" }}>DRep</span> {drepId}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Links */}
+          {links.length > 0 && (
+            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+              {links.map((l, i) => (
+                <a key={i} href={l.url} target="_blank" rel="noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: "var(--accent,#5eead4)", textDecoration: "none", padding: "0.3rem 0.75rem", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 30%,transparent)", borderRadius: 20, background: "color-mix(in srgb,var(--accent,#5eead4) 6%,transparent)", transition: "background .15s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "color-mix(in srgb,var(--accent,#5eead4) 14%,transparent)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "color-mix(in srgb,var(--accent,#5eead4) 6%,transparent)"}>
+                  <ExternalLinkIcon />{l.title || l.url}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Meta row */}
-        {(region || poolId || drepId) && (
-          <div style={{ padding: "0.75rem 1.4rem", borderBottom: "1px solid var(--line)", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-            {region && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Region: <strong style={{ color: "var(--text)" }}>{region}</strong></span>}
-            {poolId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Pool: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{poolId}</code></span>}
-            {drepId && <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>DRep: <code style={{ fontSize: "0.72rem", color: "var(--accent,#5eead4)" }}>{drepId}</code></span>}
-          </div>
-        )}
-
-        {/* Cold credential */}
+        {/* Cold credential strip */}
         {coldKey && (
-          <div style={{ padding: "0.75rem 1.4rem", borderBottom: "1px solid var(--line)" }}>
-            <p style={{ margin: "0 0 0.2rem", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" }}>Cold Credential {credType && `· ${credType}`}</p>
-            <code style={{ fontSize: "0.75rem", fontFamily: "monospace", color: "var(--accent,#5eead4)", wordBreak: "break-all" }}>{coldKey}</code>
-          </div>
-        )}
-
-        {/* Links */}
-        {links.length > 0 && (
-          <div style={{ padding: "0.75rem 1.4rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-            {links.map((l, i) => (
-              <a key={i} href={l.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color: "var(--accent,#5eead4)", textDecoration: "none", padding: "0.3rem 0.7rem", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 30%,transparent)", borderRadius: 20, background: "color-mix(in srgb,var(--accent,#5eead4) 6%,transparent)" }}
-                onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"} onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}>
-                <ExternalLinkIcon />{l.title || l.url}
-              </a>
-            ))}
+          <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid var(--line)", background: "color-mix(in srgb,var(--accent,#5eead4) 3%,var(--bg))", display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ color: "var(--accent,#5eead4)", marginTop: "0.2rem", flexShrink: 0 }}>
+              <path d="M5.5 8.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 0L5 13.5l1.5-1 1 1.5 1-1.5 1.5 1L9 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: "0 0 0.25rem", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                Cold Credential{credType && <span style={{ color: "var(--accent,#5eead4)", marginLeft: "0.4rem" }}>· {credType}</span>}
+              </p>
+              <code style={{ fontSize: "0.76rem", fontFamily: "monospace", color: "var(--accent,#5eead4)", wordBreak: "break-all", lineHeight: 1.55 }}>{coldKey}</code>
+            </div>
           </div>
         )}
       </div>
 
       {/* Governance statement */}
       {govFields.length > 0 && (
-        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.25rem 1.4rem", marginBottom: "1rem" }}>
-          {govFields.map(([label, val]) => <DetailField key={label} label={label} value={val} />)}
-        </div>
-      )}
-
-      {/* Consortium members */}
-      {track === "consortium" && members.length > 0 && (
-        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "1.1rem 1.4rem", marginBottom: "1rem" }}>
-          <p style={{ margin: "0 0 0.75rem", fontWeight: 700, fontSize: "0.88rem" }}>Consortium Members ({members.length})</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {members.map((m, i) => (
-              <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "0.75rem 0.9rem" }}>
-                <p style={{ margin: "0 0 0.2rem", fontWeight: 600, fontSize: "0.88rem" }}>{m.fullNameOrAlias || m.name || `Member ${i + 1}`}</p>
-                {m.role && <p style={{ margin: "0 0 0.2rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>{m.role}</p>}
-                {(m.briefBiography || m.bio) && <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.55 }}>{m.briefBiography || m.bio}</p>}
+        <div style={{ border: "1px solid var(--line)", borderRadius: 16, background: "var(--panel)", padding: "1.75rem", marginBottom: "1.25rem" }}>
+          <SectionLabel>Governance Statement</SectionLabel>
+          <div>
+            {govFields.map(([label, val], i) => (
+              <div key={label} style={i === govFields.length - 1 ? { paddingBottom: 0, marginBottom: 0 } : { paddingBottom: "1.5rem", marginBottom: "1.5rem", borderBottom: "1px solid var(--line)" }}>
+                <p style={{ margin: "0 0 0.5rem", fontSize: "0.67rem", fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase", color: tc.text, opacity: 0.9 }}>{label}</p>
+                <RichText text={val} />
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* Consortium members */}
+      {track === "consortium" && members.length > 0 && (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 16, background: "var(--panel)", padding: "1.75rem", marginBottom: "1.25rem" }}>
+          <SectionLabel>Consortium Members</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {members.map((m, i) => {
+              const mName = m.fullNameOrAlias || m.name || `Member ${i + 1}`;
+              const mInit = mName.split(/\s+/).slice(0,2).map(w => w[0] || "").join("").toUpperCase() || "?";
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "1rem", padding: "1rem 1.1rem", border: "1px solid var(--line)", borderRadius: 12, background: "var(--bg)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: tc.bg, border: `1.5px solid ${tc.border}`, color: tc.text, fontSize: "0.82rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {mInit}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 0.1rem", fontWeight: 700, fontSize: "0.9rem" }}>{mName}</p>
+                    {m.role && <p style={{ margin: "0 0 0.3rem", fontSize: "0.75rem", color: tc.text, fontWeight: 600 }}>{m.role}</p>}
+                    {(m.briefBiography || m.bio) && <p style={{ margin: 0, fontSize: "0.81rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{m.briefBiography || m.bio}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Admin-only private fields */}
       {isAdmin && adminFields.length > 0 && (
-        <div style={{ border: "1px solid color-mix(in srgb,#f59e0b 40%,transparent)", borderRadius: 12, background: "color-mix(in srgb,#f59e0b 5%,transparent)", padding: "1.1rem 1.4rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
-            <span style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#f59e0b", background: "color-mix(in srgb,#f59e0b 15%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 4, padding: "0.15rem 0.45rem" }}>Admin only</span>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Private fields — not visible to the public</span>
+        <div style={{ border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 16, background: "color-mix(in srgb,#f59e0b 4%,transparent)", padding: "1.5rem 1.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            <span style={{ fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#f59e0b", background: "color-mix(in srgb,#f59e0b 14%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 5, padding: "0.18rem 0.5rem" }}>Admin only</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Private — not visible to the public</span>
           </div>
-          {adminFields.map(([label, val]) => <DetailField key={label} label={label} value={val} />)}
+          {adminFields.map(([label, val], i) => (
+            <div key={label} style={i === adminFields.length - 1 ? {} : { paddingBottom: "1rem", marginBottom: "1rem", borderBottom: "1px solid color-mix(in srgb,#f59e0b 20%,transparent)" }}>
+              <p style={{ margin: "0 0 0.35rem", fontSize: "0.67rem", fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase", color: "#f59e0b", opacity: 0.8 }}>{label}</p>
+              <RichText text={val} />
+            </div>
+          ))}
         </div>
       )}
     </div>
