@@ -911,7 +911,19 @@ export function CcElectionSubmitPage() {
         <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.65rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{nominationId ? "Edit Nomination" : "Submit Nomination"}</h1>
         <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.86rem" }}>Constitutional Committee Election 2026</p>
       </header>
-      {cycleLoading || initialLoading ? (
+      {!walletApi ? (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "3rem 2rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ opacity: 0.4 }}>
+            <rect x="4" y="14" width="32" height="22" rx="4" stroke="currentColor" strokeWidth="2" />
+            <path d="M13 14v-4a7 7 0 0 1 14 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="20" cy="25" r="3" fill="currentColor" />
+          </svg>
+          <div>
+            <p style={{ margin: "0 0 0.35rem", fontWeight: 700, fontSize: "1rem" }}>Wallet required</p>
+            <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Connect your wallet using the button in the top bar to access the nomination form.</p>
+          </div>
+        </div>
+      ) : cycleLoading || initialLoading ? (
         <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", padding: "2rem", textAlign: "center" }}>
           <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading…</p>
         </div>
