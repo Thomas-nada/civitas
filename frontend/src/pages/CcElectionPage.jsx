@@ -716,7 +716,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   // §6 – declarations
   const [declAccuracy,   setDeclAccuracy]   = useState(() => Boolean(md.declarationAgreement?.accuracyPublicVisibilityConsent));
-  const [declPublic,     setDeclPublic]     = useState(false);
+  const [declPublic,     setDeclPublic]     = useState(() => Boolean(md.declarationAgreement?.accuracyPublicVisibilityConsent));
   const [declVouching,   setDeclVouching]   = useState(() => Boolean(md.declarationAgreement?.memberIdentityVouching));
   const [declTerms,      setDeclTerms]      = useState(() => Boolean(md.declarationAgreement?.termsAndConditionsAgreement));
 
