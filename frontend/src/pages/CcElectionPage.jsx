@@ -696,7 +696,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   // §4 – cold credentials
   const [coldCredentialHash, setColdCredentialHash] = useState(() => md.coldCredentialHash || "");
-  const [credentialType,     setCredentialType]     = useState(() => { const t = md.coldCredentialType || "Key credential"; return t === "Key Credential" ? "Key credential" : t === "Script Credential" ? "Script credential" : t; });
+  const [credentialType,     setCredentialType]     = useState(() => { const t = md.coldCredentialType || "keyCredential"; return (t === "Key Credential" || t === "Key credential") ? "keyCredential" : (t === "Script Credential" || t === "Script credential") ? "scriptCredential" : t; });
 
   // §5 – consortium members
   const emptyMem = () => ({ name: "", geographicRegion: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], bio: "", professionalBackground: "", governanceExperience: "", conflictOfInterest: "" });
@@ -761,7 +761,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
       metaData: {
         track,
         coldCredentialHash: clean(coldCredentialHash),
-        coldCredentialType: clean(credentialType).toLowerCase().includes("script") ? "Script" : "Key",
+        coldCredentialType: clean(credentialType).toLowerCase().includes("script") ? "scriptCredential" : "keyCredential",
         declarationAgreement: {
           accuracyPublicVisibilityConsent: declAccuracy && declPublic,
           termsAndConditionsAgreement:     declTerms,
@@ -1017,8 +1017,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           </Field>
           <Field label="Credential Type" required>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.2rem" }}>
-              <RadioRow name="credType" value="Key credential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
-              <RadioRow name="credType" value="Script credential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
+              <RadioRow name="credType" value="keyCredential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
+              <RadioRow name="credType" value="scriptCredential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
             </div>
           </Field>
         </FormSection>
