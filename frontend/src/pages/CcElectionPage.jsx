@@ -696,7 +696,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   // §4 – cold credentials
   const [coldCredentialHash, setColdCredentialHash] = useState(() => md.coldCredentialHash || "");
-  const [credentialType,     setCredentialType]     = useState(() => md.coldCredentialType || "Key Credential");
+  const [credentialType,     setCredentialType]     = useState(() => md.coldCredentialType || "Key credential");
 
   // §5 – consortium members
   const emptyMem = () => ({ name: "", geographicRegion: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], bio: "", professionalBackground: "", governanceExperience: "", conflictOfInterest: "" });
@@ -750,7 +750,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
     };
 
     const emptyGov = { xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "", contributionsToCardano: "", motivation: "", decentralisedGovernanceImportance: "", constitutionalInterpretation: "", perspectiveYouWouldBring: "", transparencyApproach: "" };
-    const emptyMember = { fullNameOrAlias: "", geographicRegion: "", briefBiography: "", professionalBackground: "", governanceExperience: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "" };
+    const emptyMember = { fullNameOrAlias: "", geographicRegion: "", briefBiography: "", professionalBackground: "", governanceExperience: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], conflictOfInterestStatement: "" };
+    const cleanMember = m => { const r = { ...m }; if (!r.poolId) delete r.poolId; if (!r.drepId) delete r.drepId; return r; };
 
     return {
       voteId: cycle._id,
@@ -766,23 +767,23 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           termsAndConditionsAgreement:     declTerms,
           memberIdentityVouching:          declVouching,
         },
-        individual: track === "individual" ? {
+        individual: track === "individual" ? cleanMember({
           fullNameOrAlias: clean(fullName), contactEmail: clean(contactEmail),
           geographicRegion: regionToId(geographicRegion), poolId: clean(poolId), drepId: clean(drepId),
           professionalBackground: clean(professionalBackground), governanceExperience: clean(governanceExperience),
           briefBiography: clean(biography), ...sharedGov,
-        } : { fullNameOrAlias: "", contactEmail: "", geographicRegion: "", poolId: "", drepId: "", professionalBackground: "", governanceExperience: "", briefBiography: "", ...emptyGov },
-        organisation: track === "organisation" ? {
+        }) : { fullNameOrAlias: "", contactEmail: "", geographicRegion: "", professionalBackground: "", governanceExperience: "", briefBiography: "", ...emptyGov },
+        organisation: track === "organisation" ? cleanMember({
           organisationName: clean(fullName), organisationDescription: clean(orgDescription),
           geographicRegion: regionToId(geographicRegion), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
           poolId: clean(poolId), drepId: clean(drepId),
           organisationalAreasOfExpertise: clean(professionalBackground), governanceExperience: clean(governanceExperience),
           ...sharedGov,
-        } : { organisationName: "", organisationDescription: "", geographicRegion: "", contactPerson: "", contactEmail: "", poolId: "", drepId: "", organisationalAreasOfExpertise: "", governanceExperience: "", ...emptyGov },
+        }) : { organisationName: "", organisationDescription: "", geographicRegion: "", contactPerson: "", contactEmail: "", organisationalAreasOfExpertise: "", governanceExperience: "", ...emptyGov },
         consortium: track === "consortium" ? {
           consortiumName: clean(fullName), contactPerson: clean(contactPerson), contactEmail: clean(contactEmail),
           internalDecisionMakingProcess: clean(internalDecisionMaking),
-          members: members.map(m => ({
+          members: members.map(m => cleanMember({
             ...emptyMember,
             fullNameOrAlias: clean(m.name), geographicRegion: regionToId(m.geographicRegion),
             poolId: clean(m.poolId), drepId: clean(m.drepId),
@@ -794,7 +795,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
             conflictOfInterestStatement: clean(m.conflictOfInterest),
           })),
           ...sharedGov,
-        } : { consortiumName: "", contactPerson: "", contactEmail: "", internalDecisionMakingProcess: "", members: [emptyMember, emptyMember], ...emptyGov },
+        } : { consortiumName: "", contactPerson: "", contactEmail: "", internalDecisionMakingProcess: "", members: [], ...emptyGov },
       },
     };
   }
@@ -1015,8 +1016,8 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
           </Field>
           <Field label="Credential Type" required>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.2rem" }}>
-              <RadioRow name="credType" value="Key Credential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
-              <RadioRow name="credType" value="Script Credential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
+              <RadioRow name="credType" value="Key credential"    current={credentialType} onChange={setCredentialType} label="Key Credential" />
+              <RadioRow name="credType" value="Script credential" current={credentialType} onChange={setCredentialType} label="Script Credential" />
             </div>
           </Field>
         </FormSection>
