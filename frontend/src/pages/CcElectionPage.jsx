@@ -761,7 +761,6 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
       metaData: {
         track,
         coldCredentialHash: clean(coldCredentialHash),
-        ...(clean(coldCredentialHash) ? { coldCredentialType: clean(credentialType).toLowerCase().includes("script") ? "Script credential" : "Key credential" } : {}),
         declarationAgreement: {
           accuracyPublicVisibilityConsent: declAccuracy && declPublic,
           termsAndConditionsAgreement:     declTerms,
