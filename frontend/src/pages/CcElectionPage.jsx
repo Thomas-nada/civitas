@@ -20,7 +20,7 @@ async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...opts });
   if (!res.ok) {
     let msg;
-    try { const j = await res.json(); msg = j?.message || j?.error || res.statusText; }
+    try { const j = await res.json(); msg = j?.message || j?.error || (Array.isArray(j?.errors) ? j.errors.map(e => e?.message || e).join("; ") : null) || JSON.stringify(j) || res.statusText; }
     catch { msg = res.statusText; }
     throw new Error(`API ${res.status}: ${msg}`);
   }
