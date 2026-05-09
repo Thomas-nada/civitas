@@ -1,18 +1,10 @@
-<!-- url: ipfs://QmNwQUcRD6pjcXdPWNq2BGv7MfCynHjMQUjQYzKTib8Q1X -->
+<!-- url: ipfs://Qmbae7PPLNpM6NFTHQDyxUJwu23TEbmwF8i5zWbrRQGhVb -->
 # InputEndorsers
 
 **Proposal:** IO Developer Experience Initiative
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1y2hlgh9600zjlt39dh54z7z8d65kahneck8yhh7ugmzc9as0xrzqd`
 
 ---
 
-I am abstaining on this proposal. I support the general direction: Cardano needs a better developer experience, easier onboarding, better documentation and a clearer path for new builders. The problem is real, and the requested amount is not excessive on its face, but I still want more clarity before voting YES.
-
-I would like more detail on the AI/LLM part of the documentation work, especially how the Developer Portal will be structured so that both developers and AI coding agents can use it reliably. In the age of AI-assisted development, it is not enough to add more documentation pages. The docs should be structured, tested, versioned and easy to use as a reliable source of truth.
-
-For me, that means tested code examples, clear recommendations on which tools and libraries to use, information on what is current or deprecated, versioned references and some kind of machine-readable entry point for AI tools. Otherwise, AI agents may keep giving developers outdated or wrong Cardano examples.
-
-I also think the Cardano Foundation should have a clearer role, possibly including co-funding. Developer onboarding and the Developer Portal are shared ecosystem infrastructure, not just IO deliverables. This work should not be fragmented across separate IO, CF, Intersect or community initiatives.
-
-So I am not voting NO, because the objective is important. But I am abstaining because I want more clarity on the AI/LLM documentation work, long-term maintenance, and the role of the Cardano Foundation before supporting it fully.
+I am changing my Abstain vote to a YES vote. The team behind this proposal has addressed most of my concerns from my rationale and I think they not only identify a real chokepoint for Cardano - based on feedback received from developer surveys - but they also have a plan how to tackle the issue. There are a lot of complaints about problems for existing builders working on Cardano right now (however we can hear those complaints loud and clear)- but we can't hear the complaints of the people who tried on their own, gave up and left. There is a lot of inward focus on teams who are here right now. Yes, they are our stars and building up the ecosystem. Data presented shows our environment is rich with senior heavy devs. We are not attracting junior devs who don't even enter... or give up as soon as they see the fragmented onboarding experience. Ultimately, I don't care who was responsible - what we need is to eliminate this lack of competition - or lack of inflow if you want - and a limited number of ideas circulating in a small circle of partners or rivals. Furthermore, this proposal is also fertile ground for cooperation among relevant people at IOG, CF and Intersect and others. From the feedback that I have received publicly over X to my questions - I see there is willingness to cooperate. Cardano will fail if everyone has to climb a mountain or devote months to learn how to start or must have a special talent to start building here. Lowering the entry bar will ultimately lower the costs for the ecosystem - that is what I want to see. This will also increase the value and utility of each and every tool that we have collectively financed so far. This is a public goods proposal that I can support as my original concerns have been sufficiently well addressed. I would advise the proposers to keep the collaboration spirit alive - a proposal like this will fail without it.
