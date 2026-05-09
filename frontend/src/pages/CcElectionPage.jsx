@@ -696,7 +696,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
 
   // §4 – cold credentials
   const [coldCredentialHash, setColdCredentialHash] = useState(() => md.coldCredentialHash || "");
-  const [credentialType,     setCredentialType]     = useState(() => md.coldCredentialType || "Key credential");
+  const [credentialType,     setCredentialType]     = useState(() => { const t = md.coldCredentialType || "Key credential"; return t === "Key Credential" ? "Key credential" : t === "Script Credential" ? "Script credential" : t; });
 
   // §5 – consortium members
   const emptyMem = () => ({ name: "", geographicRegion: "", poolId: "", drepId: "", xUsername: "", linkedinUsername: "", website: "", otherLinks: [], bio: "", professionalBackground: "", governanceExperience: "", conflictOfInterest: "" });
