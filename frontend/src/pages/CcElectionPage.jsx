@@ -1161,7 +1161,8 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
   const [nominations, setNominations] = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
-  const [deletingId,  setDeletingId]  = useState(null);
+  const [deletingId,    setDeletingId]    = useState(null);
+  const [withdrawingId, setWithdrawingId] = useState(null);
 
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
@@ -1194,11 +1195,26 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
   }
 
   async function handleDelete(nom) {
-    if (!window.confirm("Delete this nomination? This cannot be undone.")) return;
+    if (!window.confirm("Delete this draft? This cannot be undone.")) return;
     setDeletingId(nom._id);
     try { await apiFetch(`/proposals/${nom._id}`, { method: "DELETE" }); setNominations(ns => ns.filter(n => n._id !== nom._id)); }
     catch (e) { alert(e.message || "Failed to delete."); }
     finally { setDeletingId(null); }
+  }
+
+  async function handleWithdraw(nom) {
+    const category = window.prompt("Withdrawal reason:\n1. Inappropriate content\n2. Spam\n3. Policy violation\n4. Duplicate submission\n5. Other\n\nEnter the reason exactly as listed:");
+    if (!category) return;
+    const VALID = ["Inappropriate content", "Spam", "Policy violation", "Duplicate submission", "Other"];
+    if (!VALID.includes(category)) { alert("Invalid category. Please enter one of the listed reasons exactly."); return; }
+    const comment = window.prompt("Add a comment (required):");
+    if (!comment?.trim()) { alert("A comment is required."); return; }
+    setWithdrawingId(nom._id);
+    try {
+      await apiFetch(`/proposals/${nom._id}/withdraw`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, comment: comment.trim() }) });
+      setNominations(ns => ns.map(n => n._id === nom._id ? { ...n, status: "withdrawnByProposer" } : n));
+    } catch (e) { alert(e.message || "Failed to withdraw."); }
+    finally { setWithdrawingId(null); }
   }
 
   return (
@@ -1236,11 +1252,19 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
                   </div>
                   <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
                   <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.2rem" }}>
-                    <button onClick={() => { onClose(); onEdit(n); }} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.25rem 0.65rem" }}>Edit</button>
-                    <button onClick={() => handleDelete(n)} disabled={deletingId === n._id}
-                      style={{ background: "transparent", border: "1px solid color-mix(in srgb,var(--red,#f87171) 40%,transparent)", borderRadius: 7, padding: "0.25rem 0.65rem", fontSize: "0.78rem", color: "var(--red,#f87171)", cursor: "pointer" }}>
-                      {deletingId === n._id ? "Deleting…" : "Delete"}
-                    </button>
+                    {n.status === "draft" && <button onClick={() => { onClose(); onEdit(n); }} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.25rem 0.65rem" }}>Edit</button>}
+                    {n.status === "draft" && (
+                      <button onClick={() => handleDelete(n)} disabled={deletingId === n._id}
+                        style={{ background: "transparent", border: "1px solid color-mix(in srgb,var(--red,#f87171) 40%,transparent)", borderRadius: 7, padding: "0.25rem 0.65rem", fontSize: "0.78rem", color: "var(--red,#f87171)", cursor: "pointer" }}>
+                        {deletingId === n._id ? "Deleting…" : "Delete"}
+                      </button>
+                    )}
+                    {n.status === "live" && (
+                      <button onClick={() => handleWithdraw(n)} disabled={withdrawingId === n._id}
+                        style={{ background: "transparent", border: "1px solid color-mix(in srgb,var(--red,#f87171) 40%,transparent)", borderRadius: 7, padding: "0.25rem 0.65rem", fontSize: "0.78rem", color: "var(--red,#f87171)", cursor: "pointer" }}>
+                        {withdrawingId === n._id ? "Withdrawing…" : "Withdraw"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
