@@ -820,6 +820,7 @@ function NominationForm({ cycle, walletApi, walletRewardAddress, initialData, on
     setSubmitting(true); setSubmitError("");
     try {
       const payload = buildPayload(status);
+      console.log("Submitting payload metaData:", JSON.stringify(payload.metaData, null, 2));
       if (draftId) {
         await apiFetch(`/proposals/${draftId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       } else {
