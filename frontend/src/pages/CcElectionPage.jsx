@@ -20,8 +20,14 @@ async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...opts });
   if (!res.ok) {
     let msg;
-    try { const j = await res.json(); msg = j?.message || j?.error || (Array.isArray(j?.errors) ? j.errors.map(e => e?.message || e).join("; ") : null) || JSON.stringify(j) || res.statusText; }
-    catch { msg = res.statusText; }
+    try {
+      const j = await res.json();
+      console.error("API error body:", JSON.stringify(j));
+      const detail = Array.isArray(j?.errors) ? j.errors.map(e => e?.message || e?.field || JSON.stringify(e)).join("; ")
+                   : Array.isArray(j?.details) ? j.details.map(e => e?.message || JSON.stringify(e)).join("; ")
+                   : null;
+      msg = [j?.message || j?.error, detail].filter(Boolean).join(": ") || JSON.stringify(j) || res.statusText;
+    } catch { msg = res.statusText; }
     throw new Error(`API ${res.status}: ${msg}`);
   }
   return res.json();
