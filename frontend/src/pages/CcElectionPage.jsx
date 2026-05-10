@@ -1742,6 +1742,7 @@ export function CcAdminPage() {
   const [selected,     setSelected]     = useState(null);
   const [detailFull,   setDetailFull]   = useState(null);
   const [detailLoading,setDetailLoading]= useState(false);
+  const [adminWithdrawingId, setAdminWithdrawingId] = useState(null);
 
   useEffect(() => {
     apiFetch("/votes")
@@ -1783,6 +1784,52 @@ export function CcAdminPage() {
     finally { setDetailLoading(false); }
   }
 
+  async function handleAdminWithdraw(nom) {
+    const name = getCandidateName(nom);
+    const confirmed = window.confirm(
+      `ADMIN WITHDRAWAL - USE ONLY WHEN ABSOLUTELY NECESSARY\n\n` +
+      `You are about to forcibly withdraw "${name}"'s nomination on their behalf.\n\n` +
+      `This should only be used for:\n` +
+      `  - Illegal or seriously harmful content\n` +
+      `  - A verified request from the candidate who cannot self-withdraw\n\n` +
+      `This action is logged and irreversible. Are you sure?`
+    );
+    if (!confirmed) return;
+
+    const category = window.prompt(
+      `Reason for admin withdrawal of "${name}":\n\n` +
+      `  1. Inappropriate content\n` +
+      `  2. Spam\n` +
+      `  3. Policy violation\n` +
+      `  4. Duplicate submission\n` +
+      `  5. Other\n\n` +
+      `Enter the reason exactly as listed:`
+    );
+    const validCategories = ["Inappropriate content", "Spam", "Policy violation", "Duplicate submission", "Other"];
+    if (!category) return;
+    if (!validCategories.includes(category)) { alert("Invalid category. Enter one of the listed reasons exactly."); return; }
+
+    const comment = window.prompt("Add an admin comment explaining the withdrawal (required):");
+    if (!comment?.trim()) { alert("A comment is required."); return; }
+
+    setAdminWithdrawingId(nom._id);
+    try {
+      const res = await apiFetch(`/proposals/${nom._id}/withdraw`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, comment: comment.trim() }),
+      });
+      const updated = res?.data ?? { ...nom, status: "withdrawnByAdmin" };
+      setNominations(ns => ns.map(n => n._id === nom._id ? { ...n, ...updated, status: updated.status || "withdrawnByAdmin" } : n));
+      setSelected(s => s?._id === nom._id ? { ...s, ...updated, status: updated.status || "withdrawnByAdmin" } : s);
+      setDetailFull(d => d?._id === nom._id ? { ...d, ...updated, status: updated.status || "withdrawnByAdmin" } : d);
+    } catch (e) {
+      alert(e.message || "Failed to withdraw.");
+    } finally {
+      setAdminWithdrawingId(null);
+    }
+  }
+
   const counts = { draft: 0, live: 0, withdrawn: 0 };
   nominations.forEach(n => {
     if (n.status === "draft") counts.draft++;
@@ -1821,7 +1868,21 @@ export function CcAdminPage() {
             <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading…</p>
           </div>
         ) : (
-          <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} />
+          <>
+            {display.status === "live" && (
+              <div style={{ border: "1px solid color-mix(in srgb,var(--red,#f87171) 45%,transparent)", borderRadius: 10, background: "color-mix(in srgb,var(--red,#f87171) 8%,transparent)", padding: "0.9rem 1rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+                <div>
+                  <p style={{ margin: "0 0 0.2rem", fontWeight: 800, color: "var(--red,#f87171)", fontSize: "0.86rem" }}>Admin withdrawal available</p>
+                  <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.78rem" }}>Use only for serious content issues or verified candidate requests.</p>
+                </div>
+                <button onClick={() => handleAdminWithdraw(display)} disabled={adminWithdrawingId === display._id}
+                  style={{ background: "var(--red,#f87171)", border: "1px solid var(--red,#f87171)", borderRadius: 8, padding: "0.45rem 0.85rem", color: "#0a0f1a", cursor: adminWithdrawingId === display._id ? "wait" : "pointer", fontWeight: 800, fontSize: "0.8rem", flexShrink: 0 }}>
+                  {adminWithdrawingId === display._id ? "Withdrawing..." : "Force Withdraw"}
+                </button>
+              </div>
+            )}
+            <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} />
+          </>
         )}
       </main>
     );
@@ -1892,6 +1953,13 @@ export function CcAdminPage() {
                   <p style={{ margin: "0.1rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
                 </div>
                 <button onClick={() => openDetail(n)} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.28rem 0.7rem", flexShrink: 0 }}>View</button>
+                {n.status === "live" && (
+                  <button onClick={() => handleAdminWithdraw(n)} disabled={adminWithdrawingId === n._id}
+                    title="Forcibly withdraw this live nomination"
+                    style={{ background: "transparent", border: "1px solid color-mix(in srgb,var(--red,#f87171) 45%,transparent)", borderRadius: 7, padding: "0.28rem 0.7rem", fontSize: "0.75rem", color: "var(--red,#f87171)", cursor: adminWithdrawingId === n._id ? "wait" : "pointer", flexShrink: 0, fontWeight: 800 }}>
+                    {adminWithdrawingId === n._id ? "Withdrawing..." : "Force Withdraw"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
