@@ -105,6 +105,10 @@ function StatusBadge({ status }) {
   return c.label ? <span style={{ fontSize: "0.68rem", fontWeight: 700, color: c.color, letterSpacing: "0.04em" }}>{c.label}</span> : null;
 }
 
+function isWithdrawnStatus(status) {
+  return ["withdrawnbyproposer", "withdrawnbyadmin", "withdrawn"].includes(String(status || "").toLowerCase());
+}
+
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 
 function ElectionTimeline({ cycle }) {
@@ -1315,7 +1319,7 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
     return () => ctrl.abort();
   }, [cycle]);
 
-  const isWithdrawn = n => ["withdrawnbyproposer", "withdrawnbyadmin", "withdrawn"].includes(String(n.status || "").toLowerCase());
+  const isWithdrawn = n => isWithdrawnStatus(n.status);
 
   async function handleAdminWithdraw(nom) {
     const name = getCandidateName(nom);
@@ -1760,7 +1764,7 @@ export function CcAdminPage() {
     try {
       let page = 1, all = [];
       while (true) {
-        const data = await apiFetch(`/proposals?vote=${c._id}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`);
+        const data = await apiFetch(`/proposals?vote=${c._id}&status=live,withdrawnByProposer,withdrawnByAdmin,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`);
         const rows = Array.isArray(data) ? data : (data?.data ?? []);
         all = all.concat(rows);
         if (!data?.meta?.hasNextPage || rows.length < 100) break;
@@ -1780,10 +1784,17 @@ export function CcAdminPage() {
   }
 
   const counts = { draft: 0, live: 0, withdrawn: 0 };
-  nominations.forEach(n => { if (counts[n.status] !== undefined) counts[n.status]++; });
+  nominations.forEach(n => {
+    if (n.status === "draft") counts.draft++;
+    else if (n.status === "live") counts.live++;
+    else if (isWithdrawnStatus(n.status)) counts.withdrawn++;
+  });
 
   const filtered = nominations.filter(n => {
-    if (statusFilter !== "all" && n.status !== statusFilter) return false;
+    if (statusFilter !== "all") {
+      if (statusFilter === "withdrawn" && !isWithdrawnStatus(n.status)) return false;
+      if (statusFilter !== "withdrawn" && n.status !== statusFilter) return false;
+    }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
       if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
