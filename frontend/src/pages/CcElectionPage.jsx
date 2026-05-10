@@ -100,7 +100,13 @@ function TrackBadge({ type }) {
 
 function StatusBadge({ status }) {
   const s = String(status || "").toLowerCase();
-  const map = { live: { label: "Submitted", color: "#34d399" }, draft: { label: "Draft", color: "#fbbf24" }, withdrawn: { label: "Withdrawn", color: "#f87171" }, withdrawnbyproposer: { label: "Withdrawn", color: "#f87171" }, withdrawnbyadmin: { label: "Withdrawn (Admin)", color: "#f87171" } };
+  const map = {
+    live: { label: "Submitted", color: "#34d399" },
+    draft: { label: "Draft", color: "#fbbf24" },
+    withdrawn: { label: "Withdrawn", color: "#f87171" },
+    withdrawnbyproposer: { label: "Withdrawn by Proposer", color: "#f87171" },
+    withdrawnbyadmin: { label: "Withdrawn by Admin", color: "#f87171" },
+  };
   const c = map[s] || { label: status || "", color: "var(--text-muted)" };
   return c.label ? <span style={{ fontSize: "0.68rem", fontWeight: 700, color: c.color, letterSpacing: "0.04em" }}>{c.label}</span> : null;
 }
@@ -159,6 +165,81 @@ function getTrack(c) { return String(c?.metaData?.track || c?.metaData?.applican
 function getCandidateName(c) {
   const md = c?.metaData || {};
   return c?.title || md.individual?.fullNameOrAlias || md.organisation?.organisationName || md.consortium?.consortiumName || md.fullName || "Unnamed Candidate";
+}
+function getProposerId(c) { return c?.proposerId || c?.proposer || c?.userId || ""; }
+
+function CopyTextButton({ value, label = "Copy" }) {
+  if (!value) return null;
+  return (
+    <button type="button" onClick={() => navigator.clipboard?.writeText(String(value)).catch(() => {})}
+      style={{ border: "1px solid var(--line)", borderRadius: 6, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.68rem", padding: "0.16rem 0.45rem", flexShrink: 0 }}>
+      {label}
+    </button>
+  );
+}
+
+function AdminTimelinePanel({ candidate }) {
+  const proposerId = getProposerId(candidate);
+  const withdrawal = candidate?.withdrawalDetails || candidate?.withdrawal || null;
+  const item = { label: "", value: "" };
+  const timeline = [
+    { ...item, label: "Proposal ID", value: candidate?._id },
+    { ...item, label: "Proposer", value: proposerId, copy: true },
+    { ...item, label: "Status", value: candidate?.status },
+    { ...item, label: "Version", value: candidate?.version },
+    { ...item, label: "Created", value: formatDateTime(candidate?.createdAt) },
+    { ...item, label: "Submitted", value: formatDateTime(candidate?.submittedAt) },
+    { ...item, label: "Updated", value: formatDateTime(candidate?.updatedAt) },
+    { ...item, label: "Comments", value: Number(candidate?.commentCount || 0) },
+  ].filter(row => row.value !== undefined && row.value !== null && row.value !== "");
+
+  const withdrawalRows = withdrawal ? [
+    { label: "Withdrawn At", value: formatDateTime(withdrawal.date || withdrawal.createdAt) },
+    { label: "Withdrawn By", value: withdrawal.userId || withdrawal.proposerId },
+    { label: "Reason", value: withdrawal.category },
+    { label: "Comment", value: withdrawal.comment },
+  ].filter(row => row.value) : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+      <section style={{ border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 10, background: "color-mix(in srgb,#f59e0b 5%,transparent)", padding: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#f59e0b", background: "color-mix(in srgb,#f59e0b 14%,transparent)", border: "1px solid color-mix(in srgb,#f59e0b 35%,transparent)", borderRadius: 5, padding: "0.18rem 0.5rem" }}>Admin metadata</span>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>API record and timeline</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "0.65rem" }}>
+          {timeline.map(row => (
+            <div key={row.label} style={{ minWidth: 0 }}>
+              <p style={{ margin: "0 0 0.22rem", fontSize: "0.63rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>{row.label}</p>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text)", fontFamily: row.copy || row.label.includes("ID") ? "monospace" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.value}</p>
+                {row.copy && <CopyTextButton value={row.value} />}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {withdrawalRows.length > 0 && (
+        <section style={{ border: "1px solid color-mix(in srgb,var(--red,#f87171) 35%,transparent)", borderRadius: 10, background: "color-mix(in srgb,var(--red,#f87171) 5%,transparent)", padding: "1rem" }}>
+          <p style={{ margin: "0 0 0.85rem", fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--red,#f87171)" }}>Withdrawal details</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "0.65rem" }}>
+            {withdrawalRows.map(row => (
+              <div key={row.label} style={{ minWidth: 0 }}>
+                <p style={{ margin: "0 0 0.22rem", fontSize: "0.63rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>{row.label}</p>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text)", overflowWrap: "anywhere" }}>{row.value}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <details style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel)", overflow: "hidden" }}>
+        <summary style={{ cursor: "pointer", padding: "0.75rem 1rem", fontSize: "0.76rem", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Raw nomination data</summary>
+        <pre style={{ margin: 0, padding: "1rem", borderTop: "1px solid var(--line)", maxHeight: 420, overflow: "auto", fontSize: "0.72rem", lineHeight: 1.55, color: "var(--text-muted)", background: "var(--bg)" }}>{JSON.stringify(candidate, null, 2)}</pre>
+      </details>
+    </div>
+  );
 }
 
 // ─── Candidate Card ──────────────────────────────────────────────────────────
@@ -1361,7 +1442,7 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
     }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
-      if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
+      if (!getCandidateName(n).toLowerCase().includes(q) && !getProposerId(n).toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -1844,7 +1925,7 @@ export function CcAdminPage() {
     }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
-      if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
+      if (!getCandidateName(n).toLowerCase().includes(q) && !getProposerId(n).toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -1881,6 +1962,7 @@ export function CcAdminPage() {
                 </button>
               </div>
             )}
+            <AdminTimelinePanel candidate={display} />
             <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} />
           </>
         )}
@@ -1949,7 +2031,13 @@ export function CcAdminPage() {
                     <StatusBadge status={n.status} />
                     <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{getCandidateName(n)}</span>
                   </div>
-                  {n.proposer && <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.proposer}</p>}
+                  {getProposerId(n) && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
+                      <span style={{ fontSize: "0.64rem", color: "var(--text-muted)", flexShrink: 0 }}>Proposer</span>
+                      <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getProposerId(n)}</p>
+                      <CopyTextButton value={getProposerId(n)} />
+                    </div>
+                  )}
                   <p style={{ margin: "0.1rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
                 </div>
                 <button onClick={() => openDetail(n)} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.28rem 0.7rem", flexShrink: 0 }}>View</button>
