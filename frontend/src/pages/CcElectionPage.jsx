@@ -100,7 +100,7 @@ function TrackBadge({ type }) {
 
 function StatusBadge({ status }) {
   const s = String(status || "").toLowerCase();
-  const map = { live: { label: "Submitted", color: "#34d399" }, draft: { label: "Draft", color: "#fbbf24" }, withdrawn: { label: "Withdrawn", color: "#f87171" } };
+  const map = { live: { label: "Submitted", color: "#34d399" }, draft: { label: "Draft", color: "#fbbf24" }, withdrawn: { label: "Withdrawn", color: "#f87171" }, withdrawnByProposer: { label: "Withdrawn", color: "#f87171" }, withdrawnByAdmin: { label: "Withdrawn (Admin)", color: "#f87171" } };
   const c = map[s] || { label: status || "", color: "var(--text-muted)" };
   return c.label ? <span style={{ fontSize: "0.68rem", fontWeight: 700, color: c.color, letterSpacing: "0.04em" }}>{c.label}</span> : null;
 }
@@ -1175,7 +1175,7 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
     setLoading(true); setError("");
     try {
       const proposer = encodeURIComponent(walletRewardAddress);
-      const data = await apiFetch(`/proposals?vote=${cycle._id}&proposer=${proposer}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100`);
+      const data = await apiFetch(`/proposals?vote=${cycle._id}&proposer=${proposer}&status=live,withdrawnByProposer,withdrawnByAdmin,draft&sort=updatedAt&direction=desc&limit=100`);
       setNominations(Array.isArray(data) ? data : (data?.data ?? []));
       setAuthed(true);
     } catch (e) {
@@ -1299,7 +1299,7 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
       try {
         let page = 1, all = [];
         while (true) {
-          const data = await apiFetch(`/proposals?vote=${cycle._id}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`, { signal: ctrl.signal });
+          const data = await apiFetch(`/proposals?vote=${cycle._id}&status=live,withdrawnByProposer,withdrawnByAdmin,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`, { signal: ctrl.signal });
           const rows = Array.isArray(data) ? data : (data?.data ?? []);
           all = all.concat(rows);
           if (!data?.meta?.hasNextPage || rows.length < 100) break;
@@ -1314,8 +1314,13 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
     return () => ctrl.abort();
   }, [cycle]);
 
+  const isWithdrawn = n => n.status === "withdrawnByProposer" || n.status === "withdrawnByAdmin";
+
   const filtered = nominations.filter(n => {
-    if (statusFilter !== "all" && n.status !== statusFilter) return false;
+    if (statusFilter !== "all") {
+      if (statusFilter === "withdrawn" && !isWithdrawn(n)) return false;
+      if (statusFilter !== "withdrawn" && n.status !== statusFilter) return false;
+    }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
       if (!getCandidateName(n).toLowerCase().includes(q) && !(n.proposer || "").toLowerCase().includes(q)) return false;
@@ -1324,7 +1329,11 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
   });
 
   const counts = { draft: 0, live: 0, withdrawn: 0 };
-  nominations.forEach(n => { if (counts[n.status] !== undefined) counts[n.status]++; });
+  nominations.forEach(n => {
+    if (n.status === "draft") counts.draft++;
+    else if (n.status === "live") counts.live++;
+    else if (isWithdrawn(n)) counts.withdrawn++;
+  });
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }} onClick={onClose}>
