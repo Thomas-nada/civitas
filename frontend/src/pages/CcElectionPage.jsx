@@ -1279,11 +1279,12 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
 // ─── Admin Nominations Panel ──────────────────────────────────────────────────
 
 function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
-  const [nominations, setNominations] = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [query,       setQuery]       = useState("");
+  const [nominations,    setNominations]    = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState("");
+  const [statusFilter,   setStatusFilter]   = useState("all");
+  const [query,          setQuery]          = useState("");
+  const [adminWithdrawingId, setAdminWithdrawingId] = useState(null);
 
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
@@ -1315,6 +1316,39 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
   }, [cycle]);
 
   const isWithdrawn = n => n.status === "withdrawnByProposer" || n.status === "withdrawnByAdmin";
+
+  async function handleAdminWithdraw(nom) {
+    const name = getCandidateName(nom);
+    const confirmed = window.confirm(
+      `⚠️ ADMIN WITHDRAWAL — USE ONLY WHEN ABSOLUTELY NECESSARY ⚠️\n\n` +
+      `You are about to forcibly withdraw "${name}"'s nomination on their behalf.\n\n` +
+      `This should only be used for:\n` +
+      `  • Illegal or seriously harmful content\n` +
+      `  • A verified request from the candidate who cannot self-withdraw\n\n` +
+      `This action is logged and irreversible. Are you sure?`
+    );
+    if (!confirmed) return;
+    const category = window.prompt(
+      `Reason for admin withdrawal of "${name}":\n\n` +
+      `  1. Inappropriate content\n` +
+      `  2. Spam\n` +
+      `  3. Policy violation\n` +
+      `  4. Duplicate submission\n` +
+      `  5. Other\n\n` +
+      `Enter the reason exactly as listed:`
+    );
+    const VALID = ["Inappropriate content", "Spam", "Policy violation", "Duplicate submission", "Other"];
+    if (!category) return;
+    if (!VALID.includes(category)) { alert("Invalid category. Enter one of the listed reasons exactly."); return; }
+    const comment = window.prompt(`Add an admin comment explaining the withdrawal (required):`);
+    if (!comment?.trim()) { alert("A comment is required."); return; }
+    setAdminWithdrawingId(nom._id);
+    try {
+      await apiFetch(`/proposals/${nom._id}/withdraw`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, comment: comment.trim() }) });
+      setNominations(ns => ns.map(n => n._id === nom._id ? { ...n, status: "withdrawnByAdmin" } : n));
+    } catch (e) { alert(e.message || "Failed to withdraw."); }
+    finally { setAdminWithdrawingId(null); }
+  }
 
   const filtered = nominations.filter(n => {
     if (statusFilter !== "all") {
@@ -1384,6 +1418,13 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
                 <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)" }}>Updated {formatDateTime(n.updatedAt)}</p>
               </div>
               <button onClick={() => { onClose(); onView(n); }} className="btn-outline" style={{ fontSize: "0.78rem", padding: "0.28rem 0.7rem", flexShrink: 0 }}>View</button>
+              {n.status === "live" && (
+                <button onClick={() => handleAdminWithdraw(n)} disabled={adminWithdrawingId === n._id}
+                  title="Last resort only — forcibly withdraws this nomination"
+                  style={{ background: "transparent", border: "1px solid color-mix(in srgb,var(--red,#f87171) 40%,transparent)", borderRadius: 7, padding: "0.28rem 0.7rem", fontSize: "0.75rem", color: "var(--red,#f87171)", cursor: "pointer", flexShrink: 0, fontWeight: 600 }}>
+                  {adminWithdrawingId === n._id ? "Withdrawing…" : "⚠ Force Withdraw"}
+                </button>
+              )}
             </div>
           ))}
         </div>
