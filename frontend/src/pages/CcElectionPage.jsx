@@ -1764,7 +1764,7 @@ export function CcAdminPage() {
     try {
       let page = 1, all = [];
       while (true) {
-        const data = await apiFetch(`/proposals?vote=${c._id}&status=live,withdrawnByProposer,withdrawnByAdmin,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`);
+        const data = await apiFetch(`/proposals?vote=${c._id}&status=live,withdrawn,draft&sort=updatedAt&direction=desc&limit=100&page=${page}`);
         const rows = Array.isArray(data) ? data : (data?.data ?? []);
         all = all.concat(rows);
         if (!data?.meta?.hasNextPage || rows.length < 100) break;
