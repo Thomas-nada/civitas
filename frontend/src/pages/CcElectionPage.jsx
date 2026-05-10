@@ -100,7 +100,7 @@ function TrackBadge({ type }) {
 
 function StatusBadge({ status }) {
   const s = String(status || "").toLowerCase();
-  const map = { live: { label: "Submitted", color: "#34d399" }, draft: { label: "Draft", color: "#fbbf24" }, withdrawn: { label: "Withdrawn", color: "#f87171" }, withdrawnByProposer: { label: "Withdrawn", color: "#f87171" }, withdrawnByAdmin: { label: "Withdrawn (Admin)", color: "#f87171" } };
+  const map = { live: { label: "Submitted", color: "#34d399" }, draft: { label: "Draft", color: "#fbbf24" }, withdrawn: { label: "Withdrawn", color: "#f87171" }, withdrawnbyproposer: { label: "Withdrawn", color: "#f87171" }, withdrawnbyadmin: { label: "Withdrawn (Admin)", color: "#f87171" } };
   const c = map[s] || { label: status || "", color: "var(--text-muted)" };
   return c.label ? <span style={{ fontSize: "0.68rem", fontWeight: 700, color: c.color, letterSpacing: "0.04em" }}>{c.label}</span> : null;
 }
@@ -1315,7 +1315,7 @@ function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
     return () => ctrl.abort();
   }, [cycle]);
 
-  const isWithdrawn = n => n.status === "withdrawnByProposer" || n.status === "withdrawnByAdmin";
+  const isWithdrawn = n => ["withdrawnbyproposer", "withdrawnbyadmin", "withdrawn"].includes(String(n.status || "").toLowerCase());
 
   async function handleAdminWithdraw(nom) {
     const name = getCandidateName(nom);
