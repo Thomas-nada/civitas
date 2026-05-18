@@ -1,0 +1,20 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmanttGTtus3Kzfhrg4NRo7KtU6NaVsQg6u7oDp12j8zqk -->
+# Sebastien Guillemot セバ
+
+**Proposal:** IO & Midgard Labs L2 Scalability Initiative
+**Vote:** No
+**Voter ID:** `drep1y2csyxt7u2hl4674pl9cef5lknafaw5nraxvyx033kmd0es3awuv0`
+
+---
+
+Before I talk about Hydra, I just want to get the other two sections out of the way:
+1. I think this proposal only has very loose financial connections with Midgard, so I won't talk about it
+2. The proposal only vaguely talks about wanting to build a DA layer, but doesn't elaborate on how it would achieve that. DA layers are a complex topic, so if we're going to fund some DA layer effort (which I think is important), I would rather see a more concrete pitch on how that would actually be achieved. Some technical challenges just for insight:
+    1. What cryptography would you use for the DA layer? If it's ellitpic-curve based, it may have to be phased out in a few years due to quantum computers. Therefore, if a proper DA layer takes a few years to build, elliptic curves is not an option (for example, Ethereum's DA layer is based on elliptic curves, and they've already started working on their plan to migrate it to post-quantum cryptography). We can use hashes as the post-quantum scheme (similar to what Ethereum is planning to move to, and there are papers on hash-based DA layers like FRI-based DA), but this would be somewhat unfortunate given Midnight and Starstream are working working on lattices for PQ cryptography (although I don't think there is much research on lattice-based primitives required for DA layers). The reason aligning the cryptography for DA with other choices matter is because, as the ZOTA paper shows, there is quite a lot of performance benefit gained by aligning cryptography across primitives.
+    2. How to best model a DA layer in the UTXO context? All other DA layers are in the account setting (other than maybe something like Chia, which isn't a DA layer per-se, but has some ideas). If we instead try and build the DA layer more at the protocol level than at the ledger level, then we're have to think about how this aligns with Leios (since there is quite a bit of overlap, and there was even a "Blob Leios" concept at some point to use Leios for DA)
+
+Given the above, I feel this proposal is actually mostly for Hydra. In my opinion, although Hydra does have some users, it hasn't quite hit the level of adoption that was originally expected. Even for fixed-party payment systems (the use-case state channels were advertised as best suited for), people have instead been leveraging privacy-preserving ZK solutions (ex: Ligero is used in Midnight City to do fast private payments at ~500tps, which is enough for most use-cases). I see two potential directions for this proposal if it gets resubmitted:
+1. Be very clear about this being a "capstone", and clearly identify which features would be needed by Hydra to make it v1 complete. I don't really feel like existing projects using Hydra are demanding a lot of features, so I feel like we must not be far from this kind of milestone (let me know if I'm wrong)
+2. Be very clear about a new potential direction for L2 strategy (experience and things built for Hydra can be very beneficial for this!). For example
+    1. what if we built a more restrictive (not general plutus) version of Hydra that also has ZK that uses UTXOs? There is some prior ideas around this (zSwap-based L2 for Midnight, intmax in ethereum, Ligero in Midnight City, etc.)
+    2. what if we want to combine state channels with general ZK solutions? Starstream can somewhat model state channels because within a single transaction, you can "pass" the utxo set to somebody else for them to continue the proof. However, Starstream can't cover the entire set of use-cases you might care about at the moment since you may lose privacy when passing utxos (may require some MPC system for this), and there's nothing stopping somebody from ending the proof by submitting the UTXO diff onchain at any time. I feel ideas from Hydra can be combined with Starstream to achieve this though
