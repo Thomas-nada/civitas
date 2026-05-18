@@ -245,24 +245,31 @@ function AdminTimelinePanel({ candidate }) {
 // ─── Candidate Card ──────────────────────────────────────────────────────────
 
 function CandidateCard({ candidate, onClick }) {
-  const track = getTrack(candidate);
-  const name  = getCandidateName(candidate);
-  const md    = candidate?.metaData || {};
-  const bio   = candidate.summary || md.biography || md.organisationDescription || md.motivation || "";
-  const links = [...(md.links || []), ...(md.socialLinks || [])].filter(l => l?.url);
+  const track   = getTrack(candidate);
+  const name    = getCandidateName(candidate);
+  const tc      = TRACK_COLORS[track] || { bg: "var(--panel)", border: "var(--line)", text: "var(--text-muted)" };
+  const initials = name.split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?";
+  const md      = candidate?.metaData || {};
+  const bio     = candidate.summary || md.biography || md.organisationDescription || md.motivation || "";
+  const links   = [...(md.links || []), ...(md.socialLinks || [])].filter(l => l?.url);
 
   return (
     <button onClick={onClick} style={{ display: "block", width: "100%", textAlign: "left", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "1rem 1.1rem", cursor: "pointer", transition: "border-color .15s,box-shadow .15s" }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent,#5eead4)"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(94,234,212,.08)"; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.boxShadow = "none"; }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.5rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <TrackBadge type={track} />
           <StatusBadge status={candidate.status} />
         </div>
         {candidate.commentCount > 0 && <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", flexShrink: 0 }}>💬 {candidate.commentCount}</span>}
       </div>
-      <p style={{ margin: "0 0 0.4rem", fontWeight: 700, fontSize: "0.97rem", lineHeight: 1.3 }}>{name}</p>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+        <div style={{ width: 40, height: 40, borderRadius: "50%", background: tc.bg, border: `2px solid ${tc.border}`, color: tc.text, fontSize: "0.95rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, letterSpacing: "-0.02em" }}>
+          {initials}
+        </div>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.3, color: "var(--text)" }}>{name}</p>
+      </div>
       {bio && <p style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{bio}</p>}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.35rem" }}>
         <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Submitted {formatDate(candidate.submittedAt)}</span>
