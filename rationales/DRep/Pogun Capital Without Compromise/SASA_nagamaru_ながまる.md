@@ -1,37 +1,45 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmWKXQ5sDYraF2cqYBWGdhZ5dDADKeFt1E8VqEwTwHNPKb -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYDSfMbQHdqcjz7yMmoVwq3eThCjpP7DTbSZuMVi6tSf4 -->
 # SASA_nagamaru_ながまる
 
 **Proposal:** Pogun Capital Without Compromise
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1ytuddrgqca0xd4aams6pl9zndpcmxg0rs7z3mggjelm6kscp4arg5`
 
 ---
 
-I have decided to vote NO on this proposal.
+After further consideration, I have decided to vote YES on this proposal.
 
-First, I want to clearly state that I strongly support the overall vision and direction of this proposal. Bringing Bitcoin DeFi activity, external liquidity, and real economic demand into the Cardano ecosystem is, in my view, one of the most important strategic opportunities for Cardano at the current stage.
+Initially, I leaned toward voting NO because I believed the proposal carried substantial technical and execution risk relative to its scale and the current Treasury situation. The architecture involving BitVM, Mithril, recursive ZK proofs, and trust-minimized Bitcoin bridging is highly ambitious, and I still believe careful evaluation is necessary regarding long-term operational stability and execution at production scale.
 
-I also highly appreciate the proposal’s attempt to pursue a different approach from traditional DeFi models through non-margin lending, oracle-free design, a trust-minimized BitVM bridge, and a treasury repayment model. In particular, I believe the idea of treating Treasury funding as a long-term investment mechanism rather than a simple grant distribution model is an important discussion for the future of Cardano governance.
+However, after spending more time reviewing the proposal and reconsidering Cardano’s current position, I ultimately came to the conclusion that Cardano must seriously pursue initiatives capable of creating real economic demand and attracting external liquidity into the ecosystem.
 
-However, despite strongly agreeing with the direction, I believe the proposal currently carries substantial uncertainty from both a technical and market perspective.
+At the current stage, I believe one of Cardano’s greatest challenges is not the lack of technology, but the lack of sufficiently strong economic gravity compared to competing ecosystems. Cardano already possesses strong research, decentralization, security, and technical foundations. However, in areas such as capital inflow, liquidity, DeFi activity, and real market demand, the ecosystem still has significant room for growth.
 
-The architecture involving BitVM, Mithril, recursive ZK proofs, and the broader bridge infrastructure is extremely ambitious and technically complex. At this stage, I believe it is necessary to carefully evaluate whether such a system can realistically achieve production-grade security, operational stability, and long-term reliability.
+From that perspective, I believe this proposal represents one of the few initiatives directly attempting to address that structural challenge by bringing Bitcoin liquidity and Bitcoin-native financial activity into Cardano.
 
-Most importantly, given the current Treasury situation, I believe allocating approximately 12 million ADA at this stage introduces a level of risk that is simply too large.
+I also highly value the proposal’s attempt to explore alternative approaches beyond traditional DeFi models through non-margin lending, oracle-minimized infrastructure, trust-minimized bridge architecture, and Treasury repayment mechanisms. In particular, I believe the idea of treating Treasury funding not merely as grant distribution, but as a long-term ecosystem investment mechanism with potential returns, is an important direction for Cardano governance to explore going forward.
 
-This should not be interpreted as opposition to the proposal’s vision or objectives. On the contrary, I believe this represents one of the directions Cardano should seriously explore in the future. However, at the current stage, the scale of the proposal relative to its uncertainty makes me believe a more cautious approach is appropriate, and for that reason I have decided to vote NO.
+Of course, this proposal carries significant technical ambition and execution complexity, and success is not guaranteed.
+
+However, after reconsidering Cardano’s long-term competitiveness and broader ecosystem trajectory, I came to believe that initiatives capable of attracting external liquidity, expanding real economic activity, and creating new demand layers are strategically necessary for Cardano’s future.
+
+For that reason, I have decided to support this proposal and vote YES.
 
 
-僕は本提案に対してNOを投じます。
+再考した結果、僕は本提案に対してYESを投じることに決めました。
 
-まず前提として、僕は本提案の思想や方向性そのものには強く共感しています。Bitcoin DeFi市場をCardanoへ取り込み、外部流動性や実需をエコシステムへ呼び込もうとする方向性は、現在のCardanoにとって非常に重要なテーマだと考えています。
+当初、僕は本提案に対してNO寄りの考えを持っていました。理由としては、BitVM、Mithril、recursive ZK proof、trust-minimized Bitcoin bridgeなどを含む全体アーキテクチャが非常に高度かつ野心的であり、現在のTreasury状況に対して提案規模や技術的難易度が高いと感じていたためです。実運用レベルでの安定性や長期的な実行可能性についても、慎重に見る必要があると考えていました。
 
-また、non-margin lending、oracle-free設計、BitVMを活用したtrust-minimized bridge、そしてTreasuryへの返済モデルなど、既存DeFiとは異なるアプローチに挑戦している点についても高く評価しています。特に、「Treasuryを単なるgrant配布ではなく、将来的なリターンを伴う投資的な仕組みへ近づけようとしている」という考え方は、今後のガバナンスにおいて重要な議論になり得ると感じています。
+しかし、その後改めて提案内容や現在のCardanoの状況を考え直した結果、最終的には「Cardanoは、外部資本や実需を呼び込む挑戦を本格的に進めなければならない段階に来ている」と感じるようになりました。
 
-一方で、現時点では、本提案には技術面・市場面の両方で高い不確実性が存在すると考えています。
+現在のCardanoにおける課題は、技術不足というよりも、「経済圏としての重力不足」にあると僕は考えています。Cardanoには優れた研究力、安全性、分散性、技術基盤があります。一方で、他チェーンと比較した際に、資本流入、流動性、DeFi活動、そして実際の市場需要という面では、まだ十分に強い状況とは言えません。
 
-特に、BitVM、Mithril、recursive ZK proofなどを含む全体アーキテクチャは非常に高度であり、実運用レベルで安全かつ安定的に運用できるかについては、慎重に見る必要があると感じています。
+その中で、本提案はBitcoin流動性やBitcoin由来の金融活動をCardanoへ取り込もうとしており、この構造的課題に真正面から挑戦している数少ない提案の一つだと感じました。
 
-そして何より、現在のTreasury状況を踏まえると、約1200万ADA規模の資金をこの段階で投じるには、リスクが大きすぎるように感じました。
+また、non-margin lending、oracle依存を抑えた設計、trust-minimized bridge、Treasury返済モデルなど、従来のDeFiとは異なる方向性に挑戦している点も高く評価しています。特に、「Treasuryを単なるgrant配布ではなく、将来的なリターンを伴う長期的なエコシステム投資として扱おうとしている」という考え方は、今後のCardanoガバナンスにおいて重要な方向性になり得ると考えています。
 
-僕は、本提案の方向性や問題意識そのものを否定しているわけではありません。むしろ、Cardanoが今後向かうべき方向性の一つとして非常に重要な挑戦だと考えています。しかし、現時点では提案規模に対して不確実性が大きく、限られたTreasury資金を配分する優先順位としては慎重に判断すべきだと考え、今回はNOを選択しました。
+もちろん、本提案は技術的難易度も高く、大規模な挑戦であることに変わりはありません。また、成功が保証されている提案ではないとも考えています。
+
+しかし、現在のCardanoの立ち位置や長期的な競争力を改めて考えた結果、外部流動性の獲得、実需の拡大、そして新たな需要層の創出に繋がる取り組みは、今後のCardanoにとって戦略的に必要な挑戦だと考えるようになりました。
+
+そのため、今回は本提案を支持し、YESを投じます。

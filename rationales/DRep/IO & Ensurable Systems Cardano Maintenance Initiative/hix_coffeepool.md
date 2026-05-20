@@ -1,0 +1,10 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdbbG29TD1rf7xDEEXuXxyab1jAy64TXTN6aXai4YmzxT -->
+# hix_coffeepool
+
+**Proposal:** IO & Ensurable Systems Cardano Maintenance Initiative
+**Vote:** Abstain
+**Voter ID:** `drep1ygnh2uf4wkc8ldgfxwz7rzuga3m8jtqew9xh5g3n587mg6g3ge0sj`
+
+---
+
+I am abstaining on "IO & Ensurable Systems: Cardano Maintenance Initiative (Q3 2026 – Q1 2027)". Core Cardano maintenance — covering bug fixes, CI/CD, release management, Plutus Core upkeep, security reviews, and QA — is Tier 2a non-discretionary infrastructure work essential to network continuity. The nine functional areas in this proposal constitute comprehensive coverage of core maintenance responsibilities, and the accountability structures are strong: Intersect milestone management, 3rd-party assurance, and unspent fund refund conditions are all in place. The Cardano Blueprint deliverable adds further value by reducing barriers to alternative client implementations. However, ₳62M for a single 9-month proposal is the largest ask in this review cycle, and combined with Leios and CIP-159 already receiving Yes votes, NCL concentration from a single proposer is a significant concern under current market conditions. Abstaining acknowledges the genuine necessity of the work while flagging the scale and concentration risk, and does not imply opposition to the maintenance function itself. Reference: https://coffeepool.jp/notes/drep-voting-framework-for-sustainable-ecosystem/ [Japanese version follows] 私は、「IO & Ensurable Systems: Cardano Maintenance Initiative（Q3 2026〜Q1 2027）」に棄権票を投じます。コアメンテナンス（バグ修正・CI/CD・リリース管理・Plutus Core保守・セキュリティレビュー・QA）はカルダノネットワーク運用に不可欠な非裁量作業です。9つの機能領域はコアメンテナンスの包括的カバレッジを構成しており、説明責任体制も整っています。Intersectのマイルストーン管理・第三者保証・未使用資金返還条件が揃っており、Cardano Blueprintの成果物はオルタナティブクライアント実装の参入障壁を下げる追加価値もあります。しかし₳62Mは9ヶ月の単一提案として今回の審査サイクル最大の請求額であり、Leios・CIP-159がすでにYES票を受けている状況での単一提案者へのNCL集中リスクは、現在の市場状況下では看過できない懸念事項です。棄権はメンテナンス業務そのものへの反対を意味するものではなく、規模と集中リスクへの懸念を示すものです。参照: https://coffeepool.jp/notes/drep-voting-framework-for-sustainable-ecosystem-jp/
