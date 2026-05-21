@@ -1,23 +1,26 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmQ6PYF5b3ryENZ5AbUzf8QiDjMYDt2iXPjYSg84DJCsgF -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmShZYDaJcc37XShSg7BB1cjaC8XZkPXE1yqtSrMWEW2ij -->
 # YUTA
 
 **Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w`
 
 ---
 
-I am voting NO on "Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research."
-As was the case last year, many proposal items have been bundled together, and I would appreciate it if these could be split up as much as possible and resubmitted.
-Personally, I think Scalability and Post-quantum security are good, but the proposal also includes items such as useful PoW, incentive design, multi-resource consensus, Identity, Governance incentives, and SPO incentives—items that likely provide little benefit to the Cardano ecosystem, or that appear to be further research into areas where past research has yielded little of value.
-I would be grateful if this could be split up in some way—by category or by priority—and resubmitted.
+チャールズさん、メッセージをありがとうございました。私はいかなる理由があってもIORの提案書は決して再提出されることはないことを確認しました。
 
-ーーー
+私の考えではこの中のいくつかの研究はお金の無駄になる可能性が高いと考えていますが、LeiosやPerasや量子耐性などいくつかは必須です。私は分割しさて再提出されることを願って、そのいくつかにYESを、そのいくつかのNOを投票したいと考えていました。
 
-私は「Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research」にNOを投票します。
+しかし、いかなる理由があってもIORの提案書は決して再提出されることはないことが確認できた今、DRepの現在の選択肢は次の２つで、その他の選択肢の交渉の余地はありません、私は投票を変更します。
 
-去年と同様に、多くの提案項目がバンドル化されていますが、これらを可能な限り分割して再提出していただけると幸いです。
+1. IORの現在の提案書を受け入れる。（ PoUW などCardanoエコシステムから見て、優先度の低いと思う内容があっても）
+2. IORの現在の提案書を拒否して、LeiosやPerasや量子耐性の全てを研究を捨てて、スケーラビリティとセキュリティを破壊する。
 
-Scalability、Post-quantum securityについては個人的には良いと思いますが、有用なPOW、Incentive design、multi-resource consensus、Identity、Governance incentives、SPO incentivesなどは、おそらくほとんどCardanoエコシステムに利益を与えないか、過去の研究がほとんど役立っていないものをさらに研究しているように見えるものなどが含まれています。
+Thank you for your message, Charles. I have confirmed that the IOR proposal will never be resubmitted for any reason.
 
-これを何らかの方法で種類別、あるいは優先順位別に分けて、再提出していただけると嬉しいです。
+In my opinion, some of the research in this proposal is likely to be a waste of money, but some, such as Leios, Peras, and quantum-resistant, are essential. I was hoping that it would be split and resubmitted, and I wanted to vote YES for some of them and NO for others.
+
+However, now that I have confirmed that the IOR proposal will never be resubmitted for any reason, DRep's current options are the following two, and there is no room for negotiation on other options. I will change my vote.
+
+1. Accept the current IOR proposal. (Even if some of the content, such as PoUW, seems to be a low priority from the perspective of the Cardano ecosystem.)
+2. Reject the current IOR proposal, abandon all research on Leios, Peras, and quantum-resistant, and destroy scalability and security.
