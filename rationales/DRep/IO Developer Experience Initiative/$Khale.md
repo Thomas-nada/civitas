@@ -1,0 +1,11 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmPgzd2zu6gywZPFwXRqCmByevotSNW4NdiWUGL4ovzGZy -->
+# $Khale
+
+**Proposal:** IO Developer Experience Initiative
+**Vote:** Yes
+**Voter ID:** `drep1y2ltat8kjqrmnff3lkkpxy0j5tn66d3m0gy64dc92asft5g6dl9ws`
+
+---
+
+I am voting YES on “IO: Developer Experience Initiative” at 3,601,926 ADA. This is a focused, six‑month program aimed squarely at one of Cardano’s clearest bottlenecks: developer onboarding and retention. The proposal funds concrete deliverables—a stack‑agnostic “cardano‑init” starter CLI, an OpenZeppelin‑style contracts library with at least five ready‑to‑audit smart contracts, a unified Developer Portal “hub” optimized for key personas, a targeted bounty program for existing tooling, and a measurement‑oriented hackathon—all driven by prior survey data from 109 Cardano builders and the Cardano Foundation’s developer ecosystem findings. These outputs directly support a 20–30% uplift in developer onboarding and a ≥30% improvement in relative developer growth rate, which should translate into more DApps, higher MAU, and more transactions over time, aligning closely with Pillar 2 (Adoption & Utility) and Pillar 4 (Community & Ecosystem Growth) in the Cardano 2030 strategy.
+The scope is well bounded and the budget is proportionate for the work: roughly 81% of the 3.6M ADA request goes to development and engineering, with the remainder covering ecosystem support, bounties, the measurement hackathon, and standard audit/oversight costs. Governance and constitutional compliance are strong—the withdrawal is denominated in ADA, sits within the 350M NCL, and is administered via Intersect’s audited TRSC/PSSC framework with auto‑abstain delegation, multi‑sig oversight, third‑party assurance, and a commitment to return unspent funds. Compared to many larger, less targeted proposals this epoch, this initiative offers a clear link between cost and ecosystem utility. My support comes with the expectation that IO keeps the work collaborative and upstream‑oriented (so it strengthens, rather than replaces, existing community tools) and that it publishes concrete DevX metrics—such as time‑to‑MVP, NPS, and adoption of the CLI, contracts library, and Developer Portal flows—so that any future DevX‑related asks can be evaluated against demonstrable impact.
