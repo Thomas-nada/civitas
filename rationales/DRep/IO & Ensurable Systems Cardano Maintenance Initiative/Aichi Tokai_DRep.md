@@ -1,10 +1,10 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdNYkjDhJzrXjKcq53Cmakzbc79TuZXRmhdmwWz1EfEw7 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVVYsv1Fg9Xqd2r3xQZ9YxRAxNFeN2F4BtcVRwWfbXf4X -->
 # Aichi Tokai_DRep
 
 **Proposal:** IO & Ensurable Systems Cardano Maintenance Initiative
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2xacakh0g8q4exfgmvywy62an74cj7ejcpcrgq6vh4dckqhtsyh5`
 
 ---
 
-I oppose this proposal due to its broad scope and high cost; while maintenance is important, the requested funding lacks sufficient transparency and prioritization.
+Although I still have significant concerns about the proposal’s broad scope, cost, and the limited clarity around prioritization, I ultimately decided to support it after considering Cardano’s long‑term stability and the importance of maintaining reliable core infrastructure.

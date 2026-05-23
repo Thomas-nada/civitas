@@ -1,10 +1,10 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSCUTa4hM9DDh5J4GvPk5D5v8uKkvU6fCFjNj6G8jYDen -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmPnr66j3X5r6WAFDDG5xSJapxcA8ewt2X5hPmAYAZhyE8 -->
 # Aichi Tokai_DRep
 
 **Proposal:** IO Cardano High Assurance Technical Collaboration
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2xacakh0g8q4exfgmvywy62an74cj7ejcpcrgq6vh4dckqhtsyh5`
 
 ---
 
-I oppose this proposal because, although valuable, its long‑term research focus has low urgency and does not justify Treasury funding at this time.
+While I still have meaningful concerns about the proposal’s limited urgency, high cost, and the lack of clear prioritization, I ultimately decided to support it after considering Cardano’s long‑term stability and the importance of maintaining high‑assurance research for future protocol safety.
