@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA113-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research" (gov_action1ttgs45ulfxs0jwkfrecystc3flduhszmyzk8wnd7yw5za77tsg9qq4afmus), pois entendemos que ela aborda temas estratégicos para o futuro da Cardano: escalabilidade, melhoria da experiência para usuários e desenvolvedores, segurança pós-quântica, governança, identidade e interoperabilidade. Embora o valor solicitado, de ₳32,916 milhões, seja relevante, o orçamento parece proporcional ao escopo, à quantidade de entregáveis previstos e ao consórcio técnico envolvido, especialmente considerando que a proposta busca transformar pesquisa em CIPs, protótipos e capacidades implementáveis para o ecossistema. Também consideramos positivo que a proposta apresente formas de acompanhamento e controle, com entregáveis definidos, relatórios periódicos, marcos de liberação de recursos, monitoramento pela Intersect, validação por terceiro e mecanismos de transparência on-chain. Esses elementos tornam mais viável medir o progresso, cobrar execução e avaliar se o investimento está gerando valor concreto para a rede.
+[English]
+We chose to vote "YES" on this governance action "Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research" (gov_action1ttgs45ulfxs0jwkfrecystc3flduhszmyzk8wnd7yw5za77tsg9qq4afmus), because we understand that it addresses strategic topics for Cardano’s future: scalability, improved user and developer experience, post-quantum security, governance, identity, and interoperability. Although the requested amount of ₳32.916 million is significant, the budget appears proportional to the scope, the number of planned deliverables, and the technical consortium involved, especially considering that the proposal aims to turn research into CIPs, prototypes, and implementable capabilities for the ecosystem. We also view positively that the proposal includes monitoring and control mechanisms, with defined deliverables, periodic reports, funding release milestones, Intersect oversight, third-party validation, and on-chain transparency mechanisms. These elements make it more feasible to measure progress, demand execution, and assess whether the investment is generating concrete value for the network.

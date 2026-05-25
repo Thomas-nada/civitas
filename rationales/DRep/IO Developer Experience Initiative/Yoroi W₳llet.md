@@ -1,23 +1,22 @@
-<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/Dev%20Experience.jsonld -->
+<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/Developer_Exp.jsonld -->
 # Yoroi W₳llet
 
 **Proposal:** IO Developer Experience Initiative
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1ygr9tuapcanc3kpeyy4dc3vmrz9cfe5q7v9wj3x9j0ap3tswtre9j`
 
 ---
 
 Summary
-Yoroi DRep votes ABSTAIN on "IO: Developer Experience Initiative." This position is not a rejection of the goal, which Yoroi considers genuinely important, but a considered view on delivery structure and measurability.
+
+Yoroi DRep revises its prior ABSTAIN to YES on “IO: Developer Experience Initiative”, following a reassessment of the balance between structural concerns and strategic urgency.
+
 Rationale
-The diagnosis is correct and the direction is well-motivated. 
-Survey data from 109 Cardano developers and a comparative analysis of ecosystem growth rates give this proposal an unusually solid empirical foundation. Yoroi agrees that fragmented tooling, poor onboarding, and lack of ecosystem coordination are among the most actionable barriers to builder adoption.
 
-Several key outcomes depend on factors outside the proposer's direct control. 
-The success of the Developer Hub relies on buy-in from Cardano Foundation, Intersect, and the broader community. Adoption of cardano-init depends on third-party tooling maintainers integrating with it. These are not trivial dependencies, and the proposal would benefit from a clearer account of how alignment will be achieved and maintained.
+The strategic case has become harder to set aside. Developer experience is time-sensitive, and the cost of a further delay to a well-motivated, empirically grounded programme is material. Yoroi now considers the delivery risks manageable relative to the importance of the goal, particularly given IO’s demonstrated capacity to execute at this scale.
 
-The growth target needs a more defined attribution model. 
-A 30% improvement in developer growth rate is a meaningful commitment, but developer acquisition is influenced by many factors beyond any single initiative. Yoroi would find it easier to evaluate progress if the proposal defined a clearer set of attributable metrics that sit within IO's direct sphere of delivery.
+Monitoring will be our accountability mechanism. Since our structural concerns have not been formally resolved, Yoroi intends to hold IO to refining its success metrics and coordination approach through the oversight process. A YES vote is not an endorsement of every element of the delivery design.
 
 Conclusion
-Yoroi believes developer experience is one of the highest-leverage areas the ecosystem can invest in, and we have genuine respect for the work IO is proposing here. Our abstain reflects a desire to see the delivery structure and measurement approach strengthened before committing treasury resources at this scale. We would welcome a revised proposal that addresses these points and look forward to supporting a stronger version of this initiative.
+
+Yoroi votes YES. We are making this revision openly, acknowledging that the proposal is unchanged and that our prior concerns remain live. Our judgement is that supporting this initiative now, with active oversight, is more responsible than deferring again on grounds that may not be resolvable before the vote closes.

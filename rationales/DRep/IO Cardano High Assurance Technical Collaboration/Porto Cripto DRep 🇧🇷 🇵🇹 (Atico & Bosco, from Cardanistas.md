@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA102-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** IO Cardano High Assurance Technical Collaboration
+**Vote:** Abstain
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos pela "ABSTENÇÃO" nesta ação de governança "Cardano High Assurance Technical Collaboration" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3q2yd5rxu), pois reconhecemos sua relevância técnica para a evolução da Cardano, especialmente ao ampliar o acesso a ferramentas de verificação formal, fortalecer a segurança de DApps e reduzir barreiras de desenvolvimento. A proposta aborda temas importantes para consolidar a rede como uma infraestrutura segura e confiável para aplicações críticas. Apesar disso, entendemos que o valor solicitado, de ₳13.078.578, é elevado e depende da execução coordenada de entregas complexas entre múltiplas equipes, além de exigir adoção efetiva pela comunidade para que os benefícios esperados se concretizem. Embora a proposta apresente mecanismos positivos de controle e transparência — como desembolsos condicionados a marcos, supervisão independente, administração pela Intersect e devolução de fundos não utilizados — optamos pela abstenção por cautela em relação ao custo, à capacidade de execução e à mensuração prática do impacto real no ecossistema.
+[English]
+We chose to "ABSTAIN" on this governance action "Cardano High Assurance Technical Collaboration" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3q2yd5rxu), because we recognize its technical relevance to Cardano’s evolution, particularly in expanding access to formal verification tools, strengthening DApp security, and reducing development barriers. The proposal addresses important areas for positioning the network as a secure and reliable infrastructure for critical applications. However, we believe that the requested amount of ₳13,078,578 is substantial and depends on the coordinated execution of complex deliverables across multiple teams, as well as effective community adoption for the expected benefits to materialize. Although the proposal includes positive transparency and accountability mechanisms — such as milestone-based disbursements, independent oversight, administration by Intersect, and the return of unused funds — we chose to abstain out of caution regarding the cost, execution complexity, and the practical measurement of its real impact on the ecosystem.

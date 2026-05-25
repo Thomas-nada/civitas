@@ -1,41 +1,37 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdVvZX6ckaKRPttpNLMFL8nAYswHGxZ1bWNGpYag9QYGV -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVV4aNWVaE4vkbNeCMXBiEhgVoKYTQ1PnEU92ym4d9fPD -->
 # SASA_nagamaru_ながまる
 
 **Proposal:** IO Developer Experience Initiative
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1ytuddrgqca0xd4aams6pl9zndpcmxg0rs7z3mggjelm6kscp4arg5`
 
 ---
 
-I have decided to ABSTAIN on this proposal.
+I have decided to vote YES on this proposal.
 
-I recognize the importance of improving the Developer Experience (DevX) within the Cardano ecosystem, and I believe the direction of this initiative is generally positive for Cardano’s long-term growth.
+While I initially had concerns regarding prioritization under the current Treasury environment, after further consideration I believe this proposal represents a reasonable long-term investment into Cardano’s ecosystem foundations.
 
-Improving onboarding, consolidating documentation, enhancing tooling, and reducing friction for developers are all valuable efforts that could strengthen the ecosystem over time.
+I still believe that expanding adoption, liquidity, real economic activity, and business opportunities remains one of Cardano’s highest priorities. However, sustainable ecosystem growth ultimately requires both demand-side expansion and a developer environment capable of efficiently onboarding and retaining builders.
 
-My abstention should not be interpreted as opposition to DevX investment itself, nor do I believe funding developer-related initiatives is inherently inappropriate. Rather, my current position is primarily based on ecosystem prioritization under the present Treasury environment.
+As initiatives such as Bitcoin DeFi, Midnight, stablecoins, interoperability, and institutional integrations continue to evolve, Cardano will increasingly need a smoother and more standardized development experience in order to fully capitalize on those opportunities.
 
-At this stage, I personally believe Cardano’s highest priority is expanding real economic activity, liquidity, user adoption, and business opportunities that naturally attract developers to the ecosystem.
+From that perspective, improving fragmented tooling, consolidating documentation, simplifying onboarding, and establishing clearer development pathways are all meaningful contributions toward Cardano’s long-term competitiveness.
 
-Cardano already possesses strong technical foundations, research capabilities, and an increasingly mature tooling environment. In my view, compared to competing ecosystems, the more immediate gap currently lies in adoption, capital inflow, marketing reach, and real-world usage.
+I also recognize that this proposal includes relatively concrete deliverables, milestone-based oversight, ecosystem coordination, measurable KPIs, and accountability structures, which gives the initiative a stronger level of execution credibility compared to many broader or less-defined ecosystem proposals.
 
-Developers ultimately gather where meaningful opportunities exist. For that reason, while I acknowledge the potential value of this proposal, I currently believe the ecosystem should first focus on strengthening demand-side growth and economic activity before prioritizing large-scale DevX expansion.
-
-This is ultimately a question of timing and prioritization rather than disagreement with the overall direction of the initiative.
+For these reasons, although I still believe prioritization discussions remain important under the current Treasury environment, I ultimately believe supporting this proposal is reasonable as part of strengthening Cardano’s long-term growth and developer ecosystem.
 
 
-僕は本提案に対して棄権（ABSTAIN）します。
+僕は本提案に対してYESで投票します。
 
-本提案が目指しているDeveloper Experience（DevX）の改善は、Cardanoの長期的成長にとって重要であり、方向性自体には一定の理解と賛同があります。
+当初は、現在のTreasury環境における優先順位の観点から慎重に考えていましたが、改めて検討した結果、本提案はCardanoの長期的な基盤強化として一定の合理性があると判断しました。
 
-開発者オンボーディングの改善、ドキュメントの整理、ツール群の強化、開発時の摩擦軽減などは、エコシステム全体にとって価値のある取り組みだと考えています。
+僕自身、依然としてCardanoにおいて最優先で取り組むべきなのは、採用拡大、流動性、実需、経済活動、そしてビジネス機会を増やしていくことだと考えています。一方で、持続的なエコシステム成長のためには、需要側の拡大だけでなく、開発者をスムーズに受け入れ、定着させられる開発環境の整備も同時に重要であると感じています。
 
-今回の棄権は、DevXへの投資そのものに反対しているわけではなく、「開発者関連に資金を使うべきではない」という意味でもありません。あくまで、現在のTreasury環境における優先順位の問題として判断しています。
+特に、Bitcoin DeFi、Midnight、ステーブルコイン、相互運用性、機関導入などが今後本格化していく場合、Cardano側にもより整理され、標準化された開発体験が求められるようになると思います。
 
-現段階のCardanoにおいて、僕はまず優先すべきなのは「開発者数を直接増やすこと」よりも、「開発者が自然と集まりたくなる経済圏や実需をどれだけ作れるか」だと考えています。
+その観点から見ると、分散したツール群の整理、ドキュメント統合、オンボーディングの簡素化、開発導線の明確化などは、Cardanoの長期的な競争力向上に繋がる重要な取り組みであると考えています。
 
-Cardanoには既に優れた技術基盤、研究力、そして成熟しつつあるツール群が存在しています。一方で、他チェーンと比較した際に、現時点でより不足しているのは、ユーザー流入、流動性、マーケティング、資本流入、そして実際の利用拡大であると感じています。
+また、本提案は比較的具体的な成果物、マイルストーンベースの管理体制、エコシステム間の協調、測定可能なKPI、監査・説明責任構造などが明示されており、実行面についても一定の現実性がある提案だと感じています。
 
-開発者は最終的に「機会のある場所」に集まります。そのため、本提案の価値自体は認めつつも、現時点ではまず需要側や経済活動の拡大を優先すべき段階ではないかと考え、今回は棄権という判断を選択しました。
-
-これはDevX改善そのものへの否定ではなく、あくまで現在のタイミングと優先順位に関する判断です。
+そのため、Treasury環境における優先順位の議論は引き続き重要であると考えつつも、Cardanoの長期的成長と開発者エコシステム強化の観点から、最終的に本提案を支持する判断をしました。

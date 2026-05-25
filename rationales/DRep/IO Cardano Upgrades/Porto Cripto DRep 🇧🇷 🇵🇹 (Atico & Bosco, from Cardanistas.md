@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA098-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** IO Cardano Upgrades
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "IO: Cardano Upgrades" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qz6es0cp), pois ela reúne três melhorias estruturais para a Cardano — CIP-159, Tesouro Multiativos e Babel Fees — com potencial para reduzir atritos de uso, melhorar a experiência de novos usuários, ampliar modelos econômicos e fortalecer a sustentabilidade do ecossistema. Embora o valor solicitado, de ₳13.103.039, seja significativo, entendemos que o custo-benefício é justificável diante do escopo técnico e do impacto esperado em adoção, TVL, volume de transações e resiliência do Tesouro. Também consideramos positivo que a proposta apresente entregáveis distribuídos por workstream e trimestre, permitindo acompanhar a evolução das entregas, ainda que parte dos critérios de aceite dependa do contrato final. Além disso, os mecanismos de controle e transparência — gestão via Intersect, pagamentos por marcos, validação por terceiro independente, metadados públicos, dashboard de acompanhamento, smart contracts auditados e devolução de recursos não utilizados ao Tesouro — oferecem maior segurança para apoiar a execução.
+[English]
+We chose to vote "YES" on this governance action "IO: Cardano Upgrades" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qz6es0cp), because it brings together three structural improvements for Cardano — CIP-159, Multi-Asset Treasury, and Babel Fees — with the potential to reduce user friction, improve the experience for new users, expand economic models, and strengthen the ecosystem’s sustainability. Although the requested amount of ₳13,103,039 is significant, we believe the cost-benefit ratio is justified by the technical scope and the expected impact on adoption, TVL, transaction volume, and Treasury resilience. We also view positively that the proposal presents deliverables distributed by workstream and quarter, allowing the progress of deliveries to be tracked, even though some acceptance criteria will depend on the final contract. In addition, the control and transparency mechanisms — management through Intersect, milestone-based payments, validation by an independent third party, public metadata, tracking dashboard, audited smart contracts, and the return of unused funds to the Treasury — provide greater assurance in supporting its execution.

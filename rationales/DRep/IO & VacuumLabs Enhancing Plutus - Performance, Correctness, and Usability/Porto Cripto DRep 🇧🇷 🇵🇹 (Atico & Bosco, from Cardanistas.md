@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA103-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** IO & VacuumLabs Enhancing Plutus - Performance, Correctness, and Usability
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "IO & VacuumLabs: Enhancing Plutus - Performance, Correctness, and Usability" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qvczhx6t), pois entendemos que ela atua em pontos centrais para a evolução da Cardano: melhoria de desempenho e redução de custos em scripts Plutus, fortalecimento da correção formal e da segurança, além de avanços importantes na experiência dos desenvolvedores. A proposta é tecnicamente relevante porque impacta diretamente a capacidade da rede de atrair mais aplicações, aumentar a confiança em contratos inteligentes e preparar melhor o ecossistema para maior diversidade de nós e ferramentas. Embora o valor solicitado, de ₳11.877.575, seja significativo, consideramos que o custo-benefício é justificável pela abrangência dos entregáveis e pelo potencial impacto estrutural no ecossistema. Além disso, os mecanismos de controle e transparência — contratos por marcos, supervisão da Intersect, validação por terceiros, prestação de contas pública e devolução de valores não utilizados ao Tesouro — reforçam a segurança no uso dos recursos.
+[English]
+We chose to vote "YES" on this governance action "IO & VacuumLabs: Enhancing Plutus - Performance, Correctness, and Usability" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qvczhx6t), because we understand that it addresses central areas for Cardano’s evolution: improving performance and reducing costs in Plutus scripts, strengthening formal correctness and security, and delivering important improvements to the developer experience. The proposal is technically relevant because it directly impacts the network’s ability to attract more applications, increase confidence in smart contracts, and better prepare the ecosystem for greater diversity of nodes and tools. Although the requested amount, ₳11,877,575, is significant, we consider the cost-benefit ratio justified by the breadth of the deliverables and the potential structural impact on the ecosystem. In addition, the control and transparency mechanisms — milestone-based contracts, Intersect supervision, third-party validation, public reporting, and the return of unused funds to the Treasury — reinforce the safety of the use of resources.

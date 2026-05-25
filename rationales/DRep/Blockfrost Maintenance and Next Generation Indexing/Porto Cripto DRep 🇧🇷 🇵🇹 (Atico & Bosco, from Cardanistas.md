@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA104-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Blockfrost Maintenance and Next Generation Indexing
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Blockfrost: Maintenance and Next Generation Indexing" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qwt8k9fx), pois entendemos que ela trata de uma infraestrutura essencial para o ecossistema Cardano. O Blockfrost já sustenta uma parte relevante do acesso gratuito a dados da rede, enquanto o Project Cayley propõe uma evolução importante ao reduzir a necessidade de indexação completa da blockchain, tornando a operação mais acessível, descentralizada e preparada para o crescimento esperado com o Leios. Embora o valor solicitado seja significativo, de ₳7.916.666, o orçamento nos parece proporcional ao impacto pretendido, especialmente por combinar desenvolvimento de infraestrutura de longo prazo com a manutenção de um serviço já amplamente utilizado pela comunidade. Também consideramos positivos os mecanismos de controle previstos: entregas organizadas por marcos trimestrais, comprovação de SLA de 99,9%, aceite de entregas, supervisão por terceiros, gestão via smart contracts, relatórios públicos e devolução de recursos não utilizados. Esses elementos tornam o progresso mensurável e conferem maior transparência ao uso dos recursos.
+[English]
+We chose to vote "YES" on this governance action "Blockfrost: Maintenance and Next Generation Indexing" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qwt8k9fx), because we understand that it addresses essential infrastructure for the Cardano ecosystem. Blockfrost already supports a significant share of free access to network data, while Project Cayley proposes an important evolution by reducing the need for full blockchain indexing, making operations more accessible, decentralized, and prepared for the expected growth with Leios. Although the requested amount is significant, totaling ₳7,916,666, the budget appears proportional to the intended impact, especially as it combines long-term infrastructure development with the maintenance of a service already widely used by the community. We also view the proposed control mechanisms positively: deliverables organized by quarterly milestones, proof of 99.9% SLA, deliverable acceptance, third-party oversight, smart contract-based management, public reporting, and the return of unused funds. These elements make progress measurable and provide greater transparency in the use of resources.

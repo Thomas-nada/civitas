@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA097-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** IO Developer Experience Initiative
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "IO: Developer Experience Initiative" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qqfu3vtv), pois entendemos que ela enfrenta um dos gargalos mais relevantes para o crescimento sustentável da Cardano: a experiência dos desenvolvedores. A iniciativa apresenta entregáveis concretos — como melhorias no Developer Portal, criação do cardano-init, biblioteca de contratos, bounties para ferramentas do ecossistema e um hackathon de medição — que podem reduzir barreiras de entrada, acelerar o onboarding de novos builders e gerar impacto direto em adoção, utilidade e crescimento do ecossistema. Embora o valor solicitado, de ₳3.601.926, seja significativo, consideramos que o orçamento apresenta uma boa relação custo-benefício diante do escopo e do impacto esperado, especialmente por concentrar a maior parte dos recursos em desenvolvimento e engenharia. Também pesam positivamente os mecanismos de controle e transparência previstos, incluindo entregas por marcos, critérios de aceitação, acompanhamento pela Intersect, asseguração independente, prestação de contas pública e devolução de valores não utilizados ao Tesouro.
+[English]
+We chose to vote "YES" on this governance action "IO: Developer Experience Initiative" (gov_action1w0shrfxqwv95kk0v4cn34wylz25a2cmqkq5jpc0e2yrahhqava3qqfu3vtv), because we believe it addresses one of the most relevant bottlenecks for Cardano’s sustainable growth: the developer experience. The initiative presents concrete deliverables — such as improvements to the Developer Portal, creation of cardano-init, a smart contract library, ecosystem tool bounties, and a measurement-focused hackathon — which can reduce entry barriers, accelerate onboarding for new builders, and generate direct impact on adoption, utility, and ecosystem growth. Although the requested amount of ₳3,601,926 is significant, we consider the budget to present a strong cost-benefit ratio given the scope and expected impact, especially since most of the resources are concentrated on development and engineering efforts. We also view positively the proposed control and transparency mechanisms, including milestone-based deliverables, acceptance criteria, oversight by Intersect, independent assurance, public reporting, and the return of unused funds to the Treasury.
