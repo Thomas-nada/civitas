@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZkLHxEHY3GYw57Ko5j76NKgydTCch1k6S3eh3ocZEMcF -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYgPevcu6ivYED6ojPGxci8gkq1VbfspnZZ5xeVsrFWTa -->
 # TriangleForces
 
 **Proposal:** 5am.earth Trust Layer Targeting Vision 2030 KPIs
@@ -7,10 +7,10 @@
 
 ---
 
-Agriculture is a real use case, and if we could create a Cardano-based identity, farm data, oracle, and credit system for smallholders, it could actually have real benefits. Provided it’s designed as neutral infrastructure instead of just a way for a private group to bring in customers.
+There’s a good point at the heart of this, but overall, this proposal is clouded by too much institutional jargon. Keeping live integrations up and running is just basic upkeep. I understand that. Circle, LayerZero, Pyth, and Fireblocks are serious tools, not toys. If Cardano wants to be seen as a serious piece of infrastructure, **regular maintenance is just part of the deal. That much is reasonable.**
 
-But that’s a big “if,” because there’s a huge credibility gap between the current proof and what's asked for in this proposal. The claim is that there are 10k Mainnet farm registrations and that 10M ADA is needed to scale up to 500k farmers across three countries via three different application paths. That’s a mix of several businesses, a public-good initiative, a development finance program, and a governance experiment all bundled together.
+What’s concerning is that this is **another ₳23M request AFTER the ecosystem already took on ₳70M for CCI V1 **. That’s an incredibly pricey way to say “just keep things running.” The **proposal talks about necessity, but it lacks solid reasons for the budget without detailed vendor pricing, comparisons, or proof that these services aren’t being paid at top dollar while the community is just expected to trust the system.**
 
-With the little info available, it’s tough to justify the budget figure. What I’d really like to see is clearer proof that Cardano is creating lasting value, not just generating feel-good transaction numbers and flashy slides at conferences. The projections for 2030, especially the $900M TVL and around 16M-20M ADA in annual protocol revenue seem way too optimistic and not well-supported.
+The Fireblocks part is the most justifiable new addition, but I’d still like a clearer explanation of why it needs to be included in the same request instead of being handled separately. I’ve said it before, and I’ll say it again: **Bundling makes things easier for proposers because it hides weaker aspects within stronger ones.**
 
-**Cardano could have a solid use case in agriculture, but the Treasury shouldn’t back a big consortium until the economics for public good are solidly substantiated.**
+I believe in the importance of maintaining essential integrations, but this** request is too big, unclear, and too convenient in its bundling.**
