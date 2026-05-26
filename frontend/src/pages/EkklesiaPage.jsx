@@ -3092,7 +3092,6 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
   const [cycleError, setCycleError] = useState("");
 
   const [ballot, setBallot] = useState(null); // v1 ballot object with id, status
-  const [ballotQuestions, setBallotQuestions] = useState([]); // v1 questions with their IDs
 
   const [allProposals, setAllProposals] = useState([]);
   const [proposalsLoading, setProposalsLoading] = useState(false);
@@ -3182,60 +3181,13 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [cycle]);
 
-  // Fetch ballot question list from dedicated /questions endpoint
-  useEffect(() => {
-    if (!ballot?.id) return;
-    apiFetchV1(`/ballots/${ballot.id}/questions`)
-      .then(data => {
-        console.log("[Ekklesia] /questions raw:", JSON.stringify(data).slice(0, 400));
-        const inner = data?.data ?? data;
-        const qs = Array.isArray(inner) ? inner
-          : Array.isArray(inner?.questions) ? inner.questions
-          : Array.isArray(inner?.items) ? inner.items
-          : [];
-        console.log("[Ekklesia] questions count:", qs.length, "sample:", qs.slice(0, 2));
-        setBallotQuestions(qs);
-      })
-      .catch(e => console.log("[Ekklesia] /questions fetch failed:", e.message));
-  }, [ballot?.id, authed]);
-
-  // Normalize a title for fuzzy matching: lowercase, collapse whitespace, strip common punctuation
-  const normalizeTitle = (t = "") =>
-    t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-
-  // Map v0 proposalId → v1 questionId (matched by title, with fuzzy fallback)
+  // For Hydra-sourced ballots the v0 proposal _id IS the questionId — no separate questions endpoint exists.
+  // proposalToQuestionId is an identity map built once proposals are loaded.
   const proposalToQuestionId = useMemo(() => {
-    console.log("[Ekklesia] building proposalToQuestionId — questions:", ballotQuestions.length, "proposals:", allProposals.length);
-    if (!ballotQuestions.length || !allProposals.length) return {};
     const map = {};
-    for (const q of ballotQuestions) {
-      const qNorm = normalizeTitle(q.title);
-      // 1. Exact normalized match
-      let match = allProposals.find(p => normalizeTitle(p.title) === qNorm);
-      // 2. Partial containment match (one contains the other)
-      if (!match) match = allProposals.find(p => {
-        const pNorm = normalizeTitle(p.title);
-        return pNorm.includes(qNorm) || qNorm.includes(pNorm);
-      });
-      if (match) map[match._id] = q.id;
-    }
-    const matchCount = Object.keys(map).length;
-    console.debug(`[Ekklesia] proposalToQuestionId: ${matchCount} of ${ballotQuestions.length} questions matched`);
-    if (matchCount < ballotQuestions.length) {
-      const unmatchedQs = ballotQuestions.filter(q => !Object.values(map).includes(q.id));
-      console.debug("[Ekklesia] unmatched question titles (first 5):", unmatchedQs.slice(0, 5).map(q => q.title));
-      const unmatchedPs = allProposals.filter(p => !map[p._id]);
-      console.debug("[Ekklesia] unmatched proposal titles (first 5):", unmatchedPs.slice(0, 5).map(p => p.title));
-    }
+    for (const p of allProposals) map[p._id] = p._id;
     return map;
-  }, [ballotQuestions, allProposals]);
-
-  // Reverse: v1 questionId → v0 proposalId
-  const questionToProposalId = useMemo(() => {
-    const map = {};
-    for (const [pId, qId] of Object.entries(proposalToQuestionId)) map[qId] = pId;
-    return map;
-  }, [proposalToQuestionId]);
+  }, [allProposals]);
 
   // Load my confirmed votes from Hydra once authed + ballotId known
   useEffect(() => {
@@ -3243,13 +3195,12 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     async function loadConfirmed() {
       try {
         const data = await apiFetchV1(`/votes/${ballot.id}/mine`);
-        const votesMap = data?.confirmed?.votes ?? {};
-        // votesMap: { [v1questionId]: { selection: [1|2], abstain: bool } }
-        // Store temporarily keyed by questionId; re-key to proposalId once map is ready
+        // votesMap keyed by questionId which equals v0 proposalId for Hydra ballots
+        const votesMap = data?.confirmed?.votes ?? data?.data?.confirmed?.votes ?? {};
         const resolved = {};
         for (const [qId, v] of Object.entries(votesMap)) {
           const label = v.abstain ? "abstain" : v.selection?.[0] === 1 ? "yes" : v.selection?.[0] === 2 ? "no" : "abstain";
-          resolved[qId] = { _label: label, _questionId: qId };
+          resolved[qId] = label; // qId === proposalId for Hydra ballots
         }
         setConfirmed(resolved);
       } catch {
@@ -3259,23 +3210,6 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     loadConfirmed();
   }, [authed, ballot]);
 
-  // Once questionToProposalId is built, re-key confirmed from questionId → proposalId
-  useEffect(() => {
-    if (!Object.keys(questionToProposalId).length) return;
-    setConfirmed(prev => {
-      const next = {};
-      let changed = false;
-      for (const [key, v] of Object.entries(prev)) {
-        if (v && typeof v === "object" && "_questionId" in v) {
-          const pId = questionToProposalId[v._questionId];
-          if (pId) { next[pId] = v._label; changed = true; }
-        } else {
-          next[key] = v;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [questionToProposalId]);
 
   const now = new Date();
   const isVotingActive = cycle
