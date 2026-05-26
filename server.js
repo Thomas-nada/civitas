@@ -8516,10 +8516,14 @@ const server = http.createServer(async (req, res) => {
     }
     const targetPath = url.pathname.replace(/^\/ekklesia-proxy/, "") + (url.search || "");
     const https = require("https");
+    // v1 voting API lives at intersect.ekklesia.vote; v0 stays on hydra-voting.intersectmbo.org
+    const ekklesiaHost = targetPath.startsWith("/api/v1/")
+      ? "intersect.ekklesia.vote"
+      : "hydra-voting.intersectmbo.org";
     const forwardHeaders = {
       "Accept": "application/json",
       "User-Agent": "civitas-proxy/1.0",
-      "Host": "hydra-voting.intersectmbo.org",
+      "Host": ekklesiaHost,
     };
     if (req.headers["content-type"]) forwardHeaders["Content-Type"] = req.headers["content-type"];
     if (req.headers["cookie"]) forwardHeaders["Cookie"] = req.headers["cookie"];
@@ -8530,7 +8534,7 @@ const server = http.createServer(async (req, res) => {
       const body = chunks.length ? Buffer.concat(chunks) : null;
       if (body && body.length) forwardHeaders["Content-Length"] = body.length;
       const proxyReq = https.request(
-        { hostname: "hydra-voting.intersectmbo.org", path: targetPath, method: req.method, headers: forwardHeaders },
+        { hostname: ekklesiaHost, path: targetPath, method: req.method, headers: forwardHeaders },
         (proxyRes) => {
           const resHeaders = {
             "Content-Type": proxyRes.headers["content-type"] || "application/json",

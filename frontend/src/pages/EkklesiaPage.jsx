@@ -3130,22 +3130,26 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [voteSlug]);
 
-  // Discover v1 ballot ID
+  // Discover v1 ballot ID from the cycle's votingUrl field (e.g. "https://intersect.ekklesia.vote/ballots/<id>")
   useEffect(() => {
     if (!cycle) return;
+    const urlId = cycle.votingUrl?.split("/ballots/")[1]?.split(/[/?#]/)[0];
+    if (urlId) {
+      setBallot({ id: urlId });
+      return;
+    }
+    // Fallback: query the v1 ballots list
     apiFetchV1(`/ballots?status=live&limit=50`)
       .then(data => {
         const list = Array.isArray(data) ? data : (data?.data ?? []);
-        // Match by slug, externalId, or title containing the cycle slug
         const match = list.find(b =>
           b.slug === voteSlug ||
           b.externalId === cycle._id ||
-          String(b.externalId || "").includes(cycle._id) ||
           (b.title || "").toLowerCase().includes("budget 2026")
-        ) || list[0]; // fallback to first live ballot
+        ) || list[0];
         if (match) setBallot(match);
       })
-      .catch(() => {}); // non-fatal — voting still works if ballotId can't be found
+      .catch(() => {});
   }, [cycle, voteSlug]);
 
   // Fetch all live proposals
@@ -3234,7 +3238,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     setAuthLoading(true);
     setAuthError("");
     try {
-      const nonceRes = await apiFetch("/session", {
+      const nonceRes = await apiFetchV1("/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signerAddress, signType }),
@@ -3246,7 +3250,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       // Sign with stake key — CIP-30 wallets don't support DRep key signing via signData
       const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signingAddress;
       const signature = await walletApi.signData(payloadHex, signAddress, false);
-      await apiFetch("/session", {
+      await apiFetchV1("/session", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signerAddress, signature, signType }),
