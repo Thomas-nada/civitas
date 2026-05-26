@@ -3187,10 +3187,13 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     if (!ballot?.id) return;
     apiFetchV1(`/ballots/${ballot.id}`)
       .then(data => {
-        console.log("[Ekklesia] raw ballot data keys:", data ? Object.keys(data) : "null/undefined", data);
-        // Handle both { questions: [...] } and direct array responses
-        const qs = Array.isArray(data?.questions) ? data.questions
-          : Array.isArray(data?.data?.questions) ? data.data.questions
+        const inner = data?.data ?? data;
+        console.log("[Ekklesia] ballot data.data keys:", inner ? Object.keys(inner) : "null", JSON.stringify(inner).slice(0, 600));
+        // Try every known nesting shape
+        const qs = Array.isArray(inner?.questions) ? inner.questions
+          : Array.isArray(inner?.ballotQuestions) ? inner.ballotQuestions
+          : Array.isArray(inner?.items) ? inner.items
+          : Array.isArray(data?.questions) ? data.questions
           : Array.isArray(data) ? data
           : [];
         console.log("[Ekklesia] ballot questions count:", qs.length, "first 3:", qs.slice(0, 3));
