@@ -3227,11 +3227,11 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     ? (now >= new Date(cycle.votingStartDate) && now <= new Date(cycle.votingEndDate))
     : false;
 
-  // signerAddress: DRep address for session identification (tells server the voter type)
-  // signingAddress: stake address for the actual CIP-8 signature (CIP-30 wallets sign with stake/payment keys)
-  const signerAddress = walletDrep?.dRepIDCip105 || walletRewardAddress || "";
-  const signType = walletDrep ? "drep" : getSignerType(walletRewardAddress || "");
-  const signingAddress = walletRewardAddress || signerAddress;
+  // Always use the stake address for session auth — CIP-30 wallets sign with stake keys only.
+  // The Ekklesia server identifies the DRep from the on-chain link to the stake key.
+  const signerAddress = walletRewardAddress || "";
+  const signType = getSignerType(walletRewardAddress || "");
+  const signingAddress = walletRewardAddress || "";
 
   async function handleAuth() {
     if (!walletApi || !signerAddress) return;
