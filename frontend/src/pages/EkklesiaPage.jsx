@@ -2954,7 +2954,10 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
 
 // ─── Budget Vote Page ─────────────────────────────────────────────────────────
 
-const API_V1 = "/ekklesia-proxy/api/v1";
+// All budget-vote requests go through ekklesia-vote-proxy → intersect.ekklesia.vote
+// (session auth at /api/v0/session and vote API at /api/v1/* share the same cookie jar)
+const API_V1_BASE = "/ekklesia-vote-proxy";
+const API_V1 = `${API_V1_BASE}/api/v1`;
 
 async function apiFetchV1(path, opts = {}) {
   const res = await fetch(`${API_V1}${path}`, { credentials: "include", ...opts });
@@ -3238,12 +3241,22 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     setAuthLoading(true);
     setAuthError("");
     try {
-      // Session auth uses the v0 endpoint — v1 spec explicitly defers to /api/v0/session
-      const nonceRes = await apiFetch("/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signerAddress, signType }),
-      });
+      // Session auth uses /api/v0/session on intersect.ekklesia.vote (same host as v1 vote API)
+      // so the session cookie is valid for subsequent /api/v1/* calls.
+      const fetchSession = async (method, body) => {
+        const r = await fetch(`${API_V1_BASE}/api/v0/session`, {
+          method, credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+          let msg;
+          try { const j = await r.json(); msg = j?.message || j?.error || r.statusText; } catch { msg = r.statusText; }
+          throw new Error(`${r.status} — ${msg}`);
+        }
+        return method === "POST" ? r.json() : null;
+      };
+      const nonceRes = await fetchSession("POST", { signerAddress, signType });
       const dataHex = nonceRes?.dataHex ?? nonceRes?.data?.dataHex;
       const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
       const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
@@ -3252,11 +3265,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       // MeshSDK routes DRep-looking addresses through cip95.signData which is not
       // available on the BrowserWallet instance (it was enabled without CIP-95).
       const signature = await walletApi.signData(payloadHex, signingAddress, false);
-      await apiFetch("/session", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signerAddress, signature, signType }),
-      });
+      await fetchSession("PUT", { signerAddress, signature, signType });
       setAuthed(true);
     } catch (e) {
       setAuthError(e.message || "Authentication failed.");
