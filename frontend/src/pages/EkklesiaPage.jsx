@@ -3223,8 +3223,11 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     ? (now >= new Date(cycle.votingStartDate) && now <= new Date(cycle.votingEndDate))
     : false;
 
+  // signerAddress: DRep address for session identification (tells server the voter type)
+  // signingAddress: stake address for the actual CIP-8 signature (CIP-30 wallets sign with stake/payment keys)
   const signerAddress = walletDrep?.dRepIDCip105 || walletRewardAddress || "";
-  const signType = getSignerType(signerAddress);
+  const signType = walletDrep ? "drep" : getSignerType(walletRewardAddress || "");
+  const signingAddress = walletRewardAddress || signerAddress;
 
   async function handleAuth() {
     if (!walletApi || !signerAddress) return;
@@ -3240,7 +3243,8 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
       const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
       if (!payloadHex) throw new Error("No nonce returned from server.");
-      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signerAddress;
+      // Sign with stake key — CIP-30 wallets don't support DRep key signing via signData
+      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signingAddress;
       const signature = await walletApi.signData(payloadHex, signAddress, false);
       await apiFetch("/session", {
         method: "PUT",
@@ -3320,7 +3324,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
 
       // Step 2: Sign
       setSubmitState("signing");
-      const sigResult = await walletApi.signData(signingPayloadHex, signerAddress, false);
+      const sigResult = await walletApi.signData(signingPayloadHex, signingAddress, false);
       const coseSign1Hex = sigResult?.signature ?? sigResult;
       const coseKeyHex = sigResult?.key ?? "";
 
