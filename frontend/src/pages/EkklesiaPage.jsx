@@ -2951,3 +2951,614 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
     </main>
   );
 }
+
+// ─── Budget Vote Page ─────────────────────────────────────────────────────────
+
+const API_V1 = "/ekklesia-proxy/api/v1";
+
+async function apiFetchV1(path, opts = {}) {
+  const res = await fetch(`${API_V1}${path}`, { credentials: "include", ...opts });
+  if (!res.ok) {
+    let msg;
+    try {
+      const j = await res.json();
+      msg = j?.message || j?.error || res.statusText;
+    } catch {
+      msg = res.statusText;
+    }
+    throw new Error(`${res.status} — ${msg}`);
+  }
+  return res.json();
+}
+
+// Resolve yes/no/abstain option IDs from a proposal's voteOptions array.
+// Returns { yes: number|null, no: number|null } — abstain uses the `abstain: true` flag in v1.
+function resolveOptionIds(voteOptions = []) {
+  const find = (...labels) => {
+    const l = labels.map(s => s.toLowerCase());
+    const match = voteOptions.find(o => l.includes(String(o.label || "").toLowerCase()));
+    return match ? match.id : null;
+  };
+  return {
+    yes: find("yes"),
+    no: find("no"),
+  };
+}
+
+function VoteButtons({ proposalId, currentVote, onVote }) {
+  const opts = [
+    { value: "yes", label: "Yes", color: "var(--green, #4ade80)" },
+    { value: "no", label: "No", color: "var(--red, #f87171)" },
+    { value: "abstain", label: "Abstain", color: "var(--text-muted)" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+      {opts.map(o => {
+        const active = currentVote === o.value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onVote(proposalId, o.value)}
+            style={{
+              padding: "0.3rem 0.85rem", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600,
+              cursor: "pointer",
+              border: `1px solid ${active ? o.color : "var(--line)"}`,
+              background: active ? `color-mix(in srgb, ${o.color} 15%, transparent)` : "transparent",
+              color: active ? o.color : "var(--text-muted)",
+              transition: "all 0.13s",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function VoteProposalRow({ proposal, pillarById, currentVote, isConfirmed, onVote, authed }) {
+  const p = proposal;
+  const md = p.metaData || {};
+  const pillarIds = (md.strategyFramework?.pillars || []).slice(0, 2);
+  const pillarNames = pillarIds.map(id => {
+    const title = pillarById[id]?.title || "";
+    return title.replace(/^Pillar\s*\d+:\s*/i, "") || title;
+  }).filter(Boolean);
+
+  return (
+    <div style={{
+      border: `1px solid ${currentVote ? "color-mix(in srgb, var(--accent, #5eead4) 25%, var(--line))" : "var(--line)"}`,
+      borderRadius: 10, padding: "1rem 1.1rem",
+      background: "var(--panel)", display: "flex", flexDirection: "column", gap: "0.5rem",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: "0 0 0.2rem", fontWeight: 600, fontSize: "0.92rem", lineHeight: 1.35 }}>{p.title}</p>
+          {p.summary && (
+            <p style={{
+              margin: 0, fontSize: "0.78rem", lineHeight: 1.6, color: "var(--text-muted)",
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+            }}>
+              {p.summary}
+            </p>
+          )}
+        </div>
+        {md.totalBudget != null && (
+          <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--accent, #5eead4)", flexShrink: 0 }}>
+            {formatAda(md.totalBudget)}
+          </span>
+        )}
+      </div>
+
+      {pillarNames.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+          {pillarNames.map((t, i) => (
+            <span key={i} style={{
+              fontSize: "0.68rem", padding: "0.1rem 0.5rem", borderRadius: 20,
+              background: "color-mix(in srgb, var(--accent, #5eead4) 8%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--accent, #5eead4) 22%, transparent)",
+              color: "var(--accent, #5eead4)",
+            }}>{t}</span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+        {authed ? (
+          <VoteButtons proposalId={p._id} currentVote={currentVote} onVote={onVote} />
+        ) : (
+          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Sign in to vote</span>
+        )}
+        {isConfirmed && currentVote && (
+          <span style={{ fontSize: "0.72rem", color: "var(--accent, #5eead4)" }}>✓ Submitted</span>
+        )}
+        {!isConfirmed && currentVote && (
+          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Staged — submit ballot to confirm</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/budget" } = {}) {
+  const { walletApi, walletRewardAddress, walletDrep } = useContext(WalletContext) || {};
+  const navigate = useNavigate();
+
+  const [cycle, setCycle] = useState(null);
+  const [cycleLoading, setCycleLoading] = useState(true);
+  const [cycleError, setCycleError] = useState("");
+
+  const [ballot, setBallot] = useState(null); // v1 ballot object with id, status
+
+  const [allProposals, setAllProposals] = useState([]);
+  const [proposalsLoading, setProposalsLoading] = useState(false);
+  const [proposalsError, setProposalsError] = useState("");
+
+  const [authed, setAuthed] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  // pending: staged selections not yet submitted { [proposalId]: "yes" | "no" | "abstain" }
+  const [pending, setPending] = useState({});
+  // confirmed: votes already submitted & confirmed on Hydra { [questionId]: "yes" | "no" | "abstain" }
+  const [confirmed, setConfirmed] = useState({});
+
+  // submit state: "idle" | "drafting" | "signing" | "submitting" | "done" | "error"
+  const [submitState, setSubmitState] = useState("idle");
+  const [submitError, setSubmitError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [filterVote, setFilterVote] = useState(""); // "" | "unselected" | "yes" | "no" | "abstain"
+
+  useSeoMeta({
+    title: "DRep Voting — Cardano Budget 2026",
+    description: "Cast your DRep vote on Cardano Budget 2026 proposals via the Ekklesia off-chain voting system.",
+  });
+
+  // Fetch v0 cycle (for display / proposal list)
+  useEffect(() => {
+    const ctrl = new AbortController();
+    apiFetch("/votes", { signal: ctrl.signal })
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        const match = list.find(v => v.slug === voteSlug);
+        if (match) setCycle(match);
+        else setCycleError(`Vote cycle "${voteSlug}" not found.`);
+      })
+      .catch(e => { if (e.name !== "AbortError") setCycleError(e.message || "Failed to load."); })
+      .finally(() => setCycleLoading(false));
+    return () => ctrl.abort();
+  }, [voteSlug]);
+
+  // Discover v1 ballot ID
+  useEffect(() => {
+    if (!cycle) return;
+    apiFetchV1(`/ballots?status=live&limit=50`)
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        // Match by slug, externalId, or title containing the cycle slug
+        const match = list.find(b =>
+          b.slug === voteSlug ||
+          b.externalId === cycle._id ||
+          String(b.externalId || "").includes(cycle._id) ||
+          (b.title || "").toLowerCase().includes("budget 2026")
+        ) || list[0]; // fallback to first live ballot
+        if (match) setBallot(match);
+      })
+      .catch(() => {}); // non-fatal — voting still works if ballotId can't be found
+  }, [cycle, voteSlug]);
+
+  // Fetch all live proposals
+  useEffect(() => {
+    if (!cycle) return;
+    const ctrl = new AbortController();
+    setProposalsLoading(true);
+    setProposalsError("");
+    const PAGE_SIZE = 100;
+    let page = 1;
+    let all = [];
+    async function fetchAll() {
+      while (true) {
+        const data = await apiFetch(`/proposals?vote=${cycle._id}&status=live&limit=${PAGE_SIZE}&page=${page}`, { signal: ctrl.signal });
+        const rows = Array.isArray(data) ? data : (data?.data ?? []);
+        all = all.concat(rows);
+        const meta = data?.meta;
+        if (!meta?.hasNextPage || rows.length < PAGE_SIZE) break;
+        page++;
+      }
+      setAllProposals(all);
+    }
+    fetchAll()
+      .catch(e => { if (e.name !== "AbortError") setProposalsError(e.message || "Failed to load proposals."); })
+      .finally(() => setProposalsLoading(false));
+    return () => ctrl.abort();
+  }, [cycle]);
+
+  // Load my confirmed votes from Hydra once authed + ballotId known
+  useEffect(() => {
+    if (!authed || !ballot?.id) return;
+    async function loadConfirmed() {
+      try {
+        const data = await apiFetchV1(`/votes/${ballot.id}/mine`);
+        const votesMap = data?.confirmed?.votes ?? {};
+        // votesMap: { [questionId]: { selection: [optionId], abstain: bool } }
+        // We need to reverse-map optionId → "yes" | "no" | "abstain"
+        // We resolve this using the proposals' voteOptions
+        const resolved = {};
+        for (const [qId, v] of Object.entries(votesMap)) {
+          if (v.abstain) { resolved[qId] = "abstain"; continue; }
+          // selection[0] is the chosen option id; we'll resolve label after proposals load
+          resolved[qId] = { _optionId: v.selection?.[0] };
+        }
+        setConfirmed(resolved);
+      } catch {
+        // not critical
+      }
+    }
+    loadConfirmed();
+  }, [authed, ballot]);
+
+  // Once proposals + confirmed raw option IDs are both known, resolve labels
+  useEffect(() => {
+    if (!allProposals.length) return;
+    setConfirmed(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [qId, v] of Object.entries(next)) {
+        if (v && typeof v === "object" && "_optionId" in v) {
+          const proposal = allProposals.find(p => p._id === qId);
+          const opts = proposal?.voteOptions ?? [];
+          const { yes: yesId, no: noId } = resolveOptionIds(opts);
+          const label = v._optionId === yesId ? "yes" : v._optionId === noId ? "no" : "abstain";
+          next[qId] = label;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [allProposals]);
+
+  const now = new Date();
+  const isVotingActive = cycle
+    ? (now >= new Date(cycle.votingStartDate) && now <= new Date(cycle.votingEndDate))
+    : false;
+
+  const signerAddress = walletDrep?.dRepIDCip105 || walletRewardAddress || "";
+  const signType = getSignerType(signerAddress);
+
+  async function handleAuth() {
+    if (!walletApi || !signerAddress) return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const nonceRes = await apiFetch("/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signerAddress, signType }),
+      });
+      const dataHex = nonceRes?.dataHex ?? nonceRes?.data?.dataHex;
+      const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
+      const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
+      if (!payloadHex) throw new Error("No nonce returned from server.");
+      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signerAddress;
+      const signature = await walletApi.signData(payloadHex, signAddress, false);
+      await apiFetch("/session", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signerAddress, signature, signType }),
+      });
+      setAuthed(true);
+    } catch (e) {
+      setAuthError(e.message || "Authentication failed.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  // Stage a vote selection locally — does not submit until handleSubmitVotes()
+  function selectVote(proposalId, choice) {
+    setPending(p => ({ ...p, [proposalId]: choice }));
+  }
+
+  // Effective vote for a proposal: pending overrides confirmed
+  function effectiveVote(proposalId) {
+    return pending[proposalId] ?? (typeof confirmed[proposalId] === "string" ? confirmed[proposalId] : undefined);
+  }
+
+  // Submit all staged votes in one batch via draft → sign → submit
+  async function handleSubmitVotes() {
+    if (!ballot?.id) { setSubmitError("Ballot ID not found — cannot submit votes."); return; }
+    const pendingIds = Object.keys(pending);
+    if (!pendingIds.length) return;
+
+    setSubmitState("drafting");
+    setSubmitError("");
+    try {
+      // Build the votes array: pending selections + confirmed votes not overridden by pending
+      // Hydra replaces entirely, so we must include ALL intended votes
+      const allVotes = [];
+
+      // Start with confirmed votes (already on Hydra) — keep them unless pending overrides
+      for (const [qId, choice] of Object.entries(confirmed)) {
+        if (typeof choice !== "string") continue;
+        if (pending[qId] !== undefined) continue; // pending will override
+        const proposal = allProposals.find(p => p._id === qId);
+        const opts = proposal?.voteOptions ?? [];
+        const { yes: yesId, no: noId } = resolveOptionIds(opts);
+        if (choice === "abstain") {
+          allVotes.push({ questionId: qId, abstain: true });
+        } else {
+          const optId = choice === "yes" ? yesId : noId;
+          if (optId != null) allVotes.push({ questionId: qId, selection: [optId] });
+          else allVotes.push({ questionId: qId, abstain: true }); // fallback
+        }
+      }
+
+      // Add pending selections
+      for (const [proposalId, choice] of Object.entries(pending)) {
+        const proposal = allProposals.find(p => p._id === proposalId);
+        const opts = proposal?.voteOptions ?? [];
+        const { yes: yesId, no: noId } = resolveOptionIds(opts);
+        if (choice === "abstain") {
+          allVotes.push({ questionId: proposalId, abstain: true });
+        } else {
+          const optId = choice === "yes" ? yesId : noId;
+          if (optId != null) allVotes.push({ questionId: proposalId, selection: [optId] });
+          else allVotes.push({ questionId: proposalId, abstain: true }); // fallback
+        }
+      }
+
+      // Step 1: Draft
+      const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ votes: allVotes }),
+      });
+      const packageId = draft?.package?.id ?? draft?.packageId;
+      const signingPayloadHex = draft?.signingPayloadHex ?? draft?.merkleRoot;
+      if (!packageId || !signingPayloadHex) throw new Error("Draft response missing packageId or signing payload.");
+
+      // Step 2: Sign
+      setSubmitState("signing");
+      const sigResult = await walletApi.signData(signingPayloadHex, signerAddress, false);
+      const coseSign1Hex = sigResult?.signature ?? sigResult;
+      const coseKeyHex = sigResult?.key ?? "";
+
+      // Step 3: Submit signature
+      setSubmitState("submitting");
+      await apiFetchV1(`/votes/${ballot.id}/signature`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId, witness: { coseSign1Hex, coseKeyHex } }),
+      });
+
+      // Merge pending into confirmed
+      setConfirmed(c => ({ ...c, ...pending }));
+      setPending({});
+      setSubmitState("done");
+    } catch (e) {
+      setSubmitError(e.message || "Vote submission failed.");
+      setSubmitState("error");
+    }
+  }
+
+  const pillars = cycle?.metaData?.strategyFramework?.pillars ?? [];
+  const pillarById = Object.fromEntries(pillars.map(p => [p._id, p]));
+
+  const pendingCount = Object.keys(pending).length;
+  const confirmedCount = Object.keys(confirmed).filter(k => typeof confirmed[k] === "string").length;
+  const yesCount = Object.entries({ ...confirmed, ...pending }).filter(([, v]) => v === "yes").length;
+  const noCount = Object.entries({ ...confirmed, ...pending }).filter(([, v]) => v === "no").length;
+  const abstainCount = Object.entries({ ...confirmed, ...pending }).filter(([, v]) => v === "abstain").length;
+
+  const filtered = allProposals.filter(p => {
+    const ev = effectiveVote(p._id);
+    if (filterVote === "unselected" && ev) return false;
+    if (filterVote === "yes" && ev !== "yes") return false;
+    if (filterVote === "no" && ev !== "no") return false;
+    if (filterVote === "abstain" && ev !== "abstain") return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        (p.title || "").toLowerCase().includes(q) ||
+        (p.summary || "").toLowerCase().includes(q) ||
+        (p.metaData?.proposerDetails?.name || "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const isSubmitting = ["drafting", "signing", "submitting"].includes(submitState);
+  const submitLabel = { drafting: "Preparing ballot…", signing: "Waiting for signature…", submitting: "Submitting…" }[submitState] || "Submit ballot";
+
+  return (
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <button
+          onClick={() => navigate(basePath)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "0.35rem",
+            background: "transparent", border: "none", cursor: "pointer",
+            color: "var(--text-muted)", fontSize: "0.83rem", padding: "0 0 1rem",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Back to proposals
+        </button>
+        <h1 style={{ margin: "0 0 0.5rem", fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
+          DRep Voting
+        </h1>
+        <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
+          {cycle?.description || "Cardano Budget 2026"} — select your votes below, then submit them all at once
+        </p>
+        {cycleLoading && <p className="muted" style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>Loading cycle…</p>}
+        {cycleError && <p style={{ fontSize: "0.85rem", color: "var(--red, #f87171)", marginTop: "0.5rem" }}>{cycleError}</p>}
+        {cycle && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <CycleTimeline cycle={cycle} />
+          </div>
+        )}
+      </div>
+
+      {/* Voting phase warning */}
+      {cycle && !isVotingActive && (
+        <div style={{
+          padding: "0.75rem 1rem", marginBottom: "1.25rem",
+          background: "color-mix(in srgb, var(--yellow, #fbbf24) 8%, var(--panel))",
+          border: "1px solid color-mix(in srgb, var(--yellow, #fbbf24) 30%, transparent)",
+          borderRadius: 10, fontSize: "0.83rem", color: "var(--text-muted)",
+        }}>
+          {now < new Date(cycle.votingStartDate)
+            ? `Voting opens ${formatDate(cycle.votingStartDate)} — come back then to cast your votes.`
+            : `Voting closed ${formatDate(cycle.votingEndDate)}.`
+          }
+        </div>
+      )}
+
+      {/* Auth panel */}
+      <div style={{
+        border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
+        background: "var(--panel)", marginBottom: "1.25rem",
+      }}>
+        {!walletApi && (
+          <p className="muted" style={{ fontSize: "0.84rem", margin: 0 }}>
+            Connect your wallet using the button in the top bar to vote.
+          </p>
+        )}
+        {walletApi && !authed && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 0.2rem", fontWeight: 600, fontSize: "0.88rem" }}>
+                {signType === "drep" ? "Sign in with your DRep key" : "Sign in with your wallet"}
+              </p>
+              <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                {signType === "drep"
+                  ? `Voting as DRep: ${signerAddress.slice(0, 20)}…`
+                  : "No DRep credential detected. You can still sign in as a stake address."}
+              </p>
+            </div>
+            <button onClick={handleAuth} disabled={authLoading} className="btn-outline" style={{ fontSize: "0.82rem" }}>
+              {authLoading ? "Signing…" : "Sign in"}
+            </button>
+            {authError && <span style={{ fontSize: "0.8rem", color: "var(--red, #f87171)", width: "100%" }}>{authError}</span>}
+          </div>
+        )}
+        {walletApi && authed && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.84rem", color: "var(--accent, #5eead4)", fontWeight: 600 }}>
+              ✓ Signed in
+            </span>
+            <span className="muted" style={{ fontSize: "0.8rem" }}>
+              {signerAddress.slice(0, 24)}…
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Ballot summary + submit */}
+      {authed && allProposals.length > 0 && (
+        <div style={{
+          border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
+          background: "var(--panel)", marginBottom: "1.25rem",
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem",
+        }}>
+          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", fontSize: "0.82rem" }}>
+            {[
+              { label: "Selected", val: `${pendingCount + confirmedCount} / ${allProposals.length}`, muted: false },
+              { label: "Pending submission", val: pendingCount, muted: pendingCount === 0 },
+              { label: "Confirmed", val: confirmedCount, muted: confirmedCount === 0 },
+              { label: "Yes", val: yesCount },
+              { label: "No", val: noCount },
+              { label: "Abstain", val: abstainCount },
+            ].map(({ label, val, muted }) => (
+              <div key={label}>
+                <span style={{ color: "var(--text-muted)", marginRight: "0.3rem" }}>{label}:</span>
+                <span style={{ fontWeight: 700, color: muted ? "var(--text-muted)" : "var(--text)" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
+            <button
+              onClick={handleSubmitVotes}
+              disabled={isSubmitting || pendingCount === 0}
+              style={{
+                padding: "0.45rem 1.1rem", borderRadius: 8, fontSize: "0.83rem", fontWeight: 600,
+                background: pendingCount > 0 && !isSubmitting
+                  ? "color-mix(in srgb, var(--accent, #5eead4) 18%, transparent)"
+                  : "transparent",
+                border: `1px solid ${pendingCount > 0 && !isSubmitting ? "var(--accent, #5eead4)" : "var(--line)"}`,
+                color: pendingCount > 0 && !isSubmitting ? "var(--accent, #5eead4)" : "var(--text-muted)",
+                cursor: isSubmitting || pendingCount === 0 ? "default" : "pointer",
+                transition: "all 0.13s",
+              }}
+            >
+              {isSubmitting ? submitLabel : `Submit ${pendingCount} vote${pendingCount !== 1 ? "s" : ""}`}
+            </button>
+            {submitState === "done" && (
+              <span style={{ fontSize: "0.75rem", color: "var(--accent, #5eead4)" }}>✓ Ballot submitted</span>
+            )}
+            {submitError && (
+              <span style={{ fontSize: "0.75rem", color: "var(--red, #f87171)", maxWidth: 260, textAlign: "right" }}>{submitError}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{
+        display: "flex", gap: "0.5rem", flexWrap: "wrap",
+        padding: "0.7rem 0.85rem", marginBottom: "0.9rem",
+        background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10,
+      }}>
+        <input
+          type="search" placeholder="Search proposals…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: "1 1 180px", padding: "0.38rem 0.65rem", borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)", fontSize: "0.82rem" }}
+        />
+        <select
+          value={filterVote} onChange={e => setFilterVote(e.target.value)}
+          style={{ padding: "0.38rem 0.55rem", borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)", fontSize: "0.82rem" }}
+        >
+          <option value="">All proposals</option>
+          <option value="unselected">Not yet selected</option>
+          <option value="yes">Selected Yes</option>
+          <option value="no">Selected No</option>
+          <option value="abstain">Selected Abstain</option>
+        </select>
+      </div>
+
+      {proposalsError && (
+        <p style={{ fontSize: "0.83rem", color: "var(--red, #f87171)", marginBottom: "0.75rem" }}>{proposalsError}</p>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.6rem" }}>
+        <h2 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600 }}>Live proposals</h2>
+        <span className="muted" style={{ fontSize: "0.78rem" }}>
+          {proposalsLoading ? "Loading…" : `${filtered.length}${filtered.length !== allProposals.length ? ` of ${allProposals.length}` : ""} proposals`}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {filtered.map(p => (
+          <VoteProposalRow
+            key={p._id}
+            proposal={p}
+            pillarById={pillarById}
+            currentVote={effectiveVote(p._id)}
+            isConfirmed={typeof confirmed[p._id] === "string" && pending[p._id] === undefined}
+            onVote={selectVote}
+            authed={authed}
+          />
+        ))}
+        {!proposalsLoading && filtered.length === 0 && !proposalsError && (
+          <p className="muted" style={{ fontSize: "0.83rem", margin: "1rem 0" }}>
+            {allProposals.length === 0 ? "No live proposals found." : "No proposals match your filters."}
+          </p>
+        )}
+      </div>
+    </main>
+  );
+}
