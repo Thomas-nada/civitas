@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { useNavigate, useParams } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
@@ -3092,6 +3092,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
   const [cycleError, setCycleError] = useState("");
 
   const [ballot, setBallot] = useState(null); // v1 ballot object with id, status
+  const [ballotQuestions, setBallotQuestions] = useState([]); // v1 questions with their IDs
 
   const [allProposals, setAllProposals] = useState([]);
   const [proposalsLoading, setProposalsLoading] = useState(false);
@@ -3181,6 +3182,34 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [cycle]);
 
+  // Fetch ballot question list (v1 IDs) once ballot is known — needed for vote submission
+  useEffect(() => {
+    if (!ballot?.id) return;
+    apiFetchV1(`/ballots/${ballot.id}`)
+      .then(data => setBallotQuestions(Array.isArray(data?.questions) ? data.questions : []))
+      .catch(() => {});
+  }, [ballot?.id]);
+
+  // Map v0 proposalId → v1 questionId (matched by title)
+  const proposalToQuestionId = useMemo(() => {
+    if (!ballotQuestions.length || !allProposals.length) return {};
+    const map = {};
+    for (const q of ballotQuestions) {
+      const match = allProposals.find(p =>
+        p.title?.trim().toLowerCase() === q.title?.trim().toLowerCase()
+      );
+      if (match) map[match._id] = q.id;
+    }
+    return map;
+  }, [ballotQuestions, allProposals]);
+
+  // Reverse: v1 questionId → v0 proposalId
+  const questionToProposalId = useMemo(() => {
+    const map = {};
+    for (const [pId, qId] of Object.entries(proposalToQuestionId)) map[qId] = pId;
+    return map;
+  }, [proposalToQuestionId]);
+
   // Load my confirmed votes from Hydra once authed + ballotId known
   useEffect(() => {
     if (!authed || !ballot?.id) return;
@@ -3188,14 +3217,12 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       try {
         const data = await apiFetchV1(`/votes/${ballot.id}/mine`);
         const votesMap = data?.confirmed?.votes ?? {};
-        // votesMap: { [questionId]: { selection: [optionId], abstain: bool } }
-        // We need to reverse-map optionId → "yes" | "no" | "abstain"
-        // We resolve this using the proposals' voteOptions
+        // votesMap: { [v1questionId]: { selection: [1|2], abstain: bool } }
+        // Store temporarily keyed by questionId; re-key to proposalId once map is ready
         const resolved = {};
         for (const [qId, v] of Object.entries(votesMap)) {
-          if (v.abstain) { resolved[qId] = "abstain"; continue; }
-          // selection[0] is the chosen option id; we'll resolve label after proposals load
-          resolved[qId] = { _optionId: v.selection?.[0] };
+          const label = v.abstain ? "abstain" : v.selection?.[0] === 1 ? "yes" : v.selection?.[0] === 2 ? "no" : "abstain";
+          resolved[qId] = { _label: label, _questionId: qId };
         }
         setConfirmed(resolved);
       } catch {
@@ -3205,25 +3232,23 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     loadConfirmed();
   }, [authed, ballot]);
 
-  // Once proposals + confirmed raw option IDs are both known, resolve labels
+  // Once questionToProposalId is built, re-key confirmed from questionId → proposalId
   useEffect(() => {
-    if (!allProposals.length) return;
+    if (!Object.keys(questionToProposalId).length) return;
     setConfirmed(prev => {
-      const next = { ...prev };
+      const next = {};
       let changed = false;
-      for (const [qId, v] of Object.entries(next)) {
-        if (v && typeof v === "object" && "_optionId" in v) {
-          const proposal = allProposals.find(p => p._id === qId);
-          const opts = proposal?.voteOptions ?? [];
-          const { yes: yesId, no: noId } = resolveOptionIds(opts);
-          const label = v._optionId === yesId ? "yes" : v._optionId === noId ? "no" : "abstain";
-          next[qId] = label;
-          changed = true;
+      for (const [key, v] of Object.entries(prev)) {
+        if (v && typeof v === "object" && "_questionId" in v) {
+          const pId = questionToProposalId[v._questionId];
+          if (pId) { next[pId] = v._label; changed = true; }
+        } else {
+          next[key] = v;
         }
       }
       return changed ? next : prev;
     });
-  }, [allProposals]);
+  }, [questionToProposalId]);
 
   const now = new Date();
   const isVotingActive = cycle
@@ -3297,34 +3322,24 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       // Hydra replaces entirely, so we must include ALL intended votes
       const allVotes = [];
 
-      // Start with confirmed votes (already on Hydra) — keep them unless pending overrides
-      for (const [qId, choice] of Object.entries(confirmed)) {
+      // v1 ballot uses option 1=Yes, 2=No for all questions
+      const toVoteEntry = (questionId, choice) => {
+        if (choice === "abstain") return { questionId, abstain: true };
+        return { questionId, selection: [choice === "yes" ? 1 : 2] };
+      };
+
+      // Start with confirmed votes (keyed by v0 proposalId) — keep unless pending overrides
+      for (const [proposalId, choice] of Object.entries(confirmed)) {
         if (typeof choice !== "string") continue;
-        if (pending[qId] !== undefined) continue; // pending will override
-        const proposal = allProposals.find(p => p._id === qId);
-        const opts = proposal?.voteOptions ?? [];
-        const { yes: yesId, no: noId } = resolveOptionIds(opts);
-        if (choice === "abstain") {
-          allVotes.push({ questionId: qId, abstain: true });
-        } else {
-          const optId = choice === "yes" ? yesId : noId;
-          if (optId != null) allVotes.push({ questionId: qId, selection: [optId] });
-          else allVotes.push({ questionId: qId, abstain: true }); // fallback
-        }
+        if (pending[proposalId] !== undefined) continue;
+        const questionId = proposalToQuestionId[proposalId];
+        if (questionId) allVotes.push(toVoteEntry(questionId, choice));
       }
 
-      // Add pending selections
+      // Add pending selections (keyed by v0 proposalId)
       for (const [proposalId, choice] of Object.entries(pending)) {
-        const proposal = allProposals.find(p => p._id === proposalId);
-        const opts = proposal?.voteOptions ?? [];
-        const { yes: yesId, no: noId } = resolveOptionIds(opts);
-        if (choice === "abstain") {
-          allVotes.push({ questionId: proposalId, abstain: true });
-        } else {
-          const optId = choice === "yes" ? yesId : noId;
-          if (optId != null) allVotes.push({ questionId: proposalId, selection: [optId] });
-          else allVotes.push({ questionId: proposalId, abstain: true }); // fallback
-        }
+        const questionId = proposalToQuestionId[proposalId];
+        if (questionId) allVotes.push(toVoteEntry(questionId, choice));
       }
 
       // Step 1: Draft
