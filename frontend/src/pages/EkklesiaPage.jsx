@@ -3304,6 +3304,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       }
 
       // Step 1: Draft
+      console.log("[Ekklesia] draft payload:", JSON.stringify({ votes: allVotes }).slice(0, 500));
       const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
