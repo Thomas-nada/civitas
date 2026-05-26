@@ -3182,25 +3182,22 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [cycle]);
 
-  // Fetch ballot question list (v1 IDs) once ballot is known (and again after auth if it was empty)
+  // Fetch ballot question list from dedicated /questions endpoint
   useEffect(() => {
     if (!ballot?.id) return;
-    apiFetchV1(`/ballots/${ballot.id}`)
+    apiFetchV1(`/ballots/${ballot.id}/questions`)
       .then(data => {
+        console.log("[Ekklesia] /questions raw:", JSON.stringify(data).slice(0, 400));
         const inner = data?.data ?? data;
-        console.log("[Ekklesia] ballot data.data keys:", inner ? Object.keys(inner) : "null", JSON.stringify(inner).slice(0, 600));
-        // Try every known nesting shape
-        const qs = Array.isArray(inner?.questions) ? inner.questions
-          : Array.isArray(inner?.ballotQuestions) ? inner.ballotQuestions
+        const qs = Array.isArray(inner) ? inner
+          : Array.isArray(inner?.questions) ? inner.questions
           : Array.isArray(inner?.items) ? inner.items
-          : Array.isArray(data?.questions) ? data.questions
-          : Array.isArray(data) ? data
           : [];
-        console.log("[Ekklesia] ballot questions count:", qs.length, "first 3:", qs.slice(0, 3));
+        console.log("[Ekklesia] questions count:", qs.length, "sample:", qs.slice(0, 2));
         setBallotQuestions(qs);
       })
-      .catch(e => console.log("[Ekklesia] ballot questions fetch failed:", e.message));
-  }, [ballot?.id, authed]); // re-fetch after auth in case endpoint requires a session
+      .catch(e => console.log("[Ekklesia] /questions fetch failed:", e.message));
+  }, [ballot?.id, authed]);
 
   // Normalize a title for fuzzy matching: lowercase, collapse whitespace, strip common punctuation
   const normalizeTitle = (t = "") =>
