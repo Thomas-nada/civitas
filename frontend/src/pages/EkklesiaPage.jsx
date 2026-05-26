@@ -3248,9 +3248,10 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
       const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
       if (!payloadHex) throw new Error("No nonce returned from server.");
-      // Sign with stake key — CIP-30 wallets don't support DRep key signing via signData
-      const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signingAddress;
-      const signature = await walletApi.signData(payloadHex, signAddress, false);
+      // Always sign with the stake key (signingAddress = walletRewardAddress).
+      // MeshSDK routes DRep-looking addresses through cip95.signData which is not
+      // available on the BrowserWallet instance (it was enabled without CIP-95).
+      const signature = await walletApi.signData(payloadHex, signingAddress, false);
       await apiFetch("/session", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
