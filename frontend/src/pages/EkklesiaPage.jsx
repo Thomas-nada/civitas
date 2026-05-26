@@ -3187,11 +3187,16 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     if (!ballot?.id) return;
     apiFetchV1(`/ballots/${ballot.id}`)
       .then(data => {
-        const qs = Array.isArray(data?.questions) ? data.questions : [];
-        console.debug("[Ekklesia] ballot questions fetched", qs.length, qs.slice(0, 3).map(q => q.title));
+        console.log("[Ekklesia] raw ballot data keys:", data ? Object.keys(data) : "null/undefined", data);
+        // Handle both { questions: [...] } and direct array responses
+        const qs = Array.isArray(data?.questions) ? data.questions
+          : Array.isArray(data?.data?.questions) ? data.data.questions
+          : Array.isArray(data) ? data
+          : [];
+        console.log("[Ekklesia] ballot questions count:", qs.length, "first 3:", qs.slice(0, 3));
         setBallotQuestions(qs);
       })
-      .catch(e => console.warn("[Ekklesia] ballot questions fetch failed", e.message));
+      .catch(e => console.log("[Ekklesia] ballot questions fetch failed:", e.message));
   }, [ballot?.id, authed]); // re-fetch after auth in case endpoint requires a session
 
   // Normalize a title for fuzzy matching: lowercase, collapse whitespace, strip common punctuation
@@ -3200,6 +3205,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
 
   // Map v0 proposalId → v1 questionId (matched by title, with fuzzy fallback)
   const proposalToQuestionId = useMemo(() => {
+    console.log("[Ekklesia] building proposalToQuestionId — questions:", ballotQuestions.length, "proposals:", allProposals.length);
     if (!ballotQuestions.length || !allProposals.length) return {};
     const map = {};
     for (const q of ballotQuestions) {
