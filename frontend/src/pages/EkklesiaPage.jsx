@@ -3182,23 +3182,44 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [cycle]);
 
-  // Fetch ballot question list (v1 IDs) once ballot is known — needed for vote submission
+  // Fetch ballot question list (v1 IDs) once ballot is known (and again after auth if it was empty)
   useEffect(() => {
     if (!ballot?.id) return;
     apiFetchV1(`/ballots/${ballot.id}`)
-      .then(data => setBallotQuestions(Array.isArray(data?.questions) ? data.questions : []))
-      .catch(() => {});
-  }, [ballot?.id]);
+      .then(data => {
+        const qs = Array.isArray(data?.questions) ? data.questions : [];
+        console.debug("[Ekklesia] ballot questions fetched", qs.length, qs.slice(0, 3).map(q => q.title));
+        setBallotQuestions(qs);
+      })
+      .catch(e => console.warn("[Ekklesia] ballot questions fetch failed", e.message));
+  }, [ballot?.id, authed]); // re-fetch after auth in case endpoint requires a session
 
-  // Map v0 proposalId → v1 questionId (matched by title)
+  // Normalize a title for fuzzy matching: lowercase, collapse whitespace, strip common punctuation
+  const normalizeTitle = (t = "") =>
+    t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Map v0 proposalId → v1 questionId (matched by title, with fuzzy fallback)
   const proposalToQuestionId = useMemo(() => {
     if (!ballotQuestions.length || !allProposals.length) return {};
     const map = {};
     for (const q of ballotQuestions) {
-      const match = allProposals.find(p =>
-        p.title?.trim().toLowerCase() === q.title?.trim().toLowerCase()
-      );
+      const qNorm = normalizeTitle(q.title);
+      // 1. Exact normalized match
+      let match = allProposals.find(p => normalizeTitle(p.title) === qNorm);
+      // 2. Partial containment match (one contains the other)
+      if (!match) match = allProposals.find(p => {
+        const pNorm = normalizeTitle(p.title);
+        return pNorm.includes(qNorm) || qNorm.includes(pNorm);
+      });
       if (match) map[match._id] = q.id;
+    }
+    const matchCount = Object.keys(map).length;
+    console.debug(`[Ekklesia] proposalToQuestionId: ${matchCount} of ${ballotQuestions.length} questions matched`);
+    if (matchCount < ballotQuestions.length) {
+      const unmatchedQs = ballotQuestions.filter(q => !Object.values(map).includes(q.id));
+      console.debug("[Ekklesia] unmatched question titles (first 5):", unmatchedQs.slice(0, 5).map(q => q.title));
+      const unmatchedPs = allProposals.filter(p => !map[p._id]);
+      console.debug("[Ekklesia] unmatched proposal titles (first 5):", unmatchedPs.slice(0, 5).map(p => p.title));
     }
     return map;
   }, [ballotQuestions, allProposals]);
