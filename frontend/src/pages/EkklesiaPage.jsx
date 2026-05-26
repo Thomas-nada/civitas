@@ -3238,7 +3238,8 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     setAuthLoading(true);
     setAuthError("");
     try {
-      const nonceRes = await apiFetchV1("/session", {
+      // Session auth uses the v0 endpoint — v1 spec explicitly defers to /api/v0/session
+      const nonceRes = await apiFetch("/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signerAddress, signType }),
@@ -3250,7 +3251,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       // Sign with stake key — CIP-30 wallets don't support DRep key signing via signData
       const signAddress = nonceRes?.userIdHex ?? nonceRes?.signerAddressHex ?? signingAddress;
       const signature = await walletApi.signData(payloadHex, signAddress, false);
-      await apiFetchV1("/session", {
+      await apiFetch("/session", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signerAddress, signature, signType }),
