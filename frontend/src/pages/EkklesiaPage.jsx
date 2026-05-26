@@ -3137,8 +3137,16 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
   useEffect(() => {
     if (!cycle) return;
     const urlId = cycle.votingUrl?.split("/ballots/")[1]?.split(/[/?#]/)[0];
+    const fetchBallot = (id) =>
+      apiFetchV1(`/ballots/${id}`)
+        .then(data => {
+          const b = data?.data ?? data;
+          console.log("[Ekklesia] full ballot JSON:", JSON.stringify(b));
+          setBallot(b);
+        })
+        .catch(() => setBallot({ id }));
     if (urlId) {
-      setBallot({ id: urlId });
+      fetchBallot(urlId);
       return;
     }
     // Fallback: query the v1 ballots list
@@ -3150,7 +3158,7 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
           b.externalId === cycle._id ||
           (b.title || "").toLowerCase().includes("budget 2026")
         ) || list[0];
-        if (match) setBallot(match);
+        if (match) fetchBallot(match.id || match._id);
       })
       .catch(() => {});
   }, [cycle, voteSlug]);
