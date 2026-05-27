@@ -3091,9 +3091,29 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
         <div>
           {/* Page header */}
           <header style={{ marginBottom: "1.5rem" }}>
-            <h1 style={{ margin: "0 0 0.75rem", fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-              {cycle?.description || "Intersect Budget Proposals"}
-            </h1>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+              <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
+                {cycle?.description || "Intersect Budget Proposals"}
+              </h1>
+              <button
+                onClick={() => navigate(`${basePath}/results`)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "0.4rem",
+                  padding: "0.4rem 0.9rem", borderRadius: 8, fontSize: "0.8rem", fontWeight: 600,
+                  cursor: "pointer", flexShrink: 0,
+                  background: "color-mix(in srgb, var(--accent, #5eead4) 10%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--accent, #5eead4) 35%, transparent)",
+                  color: "var(--accent, #5eead4)", transition: "background 0.15s",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <rect x="1" y="7" width="2.5" height="5" rx="0.5" fill="currentColor" />
+                  <rect x="5.25" y="4" width="2.5" height="8" rx="0.5" fill="currentColor" />
+                  <rect x="9.5" y="1" width="2.5" height="11" rx="0.5" fill="currentColor" />
+                </svg>
+                View Results
+              </button>
+            </div>
             {cycleLoading && <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading…</p>}
             {cycleError && <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--red, #f87171)" }}>{cycleError}</p>}
             {cycle && <CycleTimeline cycle={cycle} />}
@@ -3917,6 +3937,300 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
           </p>
         )}
       </div>
+    </main>
+  );
+}
+
+// ─── Budget Results Page ──────────────────────────────────────────────────────
+
+export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath = "/budget" } = {}) {
+  const navigate = useNavigate();
+
+  const [cycle, setCycle] = useState(null);
+  const [ballot, setBallot] = useState(null);
+  const [allProposals, setAllProposals] = useState([]);
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [sort, setSort] = useState("yes_desc");
+
+  useSeoMeta({
+    title: "Preliminary Results — Cardano Budget 2026",
+    description: "Preliminary DRep voting results for Cardano Budget 2026 proposals.",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+
+    apiFetch("/votes")
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        const match = list.find(v => v.slug === voteSlug) || list[0];
+        if (!match) throw new Error(`Vote cycle "${voteSlug}" not found.`);
+        return match;
+      })
+      .then(async (c) => {
+        if (cancelled) return;
+        setCycle(c);
+
+        const urlId = c.votingUrl?.split("/ballots/")[1]?.split(/[/?#]/)[0];
+        let ballotObj = null;
+        if (urlId) {
+          try {
+            const bd = await apiFetchV1(`/ballots/${urlId}`);
+            ballotObj = bd?.data ?? bd;
+          } catch {
+            ballotObj = { id: urlId };
+          }
+        }
+        if (!cancelled) setBallot(ballotObj);
+
+        const ballotId = ballotObj?.id ?? urlId;
+
+        const [proposalResult, resultsResult] = await Promise.allSettled([
+          (async () => {
+            const PAGE_SIZE = 100;
+            let page = 1, all = [];
+            while (true) {
+              const d = await apiFetch(`/proposals?vote=${c._id}&limit=${PAGE_SIZE}&page=${page}`);
+              const rows = Array.isArray(d) ? d : (d?.data ?? []);
+              all = all.concat(rows);
+              if (!d?.meta?.hasNextPage || rows.length < PAGE_SIZE) break;
+              page++;
+            }
+            return all;
+          })(),
+          ballotId
+            ? apiFetchV1(`/votes/${ballotId}/results`).catch(() =>
+                apiFetchV1(`/ballots/${ballotId}/results`)
+              )
+            : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+        if (proposalResult.status === "fulfilled") setAllProposals(proposalResult.value);
+        if (resultsResult.status === "fulfilled" && resultsResult.value) {
+          setResults(resultsResult.value);
+        } else {
+          setError("Results not yet available for this ballot.");
+        }
+      })
+      .catch(e => { if (!cancelled) setError(e.message || "Failed to load."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [voteSlug]);
+
+  const questionToProposalId = useMemo(() => {
+    const questions = ballot?.hydra?.ballot?.questions ?? [];
+    const byTitle = Object.fromEntries(questions.map(q => [q.question, q.questionId]));
+    const map = {};
+    for (const p of allProposals) {
+      const qId = byTitle[p.title];
+      if (qId) map[qId] = p._id;
+    }
+    return map;
+  }, [ballot, allProposals]);
+
+  const proposalById = useMemo(() =>
+    Object.fromEntries(allProposals.map(p => [p._id, p]))
+  , [allProposals]);
+
+  const rows = useMemo(() => {
+    const questions = ballot?.hydra?.ballot?.questions ?? [];
+    if (!questions.length) return [];
+    const rq = results?.data?.results?.questions
+      ?? results?.data?.questions
+      ?? results?.results?.questions
+      ?? results?.questions
+      ?? {};
+    return questions.map(q => {
+      const proposalId = questionToProposalId[q.questionId];
+      const proposal = proposalById[proposalId];
+      const r = rq[q.questionId] ?? {};
+      const yes = Number(r.yes?.count ?? r["1"]?.count ?? 0);
+      const no = Number(r.no?.count ?? r["2"]?.count ?? 0);
+      const abstain = Number(r.abstain?.count ?? 0);
+      const total = yes + no + abstain;
+      return {
+        questionId: q.questionId,
+        title: proposal?.title ?? q.question,
+        budget: proposal?.metaData?.totalBudget ?? null,
+        yes, no, abstain, total,
+        yesPct: total ? (yes / total) * 100 : 0,
+        noPct: total ? (no / total) * 100 : 0,
+        abstainPct: total ? (abstain / total) * 100 : 0,
+      };
+    });
+  }, [ballot, results, questionToProposalId, proposalById]);
+
+  const sorted = useMemo(() => {
+    const r = [...rows];
+    if (sort === "yes_desc") return r.sort((a, b) => b.yesPct - a.yesPct);
+    if (sort === "no_desc") return r.sort((a, b) => b.noPct - a.noPct);
+    if (sort === "total_desc") return r.sort((a, b) => b.total - a.total);
+    if (sort === "budget") return r.sort((a, b) => (b.budget ?? 0) - (a.budget ?? 0));
+    if (sort === "title") return r.sort((a, b) => a.title.localeCompare(b.title));
+    return r;
+  }, [rows, sort]);
+
+  const totalVoters = rows.length ? Math.max(...rows.map(r => r.total)) : 0;
+  const passingCount = rows.filter(r => r.total > 0 && r.yesPct > 50).length;
+
+  return (
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
+      <button
+        onClick={() => navigate(basePath)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: "0.35rem",
+          background: "transparent", border: "none", cursor: "pointer",
+          color: "var(--text-muted)", fontSize: "0.83rem", padding: "0 0 1.25rem",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to proposals
+      </button>
+
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 style={{ margin: "0 0 0.4rem", fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
+          Preliminary Results
+        </h1>
+        <p className="muted" style={{ margin: "0 0 0.75rem", fontSize: "0.9rem" }}>
+          {cycle?.description || "Cardano Budget 2026"} — live off-chain DRep vote tallies
+        </p>
+        {cycle && <CycleTimeline cycle={cycle} />}
+        <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+          Preliminary — results may change until voting closes on {formatDate(cycle?.votingEndDate)}.
+        </p>
+      </div>
+
+      {loading && <p className="muted" style={{ fontSize: "0.85rem" }}>Loading results…</p>}
+
+      {!loading && error && (
+        <div style={{
+          padding: "1.25rem", borderRadius: 10, border: "1px solid var(--line)",
+          background: "var(--panel)", color: "var(--text-muted)", fontSize: "0.85rem",
+        }}>
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && rows.length > 0 && (
+        <>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "0.6rem", marginBottom: "1.25rem",
+          }}>
+            {[
+              ["Proposals", rows.length],
+              ["Currently Passing (>50% Yes)", passingCount],
+              ["Peak Participation", totalVoters || "—"],
+            ].map(([label, value]) => (
+              <div key={label} style={{
+                background: "var(--panel)", border: "1px solid var(--line)",
+                borderRadius: 10, padding: "0.75rem 0.9rem",
+              }}>
+                <p style={{ margin: "0 0 0.2rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
+                <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+            <select value={sort} onChange={e => setSort(e.target.value)}
+              style={{ padding: "0.38rem 0.55rem", borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)", fontSize: "0.82rem" }}>
+              <option value="yes_desc">Sort: Most Yes</option>
+              <option value="no_desc">Sort: Most No</option>
+              <option value="total_desc">Sort: Most Votes</option>
+              <option value="budget">Sort: Budget ↓</option>
+              <option value="title">Sort: Title A–Z</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {sorted.map(row => (
+              <div key={row.questionId} style={{
+                border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
+                background: "var(--panel)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "flex-start" }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: "0.88rem", lineHeight: 1.35, flex: 1 }}>
+                    {row.title}
+                  </p>
+                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexShrink: 0 }}>
+                    {row.budget != null && (
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--accent, #5eead4)" }}>
+                        {formatAda(row.budget)}
+                      </span>
+                    )}
+                    {row.total > 0 && row.yesPct > 50 && (
+                      <span style={{
+                        fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
+                        background: "color-mix(in srgb, var(--green, #4ade80) 15%, transparent)",
+                        border: "1px solid color-mix(in srgb, var(--green, #4ade80) 40%, transparent)",
+                        color: "var(--green, #4ade80)",
+                      }}>Passing</span>
+                    )}
+                    {row.total > 0 && row.noPct >= 50 && (
+                      <span style={{
+                        fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
+                        background: "color-mix(in srgb, var(--red, #f87171) 15%, transparent)",
+                        border: "1px solid color-mix(in srgb, var(--red, #f87171) 40%, transparent)",
+                        color: "var(--red, #f87171)",
+                      }}>Failing</span>
+                    )}
+                  </div>
+                </div>
+
+                {row.total > 0 ? (
+                  <>
+                    <div style={{
+                      display: "flex", height: 8, borderRadius: 4, overflow: "hidden",
+                      background: "var(--line)", marginBottom: "0.45rem",
+                    }}>
+                      {row.yesPct > 0 && <div style={{ width: `${row.yesPct}%`, background: "var(--green, #4ade80)" }} />}
+                      {row.noPct > 0 && <div style={{ width: `${row.noPct}%`, background: "var(--red, #f87171)" }} />}
+                      {row.abstainPct > 0 && <div style={{ width: `${row.abstainPct}%`, background: "var(--text-muted)", opacity: 0.4 }} />}
+                    </div>
+                    <div style={{ display: "flex", gap: "1rem", fontSize: "0.74rem", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--green, #4ade80)", fontWeight: 600 }}>
+                        Yes {row.yesPct.toFixed(1)}%{" "}
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.yes})</span>
+                      </span>
+                      <span style={{ color: "var(--red, #f87171)", fontWeight: 600 }}>
+                        No {row.noPct.toFixed(1)}%{" "}
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.no})</span>
+                      </span>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>
+                        Abstain {row.abstainPct.toFixed(1)}%{" "}
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.abstain})</span>
+                      </span>
+                      <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>
+                        {row.total} vote{row.total !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>No votes recorded yet</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!loading && !error && rows.length === 0 && (
+        <div style={{
+          padding: "2rem", borderRadius: 10, border: "1px solid var(--line)",
+          background: "var(--panel)", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem",
+        }}>
+          No results available yet. Results will appear once voting is underway.
+        </div>
+      )}
     </main>
   );
 }
