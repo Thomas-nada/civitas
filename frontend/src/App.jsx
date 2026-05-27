@@ -357,7 +357,6 @@ export default function App() {
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
           <Route path="/budget/submit" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/budget/submit/:proposalId" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/budget/vote" element={<Navigate to="/budget" replace />} />
           <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
           <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
