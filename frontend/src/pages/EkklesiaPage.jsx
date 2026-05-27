@@ -3516,22 +3516,16 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     const questions = ballot?.hydra?.ballot?.questions ?? [];
     if (!questions.length) return [];
 
-    // Total VP of all DReps who submitted a ballot (regardless of per-question votes).
-    // DReps who didn't vote on a specific question stay in this denominator
-    // and therefore implicitly reduce the Yes %.
-    const firstResult = Object.values(resultsByQuestionId)[0] ?? {};
-    const totalBallotVP = Number(
-      firstResult?.ballotParticipation?.totalVotingPower?.drep ?? 0
-    );
-    const totalBallotVoters = Number(
-      firstResult?.ballotParticipation?.voterCount?.drep ?? 0
-    );
-
     return questions.map(q => {
       const proposalId = questionToProposalId[q.questionId];
       const proposal = proposalById[proposalId];
       const resultObj = resultsByQuestionId[q.questionId] ?? {};
       const resultArr = resultObj?.results ?? [];
+
+      // Each result item carries its own ballotParticipation snapshot (updated as DReps vote).
+      // Use per-question totals so all yes-% denominators are consistent with that question's tally.
+      const totalBallotVP = Number(resultObj?.ballotParticipation?.totalVotingPower?.drep ?? 0);
+      const totalBallotVoters = Number(resultObj?.ballotParticipation?.voterCount?.drep ?? 0);
 
       // Parse Yes / No / Abstain by id (1=Yes, 2=No, "abstain"=Abstain)
       const findR = id => resultArr.find(r => String(r.id) === String(id)) ?? {};
