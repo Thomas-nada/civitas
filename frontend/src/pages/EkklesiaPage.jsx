@@ -3985,7 +3985,6 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
             ballotObj = { id: urlId };
           }
         }
-        console.log("[Results] full ballotObj:", ballotObj);
         if (!cancelled) setBallot(ballotObj);
 
         const ballotId = ballotObj?.id ?? urlId;
@@ -4003,30 +4002,9 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
             }
             return all;
           })(),
-          (async () => {
-            if (!ballotId) return null;
-            const candidates = [
-              `/votes/${ballotId}/results`,
-              `/ballots/${ballotId}/results`,
-              `/ballots/${ballotId}/tally`,
-              `/votes/${ballotId}/tally`,
-            ];
-            for (const path of candidates) {
-              try {
-                const r = await apiFetchV1(path);
-                console.log("[Results] success on", path, r);
-                return r;
-              } catch (e) {
-                console.warn("[Results] failed:", path, e.message);
-              }
-            }
-            // Last resort: see if the ballot object itself embeds results
-            if (ballotObj?.results || ballotObj?.tally || ballotObj?.data?.results || ballotObj?.data?.tally) {
-              console.log("[Results] using embedded ballot results");
-              return ballotObj;
-            }
-            return null;
-          })(),
+          ballotId
+            ? apiFetchV1(`/results/ballot/${ballotId}`)
+            : Promise.resolve(null),
         ]);
 
         if (cancelled) return;
@@ -4034,7 +4012,6 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
         if (resultsResult.status === "fulfilled" && resultsResult.value) {
           setResults(resultsResult.value);
         } else {
-          console.warn("[Results] resultsResult:", resultsResult);
           setError("Results not yet available for this ballot.");
         }
       })
@@ -4044,6 +4021,14 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     return () => { cancelled = true; };
   }, [voteSlug]);
 
+  // results from /api/v1/results/ballot/{id} is an array of per-question result objects.
+  // Each item's .proposalId is the v1 questionId.
+  const resultsByQuestionId = useMemo(() => {
+    const arr = results?.data ?? (Array.isArray(results) ? results : []);
+    return Object.fromEntries(arr.map(r => [r.proposalId, r]));
+  }, [results]);
+
+  // Map v1 questionId → v0 proposalId by matching titles
   const questionToProposalId = useMemo(() => {
     const questions = ballot?.hydra?.ballot?.questions ?? [];
     const byTitle = Object.fromEntries(questions.map(q => [q.question, q.questionId]));
@@ -4062,43 +4047,61 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
   const rows = useMemo(() => {
     const questions = ballot?.hydra?.ballot?.questions ?? [];
     if (!questions.length) return [];
-    const rq = results?.data?.results?.questions
-      ?? results?.data?.questions
-      ?? results?.results?.questions
-      ?? results?.questions
-      ?? {};
+
     return questions.map(q => {
       const proposalId = questionToProposalId[q.questionId];
       const proposal = proposalById[proposalId];
-      const r = rq[q.questionId] ?? {};
-      const yes = Number(r.yes?.count ?? r["1"]?.count ?? 0);
-      const no = Number(r.no?.count ?? r["2"]?.count ?? 0);
-      const abstain = Number(r.abstain?.count ?? 0);
-      const total = yes + no + abstain;
+      const resultObj = resultsByQuestionId[q.questionId] ?? {};
+      const resultArr = resultObj?.results ?? [];
+
+      // Parse Yes / No / Abstain by id (1=Yes, 2=No, "abstain"=Abstain)
+      const findR = id => resultArr.find(r => String(r.id) === String(id)) ?? {};
+      const yesR = findR(1);
+      const noR = findR(2);
+      const abstainR = findR("abstain");
+
+      const yesVP = Number(yesR.votingPower ?? 0);
+      const noVP = Number(noR.votingPower ?? 0);
+      const abstainVP = Number(abstainR.votingPower ?? 0);
+      const totalVP = yesVP + noVP + abstainVP;
+
+      const yesCount = Number(yesR.count ?? 0);
+      const noCount = Number(noR.count ?? 0);
+      const abstainCount = Number(abstainR.count ?? 0);
+      const totalCount = yesCount + noCount + abstainCount;
+
+      // Participation stats
+      const participation = resultObj?.proposalParticipation ?? {};
+      const drepVoters = participation?.voterCount?.drep ?? totalCount;
+
       return {
         questionId: q.questionId,
         title: proposal?.title ?? q.question,
         budget: proposal?.metaData?.totalBudget ?? null,
-        yes, no, abstain, total,
-        yesPct: total ? (yes / total) * 100 : 0,
-        noPct: total ? (no / total) * 100 : 0,
-        abstainPct: total ? (abstain / total) * 100 : 0,
+        yesVP, noVP, abstainVP, totalVP,
+        yesCount, noCount, abstainCount, totalCount,
+        drepVoters,
+        yesPct: totalVP ? (yesVP / totalVP) * 100 : 0,
+        noPct: totalVP ? (noVP / totalVP) * 100 : 0,
+        abstainPct: totalVP ? (abstainVP / totalVP) * 100 : 0,
+        // Passing = Yes VP > No VP (abstain excluded from threshold)
+        passing: (yesVP + noVP) > 0 && yesVP > noVP,
       };
     });
-  }, [ballot, results, questionToProposalId, proposalById]);
+  }, [ballot, resultsByQuestionId, questionToProposalId, proposalById]);
 
   const sorted = useMemo(() => {
     const r = [...rows];
     if (sort === "yes_desc") return r.sort((a, b) => b.yesPct - a.yesPct);
     if (sort === "no_desc") return r.sort((a, b) => b.noPct - a.noPct);
-    if (sort === "total_desc") return r.sort((a, b) => b.total - a.total);
+    if (sort === "total_desc") return r.sort((a, b) => b.drepVoters - a.drepVoters);
     if (sort === "budget") return r.sort((a, b) => (b.budget ?? 0) - (a.budget ?? 0));
     if (sort === "title") return r.sort((a, b) => a.title.localeCompare(b.title));
     return r;
   }, [rows, sort]);
 
-  const totalVoters = rows.length ? Math.max(...rows.map(r => r.total)) : 0;
-  const passingCount = rows.filter(r => r.total > 0 && r.yesPct > 50).length;
+  const passingCount = rows.filter(r => r.totalVP > 0 && r.passing).length;
+  const totalDrepVoters = rows.length ? Math.max(...rows.map(r => r.drepVoters)) : 0;
 
   return (
     <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
@@ -4148,8 +4151,8 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
           }}>
             {[
               ["Proposals", rows.length],
-              ["Currently Passing (>50% Yes)", passingCount],
-              ["Peak Participation", totalVoters || "—"],
+              ["Currently Passing (Yes > No VP)", passingCount],
+              ["Peak DRep Voters", totalDrepVoters || "—"],
             ].map(([label, value]) => (
               <div key={label} style={{
                 background: "var(--panel)", border: "1px solid var(--line)",
@@ -4188,7 +4191,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                         {formatAda(row.budget)}
                       </span>
                     )}
-                    {row.total > 0 && row.yesPct > 50 && (
+                    {row.totalVP > 0 && row.passing && (
                       <span style={{
                         fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
                         background: "color-mix(in srgb, var(--green, #4ade80) 15%, transparent)",
@@ -4196,7 +4199,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                         color: "var(--green, #4ade80)",
                       }}>Passing</span>
                     )}
-                    {row.total > 0 && row.noPct >= 50 && (
+                    {row.totalVP > 0 && !row.passing && (
                       <span style={{
                         fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
                         background: "color-mix(in srgb, var(--red, #f87171) 15%, transparent)",
@@ -4207,7 +4210,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                   </div>
                 </div>
 
-                {row.total > 0 ? (
+                {row.totalVP > 0 ? (
                   <>
                     <div style={{
                       display: "flex", height: 8, borderRadius: 4, overflow: "hidden",
@@ -4220,18 +4223,18 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                     <div style={{ display: "flex", gap: "1rem", fontSize: "0.74rem", flexWrap: "wrap" }}>
                       <span style={{ color: "var(--green, #4ade80)", fontWeight: 600 }}>
                         Yes {row.yesPct.toFixed(1)}%{" "}
-                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.yes})</span>
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.yesCount})</span>
                       </span>
                       <span style={{ color: "var(--red, #f87171)", fontWeight: 600 }}>
                         No {row.noPct.toFixed(1)}%{" "}
-                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.no})</span>
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.noCount})</span>
                       </span>
                       <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>
                         Abstain {row.abstainPct.toFixed(1)}%{" "}
-                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.abstain})</span>
+                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.abstainCount})</span>
                       </span>
                       <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>
-                        {row.total} vote{row.total !== 1 ? "s" : ""}
+                        {row.drepVoters} DRep{row.drepVoters !== 1 ? "s" : ""}
                       </span>
                     </div>
                   </>
