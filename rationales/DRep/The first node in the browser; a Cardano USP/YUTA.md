@@ -1,18 +1,19 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmUY2QgW8QvkEDjFQ5pDTK4QFwCYdqtpbNqNJkRWTPE2wr -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmV5kAPvwLzapDHPYoGwNN6NTHWv8ujHKdaqq9LckuAqyi -->
 # YUTA
 
 **Proposal:** The first node in the browser; a Cardano USP
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w`
 
 ---
 
-I vote NO to "The first node in the browser; a Cardano USP".
+Voting YES on "The first node in the browser; a Cardano USP."
+* Given the high maintenance costs of the Haskell node, further competition is needed.
+* I have confirmed that current DApp developers who generate transactions on mainnet intend to actively use this after Geronimo's development, provided it is properly developed. If properly developed, this will reduce the burden on developers. If properly developed, other DApp developers may also take interest.
 
-I have asked many developers about this, but I have not been able to find any developers who would want to use it. While it is difficult to foresee this demand beforehand, as the proposer claims, I may be requesting the same criteria from other proposals, so I need to maintain consistency. However, I may change this vote if I can find more evidence of demand for Goloramo.
+---
 
-—
+「The first node in the browser; a Cardano USP」にYESを投票します。
 
-私は「The first node in the browser; a Cardano USP」にNOを投票します。
-
-私は多くの開発者にこれについて聞きましたが、これを使用したい開発者を見つけることができませんでした。提案者が主張しているようにこの需要を事前に把握することは困難な作業ですが、しかしながら、私は他の提案書にも同じ基準を要求している場合がありますので、それと一貫性を保つ必要があります。ただし、Goloramoの需要についての裏付けが取れたらこの投票を変更する可能性があります。
+・Haskellノードの高額な保守費用を考えると、さらなる競争が必要です。
+・現在メインネットでTxを生むDApps開発者から、ジョロラモの開発後は、これが適切に開発された場合、積極的にこれを使用したい意向を確認しました。適切に開発された場合は、これは開発者の負担を軽減します。適切に開発されれば、その他のDApps開発者も興味を持つ可能性があります。

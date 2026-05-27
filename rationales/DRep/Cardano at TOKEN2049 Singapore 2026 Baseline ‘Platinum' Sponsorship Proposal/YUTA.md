@@ -1,26 +1,26 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbARPcYoM2DwgGiUcapsv8Xo6kJ2MPTSG7xnM6CkJeuB5 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmcD88Jud82U3GuhNixmp3N8A4ivm9EdLXx9X7ZVKZbmHE -->
 # YUTA
 
 **Proposal:** Cardano at TOKEN2049 Singapore 2026 Baseline ‘Platinum' Sponsorship Proposal
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w`
 
 ---
 
-I am voting Abstain on "Revised Cardano Summit 2026 Singapore" and "Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship Proposal."
-Given the cancellation of Dubai token 2049, it is reasonable to bet on this. Emurgo and CF will likely be able to achieve the KPIs stated in the proposals.
-However, looking at CF's and Emurgo's events from last year, I was unable to find convincing evidence as to whether these directly or indirectly succeeded in driving transactions, ADA purchases, or sustained developer onboarding—and, if they didn't, what has been improved this time around.
-On the other hand, I also agree that it would be a mistake to take pride in doing no promotion at all, and that TOKEN2049 is a good venue for it. There is also no alternative team.
-Taking all of this into account, I find it hard to firmly say YES but also hard to firmly say NO, so I am voting Abstain. I may still change my vote going forward based on feedback from everyone.
+Voting YES on "Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship Proposal."
+I have confirmed from Charles that additional funding will be directed to this and that IO will participate.
+With the cancellation of Token2049 Dubai, it is reasonable to focus on this event.
+I also confirmed that EMURGO has eliminated labor costs.
+Furthermore, each time the explanation was repeated that "we distributed X units of SWAG, obtained Y contacts, and therefore the event was a success," I felt disappointed that the outcomes beyond that remained invisible. However, we were able to have a discussion about working toward the real results beyond merely achieving formal KPIs such as whether or not SWAG was distributed. I believe the formal KPIs written in the proposal can be achieved, but at the very least, commitment toward the adoption, collaboration, and on-chain effects that this event truly aims to achieve beyond those KPIs is expected. 
 
-ーーー
+---
 
-私は「Revised Cardano Summit 2026 Singapore」「Cardano at TOKEN2049 Singapore 2026: Baseline ‘Platinum' Sponsorship Proposal」にAbstainを投票します。
+「Cardano at TOKEN2049 Singapore 2026: Baseline ‘Platinum' Sponsorship Proposal」にYESを投票します。
 
-ドバイのキャンセルを加味するとここに賭けることは合理的です。emurgoとcfは提案書に書かれたKPIを達成することは可能でしょう。
+チャールズよりこれにさらに資金が投下されること、IOの参加を確認しました。
 
-ただし、cfとemurgoの去年のイベントで、これが直接的、間接的にTxや ADAの購入、継続的な開発者のオンボードに成功しているかどうか、そして、それがうまくいかなかった場合、今回は何が改善されているのかについて、自信を持てる証拠を見つけることができませんでした。
+Token 2049ドバイのキャンセルもあり、このイベントに注力することは合理的です。
 
-一方で私たちは何も宣伝しないことを誇ることは誤りであり、token2049はそのための良い場所であることにも同意します。また他に代替チームありません。
+EMURGOが人件費を放棄したことも確認しました。
 
-これらを踏まえてYESと断言しづらいがNOとも断言しづらいと考え、abstainを投票します。今後皆さんのフィードバックでさらに投票を変える可能性があります。
+また、私はKPI通りにX件SWAGを配った、Y件連絡先を入手した、だからイベントは成功した、という説明が繰り返されるごとに、その先の成果が見えないことに残念な気持ちを持っていましたが、単にSWAGを配った配らないと言う形式的なKPIの達成ではなくその先の本物の成果について取り組むと言う点についての話し合いができました。提案書に書かれている形式的なKPIは達成できると思いますが、少なくともその先にあるこのイベントで本当に達成したい採用やコラボレーションやオンチェーン効果に向けて取り組むことが期待されます。
