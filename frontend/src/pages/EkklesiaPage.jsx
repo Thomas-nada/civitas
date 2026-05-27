@@ -3141,7 +3141,6 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       apiFetchV1(`/ballots/${id}`)
         .then(data => {
           const b = data?.data ?? data;
-          console.log("[Ekklesia] full ballot JSON:", JSON.stringify(b));
           setBallot(b);
         })
         .catch(() => setBallot({ id }));
@@ -3201,7 +3200,6 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       const qId = byTitle[p.title];
       if (qId) map[p._id] = qId;
     }
-    console.log("[Ekklesia] proposalToQuestionId size:", Object.keys(map).length, "of", allProposals.length);
     return map;
   }, [allProposals, ballot]);
 
@@ -3320,7 +3318,6 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
       }
 
       // Step 1: Draft
-      console.log("[Ekklesia] draft payload:", JSON.stringify({ votes: allVotes }).slice(0, 500));
       const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
