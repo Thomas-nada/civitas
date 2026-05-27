@@ -2911,50 +2911,6 @@ export default function EkklesiaPage({ voteSlug, basePath = "/budget" } = {}) {
     setPending(p => ({ ...p, [proposalId]: choice }));
   }
 
-  async function handleSubmitVotes() {
-    if (!ballot?.id) { setSubmitError("Ballot ID not found."); return; }
-    if (!Object.keys(pending).length) return;
-    setSubmitState("drafting");
-    setSubmitError("");
-    try {
-      const toVoteEntry = (questionId, choice) =>
-        choice === "abstain" ? { questionId, abstain: true } : { questionId, selection: [choice === "yes" ? 1 : 2] };
-      const allVotes = [];
-      for (const [pid, choice] of Object.entries(confirmed)) {
-        if (typeof choice !== "string" || pending[pid] !== undefined) continue;
-        const qId = proposalToQuestionId[pid];
-        if (qId) allVotes.push(toVoteEntry(qId, choice));
-      }
-      for (const [pid, choice] of Object.entries(pending)) {
-        const qId = proposalToQuestionId[pid];
-        if (qId) allVotes.push(toVoteEntry(qId, choice));
-      }
-      const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ votes: allVotes }),
-      });
-      const packageId = draft?.package?.id ?? draft?.packageId;
-      const signingPayloadHex = draft?.signingPayloadHex ?? draft?.merkleRoot;
-      if (!packageId || !signingPayloadHex) throw new Error("Draft response missing packageId or signing payload.");
-      setSubmitState("signing");
-      const sigResult = await walletApi.signData(signingPayloadHex, signingAddress, false);
-      const coseSign1Hex = sigResult?.signature ?? sigResult;
-      const coseKeyHex = sigResult?.key ?? "";
-      setSubmitState("submitting");
-      await apiFetchV1(`/votes/${ballot.id}/signature`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId, witness: { coseSign1Hex, coseKeyHex } }),
-      });
-      setConfirmed(c => ({ ...c, ...pending }));
-      setPending({});
-      setSubmitState("done");
-      setTimeout(() => setSubmitState("idle"), 4000);
-    } catch (e) {
-      setSubmitError(e.message || "Vote submission failed.");
-      setSubmitState("error");
-    }
-  }
-
   const openProposal = useCallback(async (p, skipNav = false) => {
     setSelected(p);
     setDetailFull(null);
