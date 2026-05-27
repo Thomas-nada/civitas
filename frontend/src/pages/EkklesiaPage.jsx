@@ -4048,6 +4048,17 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     const questions = ballot?.hydra?.ballot?.questions ?? [];
     if (!questions.length) return [];
 
+    // Total VP of all DReps who submitted a ballot (regardless of per-question votes).
+    // DReps who didn't vote on a specific question stay in this denominator
+    // and therefore implicitly reduce the Yes %.
+    const firstResult = Object.values(resultsByQuestionId)[0] ?? {};
+    const totalBallotVP = Number(
+      firstResult?.ballotParticipation?.totalVotingPower?.drep ?? 0
+    );
+    const totalBallotVoters = Number(
+      firstResult?.ballotParticipation?.voterCount?.drep ?? 0
+    );
+
     return questions.map(q => {
       const proposalId = questionToProposalId[q.questionId];
       const proposal = proposalById[proposalId];
@@ -4063,36 +4074,56 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
       const yesVP = Number(yesR.votingPower ?? 0);
       const noVP = Number(noR.votingPower ?? 0);
       const abstainVP = Number(abstainR.votingPower ?? 0);
-      const totalVP = yesVP + noVP + abstainVP;
 
       const yesCount = Number(yesR.count ?? 0);
       const noCount = Number(noR.count ?? 0);
       const abstainCount = Number(abstainR.count ?? 0);
       const totalCount = yesCount + noCount + abstainCount;
 
-      // Participation stats
+      // Per-question voter count (DReps who explicitly voted on this question)
       const participation = resultObj?.proposalParticipation ?? {};
       const drepVoters = participation?.voterCount?.drep ?? totalCount;
+
+      // Effective stake = total ballot VP minus abstainers (abstain removes their
+      // stake from the denominator per the Cardano governance FAQ).
+      // DReps who didn't vote this question stay in the denominator (implicit No).
+      const effectiveVP = totalBallotVP - abstainVP;
+
+      // Bar proportions: show each segment as a fraction of total ballot VP
+      // so the bar honestly shows how much of all participating stake voted each way.
+      // The empty remainder (non-voters) is implicit No space.
+      const barBase = totalBallotVP || 1;
+      const yesPct   = (yesVP / barBase) * 100;
+      const noPct    = (noVP  / barBase) * 100;
+      const abstainPct = (abstainVP / barBase) * 100;
+      // non-voters segment (didn't vote on this question at all)
+      const noVotePct = Math.max(0, ((totalBallotVP - yesVP - noVP - abstainVP) / barBase) * 100);
+
+      // Threshold % shown on label: Yes as fraction of effective stake
+      const yesEffectivePct = effectiveVP > 0 ? (yesVP / effectiveVP) * 100 : 0;
+
+      // Passing: Yes VP > 51% of effective stake (totalBallotVP − abstainVP)
+      const THRESHOLD = 0.51;
+      const passing = effectiveVP > 0 && yesVP / effectiveVP > THRESHOLD;
 
       return {
         questionId: q.questionId,
         title: proposal?.title ?? q.question,
         budget: proposal?.metaData?.totalBudget ?? null,
-        yesVP, noVP, abstainVP, totalVP,
+        yesVP, noVP, abstainVP,
         yesCount, noCount, abstainCount, totalCount,
-        drepVoters,
-        yesPct: totalVP ? (yesVP / totalVP) * 100 : 0,
-        noPct: totalVP ? (noVP / totalVP) * 100 : 0,
-        abstainPct: totalVP ? (abstainVP / totalVP) * 100 : 0,
-        // Passing = Yes VP > No VP (abstain excluded from threshold)
-        passing: (yesVP + noVP) > 0 && yesVP > noVP,
+        drepVoters, totalBallotVoters,
+        effectiveVP, totalBallotVP,
+        yesPct, noPct, abstainPct, noVotePct,
+        yesEffectivePct,
+        passing,
       };
     });
   }, [ballot, resultsByQuestionId, questionToProposalId, proposalById]);
 
   const sorted = useMemo(() => {
     const r = [...rows];
-    if (sort === "yes_desc") return r.sort((a, b) => b.yesPct - a.yesPct);
+    if (sort === "yes_desc") return r.sort((a, b) => b.yesEffectivePct - a.yesEffectivePct);
     if (sort === "no_desc") return r.sort((a, b) => b.noPct - a.noPct);
     if (sort === "total_desc") return r.sort((a, b) => b.drepVoters - a.drepVoters);
     if (sort === "budget") return r.sort((a, b) => (b.budget ?? 0) - (a.budget ?? 0));
@@ -4100,8 +4131,8 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     return r;
   }, [rows, sort]);
 
-  const passingCount = rows.filter(r => r.totalVP > 0 && r.passing).length;
-  const totalDrepVoters = rows.length ? Math.max(...rows.map(r => r.drepVoters)) : 0;
+  const passingCount = rows.filter(r => r.passing).length;
+  const totalBallotVoters = rows[0]?.totalBallotVoters ?? 0;
 
   return (
     <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
@@ -4151,8 +4182,8 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
           }}>
             {[
               ["Proposals", rows.length],
-              ["Currently Passing (Yes > No VP)", passingCount],
-              ["Peak DRep Voters", totalDrepVoters || "—"],
+              ["Currently Passing (>51% eff. stake)", passingCount],
+              ["DReps Participated", totalBallotVoters || "—"],
             ].map(([label, value]) => (
               <div key={label} style={{
                 background: "var(--panel)", border: "1px solid var(--line)",
@@ -4191,7 +4222,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                         {formatAda(row.budget)}
                       </span>
                     )}
-                    {row.totalVP > 0 && row.passing && (
+                    {row.totalBallotVP > 0 && row.passing && (
                       <span style={{
                         fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
                         background: "color-mix(in srgb, var(--green, #4ade80) 15%, transparent)",
@@ -4199,7 +4230,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                         color: "var(--green, #4ade80)",
                       }}>Passing</span>
                     )}
-                    {row.totalVP > 0 && !row.passing && (
+                    {row.totalBallotVP > 0 && !row.passing && (
                       <span style={{
                         fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20,
                         background: "color-mix(in srgb, var(--red, #f87171) 15%, transparent)",
@@ -4210,33 +4241,52 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                   </div>
                 </div>
 
-                {row.totalVP > 0 ? (
+                {row.totalBallotVP > 0 ? (
                   <>
-                    <div style={{
-                      display: "flex", height: 8, borderRadius: 4, overflow: "hidden",
-                      background: "var(--line)", marginBottom: "0.45rem",
-                    }}>
-                      {row.yesPct > 0 && <div style={{ width: `${row.yesPct}%`, background: "var(--green, #4ade80)" }} />}
-                      {row.noPct > 0 && <div style={{ width: `${row.noPct}%`, background: "var(--red, #f87171)" }} />}
-                      {row.abstainPct > 0 && <div style={{ width: `${row.abstainPct}%`, background: "var(--text-muted)", opacity: 0.4 }} />}
+                    {/* Bar spans full ballot VP. Segments: Yes | No | Abstain | non-voters (implicit no space) */}
+                    <div style={{ position: "relative", marginBottom: "0.45rem" }}>
+                      <div style={{
+                        display: "flex", height: 8, borderRadius: 4, overflow: "hidden",
+                        background: "color-mix(in srgb, var(--text-muted) 12%, transparent)",
+                      }}>
+                        {row.yesPct > 0 && <div style={{ width: `${row.yesPct}%`, background: "var(--green, #4ade80)", flexShrink: 0 }} />}
+                        {row.noPct > 0 && <div style={{ width: `${row.noPct}%`, background: "var(--red, #f87171)", flexShrink: 0 }} />}
+                        {row.abstainPct > 0 && <div style={{ width: `${row.abstainPct}%`, background: "var(--text-muted)", opacity: 0.35, flexShrink: 0 }} />}
+                        {/* noVotePct segment stays as background (transparent) */}
+                      </div>
+                      {/* 51% threshold marker on effective stake axis */}
+                      {row.effectiveVP > 0 && (() => {
+                        const markerAt = (row.effectiveVP / row.totalBallotVP) * 51;
+                        return (
+                          <div style={{
+                            position: "absolute", top: 0, bottom: 0,
+                            left: `${markerAt}%`,
+                            width: 2, background: "var(--text)", opacity: 0.35,
+                            borderRadius: 1,
+                          }} title="51% of effective stake threshold" />
+                        );
+                      })()}
                     </div>
-                    <div style={{ display: "flex", gap: "1rem", fontSize: "0.74rem", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: "1rem", fontSize: "0.74rem", flexWrap: "wrap", alignItems: "baseline" }}>
                       <span style={{ color: "var(--green, #4ade80)", fontWeight: 600 }}>
-                        Yes {row.yesPct.toFixed(1)}%{" "}
+                        Yes {row.yesEffectivePct.toFixed(1)}%{" "}
                         <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.yesCount})</span>
                       </span>
                       <span style={{ color: "var(--red, #f87171)", fontWeight: 600 }}>
-                        No {row.noPct.toFixed(1)}%{" "}
-                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.noCount})</span>
+                        No <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.noCount})</span>
                       </span>
-                      <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>
-                        Abstain {row.abstainPct.toFixed(1)}%{" "}
-                        <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.abstainCount})</span>
-                      </span>
+                      {row.abstainCount > 0 && (
+                        <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>
+                          Abstain <span style={{ fontWeight: 400, opacity: 0.7 }}>({row.abstainCount})</span>
+                        </span>
+                      )}
                       <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>
-                        {row.drepVoters} DRep{row.drepVoters !== 1 ? "s" : ""}
+                        {row.drepVoters}/{row.totalBallotVoters} DReps voted
                       </span>
                     </div>
+                    <p style={{ margin: "0.3rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                      % shown against effective stake (total ballot VP − abstain). Bar spans all {row.totalBallotVoters} participating DReps; grey = no vote on this question.
+                    </p>
                   </>
                 ) : (
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>No votes recorded yet</p>
