@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Critical Governance Health Assessment — Cardano DRep Intelligence Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
+    .card { background-color: #1a1f2e; }
+    .card-inner { background-color: #141926; }
+    .border-subtle { border-color: #2d3548; }
+    .text-muted { color: #8892a4; }
+    .risk-critical { background-color: rgba(220, 38, 38, 0.15); border-color: #dc2626; }
+    .risk-high { background-color: rgba(234, 88, 12, 0.15); border-color: #ea580c; }
+    .risk-medium { background-color: rgba(202, 138, 4, 0.15); border-color: #ca8a04; }
+    .risk-low { background-color: rgba(22, 163, 74, 0.15); border-color: #16a34a; }
+    .badge-critical { background-color: #dc2626; color: #fff; }
+    .badge-high { background-color: #ea580c; color: #fff; }
+    .badge-medium { background-color: #ca8a04; color: #fff; }
+    .badge-low { background-color: #16a34a; color: #fff; }
+    .badge-unmitigated { background-color: #7f1d1d; color: #fca5a5; }
+    .badge-partial { background-color: #78350f; color: #fde68a; }
+    .badge-emerging { background-color: #1e3a5f; color: #93c5fd; }
+    .callout-red { background-color: rgba(127, 29, 29, 0.25); border-left: 4px solid #dc2626; }
+    .callout-amber { background-color: rgba(120, 53, 15, 0.25); border-left: 4px solid #d97706; }
+    .callout-green { background-color: rgba(6, 78, 59, 0.25); border-left: 4px solid #10b981; }
+    .callout-blue { background-color: rgba(30, 58, 138, 0.25); border-left: 4px solid #3b82f6; }
+    blockquote { border-left: 3px solid #4a5568; padding-left: 1rem; color: #94a3b8; font-style: italic; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background-color: #111827; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    th, td { border: 1px solid #2d3548; padding: 0.75rem 1rem; vertical-align: top; }
+    tr:nth-child(even) td { background-color: rgba(255,255,255,0.02); }
+    .matrix-cell { text-align: center; font-size: 0.7rem; font-weight: 700; padding: 0.4rem; }
+    .matrix-high-high { background-color: rgba(220,38,38,0.6); }
+    .matrix-high-med { background-color: rgba(234,88,12,0.5); }
+    .matrix-med-high { background-color: rgba(234,88,12,0.5); }
+    .matrix-med-med { background-color: rgba(202,138,4,0.4); }
+    .matrix-low-any { background-color: rgba(22,163,74,0.3); }
+    .matrix-any-low { background-color: rgba(22,163,74,0.3); }
+    .matrix-header { background-color: #1f2a3c; color: #64748b; font-size: 0.65rem; text-align: center; padding: 0.4rem; }
+  </style>
+</head>
+<body>
+
+<section data-section="critical" class="max-w-6xl mx-auto px-4 py-12">
+
+  <!-- ═══════════════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-10">
+    <div class="flex items-center gap-3 mb-3">
+      <span class="text-xs font-mono text-red-400 uppercase tracking-widest border border-red-800 px-2 py-0.5 rounded">Critical Assessment</span>
+      <span class="text-xs text-muted">Cardano DRep Intelligence Report · Epoch 507–632</span>
+    </div>
+    <h1 class="text-4xl font-bold text-white mb-2 leading-tight">
+      Governance Health Assessment
+    </h1>
+    <p class="text-xl text-muted max-w-3xl leading-relaxed">
+      A rigorous audit of structural vulnerabilities, systemic risks, and genuine achievements in Cardano's post-Chang governance era. This section presents findings without institutional deference — the data speaks directly.
+    </p>
+    <div class="mt-5 flex flex-wrap gap-4 text-sm">
+      <div class="card border border-subtle rounded px-4 py-2">
+        <span class="text-muted">Actions Analyzed</span>
+        <span class="ml-2 font-bold text-white">118</span>
+      </div>
+      <div class="card border border-subtle rounded px-4 py-2">
+        <span class="text-muted">Epoch Span</span>
+        <span class="ml-2 font-bold text-white">507 – 632</span>
+      </div>
+      <div class="card border border-subtle rounded px-4 py-2">
+        <span class="text-muted">ADA Approved</span>
+        <span class="ml-2 font-bold text-red-400">≥ ₳356.7M</span>
+      </div>
+      <div class="card border border-subtle rounded px-4 py-2">
+        <span class="text-muted">Info Action Pass Rate</span>
+        <span class="ml-2 font-bold text-red-400">0.0%</span>
+      </div>
+      <div class="card border border-subtle rounded px-4 py-2">
+        <span class="text-muted">Risks Identified</span>
+        <span class="ml-2 font-bold text-amber-400">10</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 1: EXECUTIVE RISK REGISTER
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-red-600 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">1. Executive Risk Register</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">Ten structural risks identified from the 118-action dataset. Severity is independent of likelihood — it reflects potential governance damage if the risk materializes unchecked.</p>
+
+    <!-- Risk matrix visual -->
+    <div class="card border border-subtle rounded-xl p-5 mb-6">
+      <h3 class="text-sm font-semibold text-muted uppercase tracking-widest mb-4">Risk Heat Matrix</h3>
+      <div class="overflow-x-auto">
+        <table style="width:auto; min-width:500px;" class="text-xs">
+          <thead>
+            <tr>
+              <th class="matrix-header" style="width:100px;">Impact →<br/>Likelihood ↓</th>
+              <th class="matrix-header">Low Impact</th>
+              <th class="matrix-header">Medium Impact</th>
+              <th class="matrix-header">High Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="matrix-header font-semibold">High Likelihood</td>
+              <td class="matrix-cell matrix-any-low">—</td>
+              <td class="matrix-cell matrix-high-med text-white">
+                Rationale Quality Decay<br/>
+                <span class="opacity-70">NCL Dysfunction</span>
+              </td>
+              <td class="matrix-cell matrix-high-high text-white">
+                Discourse Concentration<br/>
+                Founding Entity Capture<br/>
+                Off-chain Dependency
+              </td>
+            </tr>
+            <tr>
+              <td class="matrix-header font-semibold">Medium Likelihood</td>
+              <td class="matrix-cell matrix-any-low">—</td>
+              <td class="matrix-cell matrix-med-med text-yellow-200">
+                Geographic Concentration<br/>
+                Constitutional Gaps
+              </td>
+              <td class="matrix-cell matrix-med-high text-orange-200">
+                Info Action Dysfunction<br/>
+                Institutional DRep Influence<br/>
+                Treasury Depletion
+              </td>
+            </tr>
+            <tr>
+              <td class="matrix-header font-semibold">Low Likelihood</td>
+              <td class="matrix-cell matrix-any-low text-green-200">—</td>
+              <td class="matrix-cell matrix-low-any text-green-200">—</td>
+              <td class="matrix-cell matrix-low-any text-green-200">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Risk Register Table -->
+    <div class="overflow-x-auto rounded-xl border border-subtle">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:20%">Risk</th>
+            <th style="width:10%">Category</th>
+            <th style="width:8%">Severity</th>
+            <th style="width:42%">Evidence from Dataset</th>
+            <th style="width:20%">Mitigation Status</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- R1: Discourse Concentration -->
+          <tr>
+            <td class="font-semibold text-white">
+              Discourse Concentration
+              <div class="text-xs text-muted font-normal mt-1">Fewer than 10 DReps performing most substantive intellectual work</div>
+            </td>
+            <td><span class="text-xs text-purple-300">Participation</span></td>
+            <td><span class="badge-critical text-xs font-bold px-2 py-0.5 rounded">CRITICAL</span></td>
+            <td class="text-sm">
+              Agent 4 explicitly identifies <strong class="text-white">fewer than 10 DReps</strong> who write substantive, data-referenced analyses. The high-quality cohort (YUTA, InputEndorsers, jonahkoch, Cardano Foundation, CardanoYoda, SIPO, HOSKY, Cerkoryn) is contrasted with a "larger tail" of process-enabling 1–3 sentence rationales. This means the intellectual work of governance — identifying risks, challenging proposals, setting standards — is concentrated in a handful of actors even though <em>voting power</em> is more distributed. If three of these DReps went inactive, the analytical quality of the entire system would collapse.
+            </td>
+            <td>
+              <span class="badge-unmitigated text-xs font-bold px-2 py-0.5 rounded block mb-1">UNMITIGATED</span>
+              <div class="text-xs text-muted">No structural incentive for high-quality rationales. No minimum-quality standard. Mimicking discourse quality of a few trusted DReps is available but not required.</div>
+            </td>
+          </tr>
+
+          <!-- R2: Info Action Dysfunction -->
+          <tr>
+            <td class="font-semibold text-white">
+              Info Action Dysfunction
+              <div class="text-xs text-muted font-normal mt-1">0% pass rate destroys the non-binding signaling layer</div>
+            </td>
+            <td><span class="text-xs text-yellow-300">Protocol Design</span></td>
+            <td><span class="badge-critical text-xs font-bold px-2 py-0.5 rounded">CRITICAL</span></td>
+            <td class="text-sm">
+              All <strong class="text-white">23 Info actions failed</strong> (0% pass rate). This is not a bug — DReps deliberately refuse to ratify them — but it creates a dysfunctional system. The budget process framework passed <em>as actual treasury withdrawals</em> before being formally ratified as a framework. The Plomin rename "failed" as an Info action but the name was adopted anyway via the actual hard fork. NCLs were set as Info actions that all formally failed, yet the NCL values were effectively enforced through withdrawal approvals. The result: Info actions are governance theater, the mechanism intended to enable non-binding community signaling <strong class="text-white">cannot signal anything formally</strong>.
+            </td>
+            <td>
+              <span class="badge-unmitigated text-xs font-bold px-2 py-0.5 rounded block mb-1">UNMITIGATED</span>
+              <div class="text-xs text-muted">Constitution v2.4 removed Budget Info Action requirement, acknowledging the dysfunction. But the broader Info action category remains broken. No threshold reform proposed.</div>
+            </td>
+          </tr>
+
+          <!-- R3: Institutional DRep Outsized Influence -->
+          <tr>
+            <td class="font-semibold text-white">
+              Institutional DRep Structural Advantage
+              <div class="text-xs text-muted font-normal mt-1">CF, EMURGO, Intersect have asymmetric access and bandwidth</div>
+            </td>
+            <td><span class="text-xs text-orange-300">Governance Capture</span></td>
+            <td><span class="badge-high text-xs font-bold px-2 py-0.5 rounded">HIGH</span></td>
+            <td class="text-sm">
+              GAIA estimates EMURGO controls <strong class="text-white">~16% of all governance voting power</strong> through EMURGO + YOROI combined. CF controls ~4.22%. InputEndorsers documented that "large institutional DReps with Intersect presence have structural participation advantages over small DReps" — they have advance warning of proposals, staff capacity to evaluate 194+ proposals per cycle, and seats on the Oversight Committee. CF simultaneously sits on the Intersect Oversight Committee <em>and</em> votes on Intersect's budget request. EMURGO submitted the Cardano Summit 2026 and simultaneously voted. The founding entities are both proposers and voters across the same financial requests.
+            </td>
+            <td>
+              <span class="badge-partial text-xs font-bold px-2 py-0.5 rounded block mb-1">PARTIALLY ACKNOWLEDGED</span>
+              <div class="text-xs text-muted">CF and HOSKY have demonstrated conflict-of-interest recusals (CC compensation). But no structural prohibition exists. Disclosures are voluntary. EMURGO's Yoroi DRep delegation incident prompted InputEndorsers' standing NO on all EMURGO proposals — a workaround, not a fix.</div>
+            </td>
+          </tr>
+
+          <!-- R4: NCL as Governance Bottleneck -->
+          <tr>
+            <td class="font-semibold text-white">
+              NCL as Governance Bottleneck
+              <div class="text-xs text-muted font-normal mt-1">Net Change Limit debates consume disproportionate attention while delivering limited constraint</div>
+            </td>
+            <td><span class="text-xs text-blue-300">Process Efficiency</span></td>
+            <td><span class="badge-medium text-xs font-bold px-2 py-0.5 rounded">MEDIUM</span></td>
+            <td class="text-sm">
+              Seven separate NCL-related governance actions were submitted across epochs 546–613. <em>Every single one failed</em> as an Info action. Yet NCL values were functionally enforced through individual withdrawal votes. InputEndorsers explicitly identified this as <strong class="text-white">"performative theater mandated by the constitution"</strong> — noting the NCL has been revised at will when majorities wanted different limits. The December 2025 CC retirement stalled governance in part because of NCL sequencing concerns. Multiple DRep hours were consumed on NCL debates that produced no durable constraint on spending (96.3% of quantified ADA requests were approved regardless of NCL level).
+            </td>
+            <td>
+              <span class="badge-partial text-xs font-bold px-2 py-0.5 rounded block mb-1">PARTIALLY ADDRESSED</span>
+              <div class="text-xs text-muted">Constitution v2.4 clarified NCL processes. But the fundamental constitutional requirement for NCL before withdrawals — with no binding mechanism — remains. The debate will recur every budget cycle.</div>
+            </td>
+          </tr>
+
+          <!-- R5: Rationale Quality Decay -->
+          <tr>
+            <td class="font-semibold text-white">
+              Rationale Quality Decay
+              <div class="text-xs text-muted font-normal mt-1">Spread of 1–3 sentence rationales signals delegator disengagement from accountability</div>
+            </td>
+            <td><span class="text-xs text-purple-300">Participation</span></td>
+            <td><span class="badge-high text-xs font-bold px-2 py-0.5 rounded">HIGH</span></td>
+            <td class="text-sm">
+              DReps like CaFi ("There should be no further delay. We fully support Intersect.") and AdaStat operate as rubber-stamp voters. The dataset identifies a "low quality" tier: 1–3 sentence rationales, no external data, process-enabling statements only. Against 37 simultaneous budget proposals in epoch 570, many DReps voted on ₳271M of treasury commitments with rationales shorter than a tweet. This matters because delegators chose their DRep based on the expectation of considered judgment — when the rationale is a sentence, delegators have no basis to evaluate whether their DRep read the proposal, let alone analyzed it. It also means the governance record will be useless for accountability audits.
+            </td>
+            <td>
+              <span class="badge-unmitigated text-xs font-bold px-2 py-0.5 rounded block mb-1">UNMITIGATED</span>
+              <div class="text-xs text-muted">No minimum rationale length or quality requirement exists. Gov.tools reportedly has a 500-character limit that truncates rationales. The system structurally tolerates low-effort participation.</div>
+            </td>
+          </tr>
+
+          <!-- R6: Constitutional Interpretation Gaps -->
+          <tr>
+            <td class="font-semibold text-white">
+              Constitutional Interpretation Gaps
+              <div class="text-xs text-muted font-normal mt-1">Ambiguous clauses generate recurring disputes and governance stall</div>
+            </td>
+            <td><span class="text-xs text-yellow-300">Constitutional</span></td>
+            <td><span class="badge-medium text-xs font-bold px-2 py-0.5 rounded">MEDIUM</span></td>
+            <td class="text-sm">
+              The "Ada Holder" vs "Ada Owner" terminology debate consumed an entire constitution amendment cycle — v2.3 and v2.4 differ on this single term, with EMURGO's flip from NO to YES contingent on reversion to "Ada Owner." The CC size reduction proposal failed partly due to a "root-reference technical conflict." The Christina CC addition failed partly because the constitution doesn't clearly permit expanding beyond replacement. The NC limit mechanism has been interpreted differently by CF (empirical inflows), Cerkoryn (strategic spending), and InputEndorsers (irrelevant). These are not edge cases — they are <strong class="text-white">recurring interpretive conflicts on core governance mechanics</strong>.
+            </td>
+            <td>
+              <span class="badge-partial text-xs font-bold px-2 py-0.5 rounded block mb-1">ITERATIVELY IMPROVING</span>
+              <div class="text-xs text-muted">v2.4 addressed several ambiguities. YUTA's responsive authorship model has handled most. But YUTA holds an informal role with no constitutional basis — creating a single point of failure for constitutional maintenance.</div>
+            </td>
+          </tr>
+
+          <!-- R7: Treasury Depletion Velocity -->
+          <tr>
+            <td class="font-semibold text-white">
+              Treasury Depletion Velocity
+              <div class="text-xs text-muted font-normal mt-1">₳356M+ approved across ~125 epochs; reserves declining, emissions declining</div>
+            </td>
+            <td><span class="text-xs text-red-300">Fiscal Sustainability</span></td>
+            <td><span class="badge-high text-xs font-bold px-2 py-0.5 rounded">HIGH</span></td>
+            <td class="text-sm">
+              The dataset shows <strong class="text-white">₳356.7M approved</strong> in roughly 24 months, with 38 additional proposals pending with unknown amounts. The epoch 570 batch alone disbursed ~₳271M. Cerkoryn warned of "dwindling reserve" in NCL debates with ADA at $0.33, limiting real-world USD leverage. $brock flagged that the treasury will hold ~4% of circulating supply, arguing 1% is more appropriate. The 96.3% approval rate for quantified ADA requests suggests the system has no effective fiscal brake — GAIA and TriangleForces applied personal NCL thresholds but were in the minority. No multi-year treasury projection was completed before approving the ₳96.8M IO withdrawal (CF demanded one; was overridden by the majority).
+            </td>
+            <td>
+              <span class="badge-unmitigated text-xs font-bold px-2 py-0.5 rounded block mb-1">STRUCTURALLY UNADDRESSED</span>
+              <div class="text-xs text-muted">CF's demand for 5-year projections and bear market modeling was rejected. The 2026 budget cycle has a second wave of 35 pending proposals. No treasury sustainability framework exists beyond voluntary DRep personal NCL thresholds.</div>
+            </td>
+          </tr>
+
+          <!-- R8: Founding Entity Governance Capture -->
+          <tr>
+            <td class="font-semibold text-white">
+              Founding Entity Dual Role
+              <div class="text-xs text-muted font-normal mt-1">IO, CF, EMURGO are simultaneously proposers and voters</div>
+            </td>
+            <td><span class="text-xs text-orange-300">Governance Capture</span></td>
+            <td><span class="badge-critical text-xs font-bold px-2 py-0.5 rounded">CRITICAL</span></td>
+            <td class="text-sm">
+              GAIA's analysis is blunt: <em>"The Cardano Foundation and EMURGO should be using genesis ADA to pay for building Cardano, not exploiting the treasury every week or two."</em> IO submitted ₳96.8M engineering + ₳69.5M Catalyst + ₳26.8M research = <strong class="text-white">₳193.1M in year one</strong>, all from an entity that was itself the original chain architect. CF, despite being on the Intersect Oversight Committee, voted on Intersect's ₳15.75M budget request. EMURGO submitted Cardano Summit 2026, voted on it, and had its Yoroi wallet UI route users to delegate governance power to EMURGO itself (prompting a standing NO vote from InputEndorsers). The three founding entities collectively still control disproportionate governance voting power while simultaneously being the primary treasury beneficiaries.
+            </td>
+            <td>
+              <span class="badge-unmitigated text-xs font-bold px-2 py-0.5 rounded block mb-1">STRUCTURALLY UNADDRESSED</span>
+              <div class="text-xs text-muted">No formal prohibition on self-dealing exists. CF voluntarily disclosed the Draper Dragon COI. HOSKY voluntarily abstained on CC compensation. These are individual acts of integrity, not institutional safeguards. The constitution contains no recusal requirements.</div>
+            </td>
+          </tr>
+
+          <!-- R9: Off-chain Dependency -->
+          <tr>
+            <td class="font-semibold text-white">
+              Off-Chain Process Dependency
+              <div class="text-xs text-muted font-normal mt-1">Critical governance functions rely on unenforceable off-chain entities</div>
+            </td>
+            <td><span class="text-xs text-blue-300">Process Design</span></td>
+            <td><span class="badge-high text-xs font-bold px-2 py-0.5 rounded">HIGH</span></td>
+            <td class="text-sm">
+              The Intersect budget process uses <strong class="text-white">Ekklesia</strong> for off-chain voting — but InputEndorsers documented that Ekklesia's thresholds, duration, and counting methodology were unspecified and left to Intersect's interpretive discretion. Dave explicitly voted NO on the 275M budget due to "unverifiable off-chain metrics." The 3.8B ADA voting stake participation claim cited in the 275M budget cannot be independently verified on-chain. Constitutional amendment processes (v2.0–v2.4) relied on YUTA as an informal maintainer with no constitutional basis. The CC election relied on Intersect running the process. GAIA noted that <em>no competing constitution could be submitted on gov.tools at the time</em> — a deliberate architectural choice.
+            </td>
+            <td>
+              <span class="badge-partial text-xs font-bold px-2 py-0.5 rounded block mb-1">PARTIALLY ACKNOWLEDGED</span>
+              <div class="text-xs text-muted">Budget Process Framework was rejected as an Info action (epoch 616), yet the process it described was already applied. The 2026 budget cycle specifications remain subject to Intersect's interpretation. On-chain enforceability of off-chain votes is structurally impossible under current architecture.</div>
+            </td>
+          </tr>
+
+          <!-- R10: Geographic Concentration -->
+          <tr>
+            <td class="font-semibold text-white">
+              Geographic Concentration
+              <div class="text-xs text-muted font-normal mt-1">Japanese DRep community disproportionately active; Africa at &lt;2% representation</div>
+            </td>
+            <td><span class="text-xs text-green-300">Representation</span></td>
+            <td><span class="badge-medium text-xs font-bold px-2 py-0.5 rounded">MEDIUM</span></td>
+            <td class="text-sm">
+              The Japanese DRep community (YUTA, SIPO, BWtake, SASA, AKYO, hix_coffeepool) is <strong class="text-white">disproportionately represented</strong> among high-quality governance participants — constituting 5–6 of the ~10 active analytical DReps. YUTA attends TEAMZ events in Japan and cites firsthand observations in rationales. Meanwhile, GAIA and Kostas Panagias separately noted that <strong class="text-white">Africa has less than 2% governance representation</strong> despite Cardano's stated Africa strategy. Wada DRep is the only explicitly pan-African governance voice in the sampled data. The 500 ADA DRep deposit was identified as excluding participants from developing economies. The 100,000 ADA governance action deposit was flagged as prohibitive without pooling tools.
+            </td>
+            <td>
+              <span class="badge-partial text-xs font-bold px-2 py-0.5 rounded block mb-1">DISCUSSED, NOT ADDRESSED</span>
+              <div class="text-xs text-muted">Multiple DReps raised the deposit barrier. No constitution amendment to lower it has been enacted. Wada DRep runs grassroots workshops. The structural participation gap remains encoded in the deposit requirements.</div>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 2: WHAT'S WORKING WELL
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-emerald-600 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">2. What Is Working Well</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">Honest assessment of genuine governance achievements — areas where the data shows the system functioning as designed or better than designed.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">Iterative Constitution Improvement</h3>
+        <p class="text-sm text-slate-300 mb-3">The constitution evolved from ratification (epoch 542) to v2.4 (epoch 609) in 67 epochs, with four drafts, two failures, and one successful amendment. Each version addressed the specific criticisms of the prior one — YUTA's responsive authorship model and EMURGO's v2.3→v2.4 flip demonstrate that targeted concessions can unlock consensus. The community produced a working living document.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Constitution ratified 4 epochs after submission (epoch 537→541). v2.4 passed with broad YES including EMURGO reversal.</div>
+      </div>
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">DRep Feedback as Reform Pressure</h3>
+        <p class="text-sm text-slate-300 mb-3">NO votes function as reform pressure, not just blocking. InputEndorsers documented this explicitly regarding Intersect: the organization was forced to reduce its ask from ₳20M to ₳15.75M, cut bundled proposals into individual submissions, and change leadership — all in direct response to DRep rejection. The Snek grant failures drove the ₳5M loan structure that ultimately passed. Proposal iteration demonstrably works.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Intersect 20M→15.75M reduction; Snek grant failed×2, loan succeeded; DeFi liquidity v1 failed (85% NO), v2 staged version passed (55% YES).</div>
+      </div>
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">Governance Crisis Resilience</h3>
+        <p class="text-sm text-slate-300 mb-3">The system has navigated multiple crises without collapsing: a December 2025 CC member retirement halted governance temporarily; the NCL mid-cycle revision debate was resolved; the Christina CC addition controversy produced a failed vote but no governance paralysis; competing NCL proposals were handled through parallel voting rather than deadlock. Each crisis produced a governance response that revealed protocol gaps, which were then addressed.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Replace Interim CC (epoch 573), Add CC member (epoch 599), CC size reduction debate (epoch 612), all resolved through governance action without chain halt.</div>
+      </div>
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">Founding Entity Power Transition</h3>
+        <p class="text-sm text-slate-300 mb-3">The three founding entities (IO, CF, EMURGO) transitioned from controlling the Constitutional Committee to participating as DReps alongside the community. Their positions genuinely diverge — CF and EMURGO sometimes vote against each other and against IO positions. EMURGO voted NO on v2.3 while CF voted YES; CF abstained on IO Engineering while most DReps voted YES. This is genuine pluralism, not coordinated block voting. The interim CC replacement passed near-unanimously.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Replace Interim CC at epoch 573 was described as near-unanimous. CF's IO Engineering abstain contrasted with EMURGO's YES. EMURGO's v2.3 NO while CF voted YES.</div>
+      </div>
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">Data Integrity Norm Enforcement</h3>
+        <p class="text-sm text-slate-300 mb-3">The very first governance action (HOSKY Hard Fork, epoch 507) was rejected primarily because external metadata was missing from gov.tools. GAIA and InputEndorsers explicitly cited data integrity grounds. This established an immediate, durable norm: proposals must meet minimum data standards regardless of who submits them or how beloved the cause. The subsequent parameter change failure (epoch 518, unnamed proposal) for lack of transparency reinforced it.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: HOSKY Hard Fork — "couldn't read the proposal." Unnamed parameter change (gov_action1286ft...) failed for opacity. GAIA cited Article IV §3-5 on multiple proposals.</div>
+      </div>
+
+      <div class="callout-green rounded-xl p-5">
+        <h3 class="font-bold text-emerald-300 mb-2">High-Quality Analytical Cohort</h3>
+        <p class="text-sm text-slate-300 mb-3">Despite the concentration risk, the quality ceiling of Cardano DRep analysis is genuinely high. YUTA's Summit 2026 NO vote cited specific on-chain transaction data (99% retail usage, zero identifiable enterprise transactions at epoch 622). SIPO compared Cardano's governance to Polkadot OpenGov and Cosmos. jonahkoch conducted institutional-grade analysis of Draper Dragon's waterfall mechanics. Cerkoryn tracked tau parameter history to Shelley launch. This is governance discourse of a quality rare in any public institution.</p>
+        <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: YUTA adatool.net citation; SIPO cross-chain comparison; jonahkoch fund waterfall analysis; Cerkoryn historical parameter research cited in Constitution and NCL rationales.</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 3: STRUCTURAL TENSIONS
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-amber-500 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">3. Structural Tensions</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">Three unresolved tensions that cannot be "fixed" — they are inherent to the design choices Cardano has made. Understanding them is the prerequisite to managing them.</p>
+
+    <!-- Tension 1 -->
+    <div class="card border border-subtle rounded-xl p-6 mb-5">
+      <div class="flex items-start gap-4">
+        <div class="shrink-0 w-10 h-10 rounded-full bg-amber-900 border border-amber-600 flex items-center justify-center text-amber-300 font-bold text-lg">I</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-white mb-1">Decentralization vs. Organizational Efficiency</h3>
+          <div class="text-xs text-amber-400 uppercase tracking-wider mb-3">The Coordination Paradox</div>
+
+          <p class="text-sm text-slate-300 mb-4">
+            Cardano's governance requires that <em>no single entity can dominate</em>, yet the governance system has proven unable to function without Intersect as a coordinating hub. The epoch 570 batch of 37 proposals — 31% of all governance history — was coordinated, socialized, and submitted through Intersect. Without Intersect, individual proposal submission would have required each project team to independently navigate the 100,000 ADA deposit, secure enough DRep attention for a standalone vote, and survive without the pre-approval signal of the Ekklesia process.
+          </p>
+
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="card-inner rounded-lg p-3 border border-subtle">
+              <div class="text-xs font-bold text-red-400 mb-1 uppercase">The Decentralization Case</div>
+              <p class="text-xs text-slate-400">GAIA: "Intersect wants to operate as an MBO with all the benefits of being an MBO, but then they want to be completely community funded. You cannot have this both ways." TriangleForces: "The governance and oversight model remains heavily centralized around Intersect's leadership." Dave rejected the 275M budget because it relied on "unverifiable off-chain metrics" from Ekklesia.</p>
+            </div>
+            <div class="card-inner rounded-lg p-3 border border-subtle">
+              <div class="text-xs font-bold text-emerald-400 mb-1 uppercase">The Efficiency Case</div>
+              <p class="text-xs text-slate-400">InputEndorsers, despite being a NO on the budget process, praised Intersect's evolution: "A lot of proposals are now dependent on the presence of a rational and functional administrator... Intersect cut the treasury withdrawal from the massive 20M ADA." Without Intersect, the 2025 budget cycle would likely not have produced 43 approved projects.</p>
+            </div>
+          </div>
+
+          <div class="callout-amber rounded p-3">
+            <p class="text-sm font-semibold text-amber-200">The Unresolved Core:</p>
+            <p class="text-sm text-slate-300 mt-1">The tension cannot be resolved while Intersect controls both the administrative pipeline <em>and</em> the interpretive discretion over off-chain processes. The CF's call for a shift from "vendor-led" to "purpose-led" budgeting points toward a structural solution — but requires removing Intersect's ability to define what counts as a qualifying proposal, which requires replacing Intersect's role with on-chain tooling that doesn't yet exist.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tension 2 -->
+    <div class="card border border-subtle rounded-xl p-6 mb-5">
+      <div class="flex items-start gap-4">
+        <div class="shrink-0 w-10 h-10 rounded-full bg-amber-900 border border-amber-600 flex items-center justify-center text-amber-300 font-bold text-lg">II</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-white mb-1">Constitutional Purity vs. Pragmatic Progress</h3>
+          <div class="text-xs text-amber-400 uppercase tracking-wider mb-3">The "Good Enough" Doctrine</div>
+
+          <p class="text-sm text-slate-300 mb-4">
+            The dominant governance philosophy in the dataset is what InputEndorsers called "a snapshot in time of an ephemeral consensus" — constitutions are provisional, amendable, and sufficient for moving forward. The Chilean delegate's real-world observation ("seeking perfection left us stuck with the old one") has been internalized by the majority. But this pragmatism has costs.
+          </p>
+
+          <p class="text-sm text-slate-300 mb-4">
+            The Budget Process Framework was applied (epoch 570, ₳271M disbursed) before it was formally ratified — and when it was submitted for formal ratification as an Info action at epoch 616, it <em>failed</em>. The governance process that unlocked the largest single treasury disbursement in Cardano history <strong class="text-white">has never been formally ratified</strong>. The rationale that this is fine — because individual withdrawals all cleared the 67% threshold — is internally consistent, but it means the community has committed to a budget methodology without ever formally endorsing that methodology.
+          </p>
+
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="card-inner rounded-lg p-3 border border-subtle">
+              <div class="text-xs font-bold text-red-400 mb-1 uppercase">The Purity Risk</div>
+              <p class="text-xs text-slate-400">GAIA: "A significant amount of proposals that were successfully passed did not meet the on-chain threshold of 2.69B ADA. Omnibus budgets are the only way skewed results like this are able to circumvent intended on-chain guardrails." The 275M budget passed with ~60% support — the individual proposals inside it, if voted separately, might have achieved different outcomes.</p>
+            </div>
+            <div class="card-inner rounded-lg p-3 border border-subtle">
+              <div class="text-xs font-bold text-emerald-400 mb-1 uppercase">The Progress Imperative</div>
+              <p class="text-xs text-slate-400">CF voted YES on the 275M budget "despite our significant reservations" because "the crucial step of establishing a budget is taken." The alternative — waiting for process perfection — would have blocked all 2025 treasury funding. In practice, the pragmatic majority enabled 43 infrastructure projects to receive funding.</p>
+            </div>
+          </div>
+
+          <div class="callout-amber rounded p-3">
+            <p class="text-sm font-semibold text-amber-200">The Unresolved Core:</p>
+            <p class="text-sm text-slate-300 mt-1">Governance is accumulating precedent faster than it is encoding principles. Each "pragmatic YES" under imperfect conditions sets a precedent that can be cited to justify the next imperfect proposal. The community has not yet drawn a line on what constitutes a <em>process failure serious enough to vote NO despite agreeing with the substance</em>. InputEndorsers drew such a line (NO on 275M budget, NO on Budget Process Framework). Most did not.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tension 3 -->
+    <div class="card border border-subtle rounded-xl p-6 mb-5">
+      <div class="flex items-start gap-4">
+        <div class="shrink-0 w-10 h-10 rounded-full bg-amber-900 border border-amber-600 flex items-center justify-center text-amber-300 font-bold text-lg">III</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-white mb-1">Small DRep Participation vs. Deep DRep Engagement</h3>
+          <div class="text-xs text-amber-400 uppercase tracking-wider mb-3">The Cognitive Load Trap</div>
+
+          <p class="text-sm text-slate-300 mb-4">
+            SIPO "experienced firsthand the challenges of reviewing 194 proposals in inconsistent formats." The epoch 570 batch submitted 37 proposals simultaneously. Any DRep who attempted genuine analysis of all 37 would have needed to evaluate ₳271M of treasury commitments in roughly 7 epochs (5 weeks). The cognitive load is not compatible with small-DRep participation: part-time governance participants, DReps from time zones without overlap with European working hours, or DReps without institutional staff support cannot match the analytical output of CF's professional governance team or the Japanese DRep community's organized network.
+          </p>
+
+          <p class="text-sm text-slate-300 mb-4">
+            The result is a <strong class="text-white">two-tier system</strong>: the ~10 DReps who do deep analysis set the intellectual frame for a proposal; the remaining DReps largely follow that frame without conducting independent analysis. This isn't irrational — Kostas Panagias explicitly states he reads other DReps' rationales before forming opinions, and describes this as epistemically appropriate. But it creates a dependency on the analytical tier that is itself undiversified.
+          </p>
+
+          <div class="callout-amber rounded p-3">
+            <p class="text-sm font-semibold text-amber-200">The Unresolved Core:</p>
+            <p class="text-sm text-slate-300 mt-1">Cardano has attempted to solve this through the budget process (pre-filtering via Ekklesia before on-chain votes), which reduces the number of proposals DReps must evaluate. But Ekklesia itself is an off-chain tool controlled by Intersect with unspecified counting methodology. The structural solution — granular proposal submission with mandatory minimum spacing, or RFP-style competitive processes — has been recommended by CF but not enacted. The current system rewards institutional capacity, which means governance will increasingly reflect institutional interests unless structural changes reduce the cognitive load for independent DReps.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 4: PRECEDENT AUDIT
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-blue-500 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">4. Precedent Audit</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">The most consequential governance precedents established by these 118 actions. Some constrain future governance; some opened doors that cannot be closed.</p>
+
+    <div class="grid grid-cols-1 gap-4">
+
+      <!-- Precedent 1 -->
+      <div class="card border border-blue-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P1 · IO Engineering Receives Institutional Trust at Scale</h3>
+          <span class="text-xs badge-high px-2 py-0.5 rounded shrink-0 ml-3">CONSTRAINING</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">The ₳96.8M IO Engineering approval (epoch 574) with ~88% YES established that the founding technical entity can draw from the treasury at nine-figure scale based primarily on institutional trust and track record, rather than itemized deliverables. CF's abstention — the most process-rigorous DRep — failed to alter the outcome. <strong class="text-white">This precedent will be cited in every future large-scale IO request.</strong> Any DRep who now demands itemized breakdowns will face the counterargument that DReps approved ₳96.8M without them in 2025.</p>
+        <div class="text-xs text-muted">Epoch 574 · ₳96,817,080 · 88% YES · CF and Cardanians abstained citing "lack of transparency"</div>
+      </div>
+
+      <!-- Precedent 2 -->
+      <div class="card border border-blue-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P2 · Loan Structures Unlock Grants That Fail as Grants</h3>
+          <span class="text-xs badge-emerging px-2 py-0.5 rounded shrink-0 ml-3">DOOR OPENED</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">The Snek ₳5M loan (epoch 597) succeeded after two direct grant attempts failed, establishing that reframing a disbursement as a recoverable loan can convert a near-unanimous NO into a YES. This precedent <strong class="text-white">created a template for repayable capital requests</strong> that was then extended to Draper Dragon (₳50M VC fund, treasury-first repayment). Future commercial proposals that fail as grants will systematically attempt loan structures — whether or not genuine repayment is realistic.</p>
+        <div class="text-xs text-muted">Snek grants failed epoch 573; Snek loan passed epoch 597; Draper Dragon VC fund passed epoch 623</div>
+      </div>
+
+      <!-- Precedent 3 -->
+      <div class="card border border-blue-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P3 · Constitution Can Be Amended Without In-Person Convention</h3>
+          <span class="text-xs badge-emerging px-2 py-0.5 rounded shrink-0 ml-3">DOOR OPENED</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">v2.0 was authored and submitted by YUTA through asynchronous online process, without a global convention. Despite process objections, it established — and v2.3 and v2.4 reinforced — that constitutional amendments can be community-driven online without physical convention. <strong class="text-white">The Buenos Aires convention model is no longer required precedent for constitutional change.</strong> This lowers the barrier for future amendments, but also removes the legitimacy signal of an in-person convention where delegates had verifiable geographic representation.</p>
+        <div class="text-xs text-muted">v2.0 by YUTA without convention (epoch 574, failed); v2.4 also by YUTA (epoch 601, passed)</div>
+      </div>
+
+      <!-- Precedent 4 -->
+      <div class="card border border-red-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P4 · Omnibus Budget Disbursements Are Constitutionally Viable</h3>
+          <span class="text-xs badge-critical px-2 py-0.5 rounded shrink-0 ml-3">DOOR OPENED — DANGEROUS</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">The 275M budget passed as a single Info action incorporating 39 proposals. GAIA's analysis showed several individual proposals in that bundle "did not meet the on-chain threshold of 2.69B ADA" — but passed because the bundle aggregate did. <strong class="text-white">This precedent proves that bundling can circumvent the intended per-proposal 67% DRep threshold</strong>. Future large-scale actors with multiple proposals will be incentivized to bundle rather than submit individually. Almost every DRep who voted YES on the 275M budget simultaneously criticized the bundling — but the YES vote is the precedent that will be cited.</p>
+        <div class="text-xs text-muted">Epoch 557 Info action · 275M ADA bundle · ~60% YES · CF: "despite our significant reservations"</div>
+      </div>
+
+      <!-- Precedent 5 -->
+      <div class="card border border-blue-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P5 · DeFi Treasury Deployment Is Constitutionally Permissible</h3>
+          <span class="text-xs badge-emerging px-2 py-0.5 rounded shrink-0 ml-3">DOOR OPENED</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">The DeFi Liquidity Budget Withdrawal 1 (epoch 624) and Draper Dragon Orion Fund (epoch 623) established that the Cardano treasury can be deployed as investment capital into commercial DeFi operations and VC funds — not merely as grants for public goods. The near-unanimous rejection of the original 50M DeFi proposal and the successful approval of the staged 800K pilot followed by the ₳50M Draper Dragon <strong class="text-white">demonstrates that the question is not "can the treasury do this" but "under what conditions."</strong> The conditions (treasury-first waterfall, staged disbursement, named governance) are now established baseline expectations.</p>
+        <div class="text-xs text-muted">DeFi v1 original failed (85% NO epoch 556); DeFi Withdrawal 1 passed (55% YES epoch 617); Draper Dragon passed (65% YES epoch 623)</div>
+      </div>
+
+      <!-- Precedent 6 -->
+      <div class="card border border-blue-900 rounded-xl p-5">
+        <div class="flex items-start justify-between mb-2">
+          <h3 class="font-bold text-white">P6 · Process Can Be Used Before It Is Ratified</h3>
+          <span class="text-xs badge-critical px-2 py-0.5 rounded shrink-0 ml-3">CONSTRAINING — SYSTEMIC</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-2">The Budget Process Framework (epoch 616) failed as an Info action — yet the process it described had already governed ₳271M in disbursements at epoch 570. <strong class="text-white">This is perhaps the most structurally significant precedent in the dataset:</strong> off-chain processes controlled by a single entity can govern massive on-chain spending before those processes receive any formal ratification. Any future Intersect-designed process can be deployed, produce outcomes, and accumulate path dependency before formal governance approval — because by the time approval is sought, the outcomes are already locked in.</p>
+        <div class="text-xs text-muted">Budget Process Framework failed epoch 616; ₳271M already disbursed under that framework at epoch 570</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 5: RED FLAGS
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-red-600 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">5. Red Flags</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">Five specific data points that should concern anyone who cares about long-term governance health. Cited directly from the evidence.</p>
+
+    <!-- Red Flag 1 -->
+    <div class="callout-red rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-red-400 text-2xl font-black">01</span>
+        <div>
+          <h3 class="font-bold text-red-300 text-lg">96.3% of Quantified ADA Requests Were Approved — Including ₳96.8M Without Itemized Justification</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        The treasury approval rate is so high it indicates the system lacks an effective fiscal filter. Of all quantified ADA requests, ₳356.7M was approved against ₳13.65M rejected — a 96.3% approval rate by volume. The largest single withdrawal in Cardano history (₳96.8M IO Engineering) passed at ~88% despite the CF explicitly abstaining due to "lack of sufficient transparency or accountability" and Cardanians calling it "the largest budget request in Cardano's history" with no itemized breakdown. When the most rigorous institutional DRep's abstention on transparency grounds fails to prevent a ₳96.8M approval, the accountability floor is effectively the proposer's own track record — not verifiable accountability mechanisms.
+      </p>
+      <blockquote class="text-sm">"Where are the KPIs and deliverables on each line item? This feels like the classic big tech company approach of throwing money at problems until they go away." — Maureen, voting NO on IO Engineering</blockquote>
+    </div>
+
+    <!-- Red Flag 2 -->
+    <div class="callout-red rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-red-400 text-2xl font-black">02</span>
+        <div>
+          <h3 class="font-bold text-red-300 text-lg">The Governance Process That Disbursed ₳271M Was Never Formally Ratified</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        The Budget Process Framework that governed the 2025 Cardano Budget — including the Ekklesia voting process, the 67% threshold, the Intersect administrative role, and the 39-proposal structure — was submitted for formal Info action ratification at epoch 616 and <strong class="text-white">failed</strong>. The ₳271M had already been disbursed at epoch 570. The governance community approved hundreds of millions of ADA under an informal process that it subsequently declined to formally ratify. This creates a legitimacy gap: if the process was sound, why did the community reject it when asked to ratify it? If it was unsound, how was ₳271M disbursed under it without constitutional challenge?
+      </p>
+      <blockquote class="text-sm">"There were a lot of improvisations and uncertainties with the Ekklesia voting stage... Too much power to interpret the results is left to Intersect." — InputEndorsers, voting NO on Budget Process Framework</blockquote>
+    </div>
+
+    <!-- Red Flag 3 -->
+    <div class="callout-red rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-red-400 text-2xl font-black">03</span>
+        <div>
+          <h3 class="font-bold text-red-300 text-lg">EMURGO Controls ~16% of All Governance Voting Power While Receiving Treasury Funding and Routing User Delegation</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        GAIA's estimate puts EMURGO + YOROI combined at approximately 16% of total governance voting power. EMURGO submitted the Cardano Summit 2026 proposal (which failed at 72% NO, but EMURGO voted YES on its own proposal). EMURGO's Yoroi wallet was documented as routing users to delegate their DRep power to EMURGO itself — a UI decision that extracts governance power from delegators without their explicit awareness. InputEndorsers established a standing NO vote on all EMURGO proposals until March 2027 as a direct consequence. <strong class="text-white">A founding entity systematically capturing user delegation through wallet UI while simultaneously proposing and voting on treasury requests for its own events is a structural conflict of interest without constitutional remedy.</strong>
+      </p>
+      <blockquote class="text-sm">"The Cardano Foundation and EMURGO should be using genesis ADA to pay for building Cardano, not exploiting the treasury every week or two." — GAIA</blockquote>
+    </div>
+
+    <!-- Red Flag 4 -->
+    <div class="callout-red rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-red-400 text-2xl font-black">04</span>
+        <div>
+          <h3 class="font-bold text-red-300 text-lg">The Plutocracy Lock-In: 1-Lovelace-1-Vote May Be Unreformable</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        Cardano Advocate's constitutional NO vote included the most structurally prescient critique in the dataset: <em>"When we find a better, fairer, and more representative model, we won't be able to upgrade it as large whales and token holders will likely not be receptive to losing voting power and influence regarding the future of Cardano."</em> This is not a fringe concern — it is a constitutional design problem. The 1-lovelace-1-vote model is now enshrined in v2.4 (InputEndorsers flagged that the wording "DReps have voting power equal to number of Lovelace delegated" would prevent quadratic voting). EMURGO's 16% governance power concentration is precisely the dynamic Cardano Advocate warned about. The entities who would need to vote to reduce their own voting power are the same entities who benefit from the current system.
+      </p>
+      <blockquote class="text-sm">"The 1-lovelace-1-vote model sadly leads to centralized oligarchy or plutocracy, and we are in this situation right from the start of governance, which was predetermined for CIP 1694." — GAIA</blockquote>
+    </div>
+
+    <!-- Red Flag 5 -->
+    <div class="callout-red rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-red-400 text-2xl font-black">05</span>
+        <div>
+          <h3 class="font-bold text-red-300 text-lg">YUTA Is the Single Point of Failure for Constitutional Maintenance</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        The Cardano Constitution has been effectively maintained by a single individual across four drafts, with EMURGO, CF, InputEndorsers, and Cerkoryn all crediting YUTA's responsive authorship. This is governance intellectual property concentrated in one person without constitutional basis, formal role, term limits, or succession plan. Agent 2 notes directly: <em>"YUTA has become the de facto constitutional maintenance lead — credited by EMURGO, InputEndorsers, and Cerkoryn for responsive, iterative improvement. This informal role lacks constitutional basis and creates a single point of dependency."</em> If YUTA becomes inactive, faces a conflict of interest, or introduces a sustained bias in amendments, there is no formal process for identifying or replacing them. The community has implicitly delegated constitutional stewardship to one DRep.
+      </p>
+      <blockquote class="text-sm">"Evolution waits for no one. Our constitutions are but snapshots in time of an ephemeral consensus — not a national constitution." — InputEndorsers (while inadvertently relying on YUTA to author each snapshot)</blockquote>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 6: GREEN FLAGS
+  ════════════════════════════════════════════════════ -->
+  <div class="mb-12">
+    <div class="flex items-center gap-3 mb-1">
+      <div class="w-1 h-6 bg-emerald-600 rounded"></div>
+      <h2 class="text-2xl font-bold text-white">6. Green Flags</h2>
+    </div>
+    <p class="text-muted text-sm mb-6 ml-4">Five specific data points that demonstrate genuine governance maturity — evidence the system is developing real capacity, not just process theater.</p>
+
+    <!-- Green Flag 1 -->
+    <div class="callout-green rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-emerald-400 text-2xl font-black">01</span>
+        <div>
+          <h3 class="font-bold text-emerald-300 text-lg">KPI Accountability: YUTA's Summit 2026 Vote Cites Prior KPI Failure</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        YUTA voted NO on Cardano Summit 2026 by citing the specific unmet KPI from the 2025 Summit proposal: <em>"15-20% year-on-year growth in developer numbers — that was the primary reason I voted YES at the time... the number of cases that concretely demonstrate the 2025 goal of 'acquiring and retaining new developers' is effectively zero."</em> YUTA then provided on-chain evidence: at epoch 622, 99% of transaction submissions were retail, with zero identifiable enterprise submissions. This is accountability-based governance — prior commitments evaluated before new requests approved. It is rare in any public institution and indicates at least some DReps are operating a functional accountability cycle, not merely responding to each proposal in isolation.
+      </p>
+      <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: YUTA's Summit 2026 rationale citing adatool.net/tx-stats data; prior 2025 Summit rationale with stated KPI.</div>
+    </div>
+
+    <!-- Green Flag 2 -->
+    <div class="callout-green rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-emerald-400 text-2xl font-black">02</span>
+        <div>
+          <h3 class="font-bold text-emerald-300 text-lg">HOSKY's Governance Evolution: Meme Token Becomes Accountability Watchdog</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        HOSKY's trajectory from simple YES/Abstain votes to developing a named "Cardano First" framework with five scored pillars, PDF-linked rationales, and one of the sharpest accountability challenges to the Cardano Foundation's Summit funding ("CF committed to making this sustainable, and one year later it's back asking for the same money") is one of the most encouraging signals in the dataset. <strong class="text-white">It demonstrates that governance personas can mature under community pressure.</strong> HOSKY also demonstrated exemplary conflict-of-interest handling, abstaining on CC compensation due to being a CC member. A meme token DRep now produces governance analysis comparable to institutional DReps — this is the governance self-improvement mechanism working.
+      </p>
+      <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Agent 4 HOSKY profile — "evolution description: from simple process-enabler to rigorous accountability watchdog." Summit 2026 NO with CF accountability challenge. CC compensation abstain with explicit COI disclosure.</div>
+    </div>
+
+    <!-- Green Flag 3 -->
+    <div class="callout-green rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-emerald-400 text-2xl font-black">03</span>
+        <div>
+          <h3 class="font-bold text-emerald-300 text-lg">Hard Fork Governance Is Efficient: Protocol Version 10 Ratified in 7 Epochs</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        The Plomin Hard Fork (epoch 529 → ratified epoch 536) was one of the fastest-resolved major actions in the dataset. Technical protocol changes with genuine engineering consensus — Plutus V3 cost model (6 epochs), transaction memory increase (7 epochs) — move quickly through the system. The governance design correctly distinguishes between technically consensual actions (hard forks, parameter changes with committee endorsement) and politically contested actions (treasury withdrawals, constitutional amendments). Where Intersect's Parameter Committee has done pre-work and engineering consensus exists, the DRep layer ratifies efficiently. <strong class="text-white">This suggests the tripartite governance model (SPOs + DReps + CC) works well for technical consensus questions.</strong>
+      </p>
+      <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Plomin HF epoch 529→536 (7 epochs). Plutus V3 epoch 519→525 (6 epochs). Memory Units epoch 606→613 (7 epochs). All near-unanimous.</div>
+    </div>
+
+    <!-- Green Flag 4 -->
+    <div class="callout-green rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-emerald-400 text-2xl font-black">04</span>
+        <div>
+          <h3 class="font-bold text-emerald-300 text-lg">Intersect Reformed Under Pressure — Validating the NO Vote Mechanism</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        Intersect's budget request was reduced from ₳20M to ₳15.75M, its bundled proposals were separated into individual submissions, and its leadership changed — all in direct response to DRep rejection. InputEndorsers' analysis is forensic: <em>"Intersect has been greatly shaped into a leaner and meaner machine by pushback, not by support... I want to reciprocate with my own leap of faith."</em> This is the DRep feedback loop functioning as designed: sustained NO votes creating reform pressure, reform triggering conditional YES from previously skeptical DReps, and the system arriving at a more accountable outcome than the original proposal would have produced. <strong class="text-white">It validates the entire premise of delegated representation: DReps who maintain principled positions force organizational improvement.</strong>
+      </p>
+      <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: Intersect budget 20M→15.75M reduction. InputEndorsers NO→conditional YES trajectory. Agent 3: "InputEndorsers' analysis — DRep NO votes functioning as reform pressure."</div>
+    </div>
+
+    <!-- Green Flag 5 -->
+    <div class="callout-green rounded-xl p-6 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <span class="shrink-0 text-emerald-400 text-2xl font-black">05</span>
+        <div>
+          <h3 class="font-bold text-emerald-300 text-lg">Cross-Chain Comparative Benchmarking Has Entered DRep Discourse</h3>
+        </div>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">
+        SIPO's rationale on the Budget Process Framework included the most sophisticated external benchmark in the dataset: <em>"Compared to Polkadot OpenGov facing treasury sustainability concerns and Cosmos still transitioning from simple community pool spending, Cardano's multi-role governance (DRep + SPO + CC) combined with smart-contract-enforced milestone disbursements represents one of the most mature treasury governance frameworks in the industry."</em> When DReps are capable of contextualizing Cardano governance within the broader blockchain governance ecosystem, the system has achieved a level of analytical maturity that enables calibrated self-assessment rather than self-congratulation or self-flagellation. <strong class="text-white">This is the foundation of continuous governance improvement: knowing where you stand relative to alternatives.</strong>
+      </p>
+      <div class="text-xs text-muted border-t border-green-900 pt-2 mt-2">Evidence: SIPO profile in Agent 4; Polkadot/Cosmos comparison in Budget Process Framework rationale. SIPO described as "institutionally sophisticated DRep" with "comparative ecosystem lens."</div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       CLOSING ASSESSMENT
+  ════════════════════════════════════════════════════ -->
+  <div class="card border border-subtle rounded-xl p-8 mb-6">
+    <h2 class="text-xl font-bold text-white mb-4">Overall Governance Health: Cautiously Functional</h2>
+    <p class="text-slate-300 text-sm mb-4 leading-relaxed">
+      Cardano's post-Chang governance has completed two full budget cycles, ratified a constitution through four drafts, navigated multiple governance crises, and disbursed over ₳356M in treasury funds — all without a chain halt, a governance deadlock, or a constitutional crisis. These are genuine achievements for a governance system less than three years old.
+    </p>
+    <p class="text-slate-300 text-sm mb-4 leading-relaxed">
+      However, the structural vulnerabilities identified in this assessment are not edge cases — they are load-bearing risks. Discourse concentration means the entire intellectual quality of governance depends on fewer than ten individuals. Founding entity dual roles mean the entities most capable of capturing the governance process are the same entities most trusted by the majority. The plutocracy lock-in means the voting model that perpetuates these dynamics is now constitutionally entrenched. The 0% Info action pass rate means the community has no functional non-binding signaling mechanism.
+    </p>
+    <p class="text-slate-300 text-sm leading-relaxed">
+      The clearest finding from the data is that Cardano governance is <strong class="text-white">better than it should be given its design constraints</strong> — because a small cohort of principled DReps is doing extraordinary work within a system that does not structurally reward that work. The risk is that this cohort is not replaceable by design, and the system has not yet built the institutional infrastructure to make their quality of analysis reproducible at scale.
+    </p>
+    <div class="mt-5 grid grid-cols-3 gap-4 text-center">
+      <div class="card-inner rounded-lg p-3 border border-red-900">
+        <div class="text-2xl font-bold text-red-400 mb-1">4</div>
+        <div class="text-xs text-muted">Critical / High Severity Risks Unmitigated</div>
+      </div>
+      <div class="card-inner rounded-lg p-3 border border-amber-900">
+        <div class="text-2xl font-bold text-amber-400 mb-1">3</div>
+        <div class="text-xs text-muted">Structural Tensions Without Resolution Path</div>
+      </div>
+      <div class="card-inner rounded-lg p-3 border border-green-900">
+        <div class="text-2xl font-bold text-emerald-400 mb-1">5</div>
+        <div class="text-xs text-muted">Genuine Green Flags Demonstrating Maturity</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="text-center text-xs text-muted pt-4 border-t border-subtle">
+    Critical Governance Health Assessment · Cardano DRep Intelligence Report · Generated 2026-05-24 · Based on 118 governance actions, epochs 507–632
+  </div>
+
+</section>
+
+</body>
+</html>

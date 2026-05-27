@@ -3985,6 +3985,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
             ballotObj = { id: urlId };
           }
         }
+        console.log("[Results] full ballotObj:", ballotObj);
         if (!cancelled) setBallot(ballotObj);
 
         const ballotId = ballotObj?.id ?? urlId;
@@ -4002,11 +4003,30 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
             }
             return all;
           })(),
-          ballotId
-            ? apiFetchV1(`/votes/${ballotId}/results`).catch(() =>
-                apiFetchV1(`/ballots/${ballotId}/results`)
-              )
-            : Promise.resolve(null),
+          (async () => {
+            if (!ballotId) return null;
+            const candidates = [
+              `/votes/${ballotId}/results`,
+              `/ballots/${ballotId}/results`,
+              `/ballots/${ballotId}/tally`,
+              `/votes/${ballotId}/tally`,
+            ];
+            for (const path of candidates) {
+              try {
+                const r = await apiFetchV1(path);
+                console.log("[Results] success on", path, r);
+                return r;
+              } catch (e) {
+                console.warn("[Results] failed:", path, e.message);
+              }
+            }
+            // Last resort: see if the ballot object itself embeds results
+            if (ballotObj?.results || ballotObj?.tally || ballotObj?.data?.results || ballotObj?.data?.tally) {
+              console.log("[Results] using embedded ballot results");
+              return ballotObj;
+            }
+            return null;
+          })(),
         ]);
 
         if (cancelled) return;
@@ -4014,6 +4034,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
         if (resultsResult.status === "fulfilled" && resultsResult.value) {
           setResults(resultsResult.value);
         } else {
+          console.warn("[Results] resultsResult:", resultsResult);
           setError("Results not yet available for this ballot.");
         }
       })

@@ -1,0 +1,702 @@
+<section data-section="voices" style="background:#0f1117;color:#e2e8f0;font-family:'Inter',sans-serif;padding:2rem 0;">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  [data-section="voices"] { --bg:#0f1117; --card:#1a1f2e; --card2:#232a3e; --accent:#6366f1; --green:#10b981; --red:#ef4444; --yellow:#f59e0b; --purple:#a855f7; --pink:#ec4899; --teal:#14b8a6; }
+  [data-section="voices"] .drep-card { background:var(--card); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:1.5rem; margin-bottom:1.25rem; transition:border-color 0.2s; }
+  [data-section="voices"] .drep-card:hover { border-color:rgba(99,102,241,0.4); }
+  [data-section="voices"] .archetype-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.7rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:0.5rem; }
+  [data-section="voices"] .badge-aligned { background:#10b98122; color:#10b981; border:1px solid #10b98144; }
+  [data-section="voices"] .badge-skeptical { background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b44; }
+  [data-section="voices"] .badge-principled { background:#ef444422; color:#ef4444; border:1px solid #ef444444; }
+  [data-section="voices"] .badge-process { background:#6366f122; color:#818cf8; border:1px solid #6366f144; }
+  [data-section="voices"] .badge-technical { background:#14b8a622; color:#2dd4bf; border:1px solid #14b8a644; }
+  [data-section="voices"] .badge-economic { background:#a855f722; color:#c084fc; border:1px solid #a855f744; }
+  [data-section="voices"] .badge-institutional { background:#ec489922; color:#f472b6; border:1px solid #ec489944; }
+  [data-section="voices"] .stars { color:#f59e0b; font-size:0.85rem; }
+  [data-section="voices"] .quote-card { background:var(--card2); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:1rem 1.25rem; margin-bottom:1rem; }
+  [data-section="voices"] .quote-author { font-size:0.75rem; color:#94a3b8; margin-top:0.5rem; }
+  [data-section="voices"] .quote-text { font-style:italic; color:#c7d2fe; line-height:1.65; }
+  [data-section="voices"] .theme-card { background:var(--card); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:1.25rem; margin-bottom:1rem; }
+  [data-section="voices"] .stat-pill { background:rgba(255,255,255,0.05); border-radius:6px; padding:2px 8px; font-size:0.75rem; color:#94a3b8; display:inline-block; margin-right:4px; }
+  [data-section="voices"] .vote-bar-yes { background:#10b981; height:6px; border-radius:3px; display:inline-block; }
+  [data-section="voices"] .vote-bar-no { background:#ef4444; height:6px; border-radius:3px; display:inline-block; }
+  [data-section="voices"] .vote-bar-abs { background:#6b7280; height:6px; border-radius:3px; display:inline-block; }
+  [data-section="voices"] h2 { color:#f1f5f9; font-size:1.75rem; font-weight:700; margin-bottom:0.5rem; }
+  [data-section="voices"] h3 { color:#e2e8f0; font-size:1.2rem; font-weight:600; margin:0 0 0.35rem 0; }
+  [data-section="voices"] .section-intro { color:#94a3b8; line-height:1.7; margin-bottom:2rem; max-width:820px; }
+  [data-section="voices"] .drep-name { font-size:1.1rem; font-weight:700; color:#f1f5f9; margin-bottom:0.25rem; }
+  [data-section="voices"] .drep-philosophy { font-size:0.875rem; color:#94a3b8; line-height:1.6; margin:0.5rem 0; }
+  [data-section="voices"] .drep-quote { font-style:italic; color:#c7d2fe; font-size:0.85rem; border-left:2px solid #6366f1; padding-left:0.75rem; margin-top:0.75rem; }
+  [data-section="voices"] .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:768px) { [data-section="voices"] .grid-2 { grid-template-columns:1fr; } }
+</style>
+
+<div style="max-width:1100px;margin:0 auto;padding:0 1.5rem;">
+
+  <!-- Section Header -->
+  <div style="margin-bottom:3rem;">
+    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+      <div style="width:4px;height:2rem;background:linear-gradient(180deg,#6366f1,#a855f7);border-radius:2px;"></div>
+      <span style="text-transform:uppercase;letter-spacing:0.1em;font-size:0.7rem;color:#6366f1;font-weight:700;">Section IV</span>
+    </div>
+    <h2 style="font-size:2.25rem;margin-bottom:0.75rem;">DRep Voices &amp; Thematic Intelligence</h2>
+    <p class="section-intro">
+      Behind the vote tallies are 7,140 individual rationale statements from a diverse global community. This section profiles
+      the most active and influential DReps — their governance philosophies, voting tendencies, and the quality of their reasoning —
+      and maps the recurring themes that define Cardano's democratic culture.
+    </p>
+  </div>
+
+  <!-- ─── PART 1: DRep Profile Cards ─── -->
+  <div style="margin-bottom:3rem;">
+    <h2 style="margin-bottom:0.5rem;">DRep Profiles: The Top 20</h2>
+    <p class="section-intro">Profiles based on rationale analysis across 10+ major proposals per DRep. Quality score reflects depth, data-use, and analytical rigour of rationales.</p>
+
+    <div class="grid-2">
+
+      <!-- YUTA -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">YUTA</div>
+            <span class="archetype-badge badge-process">Process-Focused / Technical</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">110 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 47 YES</span>
+          <span class="stat-pill">❌ 13 NO</span>
+          <span class="stat-pill">⬜ 2 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Japan-based ecosystem steward with the highest analytical rigour in the dataset. Uses numbered conditions (5–12 per vote), discloses conflicts of interest, cites on-chain data (TapTools, adatool.net), and writes bilingual rationales. De facto lead author of the Cardano Constitution maintenance cycle from v1 through v2.4.</p>
+        <div class="drep-quote">"Treasury withdrawal governance actions must be performed in reasonably granular chunks. Any unreasonably aggregated Treasury withdrawal governance actions will be immediately voted NO."</div>
+      </div>
+
+      <!-- InputEndorsers -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">InputEndorsers</div>
+            <span class="archetype-badge badge-economic">Economic / Skeptical-Critical</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">108 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 42 YES</span>
+          <span class="stat-pill">❌ 20 NO</span>
+          <span class="stat-pill">⬜ 2 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">The most sophisticated economic analyst in governance. Treats ADA/USD rate as a first-order concern — treasury approvals create sell pressure via fiat conversion. Writes discursive, self-reflective rationales that acknowledge counterarguments. Uniquely discloses potential conflicts in both YES and NO directions.</p>
+        <div class="drep-quote">"In a still nascent blockchain economy, spending more essentially means converting the native token for fiat, and the result is devaluation. We are not exchanging ADA directly for Cardano economy goods — we are selling it into the real world."</div>
+      </div>
+
+      <!-- CardanoYoda -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">CardanoYoda (MANDA Pool)</div>
+            <span class="archetype-badge badge-technical">Technical / Process-Focused</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">105 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 65 YES</span>
+          <span class="stat-pill">❌ 21 NO</span>
+        </div>
+        <p class="drep-philosophy">Data-first empiricist. Cites exchange volume tables, on-chain tx counts, runs community polls before major votes, and engages directly with proposers. Sets governance precedent standards. Voted No on both the Summit 2026 and Snek loan not from ideology but because the proposals failed their own stated metrics.</p>
+        <div class="drep-quote">"Treasury loans cannot be based solely on 'trust me, bro.' That would set a dangerous precedent."</div>
+      </div>
+
+      <!-- TriangleForces -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">TriangleForces</div>
+            <span class="archetype-badge badge-principled">Economic / Principled No</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">100 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 4 YES</span>
+          <span class="stat-pill">❌ 24 NO</span>
+        </div>
+        <p class="drep-philosophy">Hard-nosed fiscal conservative who applies a TMT-sector business lens to governance. Treats unchecked treasury spending as "the single greatest existential risk Cardano faces." Occasionally votes Yes on proposals he frames as "bitter medicine" — but this inconsistency undermines his credibility as a principled objector.</p>
+        <div class="drep-quote">"This proposal reeks of kindergarten-level thinking: shouting loudest in the biggest room instead of whispering strategically in the right ears."</div>
+      </div>
+
+      <!-- jonahkoch -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">jonahkoch</div>
+            <span class="archetype-badge badge-economic">Economic / Aligned Yes</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">95 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 33 YES</span>
+          <span class="stat-pill">❌ 14 NO</span>
+          <span class="stat-pill">⬜ 2 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Pragmatic ecosystem accelerationist who reads fund waterfall structures, VC terms, and portfolio data. Wrote the most detailed financial analysis in the dataset on the Draper Dragon vote. Supports institutional capital deployment when structural safeguards exist. Voted No on the Budget Process Framework for under-specification.</p>
+        <div class="drep-quote">"This is the first serious attempt to deploy treasury capital as structured investment rather than grants or operational budgets."</div>
+      </div>
+
+      <!-- HOSKY -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">HOSKY</div>
+            <span class="archetype-badge badge-process">Process-Focused (evolved)</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">77 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 18 YES</span>
+          <span class="stat-pill">❌ 7 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">The most remarkable evolution in the dataset: from meme one-liners to rigorous 5-pillar "Cardano First" analyses covering Adoption, Economic Sustainability, Governance Transparency, Decentralization, and Scalability. A sharp accountability voice — particularly on Cardano Foundation's event sustainability commitments.</p>
+        <div class="drep-quote">"The Cardano Foundation committed to making this sustainable, and one year later it's back asking for the same money. No until the CF demonstrates a credible path to event self-funding."</div>
+      </div>
+
+      <!-- Cardano Foundation -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Cardano Foundation</div>
+            <span class="archetype-badge badge-institutional">Institutional / Process-Focused</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">93 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 2 YES</span>
+          <span class="stat-pill">❌ 2 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Highest institutional standards in the dataset. Rationales often exceed 1,000 words with headers, bullet points, and PDF versions. Demands multi-year financial modeling, scenario projections, and Edinburgh Decentralization Index tracking. Discloses COIs (CEO on advisory boards, operational roles). Votes pragmatically when delays would be worse than imperfect passage.</p>
+        <div class="drep-quote">"Our yes vote is a pragmatic decision to ensure that: the crucial step of establishing a budget is taken, funding for 2025 can be received — despite our significant reservations about the budget process."</div>
+      </div>
+
+      <!-- EMURGO -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">EMURGO</div>
+            <span class="archetype-badge badge-institutional">Institutional / Aligned Yes</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">82 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 7 YES</span>
+          <span class="stat-pill">❌ 0 NO</span>
+        </div>
+        <p class="drep-philosophy">Consistent institutional Yes voter on major governance actions. Less analytically deep than CF but reliably aligned with governance milestones. Notable for voting NO on Constitution v2.3 over "Ada Holder" terminology — forcing a revision — and NO on the Christina CC appointment (procedural grounds). Demonstrates that institutional votes are not automatic.</p>
+        <div class="drep-quote">"By introducing a loan-based model, it sets a precedent for how Treasury funds can be used responsibly while ensuring capital can be recycled back into the ecosystem."</div>
+      </div>
+
+      <!-- Cerkoryn -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Cerkoryn</div>
+            <span class="archetype-badge badge-skeptical">Skeptical-Critical / Process-Focused</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">82 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 20 YES</span>
+          <span class="stat-pill">❌ 8 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Evidence-based, historically grounded. Frequently cites original IOG research (tau was recommended at 5%, changed to 20% at launch). Maintains a GitHub governance reference repository. Prefers iterative, modest first-cycle budgets to refine processes. Persuadable by specific structural safeguards (Draper Dragon treasury-first waterfall was the "saving grace").</p>
+        <div class="drep-quote">"IOG researchers initially recommended setting Tau at 5%, but changed to 20% before Shelley mainnet. Due to block reward calculations, the effective tax rate is actually 33%."</div>
+      </div>
+
+      <!-- Kostas Panagias -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Kostas Panagias</div>
+            <span class="archetype-badge badge-process">Process-Focused / Aligned Yes</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">93 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 51 YES</span>
+          <span class="stat-pill">❌ 13 NO</span>
+          <span class="stat-pill">⬜ 6 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Methodical, evidence-seeking. Explicitly reads other DReps' rationales before forming opinions and tracks his own voting record to verify budget alignment. Values broad community representation and spirit-of-the-law interpretation. Uniquely cites his own cross-proposal consistency as evidence of governance reliability.</p>
+        <div class="drep-quote">"I read other people's rationales because no one knows everything, and I might be missing important context or an interesting viewpoint."</div>
+      </div>
+
+      <!-- SIPO -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">SIPO</div>
+            <span class="archetype-badge badge-process">Process-Focused / Institutional</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★★</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">93 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 20 YES</span>
+          <span class="stat-pill">❌ 2 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Japan-based institutional sophisticate (tokyo.sipo.io). Regularly compares Cardano governance to Polkadot OpenGov and Cosmos treasury systems — the only DRep in the dataset who consistently does this. Bilingual exhaustive rationales. Uniquely experienced the workload of reviewing 194 proposals in inconsistent formats firsthand.</p>
+        <div class="drep-quote">"Cardano's multi-role governance (DRep + SPO + CC) combined with smart-contract-enforced milestone disbursements represents one of the most mature treasury governance frameworks in the industry."</div>
+      </div>
+
+      <!-- $brock -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">$brock</div>
+            <span class="archetype-badge badge-principled">Economic / Principled No</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">100 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 3 YES</span>
+          <span class="stat-pill">❌ 1 NO</span>
+        </div>
+        <p class="drep-philosophy">Concise libertarian-leaning fiscal conservative. Believes the treasury is accumulating too much ADA (prefers ~1% of circulating supply vs current ~4%). Short, decisive rationales. Dislikes "grey area" in constitutional language. Occasionally shifts to Yes when structural guarantees satisfy specific concerns.</p>
+        <div class="drep-quote">"The treasury will soon hold 4% of ADA's circulating supply, which is too high. Somewhere around 1% would make a lot more sense."</div>
+      </div>
+
+      <!-- William Doyle -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">William Doyle</div>
+            <span class="archetype-badge badge-aligned">Aligned Yes</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">82 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 30 YES</span>
+          <span class="stat-pill">❌ 0 NO</span>
+        </div>
+        <p class="drep-philosophy">Philosophical and community-centered. Frames Cardano governance as an intergenerational project. References classical literature (Ulysses pact). Pragmatic — votes Yes despite acknowledging process concerns. Advocates for crowd-sourced governance deposits as a key missing tool. Maintains a public GitHub vote context repository.</p>
+        <div class="drep-quote">"This constitution shall act as our Ulysses pact to constrain us in times of temptation. May we forever remember what came before, the mistakes that were made, and the lessons that were learned."</div>
+      </div>
+
+      <!-- Wada DRep -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Wada DRep</div>
+            <span class="archetype-badge badge-institutional">Community Representative</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">90 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 16 YES</span>
+          <span class="stat-pill">❌ 7 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Represents a decentralized network of community builders across Africa and diaspora. Voted Yes on the Constitution as a direct result of running grassroots workshops and translation services. The most explicitly pan-African governance voice in the dataset. Frames governance through inclusivity and representation, not just economics.</p>
+        <div class="drep-quote">"A robust ecosystem must be built on inclusion, legitimacy, and capacity, not on legacy position alone."</div>
+      </div>
+
+      <!-- GAIA -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">GAIA</div>
+            <span class="archetype-badge badge-process">Process-Focused / Principled</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★★☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">82 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 13 YES</span>
+          <span class="stat-pill">❌ 3 NO</span>
+          <span class="stat-pill">⬜ 4 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Technical governance idealist raising structural concerns few others articulate: the 1-lovelace-1-vote model leads to plutocracy; govDeposit at 100k ADA creates financial barriers; omnibus budgets circumvent the 67% threshold guardrail. Applies a personal 250M ADA NCL ceiling and votes accordingly. The only DRep explicitly advocating for DIDs and quadratic voting.</p>
+        <div class="drep-quote">"A significant amount of proposals that were successfully passed did not meet the on-chain threshold. Omnibus budgets are the only way skewed results like this are able to circumvent intended guardrails."</div>
+      </div>
+
+      <!-- Eternl DRep Committee -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Eternl DRep Committee</div>
+            <span class="archetype-badge badge-aligned">Aligned Yes / Process-Enabling</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">86 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 6 YES</span>
+          <span class="stat-pill">❌ 40 NO</span>
+        </div>
+        <p class="drep-philosophy">Committee-based DRep representing the Eternl wallet team. Views most budget/framework votes as "pro forma" process steps rather than substantive decisions. Short, technically clear TL;DR rationales with GitHub links. Views the 67% withdrawal threshold as sufficient protection, rendering info actions procedural. High NO rate likely reflects principled skepticism on spending proposals.</p>
+        <div class="drep-quote">"Proposals on this budget list can POTENTIALLY get funding. The threshold for each withdrawal to actually get funds will be 67%. That's restrictive enough — this budget action is just pro forma."</div>
+      </div>
+
+      <!-- AdaStat -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">AdaStat</div>
+            <span class="archetype-badge badge-aligned">Aligned Yes</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★☆☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">92 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 23 YES</span>
+          <span class="stat-pill">❌ 5 NO</span>
+          <span class="stat-pill">⬜ 14 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Operator of the AdaStat.net explorer. Pragmatic and minimal — votes Yes to let the process flow when constitutional guardrails are adequate. Unusually high abstain rate suggests deliberate restraint on uncertain proposals. Operator of a funded proposal (Blockfrost competitor) — demonstrates an active participant/voter tension the governance system must navigate.</p>
+        <div class="drep-quote">"Despite the fact that this Cardano Constitution is still far from perfect, it is definitely sufficient to move forward."</div>
+      </div>
+
+      <!-- BWtake Japan -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">BWtake(長崎)Japan</div>
+            <span class="archetype-badge badge-aligned">Aligned Yes / Philosophical</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">107 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 11 YES</span>
+          <span class="stat-pill">❌ 2 NO</span>
+          <span class="stat-pill">⬜ 1 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Philosophically ambitious, framing Cardano governance within a broad worldview: "butterfly effect" dynamics, liquid democracy as "post-national democracy," cypherpunk ideals. Describes the constitution as "DNA information" guiding AI in the Singularity era. Strong Intersect supporter. Primarily writes in Japanese — a key voice for the Nagasaki community.</p>
+        <div class="drep-quote">"The constitution may function as 'DNA information' guiding AI toward human benefit in the Singularity era, acting as an ethical framework preventing runaway centralized AI."</div>
+      </div>
+
+      <!-- Chris Cata -->
+      <div class="drep-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="drep-name">Chris Cata</div>
+            <span class="archetype-badge badge-skeptical">Skeptical-Critical</span>
+          </div>
+          <div style="text-align:right;">
+            <div class="stars">★★★☆☆</div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">96 votes</div>
+          </div>
+        </div>
+        <div style="margin:0.6rem 0;display:flex;gap:4px;align-items:center;">
+          <span class="stat-pill">✅ 29 YES</span>
+          <span class="stat-pill">❌ 6 NO</span>
+          <span class="stat-pill">⬜ 3 ABSTAIN</span>
+        </div>
+        <p class="drep-philosophy">Active community DRep applying moderate scrutiny. More supportive than the median for ecosystem tooling and infrastructure. Writes clear, direct rationales. Abstains when genuinely uncertain rather than defaulting Yes or No — a sign of intellectual honesty. One of the most balanced vote distributions in the top-20.</p>
+        <div class="drep-quote">"Abstaining on this one — the merits are real but the accountability framework is not in place yet."</div>
+      </div>
+
+    </div><!-- end grid-2 -->
+  </div>
+
+  <!-- ─── PART 2: The 6 Governance Archetypes ─── -->
+  <div style="margin-bottom:3rem;">
+    <h2 style="margin-bottom:0.5rem;">The 6 Governance Archetypes</h2>
+    <p class="section-intro">DRep voting behavior clusters into recognizable patterns. Understanding these archetypes helps predict proposal outcomes and governance coalition dynamics.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;">
+
+      <div class="theme-card" style="border-top:3px solid #10b981;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">✅</span>
+          <div>
+            <div style="font-weight:700;color:#10b981;">Aligned Yes</div>
+            <div style="font-size:0.75rem;color:#64748b;">~25% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Support most major proposals with short, process-enabling rationales. View info actions as procedural steps. Trust the 67% withdrawal threshold as sufficient protection. Enable governance momentum but contribute little intellectual scrutiny.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> CaFi, AdaStat, EMURGO, Eternl DRep Committee, William Doyle, BWtake, AKYO</div>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #f59e0b;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">🔍</span>
+          <div>
+            <div style="font-weight:700;color:#f59e0b;">Skeptical-Critical</div>
+            <div style="font-size:0.75rem;color:#64748b;">~20% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Apply genuine scrutiny, often vote No, but are persuadable by specific structural safeguards. Not dogmatically opposed to spending. Prefer phased, gradual approaches. Write long rationales with specific concerns. Upgrade from No to Yes when structure improves.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> InputEndorsers, Cerkoryn, hix_coffeepool, SASA, Nimuë</div>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #ef4444;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">🚫</span>
+          <div>
+            <div style="font-weight:700;color:#ef4444;">Principled No</div>
+            <div style="font-size:0.75rem;color:#64748b;">~10% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Consistent opposition based on stated principles — fiscal conservatism, decentralization, anti-bundling. Hard to persuade. Supply/inflation arguments. Occasionally strategic Yes votes framed as "bitter medicine." Risk: principles applied inconsistently can erode credibility.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> $brock, TriangleForces, Dave, GAIA (on spending)</div>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #818cf8;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">⚖️</span>
+          <div>
+            <div style="font-weight:700;color:#818cf8;">Process-Focused</div>
+            <div style="font-size:0.75rem;color:#64748b;">~20% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Prioritize governance process integrity, constitutional compliance, and proper sequencing above substantive agreement. Vote No when process is wrong even if content is good. Demand NCL → budget → withdrawal sequencing. Most concerned about bundling and granularity.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> YUTA, SIPO, Cardano Foundation, GAIA, Kostas, SASA</div>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #2dd4bf;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">🔬</span>
+          <div>
+            <div style="font-weight:700;color:#2dd4bf;">Technical</div>
+            <div style="font-size:0.75rem;color:#64748b;">~10% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Focus on technical merit, on-chain data, and empirical evidence. Reference TapTools, exchange volumes, DEX data. Demand measurable KPIs with verifiable baselines. Question implementation feasibility. Analytically rigorous but sometimes isolated from broader governance values.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> YUTA, CardanoYoda, Nimuë, SIPO</div>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #c084fc;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span style="font-size:1.5rem;">💰</span>
+          <div>
+            <div style="font-weight:700;color:#c084fc;">Economic/Financial</div>
+            <div style="font-size:0.75rem;color:#64748b;">~15% of active DReps</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;">Prioritize financial prudence, ADA value preservation, and treasury sustainability. Apply ADA supply/inflation arguments. Often the most sophisticated analysis of monetary mechanics. Concern about sell pressure from treasury withdrawals. Often vote No on marketing and events.</p>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:#64748b;"><strong style="color:#94a3b8;">Members:</strong> InputEndorsers, $brock, TriangleForces, hix_coffeepool, jonahkoch</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── PART 3: Notable Quotes Gallery ─── -->
+  <div style="margin-bottom:3rem;">
+    <h2 style="margin-bottom:0.5rem;">Voice of the DReps: 30 Notable Quotes</h2>
+    <p class="section-intro">The most insightful, eloquent, provocative, and revealing statements from governance rationales across 112 proposals.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0.85rem;">
+
+      <div class="quote-card"><p class="quote-text">"This constitution shall act as our Ulysses pact to constrain us in times of temptation. May we forever remember what came before, the mistakes that were made, and the lessons learned."</p><div class="quote-author">— William Doyle · Cardano Constitution</div></div>
+
+      <div class="quote-card" style="border-left-color:#ef4444;"><p class="quote-text">"In a still nascent blockchain economy, spending more essentially means converting the native token for fiat. We are not exchanging ADA directly for Cardano economy goods — we are selling it into the real world."</p><div class="quote-author">— InputEndorsers · 275M ADA Budget</div></div>
+
+      <div class="quote-card" style="border-left-color:#10b981;"><p class="quote-text">"The treasury is not a savings account — it's a growth engine."</p><div class="quote-author">— HOSKY · DeFi Liquidity Budget</div></div>
+
+      <div class="quote-card" style="border-left-color:#f59e0b;"><p class="quote-text">"Unchecked treasury spending is the single greatest existential risk Cardano faces today."</p><div class="quote-author">— TriangleForces · 275M ADA Budget</div></div>
+
+      <div class="quote-card"><p class="quote-text">"Treasury loans cannot be based solely on 'trust me, bro.' That would set a dangerous precedent."</p><div class="quote-author">— CardanoYoda · Snek Loan</div></div>
+
+      <div class="quote-card" style="border-left-color:#a855f7;"><p class="quote-text">"Now that Cardano belongs to us, it is our duty to preserve it, enhance it, and, when the time comes, hand it down to our children."</p><div class="quote-author">— William Doyle · Cardano Constitution</div></div>
+
+      <div class="quote-card" style="border-left-color:#ef4444;"><p class="quote-text">"The 1-lovelace-1-vote model sadly leads to centralized oligarchy or plutocracy, and we are in this situation right from the start of governance."</p><div class="quote-author">— GAIA · Cardano Budget Process Framework</div></div>
+
+      <div class="quote-card"><p class="quote-text">"Out of 39 proposals, I voted YES on the vast majority with only 4 NO votes. This strong alignment gives me confidence that this budget represents both my own judgment and the broader community's priorities."</p><div class="quote-author">— Kostas Panagias · 275M ADA Budget</div></div>
+
+      <div class="quote-card" style="border-left-color:#10b981;"><p class="quote-text">"A technology-based constitution should not be left up to subjective interpretation of what is 'reasonable'. It should be black and white."</p><div class="quote-author">— $brock · Cardano Constitution</div></div>
+
+      <div class="quote-card" style="border-left-color:#f59e0b;"><p class="quote-text">"This proposal reeks of kindergarten-level thinking: shouting loudest in the biggest room instead of whispering strategically in the right ears."</p><div class="quote-author">— TriangleForces · Cardano Summit 2026</div></div>
+
+      <div class="quote-card"><p class="quote-text">"I read other people's rationales because no one knows everything, and I might be missing important context or an interesting viewpoint."</p><div class="quote-author">— Kostas Panagias · General governance philosophy</div></div>
+
+      <div class="quote-card" style="border-left-color:#a855f7;"><p class="quote-text">"Cardano's multi-role governance (DRep + SPO + CC) combined with smart-contract-enforced milestone disbursements represents one of the most mature treasury governance frameworks in the industry."</p><div class="quote-author">— SIPO · Budget Process Framework</div></div>
+
+      <div class="quote-card" style="border-left-color:#ef4444;"><p class="quote-text">"A significant amount of proposals that passed did not meet the on-chain threshold. Omnibus budgets are the only way skewed results like this are able to circumvent intended guardrails."</p><div class="quote-author">— GAIA · 275M ADA Budget</div></div>
+
+      <div class="quote-card"><p class="quote-text">"The Cardano Foundation committed to making this sustainable, and one year later it's back asking for the same money. No until CF demonstrates a credible path to event self-funding."</p><div class="quote-author">— HOSKY · Cardano Summit 2026</div></div>
+
+      <div class="quote-card" style="border-left-color:#10b981;"><p class="quote-text">"This is the first serious attempt to deploy treasury capital as structured investment rather than grants or operational budgets."</p><div class="quote-author">— jonahkoch · Draper Dragon Orion Fund</div></div>
+
+      <div class="quote-card" style="border-left-color:#f59e0b;"><p class="quote-text">"The decision to pay back the treasury FIRST before the GP makes any profit is the saving grace to this proposal."</p><div class="quote-author">— Cerkoryn · Draper Dragon Orion Fund</div></div>
+
+      <div class="quote-card"><p class="quote-text">"From hosting educational workshops to facilitating town hall discussions where diverse voices could contribute, we have consistently championed inclusive decision-making."</p><div class="quote-author">— Wada DRep · Cardano Constitution</div></div>
+
+      <div class="quote-card" style="border-left-color:#a855f7;"><p class="quote-text">"Intersect has been shaped into a leaner machine by pushback, not by support. That's how governance is supposed to work."</p><div class="quote-author">— InputEndorsers · Intersect MBO Budget</div></div>
+
+      <div class="quote-card" style="border-left-color:#ef4444;"><p class="quote-text">"Treasury money is not marketing pocket money, and prestige is not a public good!"</p><div class="quote-author">— TriangleForces · Cardano Summit 2026</div></div>
+
+      <div class="quote-card"><p class="quote-text">"I was unable to identify a single transaction submission attributable to an enterprise. 99% of usage is retail."</p><div class="quote-author">— YUTA · IO Enterprise Proposal</div></div>
+
+      <div class="quote-card" style="border-left-color:#10b981;"><p class="quote-text">"We cannot govern a ghost town."</p><div class="quote-author">— TriangleForces · Cardano Critical Integrations (justifying YES)</div></div>
+
+      <div class="quote-card" style="border-left-color:#f59e0b;"><p class="quote-text">"ADA's value was $0.90 on the day of last year's Cardano Summit, and has only gone down since, sitting at $0.25 today. This is the time to put our heads down and build, not get together and party."</p><div class="quote-author">— $brock · Cardano Summit 2026</div></div>
+
+      <div class="quote-card"><p class="quote-text">"This proposal represents the most coordinated and participatory budget process in Cardano's history and deserves our support as a model for future funding cycles."</p><div class="quote-author">— Wada DRep · 275M ADA Budget</div></div>
+
+      <div class="quote-card" style="border-left-color:#a855f7;"><p class="quote-text">"Perfect is the enemy of good. We operate in a liquid democracy where it is easy to make changes when necessary."</p><div class="quote-author">— Kostas Panagias · Cardano Constitution</div></div>
+
+      <div class="quote-card" style="border-left-color:#ef4444;"><p class="quote-text">"As a DRep, I cannot support off-chain processes that lack transparency, auditability, and decentralization."</p><div class="quote-author">— Dave · 275M ADA Budget</div></div>
+
+      <div class="quote-card"><p class="quote-text">"During the Voltaire era, it's not just about what we fund — but how we fund it. A clear, disciplined process will build long-term trust and stability for Cardano."</p><div class="quote-author">— SASA_nagamaru · Budget Process Framework</div></div>
+
+      <div class="quote-card" style="border-left-color:#10b981;"><p class="quote-text">"This 70M ADA is more than a budget request — it functions as a bond of accountability. The founding entities are now publicly and collectively tied to delivering measurable outcomes."</p><div class="quote-author">— jonahkoch · Cardano Critical Integrations</div></div>
+
+      <div class="quote-card" style="border-left-color:#f59e0b;"><p class="quote-text">"If we are building a financial system, there is something to be said for financial predictability and gradual change. Outsiders looking at Cardano as an alternative financial system will look at how we manage change."</p><div class="quote-author">— InputEndorsers · Net Change Limit</div></div>
+
+      <div class="quote-card"><p class="quote-text">"I just regret that the majority of DReps have wasted 50 million ADA on an unsecured loan for a meme coin."</p><div class="quote-author">— TriangleForces · Snek Loan (post-vote)</div></div>
+
+      <div class="quote-card" style="border-left-color:#a855f7;"><p class="quote-text">"There is currently no way for a competing Cardano Constitution to be submitted in time on gov.tools — a deliberate choice that was made."</p><div class="quote-author">— GAIA · Cardano Constitution v2.4</div></div>
+
+    </div>
+  </div>
+
+  <!-- ─── PART 4: Thematic Analysis ─── -->
+  <div style="margin-bottom:3rem;">
+    <h2 style="margin-bottom:0.5rem;">Cross-Cutting Themes</h2>
+    <p class="section-intro">Seven recurring themes appear across DRep rationales regardless of proposal type. These are the ideological fault lines of Cardano governance.</p>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>1. ADA Supply Preservation vs. Treasury as Growth Capital</h3>
+        <span style="font-size:0.75rem;background:#ef444422;color:#ef4444;padding:2px 10px;border-radius:999px;border:1px solid #ef444444;">HIGH TENSION</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">The most fundamental ideological divide. One camp treats treasury spending as ADA devaluation — every withdrawal converts the native token to fiat, eroding the monetary base. The other camp treats an idle treasury as opportunity cost — ADA sitting in the treasury is ADA not building the ecosystem. <strong style="color:#e2e8f0;">Champions of preservation:</strong> InputEndorsers, $brock, hix_coffeepool, TriangleForces. <strong style="color:#e2e8f0;">Champions of deployment:</strong> jonahkoch, EMURGO, CaFi. <em style="color:#64748b;">Trajectory: Treasury deployment is winning, but supply preservation voices are shaping the terms (loans vs grants, staged withdrawals).</em></p>
+    </div>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>2. Constitutionality as a Hard Filter</h3>
+        <span style="font-size:0.75rem;background:#10b98122;color:#10b981;padding:2px 10px;border-radius:999px;border:1px solid #10b98144;">MATURING</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">A growing segment of DReps explicitly vote on whether proposals comply with the Constitution before evaluating their merits. Constitutional violations — missing audit allocations, undelegated wallet requirements, bundling prohibitions — function as hard blockers regardless of proposal quality. This is a sign of governance maturity, not obstruction. <strong style="color:#e2e8f0;">Key practitioners:</strong> GAIA, SIPO, CF, InputEndorsers, Cerkoryn. <em style="color:#64748b;">Trajectory: Accelerating — each iteration of rejected proposals cites constitutional defects explicitly.</em></p>
+    </div>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>3. Intersect: Trustworthy MBO or Centralization Risk</h3>
+        <span style="font-size:0.75rem;background:#f59e0b22;color:#f59e0b;padding:2px 10px;border-radius:999px;border:1px solid #f59e0b44;">CONTESTED</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">Intersect receives broadly positive ratings for coordinating the first budget cycle, but a consistent minority raises structural concerns: non-elected membership-gated governance, opaque personnel costs, and the tension between being both member-funded and community-funded. The MBO passed after cutting from 20M to 15.75M ADA — direct evidence that pushback shaped the proposal. <strong style="color:#e2e8f0;">Critics:</strong> InputEndorsers, Dave, TriangleForces. <strong style="color:#e2e8f0;">Supporters:</strong> BWtake, CaFi, SIPO. <em style="color:#64748b;">Trajectory: Broadly accepted but watched closely. "Purpose-led vs vendor-led" will define 2026 cycle.</em></p>
+    </div>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>4. Accountability and Milestone Verification</h3>
+        <span style="font-size:0.75rem;background:#6366f122;color:#818cf8;padding:2px 10px;border-radius:999px;border:1px solid #6366f144;">STRENGTHENING</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">The most common NO-vote trigger across all categories: lump-sum asks without itemized cost breakdowns. The ecosystem is progressively adopting smart-contract-enforced milestone disbursements as the standard. YUTA's explicit requirement that "treasury withdrawal governance actions must be performed in reasonably granular chunks" is becoming a de facto community norm. <strong style="color:#e2e8f0;">Key enforcers:</strong> YUTA, CF, CardanoYoda, HOSKY. <em style="color:#64748b;">Trajectory: Strong and accelerating — proposals that don't conform are increasingly rejected.</em></p>
+    </div>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>5. Geographic and Cultural Representation</h3>
+        <span style="font-size:0.75rem;background:#14b8a622;color:#2dd4bf;padding:2px 10px;border-radius:999px;border:1px solid #14b8a644;">POSITIVE SIGNAL</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">The geographic diversity of the active DRep set is a genuine governance asset. The Japanese community (YUTA, SIPO, BWtake, SASA, AKYO) is disproportionately active and rigorous. African representation (Wada DRep, Addisetech) frames governance through an inclusion lens absent elsewhere. Latin American voices (Arturo) and Asian voices more broadly demonstrate that on-chain governance is reaching communities that traditional Web2 governance never did. <em style="color:#64748b;">Risk: English-language proposals and processes still structurally disadvantage non-native speakers despite bilingual participation.</em></p>
+    </div>
+
+    <div class="theme-card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>6. Founding Entity Governance Capture</h3>
+        <span style="font-size:0.75rem;background:#ef444422;color:#ef4444;padding:2px 10px;border-radius:999px;border:1px solid #ef444444;">STRUCTURAL RISK</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">IO, CF, and EMURGO are simultaneously the largest proposers AND significant governance voters. CF disclosed its CEO sits on the Snek advisory board yet voted YES on the Snek loan. IO is a proposer, voter, and dominant technical contributor. This triple role creates structural conflicts that disclosures mitigate but do not resolve. DReps are beginning to name this explicitly. <strong style="color:#e2e8f0;">Explicit flaggers:</strong> GAIA, InputEndorsers, $brock. <em style="color:#64748b;">Trajectory: Growing awareness, insufficient structural remedy yet.</em></p>
+    </div>
+
+    <div class="theme-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h3>7. Quality vs. Quantity of DRep Participation</h3>
+        <span style="font-size:0.75rem;background:#f59e0b22;color:#f59e0b;padding:2px 10px;border-radius:999px;border:1px solid #f59e0b44;">REQUIRES ATTENTION</span>
+      </div>
+      <p style="font-size:0.875rem;color:#94a3b8;line-height:1.7;">The 7,140 rationale files show a starkly bimodal distribution. Fewer than 15 DReps produce the vast majority of intellectual content — multi-page, data-rich, condition-setting analyses that actually move governance outcomes. The long tail writes 1–3 sentence process-enablers. This is not necessarily a problem — liquid democracy is designed so analytical effort concentrates — but if the analytical core burns out or is captured, the rest of the DRep set provides no backstop. <em style="color:#64748b;">The question is not whether the quality tail is thin — it is whether the thin tail is enough.</em></p>
+    </div>
+  </div>
+
+  <!-- ─── PART 5: Cultural Diversity Spotlight ─── -->
+  <div style="margin-bottom:2rem;">
+    <h2 style="margin-bottom:0.5rem;">Cultural Diversity Spotlight</h2>
+    <p class="section-intro">Cardano's DRep community spans continents. The geographic and cultural diversity of active governance participants is one of the system's most underappreciated assets — and a sign of the protocol's genuine global reach.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+
+      <div class="theme-card" style="border-top:3px solid #ef4444;">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">🇯🇵</div>
+        <h3>The Japanese Cohort</h3>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;margin-top:0.4rem;">YUTA, SIPO, BWtake(長崎)Japan, SASA_nagamaru, AKYO. Disproportionately active (5 of the top 20 DReps) and analytically rigorous. Write bilingual rationales. YUTA is the dataset's most cited constitutional authority. SIPO brings comparative blockchain governance knowledge. The Japanese community represents a model for how culturally distinct communities can integrate deeply into global governance.</p>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #10b981;">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">🌍</div>
+        <h3>The African Voice</h3>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;margin-top:0.4rem;">Wada DRep (pan-African network), Addisetech (Ethiopia). Frames governance through representation and inclusion — concerns rarely voiced by other DRep communities. Wada ran constitutional workshops and translation services. Addisetech publicly explained on the Cardano Forum why they voted No as an African — a perspective the ecosystem needs to hear. This community is underrepresented in voting power relative to its intellectual contribution.</p>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #6366f1;">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">🌎</div>
+        <h3>Latin America &amp; Beyond</h3>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;margin-top:0.4rem;">Arturo (Argentina, Buenos Aires constitutional workshop participant) and DReps from Cardano in Oceania demonstrate that governance participation spans the global south. The ₳ Bïrd Called Px DRep participated in the Buenos Aires Constitutional Convention and brought that direct experience to their rationale. This geographic spread is not cosmetic — these communities have direct skin in the game on questions of financial inclusion and sovereignty.</p>
+      </div>
+
+      <div class="theme-card" style="border-top:3px solid #f59e0b;">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">🏛️</div>
+        <h3>The Institutional Layer</h3>
+        <p style="font-size:0.85rem;color:#94a3b8;line-height:1.6;margin-top:0.4rem;">CF, EMURGO, Intersect, Eternl, and HOSKY (as a protocol persona) represent a distinct institutional DRep class. They bring organizational credibility but also structural conflicts. Their outsized influence — CF rationales alone often run 1,500+ words while their vote carries institutional weight — raises questions about whether liquid democracy's concentration of analytical effort risks becoming concentration of power.</p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</section>

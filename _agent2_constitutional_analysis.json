@@ -1,0 +1,564 @@
+{
+  "constitutionDebate": {
+    "originalConstitution": {
+      "proposal": "Cardano Constitution to Replace the Interim Constitution",
+      "overallSentiment": "Broadly supportive with pragmatic acceptance of imperfection",
+      "argumentsFor": [
+        "Reflected the will of delegates at the Buenos Aires Constitutional Convention in Argentina",
+        "Major step up from the Interim Constitution — replaces an imperfect placeholder with a delegate-endorsed document",
+        "Interim Constitution may have required this draft to be in place before alternatives could be proposed",
+        "Constitution is a living document — amendable over time, not a permanent final text",
+        "Establishes 10 Cardano Blockchain Tenets and a dedicated Treasury Budget article",
+        "Reinforces three-body governance model (DReps, SPOs, CC) with checks and balances",
+        "Redistributes governance power from the 3 founding entities (IOG, CF, Emurgo) to ADA holders",
+        "Strong incentives for community to act in good faith tied to ADA price appreciation",
+        "Provides foundation for liquid democracy and on-chain governance tools"
+      ],
+      "argumentsAgainst": [
+        "1 lovelace = 1 vote model is plutocratic and excludes smaller holders",
+        "Document too long and complex — risks creating Cardano bureaucracy",
+        "Lack of clear definitions invites ambiguous interpretation",
+        "500 ADA DRep deposit is too high, especially for participants in developing countries",
+        "100,000 ADA govDeposit for governance actions is an extreme barrier — no pooling tools available",
+        "Off-chain governance given too prominent a role",
+        "Constitutional Committee given too much prominence in a decentralized system",
+        "Gov.tools limitations meant no competing constitution could be submitted",
+        "Africa and other underrepresented regions have less than 2% governance representation",
+        "No mechanism for quadratic voting or DID-based identity — governance centralized from the start",
+        "Overly precise parameter guardrails should ideally be set by individual votes"
+      ],
+      "controversialClauses": [
+        "Article 1 Section 1 Tenet 9 and Article 2 Section 2 — seen as violated by high deposit requirements",
+        "Article 3 Section 5 — alternative to gov.tools not ready, perceived violation",
+        "1 token = 1 vote model codified — prevents future alternative governance models",
+        "Prominent role of Constitutional Committee",
+        "Support for off-chain governance"
+      ],
+      "notableNOVotes": ["Cardano Advocate (1 token 1 vote concern)", "some anonymous DReps citing process concerns"],
+      "notableYESVotes": ["Cardano Foundation", "HOSKY", "InputEndorsers", "Cerkoryn", "LloydDuhon (Chair of Proceedings, Buenos Aires)", "Gnobudy Special (Convention delegate)", "Rodrigo-[CHIL] (Chilean delegate)", "GAIA (Yes with extensive concerns about tooling and deposit barriers)", "Martin Lang", "Talos", "Cardano Whale", "EMURGO"],
+      "consensusView": "Near-universal YES with the understanding this is a minimum viable starting point, not a finished product"
+    },
+    "v2Evolution": {
+      "keyDifferences_v2_0": {
+        "primaryAuthor": "YUTA",
+        "changes": [
+          "Removed the Budget Info Action requirement — streamlines treasury withdrawals",
+          "Removed DRep and SPO Codes of Conduct (deemed unenforceable)",
+          "Added requirement for immutable URLs in governance actions",
+          "Expanded and refined defined terms for precision",
+          "Separated 'must' rules from 'should' guidelines in Appendix I",
+          "Standardized governance proposal format"
+        ],
+        "controversies": [
+          "Process concern: no global workshops or in-person convention — purely asynchronous online process",
+          "Removal of Budget Info Action seen by some as weakening treasury oversight link to long-term priorities",
+          "KYC concern: treasury withdrawal recipients required to disclose identity (problematic for pseudonymous DReps like HOSKY)",
+          "Staggering CC member terms — unclear how this works given ledger only recognizes one CC",
+          "Disclosure requirements for multi-role holders (DRep+SPO) seen as unenforceable",
+          "Wording 'DReps have voting power equal to number of Lovelace delegated' would prevent quadratic voting",
+          "Ada Holder vs Ada Owner terminology debate begins"
+        ],
+        "keyVotes": {
+          "YES": ["Cardano Foundation", "HOSKY", "Cerkoryn", "InputEndorsers", "Cardano Cypherpunks", "DeepStatecraft"],
+          "NO": ["Eternl DRep Committee (detailed line-by-line criticism of unenforceable clauses and grammatical errors)"],
+          "ABSTAIN": ["EMURGO (process concerns and removal of budget Info Action weakens fiscal accountability)"]
+        }
+      },
+      "v2_3": {
+        "changes": [
+          "Continued refinement from v2.0, incorporating DRep feedback",
+          "More clarity on Net Change Limit",
+          "Unified terminology improvements",
+          "Participated stake active in over 86% of DRep active stake for v2.0 review",
+          "Further simplification of budget process"
+        ],
+        "controversies": [
+          "EMURGO voted NO: revised NCL weakens explicit link between approved budgets and treasury withdrawals",
+          "Updated Audit Requirement creates uncertainty around execution and funding responsibility",
+          "Expanded Custodian Consent clause may increase centralization risks",
+          "CRITICAL vs SECURITY parameter category confusion in guardrails (Cerkoryn noted)"
+        ],
+        "keyVotes": {
+          "YES": ["Cardano Foundation", "HOSKY", "Cerkoryn", "InputEndorsers", "Eternl DRep Committee"],
+          "NO": ["EMURGO (fiscal accountability concerns)"]
+        }
+      },
+      "v2_4": {
+        "changes": [
+          "Reverted 'Ada Holder' back to 'Ada Owner' (compromise to unblock process)",
+          "Removal of Budget Info Action confirmed",
+          "Requirement for immutable proposal documents (security upgrade)",
+          "Removed non-binding expectation clauses (Codes of Conduct fully removed)",
+          "Strengthened per-withdrawal accountability",
+          "Defined Terms block added up front",
+          "Extended audit and accountability safeguards to all treasury withdrawals"
+        ],
+        "controversies": [
+          "Cardano Foundation acknowledged 'Ada Owner' reversion as less precise but accepted it as compromise",
+          "Debate over 'Ada Holder' (ledger-accurate) vs 'Ada Owner' (legally precise) continues",
+          "InputEndorsers raised concern that 'Ada Owner' is legally fuzzy in pooled wallets"
+        ],
+        "keyVotes": {
+          "YES": ["Cardano Foundation", "HOSKY", "Cerkoryn", "EMURGO (reversed from NO on v2.3)", "Eternl DRep Committee"],
+          "NO": []
+        },
+        "significance": "EMURGO's reversal from NO (v2.3) to YES (v2.4) signals that the Ada Owner reversion and removal of unenforceable clauses addressed their core concerns"
+      }
+    },
+    "crossVersionThemes": [
+      "The Budget Info Action removal was consistently debated — most DReps ultimately supported removing it as reducing bureaucracy",
+      "Enforceability is a recurring theme: DRep disclosure requirements, SPO overlap disclosure, and Codes of Conduct all flagged as unenforceable",
+      "YUTA as author received broad credit for responsive engagement with community feedback across all versions",
+      "Each version passed with broad YES majority, suggesting the community strongly favors incremental improvement over paralysis"
+    ]
+  },
+
+  "ccAnalysis": {
+    "replacingInterimCC": {
+      "result": "Broad YES support — seen as milestone in decentralization",
+      "keyPoints": [
+        "Transitions from appointed (IOG, CF, Emurgo, Intersect) to community-elected members",
+        "Staggered 73- and 146-epoch terms for stability",
+        "Process was on-chain with public audits and full documentation",
+        "Cardano Foundation recused two members (Nicolas Cerny and Matthias Benkort) due to their CC candidacy",
+        "HOSKY: replaces centralized control with elected governance — prevents 'governance vacuum'",
+        "EMURGO: smooth transition, confident in new CC's ability to uphold constitution"
+      ],
+      "unanimity": "Near-unanimous YES — one of the most broadly supported structural actions"
+    },
+    "addingCCMember": {
+      "firstAddition": {
+        "member": "Cardano Curia",
+        "note": "Intersect held off-chain vote, community chose Cardano Curia for the vacant seat",
+        "support": "Broadly supported — Cerkoryn noted fair process"
+      },
+      "christinaAddition": {
+        "member": "Christina Gianelloni",
+        "controversy": "Runner-up in Intersect snap election — disputed whether adding runner-up is valid",
+        "argumentsFor": [
+          "Ekklesia poll showed community support",
+          "Extra CC member above minimum provides resilience buffer",
+          "Prevents governance paralysis when members resign",
+          "CC role is thankless — more volunteers are beneficial"
+        ],
+        "argumentsAgainst": [
+          "EMURGO voted NO: election was conducted for ONE seat, Curia was clear winner",
+          "Constitutionally ambiguous — document doesn't clearly permit expanding beyond replacement",
+          "Expanding from 7 to 8 changes decision thresholds",
+          "Potential unplanned compensation costs"
+        ],
+        "split": "YES majority but with notable dissent from EMURGO on procedural grounds"
+      }
+    },
+    "reducingMinSize_7to5": {
+      "context": "One CC member retired unexpectedly, causing governance stall in December 2025",
+      "argumentsFor": [
+        "Provides safety margin — committee remains functional if 2 members resign unexpectedly",
+        "Prevents governance paralysis experienced when a member retired",
+        "Lowering minimum does not change percentage required to ratify actions",
+        "Cerkoryn: reduces minimum, does not necessarily reduce actual size",
+        "InputEndorsers: pragmatic — if not ideal, can always hold new election and increase size later"
+      ],
+      "caveat": "Cardano Foundation noted a 'root-reference' technical conflict (memory units proposal passed first), making this technically invalidated. Also warned that committee of 5 requires only 2 dissenting votes to block action (vs 3 for committee of 7)",
+      "support": "Broadly supported YES"
+    },
+    "ccCompensation": {
+      "proposal": "200,000 ADA per seat for Epochs 581-653 (total ~1M ADA)",
+      "argumentsFor": [
+        "Constitution anticipates key governance roles should be fairly compensated",
+        "Fair compensation ensures qualified and unbiased individuals can dedicate necessary time",
+        "Accountability for public resources is non-negotiable — CC role is substantial work",
+        "InputEndorsers: CC should serve as independent barrier to governance capture"
+      ],
+      "argumentsAgainst": [
+        "Cardano Foundation (NO): Improper sequencing — compensation before accountability framework",
+        "High pre-determined amount risks attracting candidates motivated by payment rather than duty",
+        "No calculation provided for 200k ADA per seat figure",
+        "High workload is a governance design flaw — fix the design, don't compensate for structural bottleneck",
+        "EMURGO (ABSTAIN): unclear if 1M ADA figure is for total or per-seat, need shared information space",
+        "Cerkoryn (NO): too much too soon, should be supplementary income not a full-time salary"
+      ],
+      "HOSKYNote": "ABSTAINED explicitly due to conflict of interest as a CC member",
+      "outcome": "Contentious — CF and Cerkoryn voted NO, EMURGO and HOSKY abstained, InputEndorsers voted YES"
+    }
+  },
+
+  "nclAnalysis": {
+    "overview": "The Net Change Limit was one of the most contested areas of governance. Multiple competing proposals appeared simultaneously, with DReps divided over appropriate level and methodology.",
+    "proposalTimeline": {
+      "initialNCL_350M_2025": {
+        "proposal": "2025 Net Change Limit (350M ADA, Epochs 532-604)",
+        "CFPosition": "YES — constitutional prerequisite, grounded in previous year's inflows",
+        "HOSKYPosition": "NO — sets limit too high, frames cap as target, sends wrong fiscal signal",
+        "CerkorynPosition": "NO — excessively high, no governance maturity yet to justify, risks incentivizing max withdrawal",
+        "EMURGOPosition": "YES — 2025 is a critical transition year, flexibility needed for emerging regulatory opportunities"
+      },
+      "competingNCL_300M_and_250M_2025_2026": {
+        "proposal": "Set 2025 NCL of 300M ADA, 2026 NCL of 250M ADA",
+        "CFPosition": "NO — undermines stability of already-approved 350M 2025 NCL, premature 2026 definition",
+        "CerkorynPosition": "NO — still too high"
+      },
+      "NCL_300M_563to635": {
+        "proposal": "Set a 300 million ADA Net Change Limit for Epochs 563-635",
+        "CFPosition": "NO — altering ratified NCL mid-year undermines governance stability and trust",
+        "CerkorynPosition": "YES — after 200M proposal failed, switched to YES as compromise: tighter than 350M while covering approved budgets, ADA price up ~50% enabling further restraint"
+      },
+      "NCL_2025Cardano_200M": {
+        "proposal": "2025 Cardano NCL (200M ADA)",
+        "CerkorynPosition": "YES — fiscally responsible midpoint, preserves/grows treasury while existing 350M keeps process open, tighter cap forces better proposals"
+      },
+      "NCL_Extension_2025": {
+        "proposal": "2025 Net Change Limit Extension",
+        "CerkorynPosition": "YES — 8-epoch extension simplifies transition"
+      },
+      "NCL_613to713_350M": {
+        "proposal": "Net Change Limit (Epoch 613 to Epoch 713) — 350M ADA for ~16.5 months",
+        "CFPosition": "YES — operational necessity, corrects governance calendar, incorporates unspent stablecoin budget, annualized rate lower than previous year",
+        "EMURGOPosition": "YES — constitutional requirement, duration realignment is meaningful governance improvement",
+        "CerkorynPosition": "NO — reserve dwindling, ADA at $0.33 limits USD leverage, 2030 Vision not refined enough for comfort",
+        "InputEndorsersPosition": "ABSTAIN — NCLs are performative theater; real battles are individual treasury withdrawals",
+        "keyCritique_InputEndorsers": "NCLs as social consensus performed 12-18 months in advance don't limit anything — if majority wants to extend/increase, they will. The real governance work is scrutinizing individual withdrawals."
+      },
+      "NCL_300M_613to713": {
+        "proposal": "Net Change Limit of 300 Million ADA for Epochs 613-713",
+        "CerkorynPosition": "YES — prefers 300M over 350M, dwindling reserve and ADA price concerns"
+      }
+    },
+    "coreDebateDimensions": [
+      "Is 300M too high or too low? Fiscal conservatives (HOSKY, Cerkoryn) say too high; CF and EMURGO accept it as data-backed",
+      "Should NCL be based on inflows (CF: yes, grounded in empirical data) or strategic spending need (Cerkoryn: spending should reflect value delivered not inflow capacity)?",
+      "Are NCLs meaningful governance tools or 'performative theater'? InputEndorsers provocatively argued the latter",
+      "Multi-year vs single-year NCLs: CF initially preferred 1-year then endorsed longer period for calendar alignment",
+      "Should approved NCLs be revisited mid-cycle? CF strongly argued NO (governance stability); others said YES if needed"
+    ],
+    "300M_arguments_too_high": [
+      "Signals that maximum is the target, not a ceiling",
+      "Treasury reserve is dwindling, emissions declining",
+      "ADA price in USD gives limited real-world leverage",
+      "Governance system still immature — no robust oversight to justify level",
+      "Fiscal conservatism should be signaled at the framework level",
+      "Approving 100% of last year's income sends the wrong message (HOSKY)"
+    ],
+    "300M_arguments_appropriate": [
+      "Grounded in realized inflows, provides empirical basis",
+      "Constitutional prerequisite — without NCL, all treasury withdrawals blocked",
+      "Covers approved budgets while being noticeably lower than 350M ceiling",
+      "Annualized rate for longer-period NCL is actually lower than previous year",
+      "Carries over authority for previously approved unspent stablecoin budget",
+      "All withdrawals still subject to separate scrutiny and 67% approval threshold"
+    ]
+  },
+
+  "budgetProcessAnalysis": {
+    "proposal": "Cardano Budget Process Framework (facilitated by Intersect)",
+    "overallSentiment": "Generally positive but with specific critiques about process clarity and Intersect centralization",
+    "supportArguments": [
+      "Strategic alignment to 2030 Strategic Pillars and ecosystem KPIs is a needed improvement",
+      "Work package-based budgeting allows DReps to compare outcomes directly",
+      "1,000 ADA donation and 100,000 ADA minimum threshold deter low-effort submissions",
+      "67% Ekklesia threshold is improvement over previous 50% threshold (Cerkoryn)",
+      "Milestone-based smart contract disbursement improves accountability",
+      "Multi-party checks and balances and milestone tracking align with responsible treasury stewardship",
+      "Significant improvement from 2025 cycle (Cerkoryn)"
+    ],
+    "critiques": [
+      "InputEndorsers voted NO: Ekklesia voting process critically underspecified — how long will it last? How is 67% calculated per proposal vs session? What is minimum DRep participation threshold? How are passive abstentions counted? Too much interpretive power left to Intersect",
+      "Static 100k ADA minimum risks artificially inflating project costs (CF recommendation)",
+      "Cardano Foundation caution about centralization of admin duties — this is not the ONLY way to request treasury funding",
+      "Need for SME support for DReps evaluating highly technical proposals (CF)",
+      "Large institutional DReps with Intersect presence have participation advantages over small DReps (InputEndorsers)",
+      "No RFP-style process — open-ended proposals less efficient than defined RFPs (CF recommendation)",
+      "Budget cycle should start earlier (CF recommendation)"
+    ],
+    "cfDisclosure": "CF is one of five members of the Oversight Committee for the budget process — acknowledged conflict of interest",
+    "intersectRole": "Intersect facilitated and submitted largest budget in 2025; centralization concerns are recurring",
+    "keyVotes": {
+      "YES": ["Cardano Foundation", "EMURGO", "Cerkoryn", "most DReps"],
+      "NO": ["InputEndorsers (Ekklesia process underdefined)"]
+    }
+  },
+
+  "parameterChanges": {
+    "increaseMemoryUnits": {
+      "proposal": "Increase Transaction and Block Memory Units (Part 1 of 2)",
+      "change": "Per-transaction memory +17.9%, per-block +16.1%",
+      "context": "In development since December 2023, over 2 years of analysis by Intersect Parameter Committee",
+      "support": "Near-unanimous YES — one of the most straightforward technical votes",
+      "arguments": [
+        "Clear developer experience benefits — allows more complex Plutus scripts without inefficient workarounds",
+        "Performance benchmarking shows system resources (Kernel RSS, CPU) remain stable",
+        "Block diffusion remains well within 5-second 95% propagation target",
+        "Part 1 of 2 structure required by Constitutional Guardrails (MTEU-M-04) — maximum increase per epoch",
+        "CF advocates bundling parameter changes to reduce SPO voting burden"
+      ],
+      "dissent": "Minimal — Cerkoryn and InputEndorsers both voted YES noting it as 'obvious benefit'",
+      "technicalNote": "Cardano Foundation notes this proposal created a 'root-reference conflict' for the subsequent CC size reduction proposal — parameter changes must reference the hash of the last ratified change"
+    },
+    "decreaseTreasuryTax": {
+      "proposal": "Decrease Treasury Tax from 20% to 10%",
+      "parameter": "treasuryCut (tau / treasury_growth_rate) — all three names refer to the same parameter",
+      "background": "IOG researchers originally recommended 5% at Shelley launch, but parameter was set to 20%. Effective rate is ~33% due to total stake calculation vs active stake",
+      "supportArguments": [
+        "Treasury has had sufficient time to accumulate value",
+        "Small increase in rewards for delegators and SPOs is better use than treasury growth at this stage",
+        "Cerkoryn: voted YES but preferred incremental reduction rather than sudden 10% drop"
+      ],
+      "oppositionArguments": [
+        "Cardano Foundation (NO): No multi-year projections, no bear market scenario modeling, inflated APY baseline overstates benefits, halving treasury tax is a drastic change",
+        "CF requested: 5-year multi-year treasury projections, staking simulations with agent-based modeling, inflation analysis, reversion/recovery plan with defined triggers",
+        "InputEndorsers (NO): Wants gradual reduction, not a sharp swing. 'Financial predictability and gradual change' is how global financial systems should evolve. Will support future gradual decrease.",
+        "HOSKY position not observed in files read"
+      ],
+      "controversy": "CF's NO was not opposition to reducing tau, but opposition to doing so without sufficient financial modeling",
+      "split": "Contested — significant YES support but CF and InputEndorsers voted NO"
+    },
+    "kParameter": {
+      "proposal": "Should K increased",
+      "parameter": "desiredNumberOfPools (k) — target number of stake pools, currently 500",
+      "constitutionalStatus": "Voted unconstitutional by CC due to lack of relevant supporting materials",
+      "cerkoryn": "YES in principle — would shake up stake and increase decentralization. BUT notes k is ineffective: there are 3k+ pools vs 500 target, and k measures pools not operators. Long-term a new RSS is needed.",
+      "inputEndorsers": "NO — respects CC's unconstitutionality finding. Constitutional form and minimum requirements must be respected for governance credibility.",
+      "note": "This vote demonstrated the CC's role in blocking governance actions that fail procedural standards"
+    }
+  },
+
+  "hardForkNaming": {
+    "HOSKYHardFork": {
+      "context": "First real governance vote in Voltaire era — Adam Dean (HOSKY token creator) submitted this as the inaugural governance action to name the fork",
+      "outcome": "Voted NO by most DReps",
+      "mainReasons": [
+        "Missing/corrupted data on gov.tools — couldn't read the proposal",
+        "LloydDuhon: While appreciating HOSKY's contributions, the community needs to develop collaboration muscles and communicate before raising proposals",
+        "Cerkoryn: Counter-proposed naming it 'Sadosky Hard Fork' after Argentine mathematician Manuel Sadosky — rhymes with 'Hosky' and honors the host country of the Constitutional Convention",
+        "GAIA: Voted NO solely because the external data was missing/altered — couldn't vote yes on an unreadable proposal",
+        "InputEndorsers: Abstained — data missing from gov.tools"
+      ],
+      "significance": "The very first governance action demonstrated that DReps would reject proposals on process and data integrity grounds even for popular community figures",
+      "spirit": "Affectionate toward HOSKY as a community institution, but firm on governance norms"
+    },
+    "PlominHardFork": {
+      "context": "Renamed Chang 2 Hard Fork to honor Matthew Plomin, a community member who passed away",
+      "outcome": "Near-unanimous YES — deeply personal tribute",
+      "sentiments": [
+        "Cerkoryn: 'Matthew Plomin was one of the greatest visionaries I've ever had the privilege of knowing. His passion, dedication, and ability to inspire others left an indelible mark.'",
+        "LloydDuhon: 'RIP Matthew Plomin. He was an amazing contributor to our ecosystem and a person I considered a friend... Much love to Jillian and the children.'",
+        "Cardano Foundation: Matthew was a delegate at the Buenos Aires Constitutional Convention, co-lead of CC Election Working Group, primary driving force behind Article VIII, and a dedicated DRep"
+      ],
+      "significance": "Demonstrated that the community can come together around deeply human moments with near-unanimous consensus"
+    },
+    "vanRossemHardFork": {
+      "context": "Protocol Version 11 named after Max van Rossem, another passed community member",
+      "outcome": "Broad YES support",
+      "sentiments": [
+        "Cardano Foundation: Max was integral to election of first elected CC, contributed to constitution development, founding AdaMoments project, facilitated Dutch community meetups",
+        "HOSKY: 'No brainer, this is a common practice to honor those who have poured their lives into Cardano.'",
+        "Cerkoryn: 'Naming the next hard fork after him seems like the least we can do to honor him'"
+      ],
+      "significance": "Hard fork naming has become a community tribute mechanism — the HOSKY attempt aside, both successful renamings honored contributors who passed away"
+    },
+    "pattern": "The hard fork naming episode reveals an important governance norm: DReps will enforce data integrity and process standards even for beloved community figures (HOSKY), but will unite quickly around human tributes to those who served the ecosystem (Plomin, van Rossem)"
+  },
+
+  "keyDReps": {
+    "strongSupporters_constitutional": [
+      {
+        "name": "LloydDuhon",
+        "role": "Chair of Proceedings, Buenos Aires Constitutional Convention; Civics Committee member",
+        "pattern": "Consistent YES on constitutional actions. Personal relationships with governance participants. Emphasis on building collaboration muscles.",
+        "notable": "Voted NO on HOSKY Hard Fork while expressing affection — 'build our collaboration muscles and find a way to communicate on the actions we wish to raise prior to raising them'"
+      },
+      {
+        "name": "HOSKY",
+        "role": "Constitutional Committee member (hence CC Compensation abstention), major DRep by delegated stake",
+        "pattern": "YES on constitution and CC actions, NO/cautious on NCL spending levels. Abstained on CC compensation due to conflict of interest. Voted NO on initial 350M NCL.",
+        "notable": "Despite being the subject of the HOSKY Hard Fork vote, was absent from that specific file. Abstained on CC compensation 'as it involves compensation for Constitutional Committee members' — exemplary conflict-of-interest handling."
+      },
+      {
+        "name": "Cardano Foundation",
+        "role": "Founding entity DRep, one of five Oversight Committee members for Intersect budget process",
+        "pattern": "YES on constitution iterations and CC structure. Detailed analytical rationales with PDF versions. Often NO on proposals lacking sufficient modeling (treasury tax, NCL mid-year revision). Strong advocate for accountability frameworks before compensation.",
+        "notable": "Recused two members from CC replacement vote due to conflict of interest. Voted NO on CC compensation — not opposing principle but demanding accountability framework first."
+      },
+      {
+        "name": "EMURGO",
+        "role": "Founding entity DRep",
+        "pattern": "Abstained on constitution v2.0 (process concern), voted NO on v2.3 (NCL/audit clarity), YES on v2.4 (concerns addressed). YES on CC replacement and CC compensation principle. Generally supportive of governance structure with nuanced critiques.",
+        "notable": "The EMURGO v2.3 NO -> v2.4 YES flip is significant — shows responsive engagement with community document iteration"
+      },
+      {
+        "name": "Cerkoryn",
+        "role": "Technical governance analyst, parameter committee follower",
+        "pattern": "YES on constitutional documents, YES on technical parameter changes, consistently NO on high NCL proposals (350M), YES on lower NCLs (200M-300M). Detailed, principled rationales. Voted NO on CC compensation (too high). YES on K increase.",
+        "notable": "Most consistent fiscal conservative voice. Proposed 'Sadosky Hard Fork' as counter to HOSKY proposal — highest quality alternative suggestion in the whole dataset."
+      },
+      {
+        "name": "InputEndorsers",
+        "role": "Participated in original Constitution workshops, early YUTA v2.0 collaborator",
+        "pattern": "YES on all constitution versions. YES on CC actions. ABSTAIN on NCL (sees them as 'performative theater'). NO on CC compensation (supported principle but voted YES). NO on Intersect budget process (underspecified Ekklesia). NO on Treasury Tax reduction (prefers gradual).",
+        "notable": "Most intellectually provocative DRep — willing to swim against current on NCL theater, direct criticism of Intersect process clarity, concern about large DRep institutional advantages"
+      }
+    ],
+    "consistentDissenters": [
+      {
+        "name": "Eternl DRep Committee",
+        "pattern": "Voted NO on v2.0 constitution (detailed line-by-line critique of unenforceable clauses, grammar issues), YES on v2.3 and v2.4 after improvements. Forensic quality of analysis — highest technical precision in the dataset.",
+        "notable": "Their v2.0 NO vote included detailed editorial commentary: 'Have an LLM check the grammar and spelling' — unusually direct feedback"
+      },
+      {
+        "name": "Cardano Advocate",
+        "pattern": "Voted NO on original constitution due to 1 token = 1 vote concerns. Advocates for alternative weighted voting models considering contribution, time in ecosystem, and knowledge.",
+        "notable": "Raises a systemic governance design critique that few other DReps engage with directly: that the plutocratic model is baked in at the foundational level and may be impossible to change once whales have a vested interest in keeping it"
+      },
+      {
+        "name": "GAIA",
+        "pattern": "YES on constitution with extensive concerns. Raised: on-chain enforceability gap, 1 token = 1 vote plutocracy risk, high deposit barriers, gov.tools quality, competing constitution submission not enabled.",
+        "notable": "Most detailed critic of constitutional tooling and participation barriers. Raised the governance infrastructure critique most comprehensively."
+      }
+    ]
+  },
+
+  "notableQuotes": [
+    {
+      "dRep": "InputEndorsers",
+      "proposal": "Net Change Limit (Epoch 613 to Epoch 713)",
+      "quote": "NCLs are in reality a bit of performative theater mandated by the constitution... There is literally no one who knows the ideal NCL today. It could be 150 Million ADA, it could be 250 Million ADA. Or it could be 400 Million ADA if we are to integrate the NASDAQ in 2026.",
+      "significance": "Radical critique of NCL mechanism as a governance tool"
+    },
+    {
+      "dRep": "InputEndorsers",
+      "proposal": "CARDANO BLOCKCHAIN ECOSYSTEM CONSTITUTION v2.3",
+      "quote": "Our constitutions are but snapshots in time of an ephemeral consensus — not a national constitution. They can and should be improved by the community without waiting for one of the big entities to spearhead the process. Evolution waits for no one.",
+      "significance": "Defines the philosophical stance on constitutional governance — living document, not sacred text"
+    },
+    {
+      "dRep": "Cerkoryn",
+      "proposal": "Rename the Chang 2 Hard Fork to the Plomin Hard Fork",
+      "quote": "Matthew Plomin was one of the greatest visionaries I've ever had the privilege of knowing. His passion, dedication, and ability to inspire others left an indelible mark on the Cardano community.",
+      "significance": "Personal tribute reflecting the human dimension of Cardano governance"
+    },
+    {
+      "dRep": "Cardano Foundation",
+      "proposal": "CARDANO BLOCKCHAIN ECOSYSTEM CONSTITUTION v2.4",
+      "quote": "The removal of non-binding 'expectations' (such as Codes of Conduct) clarifies the document's purpose: it is a set of hard rules for the ledger, not a social manifesto. This focus on enforceability is a necessary evolution for long-term stability.",
+      "significance": "Articulates the core principle driving constitution evolution — enforceability over aspiration"
+    },
+    {
+      "dRep": "HOSKY",
+      "proposal": "2025 Net Change Limit",
+      "quote": "Approving an NCL equal to 100 percent of last year's treasury income sends the wrong message. Until we have stronger data on actual funding needs, outcomes, and transaction volume growth, setting the NCL this high is not just unnecessary, it is the opposite of conservative.",
+      "significance": "Despite being a 'meme' DRep, demonstrates serious fiscal governance positions"
+    },
+    {
+      "dRep": "Cerkoryn",
+      "proposal": "2025 Cardano NCL",
+      "quote": "A tighter cap protects the protocol while on-chain governance, auditing, and budgeting mechanisms are still in their infancy, ensuring we learn and iterate under controlled risk rather than spending aggressively before the guardrails are battle-tested.",
+      "significance": "Best articulation of the conservative spending case during governance infancy"
+    },
+    {
+      "dRep": "Gnobudy Special",
+      "proposal": "Cardano Constitution to Replace the Interim Constitution",
+      "quote": "The fuel that turns a quirky idea about governance into a global social phenomenon, is 'Voting participation rewards'... Right now, only governance actions about Cardano, using Ada, can be submitted. But soon we will build the tools so that any token on Cardano can hold their own votes.",
+      "significance": "Visionary — and entertainingly unusual — rationale from a Constitutional Convention delegate"
+    },
+    {
+      "dRep": "LloydDuhon",
+      "proposal": "Name the next hard fork HOSKY Hard Fork",
+      "quote": "We're really here, in the Voltaire era. We're working together to decide the future of our chain. To my dear friend Adam Dean, thanks for raising the first issue to a vote. To the good doggo Hosky, thanks for all that you do for our chain adoption. Regrettably, I must vote to decline this proposal.",
+      "significance": "Captures the historic moment and the balance between community spirit and governance norms"
+    },
+    {
+      "dRep": "InputEndorsers",
+      "proposal": "Cardano Budget Process Framework (facilitated by Intersect)",
+      "quote": "There were a lot of improvisations and uncertainties with the Ekklesia voting stage, especially with how short it lasted, how much advance warning was given, how the thresholds were calculated, how Intersect interpreted what the vote meant... Too much power to interpret the results is left to Intersect.",
+      "significance": "Sharpest critique of Intersect's centralized role in budget process interpretation"
+    },
+    {
+      "dRep": "Cardano Advocate",
+      "proposal": "Cardano Constitution to Replace the Interim Constitution",
+      "quote": "I'm extremely concerned about the real possibility that when we find a better, fairer, and more representative [voting] model, we won't be able to upgrade it as large whales and token holders will likely not be receptive to losing voting power and influence regarding the future of Cardano.",
+      "significance": "Most prescient structural critique — the plutocracy lock-in concern"
+    },
+    {
+      "dRep": "GAIA",
+      "proposal": "Cardano Constitution to Replace the Interim Constitution",
+      "quote": "Africa — a continent with a significant population — has less than 2% representation in governance processes despite Cardano's stated goal of inclusivity and global representation.",
+      "significance": "Most pointed articulation of the representation gap"
+    },
+    {
+      "dRep": "Rodrigo-[CHIL]",
+      "proposal": "Cardano Constitution to Replace the Interim Constitution",
+      "quote": "As a Chilean, I witnessed my country's attempt to rewrite its constitution, but seeking perfection left us stuck with the old one. Progress matters more than perfection, especially in a living process that will evolve.",
+      "significance": "Real-world constitutional experience grounding the 'perfect is the enemy of good' argument"
+    },
+    {
+      "dRep": "Cardano Foundation",
+      "proposal": "Constitutional Committee Compensation Epochs 581-653",
+      "quote": "If the burden on a small number of CC members is unsustainable, the solution should be to fix the governance design (e.g., by expanding the CC to distribute the load, and incentivising CC members to take decisions efficiently) rather than compensating a few members to endure a structural bottleneck.",
+      "significance": "Systemic design thinking applied to what others treated as a straightforward compensation question"
+    }
+  ],
+
+  "themes": [
+    {
+      "theme": "Enforceability as the North Star",
+      "description": "Across all constitution versions, the dominant improvement trend was removing unenforceable provisions (Codes of Conduct, disclosure requirements, overlap declarations) and replacing them with hard ledger rules. By v2.4, CF articulated this explicitly: 'a set of hard rules for the ledger, not a social manifesto.'"
+    },
+    {
+      "theme": "Budget Info Action as Bureaucratic Redundancy",
+      "description": "The removal of the mandatory Budget Info Action was consistently supported across v2.0, v2.3, and v2.4 as reducing governance fatigue and bureaucracy, while integrating requirements directly into Treasury Withdrawals. EMURGO's initial concern (that removal weakens fiscal link) was addressed in v2.4's enhanced per-withdrawal accountability."
+    },
+    {
+      "theme": "Process Legitimacy vs Substance Quality",
+      "description": "A persistent tension between how governance actions are created (in-person conventions vs asynchronous community review) and whether the resulting document is substantively better. CF resolved this by focusing purely on substance; others (like EMURGO on v2.0) were concerned process shortcuts undermined legitimacy."
+    },
+    {
+      "theme": "Fiscal Conservatism in Governance Infancy",
+      "description": "Multiple DReps (Cerkoryn, HOSKY on NCL, CF on treasury tax, InputEndorsers on treasury tax) consistently argued for caution before the governance system's oversight mechanisms are 'battle-tested.' The lack of proven ROI from treasury spending is a recurring concern."
+    },
+    {
+      "theme": "Intersect Centralization Concern",
+      "description": "Repeated concern across budget process, CC compensation, and NCL discussions about Intersect having too much interpretive power, administrative authority, and visibility advantage over non-Intersect participants. InputEndorsers named this explicitly: large institutional DReps with Intersect presence have a structural participation advantage."
+    },
+    {
+      "theme": "Governance as Living System, Not Sacred Text",
+      "description": "Almost universal agreement that the constitution should be iteratively improved — 'snapshot in time of an ephemeral consensus' (InputEndorsers). This framing enables pragmatic YES votes even with reservations, because today's flaws can be fixed tomorrow."
+    },
+    {
+      "theme": "Human Tribute via Hard Fork Naming",
+      "description": "Hard fork naming has organically evolved into a community tribute mechanism for fallen contributors. The HOSKY Hard Fork failure and subsequent unanimous tributes to Plomin and van Rossem demonstrate a norm: personal contributions to governance earn posthumous recognition; meme-based proposals face procedural scrutiny."
+    },
+    {
+      "theme": "NCL as Performative Theater",
+      "description": "InputEndorsers' provocative framing has merit: NCLs have been revised mid-cycle, extended, and effectively renegotiated when majorities wanted different limits. The real spending decisions happen at individual withdrawal level with 67% approval. The NCL is a ceiling that the community will adjust as needed."
+    },
+    {
+      "theme": "Representation Deficit",
+      "description": "The 1 token = 1 vote model, high deposit barriers, and geographic underrepresentation (Africa < 2%) are systemic concerns raised by multiple DReps. The governance system was designed with plutocratic tendencies baked in, and the concern that whales will resist reform of voting power distribution is existential."
+    },
+    {
+      "theme": "DRep Fatigue and Governance Efficiency",
+      "description": "Reduction of redundant votes (Budget Info Action removal, CC size reduction for operational resilience) is consistently supported to manage DRep cognitive load. The Eternl DRep Committee's detailed editorial critique of v2.0 illustrates the work DReps are expected to do — and the practical limits of that expectation at scale."
+    }
+  ],
+
+  "insights": [
+    "The constitution debate is fundamentally about speed vs rigor: the YES majority adopted a pragmatic 'minimum viable governance' stance, accepting imperfect documents to keep the process moving, while NO voters demanded more careful deliberation. The Chilean experience (Rodrigo-CHIL) and Cardano Foundation's 'net positive' test both resolved this tension in favor of forward momentum.",
+    "YUTA has become the de facto constitutional maintenance lead — credited by EMURGO, InputEndorsers, and Cerkoryn for responsive, iterative improvement. This informal role lacks constitutional basis and creates a single point of dependency.",
+    "The Eternl DRep Committee's detailed v2.0 NO vote — citing grammar, capitalization, unenforceability — represents a quality standard that the community implicitly adopted. Later versions addressed most of these issues, suggesting DRep line-item feedback has real influence.",
+    "EMURGO's v2.3 NO to v2.4 YES flip on the 'Ada Owner' terminology compromise reveals how large institutional DReps can be moved by targeted specific concessions — the whole amendment process essentially unblocked on a terminology choice.",
+    "The CC compensation debate exposed a governance design problem: the Constitutional Committee's workload is high, its quorum requirements are brittle, and there is no accountability framework. The CF's 'fix the design, not the compensation' argument addresses a structural problem that DReps will be forced to revisit.",
+    "HOSKY's fiscal conservatism on the NCL reveals a governance tension: the most populist and 'meme-adjacent' DRep by reputation is one of the most fiscally conservative voices in practice, voting NO on the 350M NCL and consistently emphasizing that the limit should signal restraint not possibility.",
+    "The governance system has successfully handled multiple governance crises in quick succession: the December 2025 CC member retirement halting governance, the NCL mid-cycle revision debate, the Christina addition controversy. Each revealed protocol gaps that were then addressed through new governance actions — demonstrating resilience.",
+    "The Input Endorsers' description of NCLs as 'performative theater' is the most intellectually honest critique in the dataset. NCL has been revised at will when majorities wanted different limits — the true constraint on treasury spending is the 67% withdrawal threshold, not the NCL ceiling.",
+    "Hard fork naming is a low-stakes arena where DReps simultaneously enforce governance norms (data integrity, process compliance) and express community values (tribute to fallen contributors). The HOSKY Hard Fork failure was not a rejection of HOSKY as a community figure but a statement that governance proposals must meet minimum metadata standards.",
+    "The three founding entities (IOG, CF, Emurgo) have transitioned from controlling the CC to participating as DReps — a genuine decentralization milestone. Their diverse positions (CF and Emurgo sometimes voting differently from each other and from the majority) show the governance system is beginning to function with genuine pluralism."
+  ],
+
+  "metadata": {
+    "proposalsAnalyzed": 23,
+    "totalRationalesRead": "approximately 120 individual rationale files across all proposals",
+    "analysisDate": "2026-05-24",
+    "analyst": "Constitutional & Structural Governance Agent",
+    "keyDRepsTracked": ["Cerkoryn", "HOSKY", "Cardano Foundation", "EMURGO", "InputEndorsers", "LloydDuhon", "Eternl DRep Committee", "GAIA", "Cardano Advocate", "Rodrigo-[CHIL]", "Cardano Whale", "Gnobudy Special"]
+  }
+}

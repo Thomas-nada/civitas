@@ -1,0 +1,1396 @@
+<section data-section="quantitative" style="--bg-primary:#0f1117;--bg-card:#1a1f2e;--bg-card2:#1e2538;--accent:#3b82f6;--success:#10b981;--danger:#ef4444;--warn:#f59e0b;--text:#e2e8f0;--text-muted:#94a3b8;--border:#2d3748;background:var(--bg-primary);color:var(--text);font-family:'Inter',system-ui,sans-serif;padding:2rem;">
+
+<link href="https://cdn.tailwindcss.com" rel="stylesheet">
+
+<style>
+  [data-section="quantitative"] * { box-sizing: border-box; }
+  .q-section-title {
+    font-size:1.75rem; font-weight:800; letter-spacing:-0.02em;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom:0.25rem;
+  }
+  .q-card {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:0.75rem; padding:1.25rem;
+  }
+  .q-card-sm {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:0.75rem; padding:1rem;
+  }
+  .q-stat-value { font-size:2rem; font-weight:800; line-height:1; }
+  .q-stat-label { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-top:0.25rem; }
+  .q-bar-outer { background:#2d3748; border-radius:99px; height:18px; overflow:hidden; width:100%; }
+  .q-bar-inner { border-radius:99px; height:100%; transition:width 0.3s; display:flex; align-items:center; padding-left:6px; font-size:0.65rem; font-weight:700; color:#fff; }
+  .q-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+  .q-table th { background:#1e2538; color:var(--text-muted); text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; padding:0.6rem 0.75rem; text-align:left; border-bottom:1px solid var(--border); }
+  .q-table td { padding:0.55rem 0.75rem; border-bottom:1px solid #1e2538; vertical-align:middle; }
+  .q-table tr:last-child td { border-bottom:none; }
+  .q-table tr:hover td { background:#1e2538; }
+  .q-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:99px; font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+  .badge-yes { background:#065f46; color:#6ee7b7; }
+  .badge-no { background:#7f1d1d; color:#fca5a5; }
+  .badge-pending { background:#1e3a5f; color:#93c5fd; }
+  .badge-pass { background:#14532d; color:#86efac; }
+  .badge-fail { background:#7f1d1d; color:#fca5a5; }
+  .heat-high { background:#14532d; color:#86efac; }
+  .heat-med { background:#1c3a5e; color:#93c5fd; }
+  .heat-low { background:#1f2937; color:#9ca3af; }
+  .heat-zero { background:#1c1f2e; color:#6b7280; }
+  .heat-danger { background:#7f1d1d; color:#fca5a5; }
+  .q-callout { border-left:4px solid var(--warn); background:#1c1a0e; border-radius:0 0.5rem 0.5rem 0; padding:1rem 1.25rem; }
+  .q-caption { font-size:0.75rem; color:var(--text-muted); line-height:1.5; margin-top:0.75rem; border-top:1px solid var(--border); padding-top:0.6rem; }
+  .q-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .q-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+  .q-grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:1rem; }
+  .q-grid-5 { display:grid; grid-template-columns:repeat(5,1fr); gap:1rem; }
+  @media(max-width:900px){
+    .q-grid-4,.q-grid-5 { grid-template-columns:1fr 1fr; }
+    .q-grid-3 { grid-template-columns:1fr 1fr; }
+  }
+  @media(max-width:600px){
+    .q-grid-2,.q-grid-3,.q-grid-4,.q-grid-5 { grid-template-columns:1fr; }
+  }
+  .epoch-bar-row { display:flex; align-items:center; gap:0.5rem; margin-bottom:4px; font-size:0.72rem; }
+  .epoch-label { width:42px; text-align:right; color:var(--text-muted); flex-shrink:0; }
+  .epoch-bar { background:linear-gradient(90deg,#2563eb,#7c3aed); border-radius:2px; height:14px; min-width:2px; }
+  .epoch-count { color:var(--text-muted); font-size:0.68rem; }
+  .pie-legend { display:flex; flex-direction:column; gap:0.5rem; }
+  .pie-dot { width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+  .funnel-step { background:var(--bg-card2); border:1px solid var(--border); border-radius:0.5rem; padding:0.75rem 1rem; text-align:center; position:relative; }
+  .funnel-step::after { content:''; position:absolute; bottom:-18px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-top:14px solid var(--border); z-index:1; }
+  .funnel-step:last-child::after { display:none; }
+  .funnel-wrap { display:flex; flex-direction:column; gap:20px; max-width:380px; margin:0 auto; }
+  .archetype-chip { display:inline-block; padding:0.15rem 0.45rem; border-radius:4px; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+  .arch-aligned { background:#1e3a5f; color:#93c5fd; }
+  .arch-skeptical { background:#1a2e1a; color:#86efac; }
+  .arch-principled { background:#3b1e1e; color:#fca5a5; }
+  .arch-process { background:#2a1e3b; color:#d8b4fe; }
+  .arch-technical { background:#1e2e3b; color:#7dd3fc; }
+  .arch-economic { background:#2e2a1e; color:#fde68a; }
+  .arch-institutional { background:#1e2e2e; color:#5eead4; }
+  .number-highlight { color:var(--accent); font-weight:700; }
+  .q-section-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:1rem; }
+  .q-section-icon { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:1rem; }
+  .q-h3 { font-size:0.95rem; font-weight:700; color:var(--text); }
+  .sort-icon { color:var(--text-muted); font-size:0.65rem; margin-left:3px; cursor:default; }
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-title">Quantitative &amp; Data-Driven Analysis</div>
+  <p style="color:var(--text-muted);font-size:0.875rem;margin-top:0.25rem;">
+    Cardano On-Chain Governance Intelligence — Epochs 507–632 &nbsp;·&nbsp; 118 Actions &nbsp;·&nbsp; Analysis Date: 2026-05-24
+  </p>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     1. OVERALL GOVERNANCE STATISTICS DASHBOARD
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1e3a5f;">📊</div>
+    <span class="q-h3">Overall Governance Statistics Dashboard</span>
+  </div>
+
+  <div class="q-grid-5" style="margin-bottom:1rem;">
+    <div class="q-card-sm" style="border-top:3px solid var(--accent);">
+      <div class="q-stat-value" style="color:var(--accent);">118</div>
+      <div class="q-stat-label">Total Proposals</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Epochs 507–632</div>
+    </div>
+    <div class="q-card-sm" style="border-top:3px solid var(--success);">
+      <div class="q-stat-value" style="color:var(--success);">61.4%</div>
+      <div class="q-stat-label">Pass Rate (Resolved)</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">51 of 83 resolved</div>
+    </div>
+    <div class="q-card-sm" style="border-top:3px solid #8b5cf6;">
+      <div class="q-stat-value" style="color:#d8b4fe;">₳356.7M</div>
+      <div class="q-stat-label">Total ADA Approved</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Known amounts only</div>
+    </div>
+    <div class="q-card-sm" style="border-top:3px solid #f59e0b;">
+      <div class="q-stat-value" style="color:#fde68a;">23+</div>
+      <div class="q-stat-label">DReps w/ Rationales</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">~120 files analyzed</div>
+    </div>
+    <div class="q-card-sm" style="border-top:3px solid #ef4444;">
+      <div class="q-stat-value" style="color:#fca5a5;">6</div>
+      <div class="q-stat-label">Action Types</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Treasury dominates at 74.6%</div>
+    </div>
+  </div>
+
+  <div class="q-grid-4">
+    <div class="q-card-sm" style="background:#0f1a0f;border-color:#1a3a1a;">
+      <div style="font-size:0.7rem;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Ratified &amp; Enacted</div>
+      <div style="font-size:1.5rem;font-weight:800;color:#10b981;">51</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);">43.2% of all actions</div>
+    </div>
+    <div class="q-card-sm" style="background:#1a0f0f;border-color:#3a1a1a;">
+      <div style="font-size:0.7rem;color:#fca5a5;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Failed / Dropped</div>
+      <div style="font-size:1.5rem;font-weight:800;color:#ef4444;">32</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);">27.1% of all actions</div>
+    </div>
+    <div class="q-card-sm" style="background:#0f1520;border-color:#1a2a3a;">
+      <div style="font-size:0.7rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Pending Vote</div>
+      <div style="font-size:1.5rem;font-weight:800;color:#3b82f6;">35</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);">Active in epochs 614–632</div>
+    </div>
+    <div class="q-card-sm" style="background:#140f20;border-color:#2a1a3a;">
+      <div style="font-size:0.7rem;color:#d8b4fe;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Epoch Span</div>
+      <div style="font-size:1.5rem;font-weight:800;color:#8b5cf6;">125</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);">Epochs 507 → 632</div>
+    </div>
+  </div>
+
+  <div class="q-caption">
+    The post-Chang governance era spans 125 epochs with a combined approval rate of 61.4% among resolved actions. Treasury withdrawals dominate the action landscape at 74.6%, and the ₳356.7M figure represents only those withdrawals with known on-chain amounts — actual disbursed ADA is higher. The 35 pending proposals (all 2026 budget cycle) represent Cardano's second major fiscal wave.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     2. GOVERNANCE ACTION TYPE BREAKDOWN — HORIZONTAL BAR CHART
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1e2e3b;">📋</div>
+    <span class="q-h3">Governance Action Type Breakdown</span>
+  </div>
+
+  <div class="q-grid-2">
+    <div class="q-card">
+      <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">Count of actions by type (n=118)</div>
+
+      <!-- Treasury -->
+      <div style="margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">Treasury Withdrawals</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">88 &nbsp;<span style="color:#8b5cf6;">74.6%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:74.6%;background:linear-gradient(90deg,#7c3aed,#4f46e5);">74.6%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 43 passed</span>
+          <span style="color:#ef4444;">✗ 7 failed</span>
+          <span style="color:#3b82f6;">⊙ 38 pending</span>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div style="margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">Info Actions</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">23 &nbsp;<span style="color:#64748b;">19.5%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:19.5%;background:linear-gradient(90deg,#475569,#334155);">19.5%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 0 passed</span>
+          <span style="color:#ef4444;">✗ 23 failed</span>
+          <span style="color:#f59e0b;">0% pass rate</span>
+        </div>
+      </div>
+
+      <!-- Parameter -->
+      <div style="margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">Parameter Changes</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">5 &nbsp;<span style="color:#06b6d4;">4.2%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:4.2%;background:linear-gradient(90deg,#0891b2,#0e7490);">4%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 3 passed</span>
+          <span style="color:#ef4444;">✗ 2 failed</span>
+          <span style="color:#10b981;">60% pass rate</span>
+        </div>
+      </div>
+
+      <!-- Constitution -->
+      <div style="margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">New Constitution</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">4 &nbsp;<span style="color:#f59e0b;">3.4%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:3.4%;background:linear-gradient(90deg,#d97706,#b45309);">3%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 2 passed</span>
+          <span style="color:#ef4444;">✗ 2 failed</span>
+          <span style="color:#f59e0b;">50% pass rate</span>
+        </div>
+      </div>
+
+      <!-- Committee -->
+      <div style="margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">New Committee</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">3 &nbsp;<span style="color:#10b981;">2.5%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:2.5%;background:linear-gradient(90deg,#059669,#047857);">2%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 2 passed</span>
+          <span style="color:#ef4444;">✗ 1 failed</span>
+          <span style="color:#10b981;">66.7% pass rate</span>
+        </div>
+      </div>
+
+      <!-- Hard Fork -->
+      <div style="margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:0.8rem;font-weight:600;">Hard Fork</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">1 &nbsp;<span style="color:#ef4444;">0.8%</span></span>
+        </div>
+        <div class="q-bar-outer">
+          <div class="q-bar-inner" style="width:1%;background:linear-gradient(90deg,#dc2626,#b91c1c);">1%</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:3px;font-size:0.65rem;">
+          <span style="color:#10b981;">✓ 1 passed</span>
+          <span style="color:#10b981;">100% pass rate</span>
+        </div>
+      </div>
+
+      <div class="q-caption">
+        Treasury withdrawals account for nearly three-quarters of all on-chain governance actions, reflecting Cardano's primary use of the governance system for funding allocation. The single hard fork (Plomin, epoch 529) has the highest pass rate at 100%, while info actions have a 0% pass rate — making them de facto polling tools rather than actionable governance mechanisms.
+      </div>
+    </div>
+
+    <!-- Pass Rate Comparison -->
+    <div class="q-card">
+      <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">Pass Rate Among Resolved Actions (by type)</div>
+
+      <div style="margin-bottom:1.5rem;">
+        <!-- Hard Fork: 100% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Hard Fork</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:100%;background:linear-gradient(90deg,#10b981,#059669);border-radius:99px;height:18px;display:flex;align-items:center;padding-left:6px;">
+              <span style="font-size:0.65rem;font-weight:700;color:#fff;">100%</span>
+            </div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#10b981;">100%</div>
+        </div>
+        <!-- Treasury: 86% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Treasury</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:86%;background:linear-gradient(90deg,#3b82f6,#2563eb);border-radius:99px;height:18px;display:flex;align-items:center;padding-left:6px;">
+              <span style="font-size:0.65rem;font-weight:700;color:#fff;">86%</span>
+            </div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#3b82f6;">86%</div>
+        </div>
+        <!-- Committee: 66.7% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Committee</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:66.7%;background:linear-gradient(90deg,#8b5cf6,#7c3aed);border-radius:99px;height:18px;display:flex;align-items:center;padding-left:6px;">
+              <span style="font-size:0.65rem;font-weight:700;color:#fff;">66.7%</span>
+            </div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#8b5cf6;">67%</div>
+        </div>
+        <!-- Parameter: 60% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Parameter</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:60%;background:linear-gradient(90deg,#f59e0b,#d97706);border-radius:99px;height:18px;display:flex;align-items:center;padding-left:6px;">
+              <span style="font-size:0.65rem;font-weight:700;color:#fff;">60%</span>
+            </div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#f59e0b;">60%</div>
+        </div>
+        <!-- Constitution: 50% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Constitution</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:50%;background:linear-gradient(90deg,#ec4899,#db2777);border-radius:99px;height:18px;display:flex;align-items:center;padding-left:6px;">
+              <span style="font-size:0.65rem;font-weight:700;color:#fff;">50%</span>
+            </div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#ec4899;">50%</div>
+        </div>
+        <!-- Info: 0% -->
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:10px;">
+          <div style="width:130px;font-size:0.75rem;text-align:right;color:var(--text-muted);">Info Action</div>
+          <div class="q-bar-outer" style="flex:1;">
+            <div style="width:1%;background:#4b5563;border-radius:99px;height:18px;"></div>
+          </div>
+          <div style="width:32px;font-size:0.72rem;font-weight:700;color:#ef4444;">0%</div>
+        </div>
+      </div>
+
+      <!-- Mini summary table -->
+      <table class="q-table" style="font-size:0.72rem;">
+        <thead><tr>
+          <th>Type</th><th>Total</th><th>Passed</th><th>Failed</th><th>Pending</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>Treasury</td><td><span class="number-highlight">88</span></td><td style="color:#10b981;">43</td><td style="color:#ef4444;">7</td><td style="color:#3b82f6;">38</td></tr>
+          <tr><td>Info</td><td>23</td><td style="color:#6b7280;">0</td><td style="color:#ef4444;">23</td><td style="color:#6b7280;">0</td></tr>
+          <tr><td>Parameter</td><td>5</td><td style="color:#10b981;">3</td><td style="color:#ef4444;">2</td><td style="color:#6b7280;">0</td></tr>
+          <tr><td>Constitution</td><td>4</td><td style="color:#10b981;">2</td><td style="color:#ef4444;">2</td><td style="color:#6b7280;">0</td></tr>
+          <tr><td>Committee</td><td>3</td><td style="color:#10b981;">2</td><td style="color:#ef4444;">1</td><td style="color:#6b7280;">0</td></tr>
+          <tr><td>Hard Fork</td><td>1</td><td style="color:#10b981;">1</td><td style="color:#6b7280;">0</td><td style="color:#6b7280;">0</td></tr>
+          <tr style="font-weight:700;background:#1e2538;"><td>TOTAL</td><td><span class="number-highlight">118</span></td><td style="color:#10b981;">51</td><td style="color:#ef4444;">35</td><td style="color:#3b82f6;">38</td></tr>
+        </tbody>
+      </table>
+
+      <div class="q-caption">
+        The sharp contrast between treasury (86% pass) and info actions (0% pass) reveals a fundamental structural split in Cardano governance: binding financial actions gain traction while non-binding signaling actions routinely expire. Constitution updates show a 50% pass rate driven by iterative drafting — v2.4 succeeded only after v2.0 and v2.3 failed.
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     3. OUTCOME DISTRIBUTION
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1a1e2e;">🎯</div>
+    <span class="q-h3">Overall Outcome Distribution (n=118)</span>
+  </div>
+
+  <div class="q-card">
+    <div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">
+
+      <!-- Visual outcome bars -->
+      <div style="flex:2;min-width:280px;">
+        <div style="margin-bottom:0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <span style="font-size:0.9rem;font-weight:700;color:#10b981;">YES — Ratified</span>
+            <span style="font-size:1.1rem;font-weight:800;color:#10b981;">51</span>
+          </div>
+          <div class="q-bar-outer" style="height:24px;">
+            <div style="width:43.2%;background:linear-gradient(90deg,#10b981,#059669);border-radius:99px;height:24px;display:flex;align-items:center;padding-left:10px;">
+              <span style="font-size:0.75rem;font-weight:700;color:#fff;">43.2%</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <span style="font-size:0.9rem;font-weight:700;color:#ef4444;">NO — Failed/Dropped</span>
+            <span style="font-size:1.1rem;font-weight:800;color:#ef4444;">32</span>
+          </div>
+          <div class="q-bar-outer" style="height:24px;">
+            <div style="width:27.1%;background:linear-gradient(90deg,#ef4444,#b91c1c);border-radius:99px;height:24px;display:flex;align-items:center;padding-left:10px;">
+              <span style="font-size:0.75rem;font-weight:700;color:#fff;">27.1%</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <span style="font-size:0.9rem;font-weight:700;color:#3b82f6;">PENDING — Awaiting Outcome</span>
+            <span style="font-size:1.1rem;font-weight:800;color:#3b82f6;">35</span>
+          </div>
+          <div class="q-bar-outer" style="height:24px;">
+            <div style="width:29.7%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);border-radius:99px;height:24px;display:flex;align-items:center;padding-left:10px;">
+              <span style="font-size:0.75rem;font-weight:700;color:#fff;">29.7%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resolved-only inset -->
+      <div style="flex:1;min-width:200px;">
+        <div class="q-card-sm" style="background:#0f1a14;border-color:#14532d;">
+          <div style="font-size:0.7rem;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Among Resolved Only (n=83)</div>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:6px;">
+            <div style="width:8px;height:8px;background:#10b981;border-radius:50%;"></div>
+            <span style="font-size:0.8rem;">Pass:</span>
+            <span style="font-size:1rem;font-weight:800;color:#10b981;">61.4%</span>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <div style="width:8px;height:8px;background:#ef4444;border-radius:50%;"></div>
+            <span style="font-size:0.8rem;">Fail:</span>
+            <span style="font-size:1rem;font-weight:800;color:#ef4444;">38.6%</span>
+          </div>
+          <div style="margin-top:10px;height:10px;background:#2d3748;border-radius:5px;overflow:hidden;">
+            <div style="width:61.4%;height:100%;background:linear-gradient(90deg,#10b981,#059669);"></div>
+          </div>
+        </div>
+
+        <div class="q-card-sm" style="margin-top:0.75rem;background:#0f1520;border-color:#1e3a5f;">
+          <div style="font-size:0.7rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">ADA Approval Rate</div>
+          <div style="font-size:1.2rem;font-weight:800;color:#3b82f6;">96.3%</div>
+          <div style="font-size:0.65rem;color:var(--text-muted);">₳356.7M approved vs ₳13.65M rejected (known amounts)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-caption">
+      Of the 83 resolved governance actions, 61.4% passed — reflecting that proposals reaching on-chain vote are generally well-vetted by the time they arrive. However, the ADA approval rate of 96.3% tells a more striking story: DReps rejected only ₳13.65M of quantified withdrawals while approving ₳356.7M, indicating strong deference to the Intersect budget-process proposals while selectively blocking speculative and non-infrastructure requests.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     4. INFO ACTIONS: 0% PASS RATE CALLOUT
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-callout">
+    <div style="display:flex;align-items:flex-start;gap:1rem;">
+      <div style="font-size:1.5rem;flex-shrink:0;">⚠️</div>
+      <div>
+        <div style="font-weight:800;font-size:1rem;color:#fde68a;margin-bottom:0.5rem;">Info Actions: 0 of 23 Passed (0% Pass Rate)</div>
+        <p style="font-size:0.8rem;color:#d1d5db;line-height:1.6;margin:0 0 0.5rem 0;">
+          All 23 info actions submitted between epochs 507 and 619 failed to achieve ratification. This is not a coincidence — info actions are constitutionally non-binding signaling mechanisms, and DReps overwhelmingly treat them as <strong style="color:#fde68a;">advisory polls rather than governance instruments</strong>. Notable examples include the NCL proposals (350M, 300M, multiple iterations all failed as info actions), the Cardano Budget Process Framework, and the Cardano Foundation/Catalyst management proposal.
+        </p>
+        <p style="font-size:0.8rem;color:#d1d5db;line-height:1.6;margin:0 0 0.5rem 0;">
+          In a striking paradox, the ₳275M Ecosystem Budget (the largest single spending authorization in Cardano's history) was submitted as an info action and also <strong style="color:#fde68a;">officially failed</strong> — yet the ₳39 individual treasury withdrawals it authorized proceeded successfully. This confirms InputEndorsers' characterization that info actions are "performative theater mandated by the constitution" with the real governance work happening at the individual withdrawal level.
+        </p>
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:0.75rem;">
+          <div style="font-size:0.72rem;color:#9ca3af;">NCL debates: <span style="color:#fde68a;font-weight:700;">6 info actions, all failed</span></div>
+          <div style="font-size:0.72rem;color:#9ca3af;">Budget signals: <span style="color:#fde68a;font-weight:700;">4 info actions, all failed</span></div>
+          <div style="font-size:0.72rem;color:#9ca3af;">Strategic vision: <span style="color:#fde68a;font-weight:700;">3 info actions, all failed</span></div>
+          <div style="font-size:0.72rem;color:#9ca3af;">Governance tools: <span style="color:#fde68a;font-weight:700;">2 info actions, all failed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     5. TREASURY VOLUME TABLE
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1c1a0e;">💰</div>
+    <span class="q-h3">Largest Approved Treasury Withdrawals</span>
+    <span style="font-size:0.7rem;color:var(--text-muted);margin-left:auto;">Sorted by amount (largest first) <span class="sort-icon">↕</span></span>
+  </div>
+
+  <div class="q-card" style="padding:0;overflow:hidden;">
+    <table class="q-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Proposal <span class="sort-icon">↕</span></th>
+          <th>ADA Amount <span class="sort-icon">↕</span></th>
+          <th>% of Total <span class="sort-icon">↕</span></th>
+          <th>Epoch Sub. <span class="sort-icon">↕</span></th>
+          <th>Epoch Ratified <span class="sort-icon">↕</span></th>
+          <th>Category</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">1</td>
+          <td style="font-weight:600;">IO Core Engineering 2025</td>
+          <td style="color:#8b5cf6;font-weight:800;font-size:0.85rem;">₳96,817,080</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:100%;height:100%;background:#7c3aed;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">27.1%</span>
+          </td>
+          <td>570</td><td>574</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#7dd3fc;">Core Dev</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">2</td>
+          <td style="font-weight:600;">Critical Integrations Budget</td>
+          <td style="color:#8b5cf6;font-weight:800;font-size:0.85rem;">₳70,000,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:72.3%;height:100%;background:#7c3aed;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">19.6%</span>
+          </td>
+          <td>599</td><td>605</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#7dd3fc;">Infrastructure</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">3</td>
+          <td style="font-weight:600;">IO Catalyst 2025</td>
+          <td style="color:#3b82f6;font-weight:800;font-size:0.85rem;">₳69,459,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:71.8%;height:100%;background:#3b82f6;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">19.5%</span>
+          </td>
+          <td>570</td><td>574</td>
+          <td><span class="q-badge" style="background:#14532d;color:#86efac;">Ecosystem</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">4</td>
+          <td style="font-weight:600;">IO Research: Cardano Vision</td>
+          <td style="color:#3b82f6;font-weight:700;">₳26,840,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:27.7%;height:100%;background:#3b82f6;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">7.5%</span>
+          </td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#7dd3fc;">Research</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">5</td>
+          <td style="font-weight:600;">Intersect MBO</td>
+          <td style="color:#f59e0b;font-weight:700;">₳15,750,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:16.3%;height:100%;background:#d97706;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">4.4%</span>
+          </td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#292a0e;color:#fde68a;">Org Ops</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">6</td>
+          <td style="font-weight:600;">Builder DAO (Intersect)</td>
+          <td style="color:#f59e0b;font-weight:700;">₳12,000,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:12.4%;height:100%;background:#d97706;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">3.4%</span>
+          </td>
+          <td>570</td><td>576</td>
+          <td><span class="q-badge" style="background:#14532d;color:#86efac;">Ecosystem</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">7</td>
+          <td style="font-weight:600;">TWEAG Core Projects</td>
+          <td style="color:#10b981;font-weight:700;">₳11,070,323</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:11.4%;height:100%;background:#10b981;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">3.1%</span>
+          </td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#7dd3fc;">Core Dev</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">8</td>
+          <td style="font-weight:600;">Global Events Marketing</td>
+          <td style="color:#10b981;font-weight:700;">₳6,000,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:6.2%;height:100%;background:#10b981;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">1.7%</span>
+          </td>
+          <td>570</td><td>576</td>
+          <td><span class="q-badge" style="background:#2e1e3b;color:#d8b4fe;">Marketing</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">9</td>
+          <td style="font-weight:600;">Cardano Summit 2025</td>
+          <td style="color:#10b981;font-weight:700;">₳6,000,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:6.2%;height:100%;background:#10b981;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">1.7%</span>
+          </td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#2e1e3b;color:#d8b4fe;">Events</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">10</td>
+          <td style="font-weight:600;">OSC Paid Open Source Model</td>
+          <td style="color:#10b981;font-weight:700;">₳5,885,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:6.1%;height:100%;background:#10b981;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">1.6%</span>
+          </td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#7dd3fc;">Open Source</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">11</td>
+          <td style="font-weight:600;">Global Listing Loan (Snek)</td>
+          <td style="color:#6b7280;font-weight:700;">₳5,000,000</td>
+          <td>
+            <div class="q-bar-outer" style="height:10px;width:80px;display:inline-block;vertical-align:middle;">
+              <div style="width:5.2%;height:100%;background:#6b7280;border-radius:99px;"></div>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px;">1.4%</span>
+          </td>
+          <td>590</td><td>597</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#93c5fd;">Listing / Loan</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">12</td>
+          <td style="font-weight:600;">DeFi Stablecoin Support</td>
+          <td style="color:#6b7280;font-weight:700;">₳4,000,000</td>
+          <td><span style="font-size:0.7rem;color:var(--text-muted);">1.1%</span></td>
+          <td>570</td><td>575</td>
+          <td><span class="q-badge" style="background:#14532d;color:#86efac;">DeFi</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-muted);font-weight:700;">13</td>
+          <td style="font-weight:600;">Ecosystem Exchange Listings &amp; Market Making</td>
+          <td style="color:#6b7280;font-weight:700;">₳3,126,000</td>
+          <td><span style="font-size:0.7rem;color:var(--text-muted);">0.9%</span></td>
+          <td>570</td><td>577</td>
+          <td><span class="q-badge" style="background:#1e2e3b;color:#93c5fd;">Listing</span></td>
+        </tr>
+        <tr style="background:#1a1f2e;">
+          <td colspan="7" style="text-align:right;font-size:0.72rem;color:var(--text-muted);padding:0.5rem 0.75rem;">
+            … 30 more approved withdrawals (₳25M combined — developer tools, infrastructure, research) ·
+            Smallest: <span style="color:#10b981;">₳45,217</span> (Cardano.nix, epoch 575)
+          </td>
+        </tr>
+        <tr style="font-weight:800;background:#0f1520;">
+          <td colspan="3" style="color:#d8b4fe;font-size:0.9rem;">TOTAL KNOWN APPROVED</td>
+          <td colspan="4" style="color:#d8b4fe;font-size:0.9rem;">₳356,741,769 (43 withdrawals with known amounts)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="q-caption">
+    The top 3 withdrawals (IO Engineering, Critical Integrations, Catalyst 2025) account for 66.2% of all known approved ADA (₳236.3M of ₳356.7M). The epoch 570 Intersect batch alone disbursed approximately ₳271M — 76% of total known approvals in a single governance cycle. The successful ₳5M Snek loan (epoch 590) is notable as a structural innovation: two prior direct-grant versions failed at epoch 573, demonstrating DReps' preference for repayable capital over grants.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     6. EPOCH ACTIVITY TIMELINE
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1a1e2e;">📅</div>
+    <span class="q-h3">Epoch Activity Timeline — Governance Action Submissions</span>
+  </div>
+
+  <div class="q-card">
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+
+      <!-- Bar chart column -->
+      <div style="flex:3;min-width:280px;">
+        <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">Actions submitted per epoch (epochs with 1+ action shown)</div>
+
+        <!-- Era labels -->
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+          <span style="font-size:0.65rem;background:#1e2538;padding:2px 8px;border-radius:4px;color:#94a3b8;">E507-566: Early Era (11 actions)</span>
+          <span style="font-size:0.65rem;background:#1e2538;padding:2px 8px;border-radius:4px;color:#3b82f6;">E567-578: Budget 2025 (42 actions)</span>
+          <span style="font-size:0.65rem;background:#1e2538;padding:2px 8px;border-radius:4px;color:#8b5cf6;">E579-625: Consolidation (31 actions)</span>
+          <span style="font-size:0.65rem;background:#1e2538;padding:2px 8px;border-radius:4px;color:#f59e0b;">E626-632: Budget 2026 (34 actions)</span>
+        </div>
+
+        <!-- Key epochs as bars -->
+        <div class="epoch-bar-row"><span class="epoch-label">507</span><div class="epoch-bar" style="width:3px;background:#6b7280;"></div><span class="epoch-count">1</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">514-529</span><div class="epoch-bar" style="width:9px;background:#6b7280;"></div><span class="epoch-count">3 (early era)</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">537-566</span><div class="epoch-bar" style="width:15px;background:#475569;"></div><span class="epoch-count">7 (sparse)</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">567-569</span><div class="epoch-bar" style="width:9px;background:#2563eb;"></div><span class="epoch-count">3</span></div>
+
+        <!-- PEAK: epoch 570 -->
+        <div class="epoch-bar-row" style="background:#0f1a2e;border-radius:4px;padding:2px 0;">
+          <span class="epoch-label" style="color:#fde68a;font-weight:800;">570 ★</span>
+          <div style="background:linear-gradient(90deg,#fde68a,#f59e0b);border-radius:2px;height:20px;width:370px;max-width:calc(100% - 100px);display:flex;align-items:center;padding-left:8px;">
+            <span style="font-size:0.7rem;font-weight:800;color:#1a1400;">37 actions — Intersect 2025 Budget Batch (31% of all time!)</span>
+          </div>
+        </div>
+
+        <div class="epoch-bar-row"><span class="epoch-label">573-578</span><div class="epoch-bar" style="width:15px;background:#2563eb;"></div><span class="epoch-count">5</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">579-590</span><div class="epoch-bar" style="width:21px;background:#7c3aed;"></div><span class="epoch-count">7</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">590 (lst)</span><div class="epoch-bar" style="width:9px;background:#7c3aed;"></div><span class="epoch-count">3</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">597-612</span><div class="epoch-bar" style="width:33px;background:#7c3aed;"></div><span class="epoch-count">11</span></div>
+        <div class="epoch-bar-row"><span class="epoch-label">614-625</span><div class="epoch-bar" style="width:24px;background:#8b5cf6;"></div><span class="epoch-count">8</span></div>
+
+        <!-- Second peak: epoch 626 -->
+        <div class="epoch-bar-row" style="background:#160f0e;border-radius:4px;padding:2px 0;">
+          <span class="epoch-label" style="color:#fca5a5;font-weight:800;">626 ★</span>
+          <div style="background:linear-gradient(90deg,#ef4444,#b91c1c);border-radius:2px;height:16px;width:90px;display:flex;align-items:center;padding-left:8px;">
+            <span style="font-size:0.68rem;font-weight:800;color:#fff;">9 actions (IO 2026)</span>
+          </div>
+        </div>
+
+        <div class="epoch-bar-row"><span class="epoch-label">627-632</span><div class="epoch-bar" style="width:57px;background:#d97706;"></div><span class="epoch-count">13 (2026 wave)</span></div>
+      </div>
+
+      <!-- Era summary cards -->
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.75rem;">
+        <div class="q-card-sm" style="background:#0f1520;border-color:#1e3a5f;">
+          <div style="font-size:0.65rem;color:#93c5fd;text-transform:uppercase;margin-bottom:3px;">Early Era (507-566)</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#3b82f6;">11</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);">Foundational: hard fork, constitution, early tests</div>
+        </div>
+        <div class="q-card-sm" style="background:#140f20;border-color:#fde68a50;">
+          <div style="font-size:0.65rem;color:#fde68a;text-transform:uppercase;margin-bottom:3px;">Budget Era 1 (567-578)</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#fde68a;">42</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);">Dominated by epoch 570 batch (37 of 42)</div>
+        </div>
+        <div class="q-card-sm" style="background:#10112a;border-color:#3a1a5e;">
+          <div style="font-size:0.65rem;color:#d8b4fe;text-transform:uppercase;margin-bottom:3px;">Consolidation (579-625)</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#8b5cf6;">31</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);">Constitution updates, CC changes, DeFi</div>
+        </div>
+        <div class="q-card-sm" style="background:#1a0f0a;border-color:#d97706;">
+          <div style="font-size:0.65rem;color:#fed7aa;text-transform:uppercase;margin-bottom:3px;">Budget Era 2 (626-632)</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#f97316;">34</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);">IO 2026 + new contractors, all pending</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-caption">
+      Governance activity follows a clear two-phase cycle: sparse foundational actions in the early era give way to massive batch submissions during budget rounds. The epoch 570 spike (37 actions = 31.4% of all-time submissions) is a systemic feature of batch budget processing rather than organic governance activity. The 2026 wave beginning at epoch 626 is already tracking toward a similar concentration, with 34 actions submitted in just 7 epochs.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     7. VOTE SENTIMENT HEAT MAP BY PROPOSAL CATEGORY
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1e1a2e;">🌡️</div>
+    <span class="q-h3">Vote Sentiment Heat Map by Proposal Category</span>
+    <span style="font-size:0.68rem;color:var(--text-muted);margin-left:auto;">Approximate distributions based on sampled rationale files</span>
+  </div>
+
+  <div class="q-card" style="padding:0;overflow:hidden;">
+    <table class="q-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Proposal Category</th>
+          <th>Representative Example</th>
+          <th>YES %</th>
+          <th>NO %</th>
+          <th>ABSTAIN %</th>
+          <th>Outcome</th>
+          <th>Pass Signal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700;">Open-Source Dev Tools (small)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Amaru 2025, BloxBean, Dolos</td>
+          <td class="heat-high">~90–96%</td>
+          <td class="heat-zero">2–5%</td>
+          <td class="heat-zero">2–5%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:96%;height:100%;background:#10b981;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">IO Core Engineering</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">IO Engineering ₳96.8M</td>
+          <td class="heat-high">~88%</td>
+          <td class="heat-zero">~5%</td>
+          <td class="heat-low">~7%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:88%;height:100%;background:#10b981;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Infrastructure (Large)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Critical Integrations ₳70M</td>
+          <td class="heat-high">~85%</td>
+          <td class="heat-zero">~8%</td>
+          <td class="heat-low">~7%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:85%;height:100%;background:#10b981;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Omnibus Budget (Intersect-led)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">₳275M Info Action</td>
+          <td class="heat-med">~60%</td>
+          <td class="heat-low">~30%</td>
+          <td class="heat-zero">~10%</td>
+          <td><span class="q-badge badge-fail">Failed (Info)</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:60%;height:100%;background:#f59e0b;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Intersect Operations</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Intersect MBO ₳15.75M</td>
+          <td class="heat-med">~62%</td>
+          <td class="heat-low">~25%</td>
+          <td class="heat-low">~13%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:62%;height:100%;background:#3b82f6;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">VC / Investment Fund</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Draper Dragon ₳50M</td>
+          <td class="heat-med">~65%</td>
+          <td class="heat-low">~20%</td>
+          <td class="heat-low">~15%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:65%;height:100%;background:#3b82f6;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">DeFi Liquidity (Staged)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">DeFi Withdrawal 1 ₳800K</td>
+          <td class="heat-med">~55%</td>
+          <td class="heat-low">~30%</td>
+          <td class="heat-zero">~15%</td>
+          <td><span class="q-badge badge-yes">Passed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:55%;height:100%;background:#f59e0b;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Events / Marketing (Large)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Summit 2026 + TOKEN2049 ₳14M</td>
+          <td class="heat-danger">~12%</td>
+          <td class="heat-danger">~72%</td>
+          <td class="heat-low">~16%</td>
+          <td><span class="q-badge badge-fail">Failed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:12%;height:100%;background:#ef4444;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Single-Token Listing</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">Snek Grant ₳5M</td>
+          <td class="heat-danger">~3–5%</td>
+          <td class="heat-danger">~88–90%</td>
+          <td class="heat-zero">~7%</td>
+          <td><span class="q-badge badge-fail">Failed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:4%;height:100%;background:#ef4444;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">DeFi Liquidity (Original)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">DeFi Budget ₳50M unmodified</td>
+          <td class="heat-danger">~5%</td>
+          <td class="heat-danger">~85%</td>
+          <td class="heat-zero">~10%</td>
+          <td><span class="q-badge badge-fail">Failed</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:5%;height:100%;background:#ef4444;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Info Actions (All)</td>
+          <td style="color:var(--text-muted);font-size:0.72rem;">NCL, Budget Signals, Strategic Vision</td>
+          <td class="heat-danger">varies</td>
+          <td class="heat-danger">always majority</td>
+          <td class="heat-low">varies</td>
+          <td><span class="q-badge badge-fail">0% Pass Rate</span></td>
+          <td>
+            <div class="q-bar-outer" style="height:8px;width:60px;"><div style="width:2%;height:100%;background:#6b7280;border-radius:99px;"></div></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;margin-bottom:0.5rem;">
+    <div style="display:flex;align-items:center;gap:4px;font-size:0.68rem;"><div style="width:12px;height:12px;background:#14532d;border-radius:2px;"></div> High YES (&gt;75%)</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:0.68rem;"><div style="width:12px;height:12px;background:#1c3a5e;border-radius:2px;"></div> Moderate YES (50–75%)</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:0.68rem;"><div style="width:12px;height:12px;background:#1f2937;border-radius:2px;"></div> Low (&lt;20%)</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:0.68rem;"><div style="width:12px;height:12px;background:#1c1f2e;border-radius:2px;"></div> Near-zero</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:0.68rem;"><div style="width:12px;height:12px;background:#7f1d1d;border-radius:2px;"></div> High NO / Danger</div>
+  </div>
+
+  <div class="q-caption">
+    The heat map reveals a stark bimodal sentiment pattern: open-source developer tools and IO core engineering command near-universal approval (88–96% YES) while single-token listings and unmodified DeFi proposals face near-universal rejection (85–90% NO). The "contested middle" — Intersect operations, VC funds, DeFi liquidity — passes but with significant NO blocs (20–30%), indicating these categories are sensitive to proposal structure and accountability mechanisms. Events and marketing represent the clearest category risk: large standalone asks almost always fail.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     8. TOP DREPS TABLE
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1e1a2e;">👤</div>
+    <span class="q-h3">DRep Profiles — Key Active Governance Participants</span>
+  </div>
+
+  <div class="q-card" style="padding:0;overflow:hidden;">
+    <table class="q-table">
+      <thead>
+        <tr>
+          <th>DRep Name</th>
+          <th>Proposals Sampled</th>
+          <th>Typical Vote</th>
+          <th>Rationale Quality</th>
+          <th>Dominant Archetype</th>
+          <th>Defining Characteristic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700;">YUTA</td>
+          <td style="color:#10b981;">Most proposals</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Conditional YES</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-process">Process / Technical</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Bilingual EN/JP; attaches numbered conditions to YES votes; discloses all COIs</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Cardano Foundation</td>
+          <td style="color:#10b981;">All major proposals</td>
+          <td><span class="q-badge" style="background:#1a3a2a;color:#86efac;">Strategic Mix</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-institutional">Institutional</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">PDF-linked rationales; demands multi-year modeling; COI disclosures for CEO board memberships</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">InputEndorsers</td>
+          <td style="color:#10b981;">All major proposals</td>
+          <td><span class="q-badge" style="background:#3b1e1e;color:#fca5a5;">Frequent NO</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-economic">Economic / Skeptical</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Anti-inflationary philosophy; ADA sell-pressure analysis; "performative theater" NCL critique</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">jonahkoch</td>
+          <td style="color:#3b82f6;">High (10+ major votes)</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Aligned YES</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-economic">Economic / Aligned</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Reads waterfall structures and fund mechanics; "treasury as investment capital" framing</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">CardanoYoda (MANDA)</td>
+          <td style="color:#3b82f6;">High (multiple major)</td>
+          <td><span class="q-badge" style="background:#292a0e;color:#fde68a;">Data-Driven</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-technical">Technical</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Cites exchange volumes, DEX data, community polls before voting; empirically grounded</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">SIPO</td>
+          <td style="color:#3b82f6;">High (bilingual EN/JP)</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">YES + Conditions</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★★</span></td>
+          <td><span class="archetype-chip arch-process">Process-focused</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Compares Cardano governance to Polkadot/Cosmos; exhaustively structured bilingual rationales</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">HOSKY</td>
+          <td style="color:#3b82f6;">High (evolving DRep)</td>
+          <td><span class="q-badge" style="background:#292a0e;color:#fde68a;">Evolved: Mixed</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★☆</span></td>
+          <td><span class="archetype-chip arch-process">Process / Technical</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">"Cardano First" 5-pillar framework; meme persona → rigorous accountability watchdog evolution</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Kostas Panagias</td>
+          <td style="color:#3b82f6;">Multiple major</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Supportive YES</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★☆</span></td>
+          <td><span class="archetype-chip arch-process">Process / Aligned</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Reads other DReps' rationales explicitly; tracks own voting record for alignment consistency</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Wada DRep</td>
+          <td style="color:#6b7280;">Several major</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Strong YES</span></td>
+          <td><span style="color:#fde68a;font-weight:700;">★★★★☆</span></td>
+          <td><span class="archetype-chip arch-institutional">Community Rep</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Pan-African community representation; translation/education services for delegators</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">EMURGO</td>
+          <td style="color:#10b981;">All major proposals</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Consistent YES</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-institutional">Institutional</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Constitutional compliance framing; notable v2.3 NO → v2.4 YES flip on terminology compromise</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Cerkoryn</td>
+          <td style="color:#3b82f6;">Many proposals</td>
+          <td><span class="q-badge" style="background:#292a0e;color:#fde68a;">Evidence-Based</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-skeptical">Skeptical-Critical</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Historical context expert; fiscal conservative on NCL; GitHub governance repo maintained</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">TriangleForces</td>
+          <td style="color:#3b82f6;">Many proposals</td>
+          <td><span class="q-badge" style="background:#3b1e1e;color:#fca5a5;">Default NO</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-economic">Economic / Principled No</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">High-rhetoric TeleCo background; inconsistent (voted YES on 70M but NO on 5M Snek)</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">GAIA</td>
+          <td style="color:#3b82f6;">Many proposals</td>
+          <td><span class="q-badge" style="background:#3b1e1e;color:#fca5a5;">Principled NO</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-process">Process / Principled No</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Personal 250M NCL threshold; cites specific constitutional articles; 1-vote-1-lovelace critic</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">$brock</td>
+          <td style="color:#6b7280;">Multiple</td>
+          <td><span class="q-badge" style="background:#3b1e1e;color:#fca5a5;">Short NO</span></td>
+          <td><span style="color:#6b7280;">★★☆☆☆</span></td>
+          <td><span class="archetype-chip arch-economic">Economic / Principled No</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Terse 1–3 sentence rationales; libertarian-fiscal lens; treasury target 1% of supply</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">BWtake(長崎)Japan</td>
+          <td style="color:#6b7280;">Multiple</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Strong YES</span></td>
+          <td><span style="color:#6b7280;">★★☆☆☆</span></td>
+          <td><span class="archetype-chip arch-aligned">Aligned Yes</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Japanese community voice; philosophical framing (constitution as AI governance "DNA")</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Eternl DRep Committee</td>
+          <td style="color:#6b7280;">Multiple</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Near-Always YES</span></td>
+          <td><span style="color:#6b7280;">★★☆☆☆</span></td>
+          <td><span class="archetype-chip arch-aligned">Aligned / Process-enabling</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">TL;DR format; views info actions as "pro forma" steps; GitHub transparency repo</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">CaFi</td>
+          <td style="color:#6b7280;">Several</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Always YES</span></td>
+          <td><span style="color:#ef4444;">★☆☆☆☆</span></td>
+          <td><span class="archetype-chip arch-aligned">Aligned Yes</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">"No further delay. We fully support Intersect." — 1–2 sentence rationales</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">William Doyle</td>
+          <td style="color:#6b7280;">Several</td>
+          <td><span class="q-badge" style="background:#1a3a1a;color:#86efac;">Pragmatic YES</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-aligned">Aligned Yes</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Poetic rationale style ("Ulysses pact"); public GitHub repo; intergenerational framing</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">Dave</td>
+          <td style="color:#6b7280;">Several</td>
+          <td><span class="q-badge" style="background:#3b1e1e;color:#fca5a5;">On-chain Purist NO</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-process">Process / Principled No</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Rejects off-chain unverifiable metrics; decentralization absolutist</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;">SASA_nagamaru</td>
+          <td style="color:#6b7280;">Several</td>
+          <td><span class="q-badge" style="background:#292a0e;color:#fde68a;">Process-First</span></td>
+          <td><span style="color:#6b7280;">★★★☆☆</span></td>
+          <td><span class="archetype-chip arch-process">Process-focused</span></td>
+          <td style="font-size:0.72rem;color:var(--text-muted);">Bilingual; "NCL must be set before proposals evaluated"; governance sequencing focus</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="q-caption">
+    Rationale quality is highly bimodal: a cohort of fewer than 10 DReps (YUTA, Cardano Foundation, InputEndorsers, jonahkoch, CardanoYoda, SIPO, HOSKY) produces the substantive analytical work of governance while a larger tail writes process-enabling one-liners. The intellectual burden of Cardano governance is highly concentrated. HOSKY's evolution from simple Aligned YES to a five-pillar accountability framework is the most striking governance maturation observed across all proposals.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     9. DREP ARCHETYPE DISTRIBUTION — CSS PIE CHART
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#1e1a2e;">🧩</div>
+    <span class="q-h3">DRep Archetype Distribution</span>
+  </div>
+
+  <div class="q-grid-2">
+    <div class="q-card">
+      <!-- CSS conic-gradient pie -->
+      <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;">
+        <div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(
+          #3b82f6 0deg 72deg,
+          #10b981 72deg 126deg,
+          #ef4444 126deg 169.2deg,
+          #8b5cf6 169.2deg 248.4deg,
+          #06b6d4 248.4deg 302.4deg,
+          #f59e0b 302.4deg 360deg
+        );flex-shrink:0;box-shadow:0 0 20px #0006;"></div>
+
+        <div class="pie-legend" style="flex:1;min-width:180px;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#3b82f6;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Aligned Yes</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">20% (8 DReps)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#10b981;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Process-Focused</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">15% (8 DReps)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#ef4444;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Principled No</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">12% (4 DReps)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#8b5cf6;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Economic/Financial</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">22% (5 DReps)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#06b6d4;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Technical</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">15% (4 DReps)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="pie-dot" style="background:#f59e0b;"></div>
+            <span style="font-size:0.8rem;font-weight:600;">Institutional Rep</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">16% (4 DReps)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="q-caption">
+        The archetype breakdown reflects a governance ecosystem pulled between consensus-seekers (Aligned Yes, 20%) and fiscal disciplinarians (Economic/Financial + Principled No, 34% combined). Process-focused DReps (15%) often serve as swing votes — supporting direction but blocking proposals that violate procedural norms. Multiple DReps span multiple archetypes; classifications reflect dominant behavior pattern.
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">Archetype Characteristics Summary</div>
+      <table class="q-table" style="font-size:0.72rem;">
+        <thead><tr>
+          <th>Archetype</th>
+          <th>Key DReps</th>
+          <th>Vote Tendency</th>
+          <th>Rationale Length</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="archetype-chip arch-aligned">Aligned Yes</span></td>
+            <td style="color:var(--text-muted);">CaFi, AdaStat, Eternl, EMURGO</td>
+            <td style="color:#10b981;">YES &gt;85%</td>
+            <td>Short (1–3 sentences)</td>
+          </tr>
+          <tr>
+            <td><span class="archetype-chip arch-skeptical">Skeptical-Critical</span></td>
+            <td style="color:var(--text-muted);">InputEndorsers, Cerkoryn, SASA</td>
+            <td style="color:#f59e0b;">Conditional</td>
+            <td>Very Long (500–1500w)</td>
+          </tr>
+          <tr>
+            <td><span class="archetype-chip arch-principled">Principled No</span></td>
+            <td style="color:var(--text-muted);">$brock, TriangleForces, Dave, GAIA</td>
+            <td style="color:#ef4444;">NO on large spends</td>
+            <td>Medium–Short</td>
+          </tr>
+          <tr>
+            <td><span class="archetype-chip arch-process">Process-Focused</span></td>
+            <td style="color:var(--text-muted);">YUTA, SIPO, CF, Kostas</td>
+            <td style="color:#3b82f6;">Conditional YES</td>
+            <td>Very Long (PDF-linked)</td>
+          </tr>
+          <tr>
+            <td><span class="archetype-chip arch-technical">Technical</span></td>
+            <td style="color:var(--text-muted);">YUTA, CardanoYoda, SIPO</td>
+            <td style="color:#06b6d4;">Data-driven</td>
+            <td>Long with citations</td>
+          </tr>
+          <tr>
+            <td><span class="archetype-chip arch-institutional">Institutional Rep</span></td>
+            <td style="color:var(--text-muted);">CF, EMURGO, Eternl, Wada</td>
+            <td style="color:#f59e0b;">Strategic mix</td>
+            <td>Formal + PDF</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:1rem;padding:0.75rem;background:#0f1520;border-radius:0.5rem;border:1px solid #1e3a5f;">
+        <div style="font-size:0.7rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem;">Rationale Quality Bifurcation</div>
+        <div style="display:flex;align-items:center;gap:0.75rem;font-size:0.75rem;margin-bottom:4px;">
+          <span style="color:#fde68a;font-weight:700;">High Quality (★★★★★):</span>
+          <span style="color:var(--text-muted);">YUTA, CF, InputEndorsers, jonahkoch, CardanoYoda, SIPO, HOSKY (recent), Kostas, Wada</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;font-size:0.75rem;margin-bottom:4px;">
+          <span style="color:#94a3b8;font-weight:700;">Medium Quality (★★★☆☆):</span>
+          <span style="color:var(--text-muted);">Cerkoryn, EMURGO, TriangleForces, GAIA, BWtake, hix_coffeepool, SASA, Rudianos</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;font-size:0.75rem;">
+          <span style="color:#6b7280;font-weight:700;">Low Quality (★☆☆☆☆):</span>
+          <span style="color:var(--text-muted);">CaFi, AdaStat (some votes), $brock (terse)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     10. TREASURY APPROVAL FUNNEL
+═══════════════════════════════════════════════════════════════ -->
+<div style="margin-bottom:2rem;">
+  <div class="q-section-header">
+    <div class="q-section-icon" style="background:#140f20;">🔽</div>
+    <span class="q-h3">Treasury Approval Funnel — Proposals to Disbursement</span>
+  </div>
+
+  <div class="q-grid-2">
+    <div class="q-card">
+      <div class="funnel-wrap">
+
+        <div class="funnel-step" style="border-color:#3b82f6;">
+          <div style="font-size:0.68rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.06em;">Stage 1: Submitted</div>
+          <div style="font-size:2rem;font-weight:800;color:#3b82f6;">118</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">All governance actions (epochs 507–632)</div>
+          <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">100% enter governance</div>
+        </div>
+
+        <div class="funnel-step" style="border-color:#8b5cf6;margin:0 10px;">
+          <div style="font-size:0.68rem;color:#d8b4fe;text-transform:uppercase;letter-spacing:0.06em;">Stage 2: Resolved</div>
+          <div style="font-size:2rem;font-weight:800;color:#8b5cf6;">83</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Non-pending actions with outcomes</div>
+          <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">70.3% resolved · 35 still pending</div>
+        </div>
+
+        <div class="funnel-step" style="border-color:#10b981;margin:0 20px;">
+          <div style="font-size:0.68rem;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;">Stage 3: Ratified</div>
+          <div style="font-size:2rem;font-weight:800;color:#10b981;">51</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Passed (all types)</div>
+          <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">43.2% of all · 61.4% of resolved</div>
+        </div>
+
+        <div class="funnel-step" style="border-color:#f59e0b;margin:0 30px;">
+          <div style="font-size:0.68rem;color:#fde68a;text-transform:uppercase;letter-spacing:0.06em;">Stage 4: Treasury Withdrawals Passed</div>
+          <div style="font-size:2rem;font-weight:800;color:#f59e0b;">43</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Only treasury withdrawal type</div>
+          <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">86% pass rate among resolved treasury actions</div>
+        </div>
+
+        <div class="funnel-step" style="border-color:#8b5cf6;margin:0 40px;border-width:2px;">
+          <div style="font-size:0.68rem;color:#d8b4fe;text-transform:uppercase;letter-spacing:0.06em;">Stage 5: ADA Disbursed (Known)</div>
+          <div style="font-size:1.6rem;font-weight:800;color:#d8b4fe;">₳356.7M+</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Minimum known — additional amounts in unlabeled proposals</div>
+          <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">96.3% of quantified ADA requests approved</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">Funnel Conversion Metrics</div>
+
+      <table class="q-table">
+        <thead><tr>
+          <th>Conversion Step</th>
+          <th>Input</th>
+          <th>Output</th>
+          <th>Rate</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>Submitted → Resolved</td>
+            <td>118</td>
+            <td>83</td>
+            <td><span style="color:#3b82f6;font-weight:700;">70.3%</span></td>
+          </tr>
+          <tr>
+            <td>Resolved → Passed</td>
+            <td>83</td>
+            <td>51</td>
+            <td><span style="color:#10b981;font-weight:700;">61.4%</span></td>
+          </tr>
+          <tr>
+            <td>Passed → Treasury</td>
+            <td>51</td>
+            <td>43</td>
+            <td><span style="color:#f59e0b;font-weight:700;">84.3%</span></td>
+          </tr>
+          <tr>
+            <td>Treasury Resolved → Pass</td>
+            <td>50</td>
+            <td>43</td>
+            <td><span style="color:#10b981;font-weight:700;">86.0%</span></td>
+          </tr>
+          <tr>
+            <td>ADA Requested → Approved</td>
+            <td>₳370.4M</td>
+            <td>₳356.7M</td>
+            <td><span style="color:#d8b4fe;font-weight:700;">96.3%</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:1.25rem;">
+        <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">Top Rejection Points</div>
+        <div style="margin-bottom:0.6rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px;">
+            <span>Info Actions (non-binding by design)</span>
+            <span style="color:#ef4444;font-weight:700;">23 failed</span>
+          </div>
+          <div class="q-bar-outer" style="height:8px;">
+            <div style="width:71.9%;height:100%;background:#ef4444;border-radius:99px;"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:0.6rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px;">
+            <span>Treasury Withdrawals rejected</span>
+            <span style="color:#f59e0b;font-weight:700;">7 failed</span>
+          </div>
+          <div class="q-bar-outer" style="height:8px;">
+            <div style="width:21.9%;height:100%;background:#f59e0b;border-radius:99px;"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px;">
+            <span>Other types failed (param, CC, constitution)</span>
+            <span style="color:#6b7280;font-weight:700;">5 failed</span>
+          </div>
+          <div class="q-bar-outer" style="height:8px;">
+            <div style="width:15.6%;height:100%;background:#6b7280;border-radius:99px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:1.25rem;padding:0.75rem;background:#0f1a14;border-radius:0.5rem;border:1px solid #14532d;">
+        <div style="font-size:0.7rem;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem;">Epoch 570 Batch Effect</div>
+        <div style="font-size:0.8rem;color:var(--text);">37 proposals in 1 epoch (31.4% of all time)</div>
+        <div style="font-size:0.8rem;color:#10b981;font-weight:700;">35 of 37 passed = 94.6% batch pass rate</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">Only RWA Real Estate (₳3M) and Complement Catalyst (₳1.5M) rejected from batch</div>
+      </div>
+
+      <div class="q-caption">
+        The funnel reveals that governance's most significant "filter" is not DRep NO votes on treasury withdrawals (only 7 rejected) but the structural exclusion of info actions from actual passage. Once a treasury proposal enters on-chain vote, it has an 86% probability of passing — suggesting DRep scrutiny is front-loaded into the community/Intersect process before proposals reach the chain.
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FOOTER / METADATA
+═══════════════════════════════════════════════════════════════ -->
+<div style="border-top:1px solid var(--border);padding-top:1rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+  <div style="font-size:0.68rem;color:var(--text-muted);">
+    Data sources: governance_actions_summary.json · _agent1_governance_landscape.json · _agent2_constitutional_analysis.json · _agent3_treasury_analysis.json · _agent4_drep_profiles.json
+  </div>
+  <div style="font-size:0.68rem;color:var(--text-muted);">
+    Analysis period: Epochs 507–632 &nbsp;·&nbsp; Report generated: 2026-05-24 &nbsp;·&nbsp; Civitas DRep Intelligence Platform
+  </div>
+</div>
+
+</section>
