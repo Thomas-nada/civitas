@@ -1,90 +1,104 @@
-<!-- url: ipfs://bafkreihrta57dkb6s6svkgk3q6njyssop3s34b4eulokpfqiugb3nhtpu4 -->
+<!-- url: ipfs://bafkreibe3fqopq7aifton4laclefqugwq3j7wrtffvob2qqpyyxlyo5vee -->
 # SIPO
 
 **Proposal:** Revised Cardano Summit 2026 Singapore
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh`
 
 ---
 
-SIPO DRep votes NO on Revised Cardano Summit 2026 Singapore.
+SIPO DRep re-vote on Revised Cardano Summit 2026 Singapore: changing from NO to YES.
 
-Governance Action ID: gov_action10dp9wzmgt2nqshyrghufff4sfhcxedhmzluly5k0azguatnsthwqqs84cjf
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+Context: On 2026-05-13, SIPO voted NO with principle-based reasoning anchored in four structural concerns about Treasury Fit. On 2026-05-24, IOG CEO Charles Hoskinson posted a public commitment on his official X account (https://x.com/IOHK_Charles/status/2058553026382606787) that materially changes the public information available about this proposal's strategic framing. Cardano Foundation CEO Frederik Gregaard publicly endorsed the message in the same thread on 2026-05-25. SIPO has independently reassessed all three resubmissions and is changing its vote from NO to YES on each.
 
-Context: This is the resubmission of the Summit half of the combined Cardano Summit 2026 + TOKEN2049 Singapore proposal, on which SIPO voted NO (with explicit principle-based reasoning) on 2026-04-18. The original ₳14,076,539 ($3.66M) combined proposal failed DRep ratification. CF and EMURGO responded to community feedback by splitting it into three independent proposals — Summit (this proposal), TOKEN2049 Baseline, and TOKEN2049 Top-Up — and reducing the combined ask. SIPO has reviewed all three resubmissions and votes NO on each individually.
+This re-vote is not a retreat from SIPO's prior reasoning. SIPO's four-pillar Treasury Fit framework remains intact. What changed is the public information against which that framework is now being applied — and what that information enables this Summit to become.
 
-To be explicit: we are not opposed to Cardano Summit 2026 being held. We acknowledge and appreciate CF's good faith response to community feedback — the 22% budget reduction (from $2.5M to $1.95M), the decoupling from EMURGO's TOKEN2049 proposals, the increase in CF internal resource contribution from $250k to $380k, and the explicit thanks to the community. These are responsible adjustments.
+The broader judgment
 
-However, SIPO's April 18 NO was principle-driven, anchored in four structural concerns about the Treasury Fit of this kind of withdrawal. The resubmitted Summit proposal addresses none of those structural concerns in a material way. The 22% reduction is a budget concession, not a structural redesign.
+With Hoskinson's public commitment and CF's public endorsement, this Summit can become a real-world execution signal for Cardano's next phase — a coordination moment where the founding entities re-synchronize visibly at a time of broad market and geopolitical uncertainty. Better evaluated not only as a brand-marketing event with a treasury cost, but as a real-world execution signal at a critical juncture. SIPO.TOKYO publishes the full strategic rationale separately.
 
-Why SIPO votes NO
+Why SIPO changes its vote to YES
 
-1. CF self-funding capacity remains unaddressed. The proposal does not argue why CF — which self-funded the Summit from 2022 through 2024 and which the 2025 Financial Insights and Activity Report shows holds sufficient reserves — cannot self-fund this Summit. The CF internal contribution increase to $380k is welcomed as an implicit acknowledgment that more self-funding is possible, but it does not address the principled question: for a well-capitalized entity, treasury should be the funding source of last resort. Voting YES on 2026 after 2025's first treasury access would consolidate this as a recurring pattern, against the line SIPO drew on April 18.
+Pillar 4 (IOG absence and unified-Cardano framing disclosure gap) is materially addressed by public signal.
 
-2. Three-way conflict-of-interest still unaddressed. CF (DRep with approximately ₳133m delegated) remains simultaneously (a) the proposer, (b) the direct beneficiary, and (c) an active DRep voting on the outcome. The proposal does not publicly pre-commit CF to Abstain on its own action. SIPO's April 18 constructive alternative explicitly named this as a minimum disclosure requirement; the resubmission does not adopt it.
+On 2026-05-13, SIPO's voteContext noted that this proposal was signed by CF only, with IOG's non-participation or co-sign status not addressed.
 
-3. Public-goods justification still missing. A Summit is, by structure, a brand and audience-acquisition event. The proposal articulates strategic value (Asia hub timing, TOKEN2049 audience proximity, institutional engagement) but does not justify Summit-as-public-good in the sense the SundaeLabs treasury-contracts framework was designed to fund (public goods, infrastructure, direct builder support). There is no per-builder allocation breakdown comparable to what SIPO requested in the April 18 alternative.
+On 2026-05-24, Hoskinson posted on his official IOG CEO X account a public commitment to attend Cardano Summit 2026 and to be on stage; to personally make a partial contribution toward upgrading Cardano's TOKEN2049 sponsorship to Title level; and to invite the Pentad (IOG / EMURGO / Cardano Foundation / Midnight Foundation / Intersect) to formalize coordination going forward. CF CEO Frederik Gregaard publicly endorsed this in the same thread.
 
-4. IOG absence is not explained. The proposal positions Summit 2026 as a flagship Cardano event but is signed by CF only. IOG's non-participation — or whether IOG was invited to co-sign — is not addressed. For an event framed at this scale, community clarity on the relationship among the three founding entities (CF / EMURGO / IOG) is a reasonable minimum disclosure SIPO requested on April 18 and which remains absent.
+This is a publicly verifiable, on-the-record signal from IOG's CEO and CF's CEO that the founding-entity relationship around this Summit is shifting from disclosure gap toward coordination intent. Concrete Program participation remains to be made public, but the disclosure concern Pillar 4 surfaced has been materially addressed in substance.
 
-ROI justification thinness
+Reassessment of the remaining three pillars
 
-Beyond the four structural signals, SIPO notes that the proposal frames the Summit as a strategic investment but does not articulate measurable ROI to the Cardano ecosystem (e.g., conversion targets from "qualified leads" or "strategic meetings" to on-chain activity / new ecosystem projects / adoption growth, with baselines). Without such metrics, the case for treasury funding — versus CF self-funding — of a brand event becomes harder to make on public-goods grounds.
+Pillar 1 (three-way conflict structure): CF remains proposer, beneficiary, and DRep. The Summit YES re-vote rests primarily on Pillar 4 public signal, not on Pillar 1 reassessment. Pillar 1 remains formally unresolved.
 
-Consistency with SIPO's prior votes
+Pillar 2 (CF self-funding capacity): the proposal still does not articulate why CF cannot self-fund. The case for treasury funding, however, is qualitatively different when this Summit is read as a Pentad coordination moment and real-world execution signal, rather than a stand-alone CF brand event.
 
-SIPO has consistently voted YES on treasury withdrawals for protocol and node diversity (Amaru, Dingo, HLabs Pebble + Gerolamo), capital formation infrastructure (DeFi Liquidity, Orion Fund), governance institutions (CC compensation, NCL, Budget Framework), critical integrations, and the IOG 9-proposal round on 2026-05-09. All of these fit within public goods, infrastructure, or ecosystem growth capital. A NO here continues to clarify, rather than contradict, the line SIPO drew on April 18.
+Pillar 3 (public-goods vs. brand-marketing ratio): Summit's nature as a discussion, institutional engagement, and regulatory roundtable forum continues to provide partial mitigation, reinforced by the unified Cardano framing Hoskinson's commitment makes more visible.
 
-Constructive alternatives
+Overall judgment
 
-- CF funds Cardano Summit 2026 from its own reserves, consistent with 2022–2024 practice and with 2025 Summit revenue already ring-fenced for 2026 Singapore as stated in this proposal.
-- If treasury funding is genuinely required, the resubmission should include: an explicit public-goods justification, a per-builder direct allocation ratio target, a CF DRep pre-committed Abstain on its own action, and disclosure of IOG's position (participating / abstaining / declining).
-- For 2027 cycle, route any treasury-funded event through the Intersect budget process with the above structural commitments embedded from the start.
+SIPO's framework is unchanged; the public information against which the framework is applied has changed. With Pillar 4 materially addressed via public signal, SIPO judges that the public-goods value of Cardano's integrated strategy and execution signal at a critical juncture outweighs the residual structural concerns.
 
-We thank CF for the responsible response to community feedback. We look forward to supporting future event proposals that are structured as public goods investments with explicit conflict-of-interest mitigation.
+This is the Constructive NO → public-channel improvement → independent reassessment → YES pathway that SIPO's voting doctrine supports — not a concession of the framework, and not a response to private-channel persuasion.
 
-For these reasons, SIPO DRep votes NO.
+SIPO expectations (public accountability)
+
+SIPO is a DRep and does not impose legal conditions. Tracked publicly:
+
+1. Pentad coordination meeting publicly announced before Summit 2026 (October 5-8, 2026).
+2. IOG participation made concrete in publicly listed Program & Agenda (Hoskinson keynote, IOG technical track, Midnight presence, or equivalent visible IOG/Midnight participation) by September 2026.
+3. Summit 2026 post-event report disclosing per-builder allocation, audience-conversion metrics, and CF self-funding accounting.
+4. CF 2026 Financial Insights and Activity Report addressing self-funding capacity for future Summits.
+
+Consistency with SIPO's prior votes: this re-vote does not modify SIPO's consistent line of voting YES on public goods, infrastructure, and ecosystem growth capital. It reflects that, with Pentad coordination intent publicly disclosed, this Summit qualifies as a coordination-infrastructure moment and real-world execution signal for Cardano's next phase.
+
+With appreciation to the proposers and to the Pentad principals who responded to community feedback through public channels, SIPO DRep changes its vote from NO to YES.
 
 ---
 
-SIPO DRep として、本提案「Revised Cardano Summit 2026 Singapore」に反対（NO）を投じます。
+SIPO DRep として、本提案「Revised Cardano Summit 2026 Singapore」への投票を NO から YES へ変更します。
 
-Governance Action ID: gov_action10dp9wzmgt2nqshyrghufff4sfhcxedhmzluly5k0azguatnsthwqqs84cjf
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+背景：2026-05-13、SIPO は Treasury Fit に関する 4 つの構造的懸念に基づき原則ベースの NO を投じました。2026-05-24、IOG CEO Charles Hoskinson 氏が公式 X (https://x.com/IOHK_Charles/status/2058553026382606787) で本提案の戦略的 framing に実質的な変化をもたらす公的コミットメントを表明し、2026-05-25、CF CEO Frederik Gregaard 氏が同スレッドで公開支持を表明しました。SIPO はこれらの公開情報を踏まえ、3 件再提出案を独立に再評価し、それぞれ NO から YES へ投票変更します。
 
-背景：本提案は、2026-04-18 にSIPOが原則に基づき NO を投じた当初の Cardano Summit 2026 + TOKEN2049 Singapore 一括提案（₳14,076,539 / $3.66M）のうち Summit 部分の再提出です。当初提案は DRep 批准で否決され、CF と EMURGO はコミュニティフィードバックを反映し 3 独立提案（本Summit / TOKEN2049 Baseline / TOKEN2049 Top-Up）に分割再提出しました。SIPO は 3 件すべてを精読し、それぞれに対して個別に NO を投じます。
+本再投票は SIPO 従来主張からの撤回ではありません。SIPO の 4 本柱フレームワーク自体は維持され、変化したのはそのフレームワークが適用される公開情報と、その情報が本 Summit に何をもたらし得るかという評価環境です。
 
-明確にします：私たちは Cardano Summit 2026 の開催自体に反対ではありません。CF がコミュニティフィードバックに対して誠意ある対応をしたこと — 22% 予算削減（$2.5M → $1.95M）、EMURGO の TOKEN2049 提案からの decouple、CF 内部資源拠出を $250k から $380k へ増加、コミュニティへの明示的な謝意 — は責任ある調整として認識・評価します。
+より大きな判断
 
-しかし、4 月 18 日の SIPO NO 投票は原則ベースの判断であり、このタイプの Treasury Withdrawal に対する 4 つの構造的懸念に基づいていました。再提出された Summit 提案は、それら構造的懸念のいずれにも実質的に対応していません。22% 削減は予算的譲歩であり、構造的再設計ではありません。
+Hoskinson 氏の公的コミットメントと CF の公開支持により、本 Summit は「Cardano 次段階の real-world execution signal」 — 創設エンティティが市場・地政学的不確実性の中で可視的に再同期する coordination moment — になり得ます。Treasury 負担を伴う単なるブランドマーケティングイベントよりも、重要局面における real-world execution signal として評価する方が適切です。詳細な戦略的論証は SIPO.TOKYO で別途公開します。
 
-SIPO が NO を投じる理由
+SIPO が YES に変更する理由
 
-1. CF の自己資金調達能力が依然として論じられていない。CF は 2022 年から 2024 年まで Summit を自己資金で開催してきており、2025 Financial Insights and Activity Report は十分な内部留保を示しています。本提案は、なぜ CF が今回 Summit を自己資金で開催できないのかを論じていません。CF 内部拠出の $380k への増額は「もう少しは自己負担可能」との暗黙の認識として歓迎しますが、原則的問いには答えていません — 十分に資本化された組織にとって、Treasury は「最後の資金源」であるべきで「最初の資金源」ではない。2025 年の初 Treasury access の翌年に YES を投じれば、これを恒常的パターンとして定着させることになり、4 月 18 日に SIPO が引いた線に反します。
+柱 4（IOG 不在および統合 Cardano framing への開示不足）は公的シグナルにより実質的に対応されました。
 
-2. 三重利益相反構造が依然として未対応。CF（DRep 委任額 約 ₳133m）は本提案において、(a) 提案者、(b) 直接受益者、(c) 投票権を行使する DRep の三者を兼ねたままです。本提案は CF DRep の自己提案に対する Abstain 事前表明を含んでいません。4 月 18 日 SIPO 建設的代替案でこれを最低限の情報開示要件として明示しましたが、再提出版は採用していません。
+2026-05-13 SIPO voteContext は、本提案が CF 単独署名で IOG の不参加・共同署名状況が言及されていない点を指摘しました。
 
-3. 公共財正当化が依然として欠如。Summit は構造的にブランド・観衆獲得イベントです。本提案は戦略的価値（アジアハブ・タイミング、TOKEN2049 オーディエンス近接、機関エンゲージメント）を述べていますが、SundaeLabs treasury-contracts フレームワーク（公共財・インフラ・ビルダー直接支援のために設計）が想定する意味での「Summit-as-public-good」を論証していません。SIPO が 4 月 18 日代替案で求めたビルダー直接配分比率の breakdown も含まれていません。
+2026-05-24、Hoskinson 氏は IOG CEO 公式 X で、Cardano Summit 2026 への出席とステージ登壇、Token2049 Title レベルアップグレードへの個人的部分貢献の公的意向、Pentad (IOG / EMURGO / Cardano Foundation / Midnight Foundation / Intersect) への coordination 正式化対話招集を公的にコミットしました。CF CEO Frederik Gregaard 氏は同スレッドで公開支持を表明しました。
 
-4. IOG 不在の説明がない。本提案は Summit 2026 を Cardano の旗艦イベントと位置づけていますが、署名者は CF のみです。IOG の不参加、または IOG に共同署名を打診したかどうかについて言及がありません。この規模で位置づけられるイベントについて、創設 3 エンティティ（CF / EMURGO / IOG）の関係性に関するコミュニティへの説明は、SIPO が 4 月 18 日に求めた最低限の情報開示であり、依然として欠落しています。
+これは IOG CEO と CF CEO による publicly verifiable・on-the-record なシグナルであり、本 Summit を巡る創設エンティティ関係性が「開示不足」から「coordination intent」へ移行しつつあることを示します。Program 上の参加内容は今後の公開待ちですが、柱 4 が顕在化させた開示懸念は実質において対応されています。
 
-ROI 論証の薄さ
+残る 3 柱の再評価
 
-4 構造シグナルに加え、本提案は Summit を戦略投資と位置づけながら、Cardano エコシステムへの測定可能な ROI（例：「qualified leads」「strategic meetings」から on-chain activity・新エコシステムプロジェクト・採用成長 への変換目標とベースライン）を明示していません。この種の指標がなければ、ブランドイベントに対する Treasury 資金提供を（CF 自己資金ではなく）公共財として正当化することは困難です。
+柱 1（三重利益相反構造）：CF は依然として提案者・受益者・DRep を兼ねています。本 Summit YES 再投票は主として Hoskinson 公的コミットメントが柱 4 に対応したことに基づき、柱 1 の再評価に基づくものではありません。柱 1 は formal には未解消のまま維持されます。
 
-過去 SIPO 投票との整合性
+柱 2（CF 自己資金調達能力）：本提案は依然 CF がなぜ自己資金で開催できないかを論じていません。しかし、本 Summit を Pentad coordination moment + real-world execution signal として読むとき、Treasury 資金提供のケースは質的に異なります。
 
-SIPO はプロトコル・ノード多様性（Amaru、Dingo、HLabs Pebble + Gerolamo）、資本形成インフラ（DeFi Liquidity、Orion Fund）、ガバナンス制度（CC 報酬、NCL、Budget Framework）、重要統合、2026-05-09 IOG 9 提案ラウンドに一貫して YES を投じてきました。いずれも「公共財・インフラ・エコシステム成長資本」の範疇です。本 NO は 4 月 18 日に引いた線を矛盾なく明確化するものです。
+柱 3（公共財対ブランドマーケティング比率）：Summit が議論・機関エンゲージメント・規制ラウンドテーブルの場である性質は引き続き partial mitigation を提供し、Hoskinson 氏のコミットメントがより可視化する統合 Cardano framing がこれを強化します。
 
-建設的代替案
+総合判断
 
-- CF は Cardano Summit 2026 を自己資金で開催する（2022-2024 実務 + 本提案自身が記述している 2025 Summit 収益の 2026 Singapore 向け確保と整合）。
-- Treasury 資金提供が真に必要であれば、再提出版に以下を含めること：公共財としての明示的正当化、ビルダー直接配分比率目標、CF DRep の自己提案に対する Abstain 事前表明、IOG の立場（参加 / 棄権 / 不参加）の開示。
-- 2027 サイクル分は、上記構造的コミットメントを最初から組み込んで Intersect 予算プロセス経由で提案する。
+SIPO のフレームワークは不変です。柱 4 が公的シグナルにより実質的に対応された現在、SIPO は Cardano の統合戦略・実行能力・重要局面における信念の表明という公益価値が残存する構造的懸念を上回ると判断します。
 
-CF のコミュニティフィードバックに対する責任ある対応に敬意を表します。今後、明示的な利益相反緩和を伴う公共財投資として構造化されたイベント提案については、積極的に支持してまいります。
+これは「Constructive NO → 公開チャネルでの改善 → 独立再評価 → YES」のパスウェイです。SIPO の投票変更はこのパスウェイを反映するものであり、基礎フレームワークの譲歩でも、私的チャネル説得への応答でもありません。
 
-以上の理由により、SIPO DRep として本提案に反対（NO）を投じます。
+SIPO の期待事項（公開アカウンタビリティ）
+
+SIPO は DRep であり、法的条件を課す立場ではありません。以下は公開トラックします：
+
+1. Pentad coordination meeting の公開アナウンス（Summit 2026 (10/5-8) 前）
+2. IOG の Summit 2026 参加が公開 Program & Agenda で具体化（Hoskinson keynote / IOG technical track / Midnight presence / または同等の可視的 IOG・Midnight 参加）2026 年 9 月までに
+3. Summit 2026 事後レポートで builder 直接配分・audience conversion 指標・CF 自己資金拠出会計を開示
+4. CF 2026 Financial Insights and Activity Report で将来 Summit 自己資金調達能力を論じる
+
+過去 SIPO 投票との整合性：本再投票は SIPO の公共財・インフラ・エコシステム成長資本に整合する Treasury Withdrawal への一貫した YES 線を修正するものではありません。Pentad coordination 意図が公開開示された後、本 Summit が Cardano 次段階の coordination インフラ moment + real-world execution signal として qualify することを反映しています。
+
+提案者および公開チャネルでコミュニティフィードバックに応答してくれた Pentad principals に感謝しつつ、SIPO DRep は本提案への投票を NO から YES へ変更します。

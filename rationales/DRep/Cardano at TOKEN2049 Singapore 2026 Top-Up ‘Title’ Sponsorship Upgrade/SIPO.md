@@ -1,82 +1,120 @@
-<!-- url: ipfs://bafkreihn6e7rhy5o45ql3qqunwdzqyp3yvgdmlxdllhhzsyv6yi66jj2bq -->
+<!-- url: ipfs://bafkreidnxfxfc62rq257zq7xq6y46xoas5hv6ss4qui7v6e23smplwqdyy -->
 # SIPO
 
 **Proposal:** Cardano at TOKEN2049 Singapore 2026 Top-Up ‘Title’ Sponsorship Upgrade
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh`
 
 ---
 
-SIPO DRep votes NO on Cardano at TOKEN2049 Singapore 2026: Top-Up 'Title' Sponsorship Upgrade.
+SIPO DRep re-vote on Cardano at TOKEN2049 Singapore 2026: Top-Up 'Title' Sponsorship Upgrade: changing from NO to YES (with explicit reconciliation expectations).
 
-Governance Action ID: gov_action1kj6ghzuz9wcq88f3y72cyyeekdcemlq0dqk4zpjd4eck5assuypqq0pckkw
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+Context: On 2026-05-13, SIPO voted NO on this Top-Up — the strongest NO among the three resubmissions — on the grounds that the Title-tier upgrade represented the most pure brand-marketing premium and the structurally weakest case for treasury funding. On 2026-05-24, IOG CEO Charles Hoskinson posted a public commitment on his official X account (https://x.com/IOHK_Charles/status/2058553026382606787) directly relevant to this Top-Up. CF CEO Frederik Gregaard publicly endorsed the message in the same thread on 2026-05-25. SIPO has independently reassessed and is changing its vote from NO to YES, with explicit reconciliation expectations regarding the relationship between Hoskinson's stated personal contribution and the treasury draw.
 
-Context: This is the resubmission of the upgrade-to-Title portion of the combined Cardano Summit 2026 + TOKEN2049 proposal, on which SIPO voted NO (with explicit principle-based reasoning) on 2026-04-18. The original combined ask was ₳14,076,539 ($3.66M). EMURGO restructured into three independent proposals — Summit, TOKEN2049 Baseline (Platinum), and this Top-Up to Title — with an atomic dependency clause (if this Top-Up is ratified without the Baseline being ratified, EMURGO commits to return 100% of funds within 30 days). SIPO has reviewed all three resubmissions and votes NO on each individually.
+This re-vote is not a retreat from SIPO's prior reasoning. SIPO's four-pillar Treasury Fit framework remains intact. What changed is the public information against which that framework is now being applied — and what that information enables this Top-Up to become.
 
-To be explicit: we appreciate EMURGO's atomic dependency clause as a structurally responsible safeguard — Top-Up alone has no underlying sponsorship to upgrade, and the auto-refund mechanism prevents stranded treasury funds. This is a constructive structural element.
+The broader judgment
 
-However, of the three resubmissions, the Top-Up has the weakest public-goods case, and SIPO's April 18 NO doctrine applies most strongly to this proposal.
+SIPO views this Top-Up as part of whether Cardano can use TOKEN2049 Singapore — one of the world's most important blockchain conferences — to project an integrated next-phase strategy into the real world at a time of broad market and geopolitical uncertainty. A unified Cardano mainstage presence with publicly demonstrated founding-entity coordination has public value beyond branding. Better evaluated as a real-world execution signal for Cardano's next phase, conditioned on transparent reconciliation between personal and treasury contributions. SIPO.TOKYO publishes the full strategic rationale separately.
 
-Why SIPO votes NO
+Why SIPO changes its vote to YES on Top-Up specifically
 
-1. The Top-Up is essentially a pure brand-marketing premium. The $424k upgrade unlocks: a larger booth (144sqm vs 108sqm), a 15-minute Mainstage Keynote, event press release inclusion, branded lanyards worn by attendees, a branded protein shake station, and additional event tickets / Speakers Reception invites. These are textbook brand-marketing deliverables — visibility maximization, premium positioning, attendee impression management. Builder-direct deliverables in the Top-Up incremental scope are negligible.
+The Top-Up's evaluation environment is most directly affected by Hoskinson's 2026-05-24 public commitment.
 
-2. SundaeLabs treasury-contracts framework was designed for public goods, infrastructure, and direct builder support. A premium brand-marketing upgrade does not fit this framework, regardless of the atomic dependency safeguard. The framework's purpose is not just preventing fund misallocation; it is funding work that produces non-rivalrous, non-excludable ecosystem value.
+Hoskinson wrote on his official IOG CEO X account: "I am also personally committing to partially top up our Token2049 sponsorship to Title level. Being on that main stage is where Cardano and Midnight need to be heard."
 
-3. Three-way conflict-of-interest still unaddressed. EMURGO (DRep with approximately ₳297m delegated) remains simultaneously the proposer, beneficiary as facilitator, and active DRep. The proposal does not publicly pre-commit EMURGO to Abstain on its own action.
+This is a publicly verifiable, on-the-record public intention by IOG's CEO to make a personal partial contribution toward upgrading Cardano's TOKEN2049 sponsorship to Title level. SIPO treats this as a public intention, not as a defined contractual commitment — the precise scope, amount, and reconciliation method with the treasury Top-Up draw are not yet publicly defined.
 
-4. IOG absence and "Cardano core narrative" mainstage framing. The Mainstage Keynote slot is positioned to "deliver Cardano's core narrative directly to the largest possible audience" of 25,000+. The proposal does not identify who delivers this keynote, whether IOG is invited to participate in delivering the unified-Cardano narrative, or whether the keynote will reflect the views of all three founding entities. If the Cardano keynote is mainstage-grade but is unilaterally developed and delivered by EMURGO, the "unified Cardano" framing does not hold.
+Implications for the four pillars:
+- Pillar 2: a non-treasury funding contribution toward the Title upgrade has been publicly intended, reducing — but not removing — reliance on the treasury for the brand premium.
+- Pillar 3: the brand premium is partially shared with personal contribution rather than fully treasury-funded.
+- Pillar 4: IOG's CEO is publicly committing personal effort and contribution to a unified Cardano presence at TOKEN2049 — a direct public signal addressing the disclosure concern.
 
-Consistency with SIPO's prior votes
+The Top-Up's evaluation environment has materially changed even though the proposal text itself has not been formally amended. Reconciliation between personal and treasury contributions becomes the central operational question.
 
-SIPO has consistently voted YES on public goods, infrastructure, and ecosystem growth capital — and consistently voted NO on brand-marketing-premium treasury withdrawals from well-capitalized proposers with unresolved conflict-of-interest structure. This Top-Up sits squarely in the second category. Even with the atomic dependency safeguard, a NO here is the principled continuation of the April 18 line.
+Pillar 1 reassessment
 
-Constructive alternatives (extension of April 18)
+Pillar 1 (EMURGO three-way conflict) remains formally unresolved. EMURGO's reported management fee waiver applies primarily to the Baseline proposal's operational fee; the Top-Up itself does not carry a separate management fee, so the fee-waiver signal is treated here as supportive context rather than a direct mitigation specific to the Top-Up.
 
-- EMURGO funds the Title-tier upgrade through commercial partnership funding (sponsors specifically targeting mainstage exposure, co-branding deals, allocation from EMURGO's existing enterprise revenue).
-- If treasury funding of premium brand exposure for Cardano is desired in the future, structure it as: (a) a multi-entity joint proposal (CF + EMURGO + IOG) with explicit roles, (b) the mainstage keynote delivered by a community-elected or community-nominated representative rather than the proposer, (c) pre-committed Abstain from proposer DReps, (d) clear disclosure of how the brand-marketing investment connects to measurable ecosystem outcomes beyond impression counts.
-- The atomic dependency clause structure (100% refund within 30 days if dependency fails) is a useful precedent SIPO would welcome in other proposals; we encourage EMURGO to bring it to other treasury work going forward.
+Central reconciliation expectation for Top-Up
 
-We thank EMURGO for the responsible atomic dependency structure and the explicit response to community feedback. We look forward to supporting future TOKEN2049 work structured with clearer public-goods justification, multi-entity participation, and explicit conflict-of-interest mitigation.
+Given that Hoskinson's public intention to make a personal partial contribution and the treasury Top-Up draw will fund the same Title-tier upgrade, transparent reconciliation is essential. SIPO expects:
 
-For these reasons, SIPO DRep votes NO.
+1. Actual Title-tier upgrade cost (Baseline → Title delta) publicly disclosed before September 2026.
+2. Hoskinson's personal contribution amount publicly disclosed and verifiable, separately from the treasury Top-Up draw.
+3. If Hoskinson's personal contribution + treasury Top-Up exceed the actual upgrade cost, the difference is returned to the treasury within 30 days of TOKEN2049 closure (Reconciliation Expectation, extending the precedent-setting logic of the original Top-Up Atomic Dependency Clause).
+4. The Reconciliation Expectation is publicly committed by EMURGO before any treasury Top-Up funds are drawn.
+
+Overall judgment
+
+With Pillar 4 materially addressed by public signal, Pillars 2 and 3 partially mitigated by Hoskinson's publicly intended personal contribution, Pillar 1 partially mitigated by the publicly discussed fee-waiver context, and a clear Reconciliation Expectation protecting against double-funding, SIPO judges that the Top-Up — as a potential co-funding pathway with clear reconciliation expectations and as part of Cardano's real-world execution signal at a critical juncture — qualifies for YES.
+
+This is the Constructive NO → public-channel improvement → independent reassessment → YES pathway — not a concession of the framework, and not a response to private-channel persuasion.
+
+SIPO expectations (public accountability) — summary
+
+SIPO is a DRep and does not impose legal conditions. Tracked publicly:
+
+1. Reconciliation Expectation: Hoskinson personal contribution + treasury Top-Up draw ≤ actual Title-tier upgrade cost, with overage returned to treasury within 30 days of TOKEN2049 closure.
+2. Title-tier upgrade cost (Baseline → Title delta) publicly disclosed before September 2026.
+3. Hoskinson personal contribution amount publicly disclosed and verifiable, separately from treasury draw.
+4. EMURGO formalizes 15% management fee waiver on Baseline via official channels before TOKEN2049; for Top-Up, EMURGO publicly confirms no additional management fee on the Top-Up draw.
+5. TOKEN2049 mainstage Title-tier presence (Hoskinson keynote, Midnight presence, or equivalent visible Title-tier participation) made concrete in publicly listed Program & Agenda by September 2026.
+
+For these reasons, SIPO DRep changes its vote from NO to YES on the Top-Up Title Sponsorship Upgrade.
 
 ---
 
-SIPO DRep として、本提案「Cardano at TOKEN2049 Singapore 2026: Top-Up 'Title' Sponsorship Upgrade」に反対（NO）を投じます。
+SIPO DRep として、本提案「Cardano at TOKEN2049 Singapore 2026: Top-Up 'Title' Sponsorship Upgrade」への投票を NO から YES へ変更します（明確な精算期待事項付き）。
 
-Governance Action ID: gov_action1kj6ghzuz9wcq88f3y72cyyeekdcemlq0dqk4zpjd4eck5assuypqq0pckkw
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+背景：2026-05-13、SIPO は本 Top-Up を「Title ティアアップグレードが最も純粋なブランドマーケティング premium であり、Treasury 資金提供の構造的根拠が最も弱い」として 3 件再提出のうち最も強い NO を投じました。2026-05-24、IOG CEO Charles Hoskinson 氏が公式 X (https://x.com/IOHK_Charles/status/2058553026382606787) で本 Top-Up 提案に直接関連する公的コミットメントを表明し、2026-05-25、CF CEO Frederik Gregaard 氏が同スレッドで公開支持を表明しました。SIPO は独立に再評価し、Hoskinson 氏個人拠出と Treasury 引出の精算に関する明示的期待事項付きで NO から YES へ投票変更します。
 
-背景：本提案は、2026-04-18 にSIPOが原則に基づき NO を投じた当初の Cardano Summit 2026 + TOKEN2049 一括提案（₳14,076,539 / $3.66M）のうち Title tier 部分への upgrade を担う再提出です。EMURGO は 3 独立提案（Summit / TOKEN2049 Baseline (Platinum) / 本 Top-Up to Title）に再構成し、atomic dependency clause（本 Top-Up が Baseline 不承認のまま承認された場合、EMURGO は 30 日以内に 100% 返却する）を含めています。SIPO は 3 件すべてに対して個別に NO を投じます。
+本再投票は SIPO 従来主張からの撤回ではありません。SIPO の 4 本柱フレームワーク自体は維持され、変化したのはそのフレームワークが適用される公開情報と、その情報が本 Top-Up に何をもたらし得るかという評価環境です。
 
-明確にします：EMURGO の atomic dependency clause を構造的に責任ある safeguard として評価します — Top-Up 単独では upgrade すべき下位 sponsorship が存在せず、auto-refund メカニズムは stranded treasury funds を防ぎます。これは建設的な構造的要素です。
+より大きな判断
 
-しかし、3 再提出のうち Top-Up は public-goods 性質が最も弱く、SIPO 4 月 18 日 NO ドクトリンが最も強く適用される提案です。
+SIPO は本 Top-Up を、Cardano が TOKEN2049 Singapore — 世界で最も重要なブロックチェーンカンファレンスの一つ — を「市場・地政学的不確実性の中で統合された次段階戦略を現実世界へ投射する moment」として活用できるかの一部として捉えています。創設エンティティ間の coordination が公的に示された統合 Cardano メインステージプレゼンスは、ブランディングを超えた公益価値を持ちます。個人拠出と Treasury 拠出の透明な精算を条件に、Cardano 次段階の real-world execution signal として評価する方が適切です。詳細な戦略的論証は SIPO.TOKYO で別途公開します。
 
-SIPO が NO を投じる理由
+SIPO が Top-Up を特に YES に変更する理由
 
-1. Top-Up は本質的に純粋なブランドマーケティング premium。$424k upgrade で unlock されるのは：より大きなブース（144sqm vs 108sqm）、15 分のメインステージ基調講演、event press release inclusion、attendee 着用ロゴ入りネックストラップ、ブランディングされたプロテインスタンド、追加 event tickets / Speakers Reception 招待。これらは textbook なブランドマーケティング deliverables — visibility maximization、premium positioning、attendee impression management。Top-Up incremental scope の builder-direct deliverables は無視できるレベルです。
+本 Top-Up の評価環境は Hoskinson 氏の 2026-05-24 公的コミットメントによって最も直接的に影響を受けます。
 
-2. SundaeLabs treasury-contracts framework は公共財・インフラ・ビルダー直接支援のために設計されました。premium ブランドマーケティング upgrade は、atomic dependency safeguard があってもこの framework には fit しません。framework の目的は単に fund misallocation を防ぐことではなく、non-rivalrous で non-excludable なエコシステム価値を生む仕事に資金提供することです。
+Hoskinson 氏は IOG CEO 公式 X で次のように投稿しました：「私は Token2049 スポンサーシップを Title レベルへアップグレードする分を個人的に一部負担することにコミットします。メインステージこそ Cardano と Midnight が語られるべき場所です」。
 
-3. 三重利益相反が依然として未対応。EMURGO（DRep 委任額 約 ₳297m）は本提案でも提案者、facilitator としての受益者、active DRep を兼ねたままです。本提案は EMURGO DRep の自己提案に対する Abstain 事前表明を含んでいません。
+これは IOG CEO による publicly verifiable・on-the-record な公的意向であり、Cardano の TOKEN2049 スポンサーシップを Title レベルへアップグレードする分に個人的に一部貢献するというものです。SIPO はこれを「公的意向」として扱い、確定した契約的コミットメントとしては扱いません — 正確な scope・金額・Treasury Top-Up 引出との精算方法は公的にはまだ確定していません。
 
-4. IOG 不在と「Cardano core narrative」mainstage framing。Mainstage Keynote slot は「deliver Cardano's core narrative directly to the largest possible audience」（25,000+ 観衆）と positioning されています。本提案は、この keynote を誰が deliver するのか、IOG が unified-Cardano narrative の delivery 参加に招待されているのか、keynote が創設 3 エンティティすべての views を反映するのかを特定していません。Cardano keynote が mainstage-grade でありながら EMURGO 単独で developed・delivered されるのであれば、「unified Cardano」framing は成立しません。
+4 本柱への含意：
+- 柱 2：Title アップグレードへの非 Treasury 資金拠出が公的に意向表明された — ブランド premium 部分に対する Treasury 依存を縮小（完全除去ではない）
+- 柱 3：ブランド premium 部分が個人拠出と部分的に共有され、Treasury 全額負担ではなくなる
+- 柱 4：IOG CEO が TOKEN2049 における統合 Cardano プレゼンスへの個人的努力と個人的拠出を公的にコミット — 開示懸念に対する直接的な公的シグナル
 
-過去 SIPO 投票との整合性
+提案テキスト自体は正式 amend されていないものの、本 Top-Up の評価環境は実質的に変化しました。個人拠出と Treasury 拠出の精算が中心的な operational 論点となります。
 
-SIPO は公共財・インフラ・エコシステム成長資本に一貫して YES を投じ、未解決の利益相反構造を持つ十分資本化された提案者からの brand-marketing premium Treasury Withdrawal には一貫して NO を投じてきました。本 Top-Up はまさに後者のカテゴリに属します。atomic dependency safeguard があっても、本 NO は 4 月 18 日に引いた線の原則的継続です。
+柱 1 の再評価
 
-建設的代替案
+柱 1（EMURGO 三重利益相反）は formal には未解消です。EMURGO の報じられているマネジメントフィー無料化は主として Baseline 提案の operational fee に適用され、Top-Up 自体は別途マネジメントフィーを持たないため、フィー無料化シグナルを Top-Up に対する直接的緩和ではなく文脈的 supportive 要因として扱います。
 
-- EMURGO は Title-tier upgrade を商業パートナーシップ資金（mainstage exposure を狙う sponsors、co-branding deals、EMURGO 既存 enterprise revenue 配分）で funding する。
-- 将来 Cardano への premium brand exposure に Treasury 資金提供を行う場合は、(a) multi-entity 合同提案（CF + EMURGO + IOG）で役割を明示、(b) mainstage keynote を提案者ではなく community-elected または community-nominated 代表が deliver、(c) 提案者 DRep の Abstain 事前表明、(d) brand-marketing 投資が impression counts を超える測定可能なエコシステム成果にどう繋がるかの明確な開示、を含めるべきです。
-- atomic dependency clause 構造（dependency 不成立時に 30 日以内 100% 返却）は SIPO が歓迎する有用な precedent です — EMURGO がこれを今後の他の treasury work でも持ち込むことを推奨します。
+精算に関する中心的期待事項（Top-Up 固有）
 
-EMURGO の責任ある atomic dependency 構造とコミュニティフィードバックへの明示的な対応に敬意を表します。今後、明示的な公共財正当化、multi-entity 参加、明示的な利益相反緩和を伴う構造の TOKEN2049 work については、積極的に支持してまいります。
+Hoskinson 氏の公的意向としての個人一部拠出と Treasury Top-Up 引出は同じ Title ティアアップグレードに資金提供することになるため、両者の透明な精算が essential です。SIPO は以下を期待します：
 
-以上の理由により、SIPO DRep として本提案に反対（NO）を投じます。
+1. Title ティアアップグレード実費（Baseline → Title 差額）を 2026 年 9 月までに公開開示
+2. Hoskinson 氏個人拠出額を Treasury 引出と分離して公開開示・verifiable とする
+3. Hoskinson 氏個人拠出 + Treasury Top-Up が実 Title アップグレード費用を超える場合、差額を TOKEN2049 終了後 30 日以内に Treasury 返却（Reconciliation Expectation、原 Top-Up Atomic Dependency Clause の precedent-setting ロジックを extend）
+4. Reconciliation Expectation は Treasury Top-Up 資金引出前に EMURGO が公的にコミット
+
+総合判断
+
+柱 4 が公的シグナルにより実質的に対応され、柱 2 と 3 が Hoskinson 氏の公的意向としての個人拠出で部分的に緩和され、柱 1 が公開議論されているフィー無料化文脈で部分的に緩和され、明確な Reconciliation Expectation が double-funding を防護する状況で、SIPO は Top-Up — 明確な精算期待を伴う潜在的 co-funding pathway として読み、重要局面における Cardano real-world execution signal の一部として読むとき — が YES に値すると判断します。
+
+これは「Constructive NO → 公開チャネルでの改善 → 独立再評価 → YES」のパスウェイです。SIPO の投票変更はこのパスウェイを反映するものであり、基礎フレームワークの譲歩でも、私的チャネル説得への応答でもありません。
+
+SIPO の期待事項（公開アカウンタビリティ）— 要約
+
+1. Reconciliation Expectation：Hoskinson 氏個人拠出 + Treasury Top-Up 引出 ≤ 実 Title ティアアップグレード費用、超過分は TOKEN2049 終了後 30 日以内に Treasury 返却
+2. Title ティアアップグレード費用（Baseline → Title 差額）を 2026 年 9 月までに公開開示
+3. Hoskinson 氏個人拠出額を Treasury 引出と分離して公開開示・verifiable
+4. EMURGO が Baseline 15% マネジメントフィー無料化を TOKEN2049 (2026 年 10 月) 前に公式チャネル経由で正式化；Top-Up 固有として、EMURGO が Top-Up 引出に追加マネジメントフィーが上乗せされないことを公的確認
+5. TOKEN2049 メインステージ Title ティアプレゼンス（Hoskinson keynote / Midnight presence / または同等の可視的 Title ティア参加）を 2026 年 9 月までに公開 Program & Agenda で具体化
+
+以上の理由により、SIPO DRep として本 Top-Up Title Sponsorship Upgrade への投票を NO から YES へ変更します。

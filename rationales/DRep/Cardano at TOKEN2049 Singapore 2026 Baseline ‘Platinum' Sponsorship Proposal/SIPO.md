@@ -1,82 +1,104 @@
-<!-- url: ipfs://bafkreigezsbs25bzxjdi47buz4nloaxvnkbh5jpisvcn36r4fwv26htsk4 -->
+<!-- url: ipfs://bafkreiar3for37uac4yglqtltlincgswe6fys46wqpmi6wrgd6bwqe2czi -->
 # SIPO
 
 **Proposal:** Cardano at TOKEN2049 Singapore 2026 Baseline ‘Platinum' Sponsorship Proposal
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh`
 
 ---
 
-SIPO DRep votes NO on Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship.
+SIPO DRep re-vote on Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship: changing from NO to YES.
 
-Governance Action ID: gov_action18u8lpkzge2csxe3plynn9lh4agwtv3nrqkyfwalwj4ykjv7l68jqqzmul9z
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+Context: On 2026-05-13, SIPO voted NO with principle-based reasoning anchored in four structural concerns about Treasury Fit. On 2026-05-24, IOG CEO Charles Hoskinson posted a public commitment on his official X account (https://x.com/IOHK_Charles/status/2058553026382606787) that materially changes the public information available about this proposal's strategic framing. Cardano Foundation CEO Frederik Gregaard publicly endorsed the message in the same thread on 2026-05-25. SIPO has independently reassessed all three resubmissions and is changing its vote from NO to YES on each.
 
-Context: This is the resubmission of the TOKEN2049 baseline sponsorship portion of the combined Cardano Summit 2026 + TOKEN2049 proposal, on which SIPO voted NO (with explicit principle-based reasoning) on 2026-04-18. EMURGO responded to community feedback by submitting three independent resubmissions — Summit (CF-led), TOKEN2049 Baseline (this proposal), and TOKEN2049 Top-Up — reducing the tier from Title to Platinum and reducing the combined ask. SIPO votes NO on each individually.
+This re-vote is not a retreat from SIPO's prior reasoning. SIPO's four-pillar Treasury Fit framework remains intact. What changed is the public information against which that framework is now being applied — and what that information enables this unified Cardano presence at TOKEN2049 to become.
 
-To be explicit: we are not opposed to Cardano having a presence at TOKEN2049 Singapore. We acknowledge EMURGO's good faith response to community feedback — the restructuring from Title to Platinum tier (lower-cost), the explicit dedication of 30 builder tickets (10 procured + 20 included), the dedicated sub-stage presentation slots for ecosystem builders, and the structural separation that allows DReps to make an isolated decision on the baseline versus the upgrade. These are responsible adjustments.
+The broader judgment
 
-However, SIPO's April 18 NO was principle-driven, anchored in four structural concerns about the Treasury Fit of this kind of withdrawal. The resubmitted Baseline addresses some surface concerns (tier downgrade, builder ticket explicit) but does not materially address the structural issues.
+SIPO views this Baseline not in isolation but as part of whether Cardano can use TOKEN2049 Singapore — one of the world's most important blockchain conferences — to project an integrated next-phase strategy into the real world at a time of broad market and geopolitical uncertainty. With Hoskinson's commitment and CF's endorsement, a unified Cardano presence with publicly demonstrated founding-entity coordination becomes possible in a way that was not on 2026-05-13. Better evaluated as a real-world execution signal for Cardano's next phase, not only as a brand-marketing event with a treasury cost. SIPO.TOKYO publishes the full strategic rationale separately.
 
-Why SIPO votes NO
+Why SIPO changes its vote to YES
 
-1. EMURGO three-way conflict-of-interest unaddressed. EMURGO (DRep with approximately ₳297m delegated) remains simultaneously (a) the proposer, (b) the direct beneficiary as facilitator (despite the "100% pass-through" framing), and (c) an active DRep voting on the outcome. The proposal does not publicly pre-commit EMURGO to Abstain on its own action. SIPO's April 18 constructive alternative named this as a minimum disclosure requirement; the resubmission does not adopt it.
+Pillar 4 (IOG absence and unified-Cardano framing disclosure gap) is materially addressed by public signal.
 
-2. Self-funding alternative (EMURGO commercial partnership) not explored. EMURGO is a commercial entity with global enterprise partnerships. The April 18 SIPO alternative explicitly suggested EMURGO pursue Title sponsorship through commercial partnership funding (sponsors, co-branding, enterprise revenue allocation) rather than treasury withdrawal. The resubmission does not address why commercial partnership funding cannot cover this — even at the lower Platinum tier ($793k USD).
+On 2026-05-13, SIPO's voteContext noted that this Baseline proposal was signed by EMURGO only, with IOG's position on the booth program, Cardano Showcase, or the broader Cardano presence at TOKEN2049 not disclosed.
 
-3. Public-goods vs brand marketing ratio. The Baseline includes meaningful builder elements (30 dedicated builder tickets, sub-stage time, on-site coordination) — which we appreciate as movement in the right direction. However, the headline allocation of $793k for a Platinum tier sponsorship (108 sqm booth, networking, lead generation positioning) still has the character of brand marketing rather than direct public-goods support. SIPO's April 18 critique that "builder direct allocation should not be a small fraction of an event budget" has been partially addressed in spirit but the per-dollar builder-direct ratio remains low.
+On 2026-05-24, Hoskinson posted on his official IOG CEO X account a public commitment to attend Cardano Summit 2026, to be on stage, and to make a personal partial contribution toward Title-level upgrade. He invited the Pentad (IOG / EMURGO / Cardano Foundation / Midnight Foundation / Intersect) to formalize coordination. CF CEO Frederik Gregaard publicly endorsed this in the same thread.
 
-4. IOG absence and "unified Cardano" framing. The proposal frames the TOKEN2049 presence as "putting Cardano builders at the forefront" and "the Cardano ecosystem on the global stage", but is signed by EMURGO only. IOG's participation is not addressed. The community-first / unified-Cardano framing requires disclosure of IOG's position — declined / not invited / pursuing separately — for the community to evaluate whether this is genuinely an ecosystem-wide initiative.
+This is a publicly verifiable, on-the-record signal from IOG's CEO and CF's CEO that materially reduces the IOG-absence disclosure concern Pillar 4 surfaced. Concrete Program participation at TOKEN2049 itself remains to be made public, but the founding-entity coordination intent is now publicly stated.
 
-Consistency with SIPO's prior votes
+Reassessment of the remaining three pillars
 
-SIPO has consistently voted YES on treasury withdrawals for public goods, infrastructure, ecosystem growth capital, and governance institutions. Event sponsorship at industry conferences, even with builder-focused elements, falls outside those categories when (a) the proposer is a well-capitalized commercial entity, (b) conflict-of-interest mitigation is absent, and (c) the public-goods justification is not the headline of the proposal. A NO here continues to clarify, rather than contradict, the April 18 line.
+Pillar 1 (EMURGO three-way conflict): EMURGO remains proposer, beneficiary, and DRep, and has not publicly pre-committed Abstain. EMURGO's intent to waive its 15% management fee on this Baseline proposal has been emerging through public discussion and reporting (Learn Cardano Podcast featuring CF and EMURGO representatives, among others). SIPO treats this fee-waiver signal as supportive but not load-bearing, pending EMURGO's formal announcement via its official channels.
 
-Constructive alternatives (extension of April 18)
+Pillar 2 (commercial-funding alternatives): EMURGO's commercial partnership capacity remains the principled alternative funding path. If the reported fee-waiver signal is formalized, EMURGO's role moves closer to a facilitator rather than a fee-extracting service provider, consistent with SIPO's 2026-04-18 alternative.
 
-- EMURGO pursues TOKEN2049 sponsorship through commercial partnership funding (sponsors, co-branding, allocation from EMURGO's existing enterprise revenue), as suggested in the April 18 SIPO NO voteContext.
-- If treasury funding for a TOKEN2049 builder showcase is genuinely needed, restructure as a builder-direct grant program (e.g., a Catalyst-style sub-allocation for ecosystem projects to attend / present / showcase), with EMURGO as logistical facilitator only (zero proposer financial benefit), CF / EMURGO / IOG joint disclosure of positions, and pre-committed Abstain from proposer DReps.
-- For future cycles, separate the "Cardano logistical presence" (operational) from the "Cardano sponsorship branding" (marketing) — the former can be a public-goods-aligned grant; the latter should be commercial.
+Pillar 3 (builder-direct support ratio): partially mitigated by the proposal's 30 builder tickets, sub-stage slot, and "Top 20 Cardano builders" booth program.
 
-We thank EMURGO for the responsible response to community feedback. We look forward to supporting future TOKEN2049 ecosystem presence proposals structured with explicit conflict-of-interest mitigation and clearer builder-direct allocation as headline rather than supplement.
+Overall judgment
 
-For these reasons, SIPO DRep votes NO.
+SIPO's framework is unchanged; the public information against which the framework is applied has changed. With Pillar 4 materially addressed via public signal, Pillar 1 partially mitigated by the publicly discussed fee-waiver signal, and the TOKEN2049 Baseline contextualizable as part of a Pentad-coordinated Cardano presence and a real-world execution signal at a critical juncture, SIPO judges that the public-goods value of a unified Cardano presence at TOKEN2049 Singapore outweighs the residual structural concerns.
+
+This is the Constructive NO → public-channel improvement → independent reassessment → YES pathway — not a concession of the framework, and not a response to private-channel persuasion.
+
+SIPO expectations (public accountability)
+
+SIPO is a DRep and does not impose legal conditions. Tracked publicly:
+
+1. EMURGO formalizes the 15% management fee waiver via official channels (EMURGO X / press release / Cardano Forum) before TOKEN2049 (October 2026).
+2. TOKEN2049 booth program publicly lists Top 20 Cardano builders and IOG / Midnight presence with concrete agenda items by September 2026.
+3. Post-event report disclosing 30 builder ticket allocation outcomes, audience-conversion metrics, and commercial sponsorship revenue offsetting treasury draw.
+4. EMURGO moves toward per-proposal disclosure of DRep Abstain intent on its own self-submitted Treasury proposals — a voluntary norm SIPO will continue to advocate.
+
+Consistency with SIPO's prior votes: this re-vote does not modify SIPO's consistent line of voting YES on public goods, infrastructure, and ecosystem growth capital. It reflects that, with Pentad coordination intent publicly disclosed and EMURGO's reported fee-waiver positioning, the Baseline Platinum qualifies as a coordination-infrastructure moment and real-world execution signal for Cardano's next phase.
+
+With appreciation to the proposers and to the Pentad principals who responded to community feedback through public channels, SIPO DRep changes its vote from NO to YES.
 
 ---
 
-SIPO DRep として、本提案「Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship」に反対（NO）を投じます。
+SIPO DRep として、本提案「Cardano at TOKEN2049 Singapore 2026: Baseline 'Platinum' Sponsorship」への投票を NO から YES へ変更します。
 
-Governance Action ID: gov_action18u8lpkzge2csxe3plynn9lh4agwtv3nrqkyfwalwj4ykjv7l68jqqzmul9z
-DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
-Date: 2026-05-13
+背景：2026-05-13、SIPO は Treasury Fit に関する 4 つの構造的懸念に基づき原則ベースの NO を投じました。2026-05-24、IOG CEO Charles Hoskinson 氏が公式 X (https://x.com/IOHK_Charles/status/2058553026382606787) で本提案の戦略的 framing に実質的な変化をもたらす公的コミットメントを表明し、2026-05-25、CF CEO Frederik Gregaard 氏が同スレッドで公開支持を表明しました。SIPO はこれらの公開情報を踏まえ、3 件再提出案を独立に再評価し、それぞれ NO から YES へ投票変更します。
 
-背景：本提案は、2026-04-18 にSIPOが原則に基づき NO を投じた当初の Cardano Summit 2026 + TOKEN2049 一括提案のうち TOKEN2049 baseline sponsorship 部分の再提出です。EMURGO はコミュニティフィードバックを反映し 3 独立提案（Summit / TOKEN2049 Baseline 本提案 / TOKEN2049 Top-Up）に分割再提出、tier を Title から Platinum に変更し、合計請求額を削減しました。SIPO は 3 件すべてに対して個別に NO を投じます。
+本再投票は SIPO 従来主張からの撤回ではありません。SIPO の 4 本柱フレームワーク自体は維持され、変化したのはそのフレームワークが適用される公開情報と、その情報が本 TOKEN2049 における統合 Cardano プレゼンスに何をもたらし得るかという評価環境です。
 
-明確にします：私たちは Cardano が TOKEN2049 Singapore に presence を持つこと自体に反対ではありません。EMURGO がコミュニティフィードバックに対して誠意ある対応をしたこと — Title から Platinum への tier 引き下げ、30 builder tickets（10 procured + 20 included）の明示的確保、エコシステムビルダー向け sub-stage 出演枠の明示、Baseline と Top-Up を分離して DRep が個別判断可能とした構造的分離 — は責任ある調整として認識・評価します。
+より大きな判断
 
-しかし、4 月 18 日 SIPO NO 投票は原則ベースの判断であり、このタイプの Treasury Withdrawal に対する 4 つの構造的懸念に基づいていました。再提出 Baseline は表層的懸念（tier 引き下げ、builder ticket 明示）には部分的に対応していますが、構造的論点には実質的に対応していません。
+SIPO は本 Baseline 提案を単独でなく、Cardano が TOKEN2049 Singapore — 世界で最も重要なブロックチェーンカンファレンスの一つ — を「市場・地政学的不確実性の中で統合された次段階戦略を現実世界へ投射する moment」として活用できるか、という問いの一要素として捉えています。Hoskinson 氏のコミットメントと CF の支持により、創設エンティティ間 coordination が公的に示された統合 Cardano プレゼンスが 2026-05-13 時点では不可能だった形で可能になりました。Treasury 負担を伴う単なるブランドマーケティングイベントよりも、Cardano 次段階の real-world execution signal として評価する方が適切です。詳細な戦略的論証は SIPO.TOKYO で別途公開します。
 
-SIPO が NO を投じる理由
+SIPO が YES に変更する理由
 
-1. EMURGO 三重利益相反が未対応。EMURGO（DRep 委任額 約 ₳297m）は本提案において、(a) 提案者、(b) facilitator としての直接受益者（「100% pass-through」と framing しているが組織として活動コスト・人件費等を吸収）、(c) 投票権を行使する DRep の三者を兼ねたままです。本提案は EMURGO DRep の自己提案に対する Abstain 事前表明を含んでいません。4 月 18 日 SIPO 建設的代替案で最低限の情報開示要件として明示しましたが、再提出版は採用していません。
+柱 4（IOG 不在および統合 Cardano framing への開示不足）は公的シグナルにより実質的に対応されました。
 
-2. 自己資金代替案（EMURGO commercial partnership）が検討されていない。EMURGO は global enterprise partnerships を持つ商業エンティティです。4 月 18 日 SIPO 代替案で「EMURGO は商業パートナーシップ資金（sponsors、co-branding、enterprise revenue 配分）で TOKEN2049 sponsorship を pursue する」ことを明示的に示唆しました。再提出版は、なぜ commercial partnership 資金で（より低価格の Platinum tier $793k USD でも）カバーできないのかを論じていません。
+2026-05-13 SIPO voteContext は、本 Baseline 提案が EMURGO 単独署名であり、IOG のブースプログラム・Cardano Showcase・TOKEN2049 における広範な Cardano プレゼンスへの立場が開示されていない点を指摘しました。
 
-3. 公共財 vs ブランドマーケティング比率。Baseline は意味のあるビルダー要素（30 builder tickets 専属確保、sub-stage 時間、on-site coordination）を含み、これは方向性として評価できます。しかし、Platinum tier sponsorship $793k の headline 配分（108 sqm ブース、networking、lead generation positioning）は依然としてブランドマーケティング性質が強く、direct public-goods support とは言えません。4 月 18 日 SIPO 批判「event budget に対する builder direct allocation 比率」は精神的には部分対応されていますが、$ あたりの builder-direct 比率は依然として低いままです。
+2026-05-24、Hoskinson 氏は IOG CEO 公式 X で Cardano Summit 2026 への出席とステージ登壇、Title レベルアップグレードへの個人的部分貢献の公的意向、Pentad への coordination 正式化対話招集を公的にコミットしました。CF CEO Frederik Gregaard 氏は同スレッドで公開支持を表明しました。
 
-4. IOG 不在と「統合 Cardano」framing。本提案は TOKEN2049 presence を「putting Cardano builders at the forefront」「the Cardano ecosystem on the global stage」と framing していますが、署名者は EMURGO のみです。IOG の参加は触れられていません。community-first / unified-Cardano framing には、IOG の立場（declined / not invited / pursuing separately）の開示が必要です — コミュニティがこれを真にエコシステム全体のイニシアチブとして評価できるためには。
+これは IOG CEO と CF CEO による publicly verifiable・on-the-record なシグナルであり、柱 4 が顕在化させた IOG 不在開示懸念を実質的に緩和します。TOKEN2049 自体での具体的 Program 上の参加内容は今後の公開待ちですが、創設エンティティ間の coordination intent は公的に表明されました。
 
-過去 SIPO 投票との整合性
+残る 3 柱の再評価
 
-SIPO は公共財・インフラ・エコシステム成長資本・ガバナンス制度に一貫して YES を投じてきました。業界カンファレンスでのイベント sponsorship は、ビルダー focused 要素を含んでいても、(a) 提案者が十分資本化された商業エンティティ、(b) 利益相反緩和が欠如、(c) 公共財正当化が headline でない、という条件下では上記カテゴリ外です。本 NO は 4 月 18 日に引いた線を矛盾なく明確化します。
+柱 1（EMURGO 三重利益相反）：EMURGO は依然として提案者・受益者・DRep を兼ね、自己提案 Abstain 事前表明を公開していません。EMURGO の本 Baseline 提案における 15% マネジメントフィー無料化方針は Learn Cardano Podcast (CF + EMURGO 代表登壇) など公開議論・報道を通じて確認されつつあり、SIPO はこれを支持的だが load-bearing でない要因として扱い、EMURGO 公式チャネル経由の正式アナウンスを期待します。
 
-建設的代替案
+柱 2（商業資金代替可能性）：EMURGO の commercial partnership 能力は依然として原則的代替資金源です。報じられているフィー無料化シグナルが正式化されれば、EMURGO の役割は facilitator により近い位置へ移り、SIPO 2026-04-18 代替案の精神と整合的になります。
 
-- EMURGO は TOKEN2049 sponsorship を商業パートナーシップ資金（sponsors、co-branding、EMURGO 既存 enterprise revenue 配分）で pursue する（4 月 18 日 SIPO NO voteContext で提示済）。
-- TOKEN2049 ビルダー showcase に Treasury 資金提供が真に必要であれば、ビルダー直接 grant プログラム（例：Catalyst-style sub-allocation でエコシステムプロジェクトが attend / present / showcase）として再構成、EMURGO は logistical facilitator のみ（提案者財務利益ゼロ）、CF / EMURGO / IOG 立場の合同開示、提案者 DRep の Abstain 事前表明 を備える。
-- 将来サイクル分は、「Cardano logistical presence（運用）」と「Cardano sponsorship branding（マーケティング）」を分離する — 前者は公共財整合 grant、後者は商業的に位置づけるべき。
+柱 3（ビルダー直接支援比率）：本提案は 30 ビルダーチケット、sub-stage 出演枠、「Top 20 Cardano builders」ブースプログラムにより部分的に緩和されています。
 
-EMURGO のコミュニティフィードバックに対する責任ある対応に敬意を表します。今後、明示的な利益相反緩和と builder-direct 配分を headline（補足ではなく）とした構造の TOKEN2049 ecosystem presence 提案については、積極的に支持してまいります。
+総合判断
 
-以上の理由により、SIPO DRep として本提案に反対（NO）を投じます。
+SIPO のフレームワークは不変です。柱 4 が公的シグナルにより実質的に対応され、柱 1 が公開議論されているフィー無料化シグナルで部分的に緩和され、TOKEN2049 Baseline が Pentad coordinated Cardano プレゼンスの一部 + 重要局面における real-world execution signal として contextualize 可能になった現在、SIPO は世界で最も重要なブロックチェーンカンファレンスの一つである TOKEN2049 Singapore における統合 Cardano プレゼンスの公共財価値が、残存する構造的懸念を上回ると判断します。
+
+これは「Constructive NO → 公開チャネルでの改善 → 独立再評価 → YES」のパスウェイです。SIPO の投票変更はこのパスウェイを反映するものであり、基礎フレームワークの譲歩でも、私的チャネル説得への応答でもありません。
+
+SIPO の期待事項（公開アカウンタビリティ）
+
+SIPO は DRep であり、法的条件を課す立場ではありません。以下は公開トラックします：
+
+1. EMURGO が 15% マネジメントフィー無料化を TOKEN2049 (2026 年 10 月) 前に公式チャネル (EMURGO X / press release / Cardano Forum) 経由で正式化
+2. TOKEN2049 ブースプログラムで Top 20 Cardano builders と IOG / Midnight プレゼンスを 2026 年 9 月までに公開
+3. 事後レポートで 30 ビルダーチケット配分結果・audience-conversion 指標・商業スポンサーシップ収益開示
+4. EMURGO が自己提出 Treasury 提案に対する DRep Abstain 意向の提案ごと開示の方向へ進むこと
+
+過去 SIPO 投票との整合性：本再投票は SIPO の公共財・インフラ・エコシステム成長資本に整合する Treasury Withdrawal への一貫した YES 線を修正するものではありません。Pentad coordination 意図の公開開示と EMURGO の報じられているフィー無料化 positioning の後、Baseline Platinum が Pentad coordinated 統合 Cardano プレゼンスの coordination インフラ moment + real-world execution signal として qualify することを反映しています。
+
+提案者および公開チャネルでコミュニティフィードバックに応答してくれた Pentad principals に感謝しつつ、SIPO DRep は本提案への投票を NO から YES へ変更します。
