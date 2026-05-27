@@ -3189,13 +3189,21 @@ export function BudgetVotePage({ voteSlug = "cardano-budget-2026", basePath = "/
     return () => ctrl.abort();
   }, [cycle]);
 
-  // For Hydra-sourced ballots the v0 proposal _id IS the questionId — no separate questions endpoint exists.
-  // proposalToQuestionId is an identity map built once proposals are loaded.
+  // Build proposalId → v1 questionId by matching v0 proposal title to ballot.hydra.ballot.questions[].question
   const proposalToQuestionId = useMemo(() => {
+    const questions = ballot?.hydra?.ballot?.questions ?? [];
+    if (!questions.length) return {};
+    // index by exact title for fast lookup
+    const byTitle = {};
+    for (const q of questions) byTitle[q.question] = q.questionId;
     const map = {};
-    for (const p of allProposals) map[p._id] = p._id;
+    for (const p of allProposals) {
+      const qId = byTitle[p.title];
+      if (qId) map[p._id] = qId;
+    }
+    console.log("[Ekklesia] proposalToQuestionId size:", Object.keys(map).length, "of", allProposals.length);
     return map;
-  }, [allProposals]);
+  }, [allProposals, ballot]);
 
   // Load my confirmed votes from Hydra once authed + ballotId known
   useEffect(() => {
