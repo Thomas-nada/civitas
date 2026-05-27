@@ -3418,6 +3418,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
   const [allProposals, setAllProposals] = useState([]);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [detailRow, setDetailRow] = useState(null); // proposal detail modal
   const [error, setError] = useState("");
   const [sort, setSort] = useState("yes_desc");
 
@@ -3569,9 +3570,24 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
       // Threshold % shown on label: Yes as fraction of effective stake
       const yesEffectivePct = effectiveVP > 0 ? (yesVP / effectiveVP) * 100 : 0;
 
-      // Passing: Yes VP > 51% of effective stake (totalBallotVP − abstainVP)
-      const THRESHOLD = 0.51;
+      // Passing: Yes VP > 67% of effective stake (totalBallotVP − abstainVP)
+      // Per Cardano Budget 2026 process: Treasury Withdrawal threshold ≥67%
+      const THRESHOLD = 0.67;
       const passing = effectiveVP > 0 && yesVP / effectiveVP > THRESHOLD;
+
+      // Didn't-vote segment (DReps on ballot who didn't vote on this question)
+      const noVoteCount = totalBallotVoters - drepVoters;
+      const noVoteVP = Math.max(0, totalBallotVP - yesVP - noVP - abstainVP);
+
+      // Effective No = explicit No + didn't-vote (both count against passing)
+      const effectiveNoVP = noVP + noVoteVP;
+      const effectiveNoPct = effectiveVP > 0 ? (effectiveNoVP / effectiveVP) * 100 : 0;
+
+      // Participation % = DReps who voted on this question / total ballot DReps
+      const participationPct = totalBallotVoters > 0 ? (drepVoters / totalBallotVoters) * 100 : 0;
+
+      // Power expressed on this question
+      const powerExpressed = yesVP + noVP + abstainVP;
 
       return {
         questionId: q.questionId,
@@ -3579,11 +3595,13 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
         budget: proposal?.metaData?.totalBudget ?? null,
         yesVP, noVP, abstainVP,
         yesCount, noCount, abstainCount, totalCount,
+        noVoteCount, noVoteVP,
+        effectiveNoVP, effectiveNoPct,
         drepVoters, totalBallotVoters,
         effectiveVP, totalBallotVP,
         yesPct, noPct, abstainPct, noVotePct,
-        yesEffectivePct,
-        passing,
+        yesEffectivePct, participationPct, powerExpressed,
+        passing, THRESHOLD,
       };
     });
   }, [ballot, resultsByQuestionId, questionToProposalId, proposalById]);
@@ -3649,7 +3667,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
           }}>
             {[
               ["Proposals", rows.length],
-              ["Currently Passing (>51% eff. stake)", passingCount],
+              ["Currently Passing (≥67% eff. stake)", passingCount],
               ["DReps Participated", totalBallotVoters || "—"],
             ].map(([label, value]) => (
               <div key={label} style={{
@@ -3675,10 +3693,18 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
             {sorted.map(row => (
-              <div key={row.questionId} style={{
-                border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
-                background: "var(--panel)",
-              }}>
+              <div key={row.questionId}
+                onClick={() => setDetailRow(row)}
+                role="button" tabIndex={0}
+                onKeyDown={e => e.key === "Enter" && setDetailRow(row)}
+                style={{
+                  border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
+                  background: "var(--panel)", cursor: "pointer",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent, #5eead4)"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "var(--line)"}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "flex-start" }}>
                   <p style={{ margin: 0, fontWeight: 600, fontSize: "0.88rem", lineHeight: 1.35, flex: 1 }}>
                     {row.title}
@@ -3721,16 +3747,16 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                         {row.abstainPct > 0 && <div style={{ width: `${row.abstainPct}%`, background: "var(--text-muted)", opacity: 0.35, flexShrink: 0 }} />}
                         {/* noVotePct segment stays as background (transparent) */}
                       </div>
-                      {/* 51% threshold marker on effective stake axis */}
+                      {/* 67% threshold marker on effective stake axis */}
                       {row.effectiveVP > 0 && (() => {
-                        const markerAt = (row.effectiveVP / row.totalBallotVP) * 51;
+                        const markerAt = (row.effectiveVP / row.totalBallotVP) * 67;
                         return (
                           <div style={{
                             position: "absolute", top: 0, bottom: 0,
                             left: `${markerAt}%`,
                             width: 2, background: "var(--text)", opacity: 0.35,
                             borderRadius: 1,
-                          }} title="51% of effective stake threshold" />
+                          }} title="67% of effective stake threshold" />
                         );
                       })()}
                     </div>
@@ -3770,6 +3796,168 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
           background: "var(--panel)", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem",
         }}>
           No results available yet. Results will appear once voting is underway.
+        </div>
+      )}
+
+      {/* ── Proposal detail modal ─────────────────────────────────────── */}
+      {detailRow && (
+        <div
+          onClick={() => setDetailRow(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--bg)", borderRadius: 14,
+              border: "1px solid var(--line)",
+              width: "100%", maxWidth: 680,
+              maxHeight: "90vh", overflowY: "auto",
+              padding: "1.5rem",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: "1.25rem" }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: "0 0 0.3rem", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                  Proposal result
+                </p>
+                <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, lineHeight: 1.35 }}>
+                  {detailRow.title}
+                </h2>
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{
+                    fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.6rem", borderRadius: 20,
+                    background: detailRow.passing
+                      ? "color-mix(in srgb, var(--green, #4ade80) 15%, transparent)"
+                      : "color-mix(in srgb, var(--red, #f87171) 15%, transparent)",
+                    border: `1px solid color-mix(in srgb, ${detailRow.passing ? "var(--green,#4ade80)" : "var(--red,#f87171)"} 40%, transparent)`,
+                    color: detailRow.passing ? "var(--green, #4ade80)" : "var(--red, #f87171)",
+                  }}>{detailRow.passing ? "Passing" : "Failing"}</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>PROVISIONAL</span>
+                  {detailRow.budget != null && (
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--accent, #5eead4)" }}>
+                      {formatAda(detailRow.budget)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailRow(null)}
+                style={{
+                  background: "transparent", border: "1px solid var(--line)",
+                  borderRadius: 8, cursor: "pointer", padding: "0.3rem 0.6rem",
+                  color: "var(--text-muted)", fontSize: "1rem", lineHeight: 1, flexShrink: 0,
+                }}
+              >✕</button>
+            </div>
+
+            {/* By Voters / By Voting Power — two column */}
+            {(() => {
+              const totalVoters = detailRow.totalBallotVoters;
+              const noVoteCount = detailRow.noVoteCount;
+              const pctV = n => totalVoters > 0 ? ((n / totalVoters) * 100).toFixed(1) + "%" : "—";
+              const pctVP = vp => detailRow.totalBallotVP > 0 ? ((vp / detailRow.totalBallotVP) * 100).toFixed(1) + "%" : "—";
+              const fmtVP = vp => {
+                if (!vp) return "₳0";
+                const m = vp / 1e6;
+                return m >= 1000 ? `₳${(m/1000).toFixed(2)}B` : `₳${m.toFixed(2)}M`;
+              };
+
+              const voterRows = [
+                { label: "Yes", color: "var(--green, #4ade80)", count: detailRow.yesCount, vp: detailRow.yesVP },
+                { label: "No (voted)", color: "var(--red, #f87171)", count: detailRow.noCount, vp: detailRow.noVP },
+                { label: "Abstain", color: "#f59e0b", count: detailRow.abstainCount, vp: detailRow.abstainVP },
+                { label: "Didn't vote", color: "var(--text-muted)", count: noVoteCount, vp: detailRow.noVoteVP },
+              ];
+
+              return (
+                <>
+                  {/* Stacked bar */}
+                  <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", background: "var(--line)", marginBottom: "1rem", position: "relative" }}>
+                    {detailRow.yesPct > 0 && <div style={{ width: `${detailRow.yesPct}%`, background: "var(--green, #4ade80)", flexShrink: 0 }} />}
+                    {detailRow.noPct > 0 && <div style={{ width: `${detailRow.noPct}%`, background: "var(--red, #f87171)", flexShrink: 0 }} />}
+                    {detailRow.abstainPct > 0 && <div style={{ width: `${detailRow.abstainPct}%`, background: "#f59e0b", opacity: 0.7, flexShrink: 0 }} />}
+                    {/* 67% threshold line */}
+                    {detailRow.effectiveVP > 0 && (
+                      <div style={{
+                        position: "absolute", top: 0, bottom: 0,
+                        left: `${(detailRow.effectiveVP / detailRow.totalBallotVP) * 67}%`,
+                        width: 2, background: "white", opacity: 0.5, borderRadius: 1,
+                      }} title="67% threshold" />
+                    )}
+                  </div>
+
+                  {/* Table */}
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", marginBottom: "1rem" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                        <th style={{ textAlign: "left", padding: "0.4rem 0.5rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Option</th>
+                        <th style={{ textAlign: "right", padding: "0.4rem 0.5rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Voters</th>
+                        <th style={{ textAlign: "right", padding: "0.4rem 0.5rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Power</th>
+                        <th style={{ textAlign: "right", padding: "0.4rem 0.5rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {voterRows.map(vr => (
+                        <tr key={vr.label} style={{ borderBottom: "1px solid color-mix(in srgb, var(--line) 50%, transparent)" }}>
+                          <td style={{ padding: "0.45rem 0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: vr.color, flexShrink: 0, display: "inline-block" }} />
+                            {vr.label}
+                          </td>
+                          <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", tabularNums: true }}>{vr.count}</td>
+                          <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", fontWeight: 600 }}>{fmtVP(vr.vp)}</td>
+                          <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", color: "var(--text-muted)" }}>{pctV(vr.count)}</td>
+                        </tr>
+                      ))}
+                      {/* Effective No separator row */}
+                      <tr style={{ borderTop: "2px solid var(--line)" }}>
+                        <td style={{ padding: "0.45rem 0.5rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red, #f87171)", opacity: 0.5, flexShrink: 0, display: "inline-block" }} />
+                          Effective No (No + Didn't vote)
+                        </td>
+                        <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", color: "var(--text-muted)" }}>—</td>
+                        <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", fontWeight: 600 }}>{fmtVP(detailRow.effectiveNoVP)}</td>
+                        <td style={{ textAlign: "right", padding: "0.45rem 0.5rem", fontWeight: 700, color: "var(--red, #f87171)" }}>
+                          {detailRow.effectiveNoPct.toFixed(1)}%
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Stats grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "1rem" }}>
+                    {[
+                      ["Participation", `${detailRow.participationPct.toFixed(1)}%`],
+                      ["Voters on proposal", `${detailRow.drepVoters} / ${detailRow.totalBallotVoters}`],
+                      ["Power expressed", fmtVP(detailRow.powerExpressed)],
+                      ["Ballot power", fmtVP(detailRow.totalBallotVP)],
+                      ["Pass/fail call", detailRow.passing ? `Passing (≥${Math.round(detailRow.THRESHOLD * 100)}% Yes)` : `Failing (<${Math.round(detailRow.THRESHOLD * 100)}% Yes)`],
+                      ["Decision basis", "Yes vs (No + non-voters)"],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{
+                        background: "var(--panel)", borderRadius: 8, padding: "0.6rem 0.75rem",
+                        border: "1px solid var(--line)",
+                      }}>
+                        <p style={{ margin: "0 0 0.2rem", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
+                        <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: 700 }}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer note */}
+                  <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Yes / No / Didn't vote are shown as % of <strong>active ballot stake</strong> (all participating DReps). Abstain is subtracted from the threshold denominator. Pass/fail uses the Treasury Withdrawal threshold of ≥{Math.round(detailRow.THRESHOLD * 100)}% Yes. DReps who didn't vote on this question have their stake counted as non-supporting.
+                  </p>
+                </>
+              );
+            })()}
+          </div>
         </div>
       )}
     </main>
