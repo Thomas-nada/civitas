@@ -3611,7 +3611,19 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
   }, [rows, sort]);
 
   const passingCount = rows.filter(r => r.passing).length;
-  const totalBallotVoters = rows[0]?.totalBallotVoters ?? 0;
+  // Use the maximum across all per-question snapshots — gives the most up-to-date ballot-wide total
+  const maxBallotVP = rows.length ? Math.max(...rows.map(r => r.totalBallotVP)) : 0;
+  const maxBallotVoters = rows.length ? Math.max(...rows.map(r => r.totalBallotVoters)) : 0;
+
+  // Format lovelace → compact ADA string (e.g. ₳814.7M)
+  const fmtAdaCompact = vp => {
+    if (!vp) return "₳0";
+    const ada = vp / 1e6; // lovelace → ADA
+    if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(1)}B`;
+    if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(1)}M`;
+    if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(0)}K`;
+    return `₳${Math.round(ada).toLocaleString()}`;
+  };
 
   return (
     <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
@@ -3655,21 +3667,37 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
 
       {!loading && !error && rows.length > 0 && (
         <>
+          {/* ── Participation stats ── */}
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+            display: "grid", gridTemplateColumns: "2fr 1fr 1fr",
             gap: "0.6rem", marginBottom: "1.25rem",
           }}>
+            {/* Hero stat: ADA in vote */}
+            <div style={{
+              background: "var(--panel)", border: "1px solid var(--accent, #5eead4)",
+              borderRadius: 10, padding: "0.85rem 1rem",
+            }}>
+              <p style={{ margin: "0 0 0.25rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                Total ADA in vote
+              </p>
+              <p style={{ margin: 0, fontSize: "2rem", fontWeight: 800, color: "var(--accent, #5eead4)", letterSpacing: "-0.02em" }}>
+                {fmtAdaCompact(maxBallotVP)}
+              </p>
+              <p style={{ margin: "0.2rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                across {maxBallotVoters} DRep{maxBallotVoters !== 1 ? "s" : ""} who have voted
+              </p>
+            </div>
+            {/* Secondary stats */}
             {[
-              ["Proposals", rows.length],
-              ["Currently Passing (≥67% eff. stake)", passingCount],
-              ["DReps Participated", totalBallotVoters || "—"],
-            ].map(([label, value]) => (
+              ["Proposals", rows.length, null],
+              ["Passing ≥67%", passingCount, passingCount > 0 ? "var(--green, #4ade80)" : null],
+            ].map(([label, value, color]) => (
               <div key={label} style={{
                 background: "var(--panel)", border: "1px solid var(--line)",
-                borderRadius: 10, padding: "0.75rem 0.9rem",
+                borderRadius: 10, padding: "0.85rem 1rem",
               }}>
-                <p style={{ margin: "0 0 0.2rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
-                <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>{value}</p>
+                <p style={{ margin: "0 0 0.25rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
+                <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color: color || "var(--text)" }}>{value}</p>
               </div>
             ))}
           </div>
@@ -3857,10 +3885,14 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
               const noVoteCount = detailRow.noVoteCount;
               const pctV = n => totalVoters > 0 ? ((n / totalVoters) * 100).toFixed(1) + "%" : "—";
               const pctVP = vp => detailRow.totalBallotVP > 0 ? ((vp / detailRow.totalBallotVP) * 100).toFixed(1) + "%" : "—";
+              // lovelace → compact ADA (e.g. 583,944,448,565,309 → ₳583.94M)
               const fmtVP = vp => {
                 if (!vp) return "₳0";
-                const m = vp / 1e6;
-                return m >= 1000 ? `₳${(m/1000).toFixed(2)}B` : `₳${m.toFixed(2)}M`;
+                const ada = vp / 1e6; // lovelace → ADA
+                if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(2)}B`;
+                if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(2)}M`;
+                if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(1)}K`;
+                return `₳${Math.round(ada).toLocaleString()}`;
               };
 
               const voterRows = [
@@ -3945,9 +3977,23 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                   </div>
 
                   {/* Footer note */}
-                  <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  <p style={{ margin: "0 0 0.6rem", fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
                     Yes / No / Didn't vote are shown as % of <strong>active ballot stake</strong> (all participating DReps). Abstain is subtracted from the threshold denominator. Pass/fail uses the Treasury Withdrawal threshold of ≥{Math.round(detailRow.THRESHOLD * 100)}% Yes. DReps who didn't vote on this question have their stake counted as non-supporting.
                   </p>
+                  <div style={{
+                    display: "flex", alignItems: "flex-start", gap: "0.5rem",
+                    padding: "0.6rem 0.75rem", borderRadius: 8,
+                    background: "color-mix(in srgb, var(--accent, #5eead4) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--accent, #5eead4) 25%, transparent)",
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+                      <circle cx="7" cy="7" r="6" stroke="var(--accent, #5eead4)" strokeWidth="1.3" />
+                      <path d="M7 6.5v3.5M7 4.5v.5" stroke="var(--accent, #5eead4)" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                    <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      <strong style={{ color: "var(--accent, #5eead4)" }}>Individual DRep votes</strong> — which DRep voted which way — will be published when the ballot closes on {formatDate(cycle?.votingEndDate)} and results are certified on-chain via IPFS.
+                    </p>
+                  </div>
                 </>
               );
             })()}
