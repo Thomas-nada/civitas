@@ -1,0 +1,13 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVqEgiRbJcuPxbvWpK6YQT2qdE71NjGrE9YVQa1PHRFy2 -->
+# $Khale
+
+**Proposal:** Pebble & Ecosystem maintenance TypeScript core of Cardano
+**Vote:** Yes
+**Voter ID:** `drep1y2ltat8kjqrmnff3lkkpxy0j5tn66d3m0gy64dc92asft5g6dl9ws`
+
+---
+
+I am voting YES on “Pebble & Ecosystem maintenance: TypeScript core of Cardano.” This proposal combines clearly justified TypeScript tooling maintenance with a strategic, but in my view acceptable, investment into Pebble as a TS‑shaped smart‑contract language. The total ask is mid‑sized relative to other 2026 infrastructure packages and uses the now‑standard SundaeLabs treasury contracts with independent oversight, milestone‑based disbursement, and refunds of undisbursed funds, which meets my governance and accountability expectations.
+On the maintenance side, the value is straightforward. Many widely used ecosystem tools—including Mesh, Lucid Evolution, Midgard, and other SDKs—depend directly or indirectly on HLabs’ TypeScript stack (cardano‑ledger‑ts, ouroboros‑miniprotocols‑ts, plutus‑machine, uplc). If these libraries lag protocol changes such as Plutus V4 and new parameter sets, a large part of the developer ecosystem is at risk of breakage. Funding a dedicated team to keep this stack aligned with upcoming hard forks is a clear public good and, in my view, an appropriate use of treasury funds.
+Pebble is the higher‑risk component, and I acknowledge the concerns raised by some DReps: Aiken is already working well, Pebble’s near‑term adoption targets are modest, and the main barriers to Cardano adoption are not solely about language syntax. However, I believe there is a strong strategic case for having a production‑grade, TS‑shaped language that compiles to optimized UPLC, with a full type system, Plutus V4 support, and modern tooling (LSP, CLI, sourcemaps). TypeScript is one of the most widely used languages globally, and giving those developers a familiar path to write on‑chain logic on Cardano is, in my view, a reasonable bet to broaden the long‑term developer funnel, especially when paired with the existing Aiken and Plutus options.
+I agree that HLabs should, over time, provide a clearer retrospective on prior Catalyst funding related to plu‑ts and Pebble, and I expect them to report not just code delivery but real usage metrics for Pebble and the maintained TS stack. Nonetheless, given the strong public‑goods case for the TS maintenance track, the credible technical scope for Pebble, the modest size of the combined ask relative to other infra proposals, and the robust treasury‑governance structure, I judge that the likely long‑term benefits to Cardano’s TypeScript ecosystem justify a YES vote.
