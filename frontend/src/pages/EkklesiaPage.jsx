@@ -3491,76 +3491,19 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     return () => { cancelled = true; };
   }, [voteSlug]);
 
-  // ── Load individual DRep votes from intersect.ekklesia.vote v0 API ──────────
+  // ── Load individual DRep votes via server-side aggregation endpoint ──────────
+  // The server fetches all voter details from intersect.ekklesia.vote, handles
+  // 404s/429s silently, caches for 5 min, and returns one clean JSON response.
   useEffect(() => {
     if (!ballot || !allProposals.length) return;
     let cancelled = false;
     setDrepVotesLoading(true);
 
-    (async () => {
-      try {
-        // Step 1: Fetch paginated voter list to get userId + name
-        const votersList = [];
-        for (let page = 1; ; page++) {
-          const res = await fetch(`/ekklesia-vote-proxy/api/v0/voters?limit=100&page=${page}`, { credentials: "include" });
-          if (!res.ok) break;
-          const data = await res.json();
-          votersList.push(...(data?.data ?? []));
-          if (page >= (data?.pagination?.totalPages ?? 1)) break;
-        }
-        if (cancelled) return;
-
-        // Name lookup map
-        const nameMap = Object.fromEntries(votersList.map(v => [v.userId, v.name || ""]));
-
-        // Step 2: Fetch each voter's full detail in batches of 10
-        const BATCH = 10;
-        const allDetails = [];
-        for (let i = 0; i < votersList.length; i += BATCH) {
-          if (cancelled) return;
-          const batch = votersList.slice(i, i + BATCH);
-          const results = await Promise.all(
-            batch.map(v =>
-              fetch(`/ekklesia-vote-proxy/api/v0/voters/${encodeURIComponent(v.userId)}`, { credentials: "include" })
-                .then(r => r.ok ? r.json() : null)
-                .catch(() => null)
-            )
-          );
-          allDetails.push(...results.filter(Boolean));
-          // Small pause between batches to avoid rate-limiting
-          if (i + BATCH < votersList.length) await new Promise(r => setTimeout(r, 80));
-        }
-        if (cancelled) return;
-
-        // Step 3: Build map — v0ProposalId → [{userId, name, vote, votingPower}]
-        const map = {};
-        for (const detail of allDetails) {
-          if (!detail?.votes) continue;
-          // Identify the budget ballot: the one with the most proposals (≥60), or "live" status
-          const ballotEntry = detail.votes.find(b => (b.proposals?.length ?? 0) >= 60)
-            || detail.votes.find(b => b.status === "live")
-            || [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
-          if (!ballotEntry?.proposals?.length) continue;
-          const name = nameMap[detail.userId] || "";
-          const votingPower = ballotEntry.votingPower ?? 0;
-          for (const prop of ballotEntry.proposals) {
-            if (!map[prop.proposalId]) map[prop.proposalId] = [];
-            map[prop.proposalId].push({
-              userId: detail.userId,
-              name,
-              vote: prop.vote?.[0] ?? "—",
-              votingPower,
-            });
-          }
-        }
-
-        if (!cancelled) setDrepVotesMap(map);
-      } catch (e) {
-        console.warn("Failed to load DRep votes:", e);
-      } finally {
-        if (!cancelled) setDrepVotesLoading(false);
-      }
-    })();
+    fetch("/ekklesia-drep-votes", { credentials: "include" })
+      .then(r => r.ok ? r.json() : {})
+      .then(map => { if (!cancelled) setDrepVotesMap(map); })
+      .catch(() => { if (!cancelled) setDrepVotesMap({}); })
+      .finally(() => { if (!cancelled) setDrepVotesLoading(false); });
 
     return () => { cancelled = true; };
   }, [ballot, allProposals]);

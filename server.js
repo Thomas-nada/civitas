@@ -8503,6 +8503,105 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Server-side aggregation of per-DRep votes (cached, avoids 100+ browser-visible 404s)
+  if (url.pathname === "/ekklesia-drep-votes") {
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": req.headers.origin || "*",
+      "Access-Control-Allow-Credentials": "true",
+      "Cache-Control": "public, max-age=300",
+    });
+
+    // In-process cache: { data, fetchedAt }
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    if (
+      global._drepVotesCache &&
+      Date.now() - global._drepVotesCache.fetchedAt < CACHE_TTL_MS
+    ) {
+      res.end(JSON.stringify(global._drepVotesCache.data));
+      return;
+    }
+
+    const https = require("https");
+    const ekkHost = "intersect.ekklesia.vote";
+
+    function ekkGet(path) {
+      return new Promise((resolve) => {
+        const req2 = https.request(
+          { hostname: ekkHost, path, method: "GET",
+            headers: { Accept: "application/json", "User-Agent": "civitas-proxy/1.0", Host: ekkHost } },
+          (res2) => {
+            const chunks = [];
+            res2.on("data", c => chunks.push(c));
+            res2.on("end", () => {
+              if (res2.statusCode !== 200) { resolve(null); return; }
+              try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+              catch { resolve(null); }
+            });
+          }
+        );
+        req2.on("error", () => resolve(null));
+        req2.end();
+      });
+    }
+
+    try {
+      // Step 1: Collect all voters from paginated list
+      const voters = [];
+      for (let page = 1; ; page++) {
+        const d = await ekkGet(`/api/v0/voters?limit=100&page=${page}`);
+        if (!d?.data?.length) break;
+        voters.push(...d.data);
+        if (page >= (d?.pagination?.totalPages ?? 1)) break;
+      }
+
+      const nameMap = Object.fromEntries(voters.map(v => [v.userId, v.name || ""]));
+
+      // Step 2: Fetch voter details in small batches with delay to avoid 429
+      const BATCH = 5;
+      const DELAY_MS = 300;
+      const allDetails = [];
+      for (let i = 0; i < voters.length; i += BATCH) {
+        const batch = voters.slice(i, i + BATCH);
+        const results = await Promise.all(
+          batch.map(v => ekkGet(`/api/v0/voters/${encodeURIComponent(v.userId)}`))
+        );
+        allDetails.push(...results.filter(Boolean));
+        if (i + BATCH < voters.length) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+      }
+
+      // Step 3: Build proposalId → [{userId, name, vote, votingPower}] map
+      const map = {};
+      for (const detail of allDetails) {
+        if (!detail?.votes) continue;
+        const ballotEntry =
+          detail.votes.find(b => (b.proposals?.length ?? 0) >= 60) ||
+          detail.votes.find(b => b.status === "live") ||
+          [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
+        if (!ballotEntry?.proposals?.length) continue;
+        const name = nameMap[detail.userId] || "";
+        const votingPower = ballotEntry.votingPower ?? 0;
+        for (const prop of ballotEntry.proposals) {
+          if (!map[prop.proposalId]) map[prop.proposalId] = [];
+          map[prop.proposalId].push({
+            userId: detail.userId,
+            name,
+            vote: prop.vote?.[0] ?? "—",
+            votingPower,
+          });
+        }
+      }
+
+      global._drepVotesCache = { data: map, fetchedAt: Date.now() };
+      res.end(JSON.stringify(map));
+    } catch (e) {
+      res.end(JSON.stringify({}));
+    }
+    return;
+  }
+
   // Dedicated proxy for intersect.ekklesia.vote (v1 voting API + its own v0/session endpoint)
   if (url.pathname.startsWith("/ekklesia-vote-proxy/")) {
     if (req.method === "OPTIONS") {
