@@ -8597,7 +8597,10 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const payload = { votes: map, allVoters: voters.map(v => ({ userId: v.userId, name: v.name || "" })) };
+      // Only include voters whose detail pages were accessible — the raw voter list includes
+      // participants from all past ballots (100+), not just this one (~18 DReps).
+      const allVoters = allDetails.map(d => ({ userId: d.userId, name: nameMap[d.userId] || "" }));
+      const payload = { votes: map, allVoters };
       global[CACHE_KEY] = { data: payload, fetchedAt: Date.now() };
       res.end(JSON.stringify(payload));
     } catch (e) {
