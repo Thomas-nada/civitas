@@ -8512,19 +8512,21 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": "public, max-age=300",
     });
 
-    // In-process cache: { data, fetchedAt }
+    // Cache key v2 — bump this whenever the payload schema changes to avoid stale-format hits
+    const CACHE_KEY = "_drepVotesCache_v2";
     const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
     if (
-      global._drepVotesCache &&
-      Date.now() - global._drepVotesCache.fetchedAt < CACHE_TTL_MS
+      global[CACHE_KEY] &&
+      Date.now() - global[CACHE_KEY].fetchedAt < CACHE_TTL_MS
     ) {
-      res.end(JSON.stringify(global._drepVotesCache.data));
+      res.end(JSON.stringify(global[CACHE_KEY].data));
       return;
     }
 
     const https = require("https");
     const ekkHost = "intersect.ekklesia.vote";
 
+    // Fetch with 8-second timeout so a slow/hung request doesn't block forever
     function ekkGet(path) {
       return new Promise((resolve) => {
         const req2 = https.request(
@@ -8540,6 +8542,7 @@ const server = http.createServer(async (req, res) => {
             });
           }
         );
+        req2.setTimeout(8000, () => { req2.destroy(); resolve(null); });
         req2.on("error", () => resolve(null));
         req2.end();
       });
@@ -8595,7 +8598,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const payload = { votes: map, allVoters: voters.map(v => ({ userId: v.userId, name: v.name || "" })) };
-      global._drepVotesCache = { data: payload, fetchedAt: Date.now() };
+      global[CACHE_KEY] = { data: payload, fetchedAt: Date.now() };
       res.end(JSON.stringify(payload));
     } catch (e) {
       res.end(JSON.stringify({ votes: {}, allVoters: [] }));
