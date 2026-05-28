@@ -3661,7 +3661,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
 
       return {
         questionId: q.questionId,
-        v0ProposalId: proposalId, // v0 proposal ID (used to look up per-DRep votes)
+        v0ProposalId: q.questionId, // matches proposalId in intersect.ekklesia.vote voter detail
         title: proposal?.title ?? q.question,
         budget: proposal?.metaData?.totalBudget ?? null,
         yesVP, noVP, abstainVP,
