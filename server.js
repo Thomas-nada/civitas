@@ -8513,7 +8513,7 @@ const server = http.createServer(async (req, res) => {
     });
 
     // Cache key v2 — bump this whenever the payload schema changes to avoid stale-format hits
-    const CACHE_KEY = "_drepVotesCache_v2";
+    const CACHE_KEY = "_drepVotesCache_v3";
     const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
     if (
       global[CACHE_KEY] &&
