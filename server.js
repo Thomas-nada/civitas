@@ -8594,10 +8594,11 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      global._drepVotesCache = { data: map, fetchedAt: Date.now() };
-      res.end(JSON.stringify(map));
+      const payload = { votes: map, allVoters: voters.map(v => ({ userId: v.userId, name: v.name || "" })) };
+      global._drepVotesCache = { data: payload, fetchedAt: Date.now() };
+      res.end(JSON.stringify(payload));
     } catch (e) {
-      res.end(JSON.stringify({}));
+      res.end(JSON.stringify({ votes: {}, allVoters: [] }));
     }
     return;
   }
