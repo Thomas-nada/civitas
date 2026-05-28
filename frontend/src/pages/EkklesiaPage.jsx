@@ -3421,6 +3421,8 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
   const [detailRow, setDetailRow] = useState(null); // proposal detail modal
   const [error, setError] = useState("");
   const [sort, setSort] = useState("yes_desc");
+  const [drepVotesMap, setDrepVotesMap] = useState(null); // v0ProposalId → [{userId, name, vote, votingPower}]
+  const [drepVotesLoading, setDrepVotesLoading] = useState(false);
 
   useSeoMeta({
     title: "Preliminary Results — Cardano Budget 2026",
@@ -3488,6 +3490,80 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
 
     return () => { cancelled = true; };
   }, [voteSlug]);
+
+  // ── Load individual DRep votes from intersect.ekklesia.vote v0 API ──────────
+  useEffect(() => {
+    if (!ballot || !allProposals.length) return;
+    let cancelled = false;
+    setDrepVotesLoading(true);
+
+    (async () => {
+      try {
+        // Step 1: Fetch paginated voter list to get userId + name
+        const votersList = [];
+        for (let page = 1; ; page++) {
+          const res = await fetch(`/ekklesia-vote-proxy/api/v0/voters?limit=100&page=${page}`, { credentials: "include" });
+          if (!res.ok) break;
+          const data = await res.json();
+          votersList.push(...(data?.data ?? []));
+          if (page >= (data?.pagination?.totalPages ?? 1)) break;
+        }
+        if (cancelled) return;
+
+        // Name lookup map
+        const nameMap = Object.fromEntries(votersList.map(v => [v.userId, v.name || ""]));
+
+        // Step 2: Fetch each voter's full detail in batches of 10
+        const BATCH = 10;
+        const allDetails = [];
+        for (let i = 0; i < votersList.length; i += BATCH) {
+          if (cancelled) return;
+          const batch = votersList.slice(i, i + BATCH);
+          const results = await Promise.all(
+            batch.map(v =>
+              fetch(`/ekklesia-vote-proxy/api/v0/voters/${encodeURIComponent(v.userId)}`, { credentials: "include" })
+                .then(r => r.ok ? r.json() : null)
+                .catch(() => null)
+            )
+          );
+          allDetails.push(...results.filter(Boolean));
+          // Small pause between batches to avoid rate-limiting
+          if (i + BATCH < votersList.length) await new Promise(r => setTimeout(r, 80));
+        }
+        if (cancelled) return;
+
+        // Step 3: Build map — v0ProposalId → [{userId, name, vote, votingPower}]
+        const map = {};
+        for (const detail of allDetails) {
+          if (!detail?.votes) continue;
+          // Identify the budget ballot: the one with the most proposals (≥60), or "live" status
+          const ballotEntry = detail.votes.find(b => (b.proposals?.length ?? 0) >= 60)
+            || detail.votes.find(b => b.status === "live")
+            || [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
+          if (!ballotEntry?.proposals?.length) continue;
+          const name = nameMap[detail.userId] || "";
+          const votingPower = ballotEntry.votingPower ?? 0;
+          for (const prop of ballotEntry.proposals) {
+            if (!map[prop.proposalId]) map[prop.proposalId] = [];
+            map[prop.proposalId].push({
+              userId: detail.userId,
+              name,
+              vote: prop.vote?.[0] ?? "—",
+              votingPower,
+            });
+          }
+        }
+
+        if (!cancelled) setDrepVotesMap(map);
+      } catch (e) {
+        console.warn("Failed to load DRep votes:", e);
+      } finally {
+        if (!cancelled) setDrepVotesLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [ballot, allProposals]);
 
   // results from /api/v1/results/ballot/{id} is an array of per-question result objects.
   // Each item's .proposalId is the v1 questionId.
@@ -3585,6 +3661,7 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
 
       return {
         questionId: q.questionId,
+        v0ProposalId: proposalId, // v0 proposal ID (used to look up per-DRep votes)
         title: proposal?.title ?? q.question,
         budget: proposal?.metaData?.totalBudget ?? null,
         yesVP, noVP, abstainVP,
@@ -3622,6 +3699,16 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
     if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(1)}B`;
     if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(1)}M`;
     if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(0)}K`;
+    return `₳${Math.round(ada).toLocaleString()}`;
+  };
+
+  // Format lovelace → precise compact ADA (e.g. ₳583.94M) used in modal tables
+  const fmtVP = vp => {
+    if (!vp) return "₳0";
+    const ada = vp / 1e6;
+    if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(2)}B`;
+    if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(2)}M`;
+    if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(1)}K`;
     return `₳${Math.round(ada).toLocaleString()}`;
   };
 
@@ -3885,15 +3972,6 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
               const noVoteCount = detailRow.noVoteCount;
               const pctV = n => totalVoters > 0 ? ((n / totalVoters) * 100).toFixed(1) + "%" : "—";
               const pctVP = vp => detailRow.totalBallotVP > 0 ? ((vp / detailRow.totalBallotVP) * 100).toFixed(1) + "%" : "—";
-              // lovelace → compact ADA (e.g. 583,944,448,565,309 → ₳583.94M)
-              const fmtVP = vp => {
-                if (!vp) return "₳0";
-                const ada = vp / 1e6; // lovelace → ADA
-                if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(2)}B`;
-                if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(2)}M`;
-                if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(1)}K`;
-                return `₳${Math.round(ada).toLocaleString()}`;
-              };
 
               const voterRows = [
                 { label: "Yes", color: "var(--green, #4ade80)", count: detailRow.yesCount, vp: detailRow.yesVP },
@@ -3977,23 +4055,81 @@ export function BudgetResultsPage({ voteSlug = "cardano-budget-2026", basePath =
                   </div>
 
                   {/* Footer note */}
-                  <p style={{ margin: "0 0 0.6rem", fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
                     Yes / No / Didn't vote are shown as % of <strong>active ballot stake</strong> (all participating DReps). Abstain is subtracted from the threshold denominator. Pass/fail uses the Treasury Withdrawal threshold of ≥{Math.round(detailRow.THRESHOLD * 100)}% Yes. DReps who didn't vote on this question have their stake counted as non-supporting.
                   </p>
-                  <div style={{
-                    display: "flex", alignItems: "flex-start", gap: "0.5rem",
-                    padding: "0.6rem 0.75rem", borderRadius: 8,
-                    background: "color-mix(in srgb, var(--accent, #5eead4) 8%, transparent)",
-                    border: "1px solid color-mix(in srgb, var(--accent, #5eead4) 25%, transparent)",
-                  }}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <circle cx="7" cy="7" r="6" stroke="var(--accent, #5eead4)" strokeWidth="1.3" />
-                      <path d="M7 6.5v3.5M7 4.5v.5" stroke="var(--accent, #5eead4)" strokeWidth="1.3" strokeLinecap="round" />
-                    </svg>
-                    <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      <strong style={{ color: "var(--accent, #5eead4)" }}>Individual DRep votes</strong> — which DRep voted which way — will be published when the ballot closes on {formatDate(cycle?.votingEndDate)} and results are certified on-chain via IPFS.
+
+                  {/* ── Per-DRep vote breakdown ── */}
+                  <p style={{ margin: "0 0 0.45rem", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                    How Each DRep Voted
+                  </p>
+                  {drepVotesLoading ? (
+                    <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                      Loading DRep votes…
                     </p>
-                  </div>
+                  ) : (detailRow.v0ProposalId && drepVotesMap?.[detailRow.v0ProposalId]?.length > 0) ? (
+                    <div style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden", maxHeight: 320, overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+                        <thead>
+                          <tr style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 1 }}>
+                            <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid var(--line)" }}>DRep</th>
+                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid var(--line)" }}>Vote</th>
+                            <th style={{ textAlign: "right", padding: "0.4rem 0.6rem", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid var(--line)" }}>Power</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...drepVotesMap[detailRow.v0ProposalId]]
+                            .sort((a, b) => {
+                              const o = { Yes: 0, No: 1, Abstain: 2 };
+                              return (o[a.vote] ?? 3) - (o[b.vote] ?? 3) || b.votingPower - a.votingPower;
+                            })
+                            .map(drep => {
+                              const voteColor = drep.vote === "Yes"
+                                ? "var(--green, #4ade80)"
+                                : drep.vote === "No"
+                                  ? "var(--red, #f87171)"
+                                  : drep.vote === "Abstain"
+                                    ? "#f59e0b"
+                                    : "var(--text-muted)";
+                              const displayName = drep.name
+                                || drep.userId.slice(0, 14) + "…" + drep.userId.slice(-6);
+                              return (
+                                <tr key={drep.userId} style={{ borderBottom: "1px solid color-mix(in srgb, var(--line) 50%, transparent)" }}>
+                                  <td style={{ padding: "0.38rem 0.6rem", maxWidth: 200 }}>
+                                    <span style={{ fontWeight: 500, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</span>
+                                    {drep.name && (
+                                      <span style={{ fontSize: "0.62rem", color: "var(--text-muted)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {drep.userId.slice(0, 22)}…
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "0.38rem 0.6rem" }}>
+                                    <span style={{
+                                      fontSize: "0.68rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 12,
+                                      background: `color-mix(in srgb, ${voteColor} 12%, transparent)`,
+                                      border: `1px solid color-mix(in srgb, ${voteColor} 35%, transparent)`,
+                                      color: voteColor, display: "inline-block",
+                                    }}>{drep.vote}</span>
+                                  </td>
+                                  <td style={{ textAlign: "right", padding: "0.38rem 0.6rem", fontWeight: 600, whiteSpace: "nowrap" }}>
+                                    {fmtVP(drep.votingPower)}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : drepVotesMap ? (
+                    <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                      No individual vote data available for this proposal yet.
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                      Individual DRep vote data will appear shortly after the page loads.
+                    </p>
+                  )}
                 </>
               );
             })()}
