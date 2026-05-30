@@ -1,0 +1,10 @@
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbPWQKm3EQkiuNbfji3khEBkahphoAmmHdUPAKY6G6gBx -->
+# AKYO
+
+**Proposal:** Tweag Core Cardano Infrastructure Treasury Withdrawal 2026–2028
+**Vote:** Abstain
+**Voter ID:** `drep1yts3qdjsqcnhld4r3uek2uu0n2tnh824tgnf75a83q3yhequuy54u`
+
+---
+
+私はこの提案を棄権します。Perasによるファイナリティ短縮、履歴データ管理の効率化、適合性テスト、ネットワーク監視・分析基盤であるHoarding Nodeをはじめとする各取り組みは、Cardanoのコアインフラ強化に貢献するものであり、その技術的価値やTweagのこれまでの実績については高く評価しています。また、Cardanoの長期的な競争力を維持するためには、こうした基盤技術への継続的な投資が重要であると考えています。一方で、本提案は17のワークパッケージと複数の異なる取り組みを単一の財務引き出し提案にまとめており、それぞれを個別に評価して判断することが困難だと感じています。提案に含まれる内容の中には支持できるものが多くありますが、優先順位や必要性について個別に判断したい項目も含まれています。また、₳39,787,316という大規模な予算と2年間にわたる実施期間を考慮すると、より分割された形で提案されていれば、コミュニティやDRepが各取り組みについて、より明確に意思表示を行えた可能性があると考えています。そのため、本提案の技術的価値や目的には一定の理解を示しつつ、今回は棄権します。\n\nI abstain from this proposal. I highly value the initiatives included in this proposal, such as Peras for faster finality, improvements to historical data management, conformance testing, and Hoarding Node as a network monitoring and analysis platform. These efforts contribute to strengthening Cardano’s core infrastructure, and I highly appreciate both their technical value and Tweag’s track record to date. I also believe that continued investment in foundational technologies is important for maintaining Cardano’s long-term competitiveness. At the same time, this proposal combines 17 work packages and multiple distinct initiatives into a single treasury withdrawal proposal, making it difficult to evaluate and form a judgment on each component individually. While many aspects of the proposal are worthy of support, it also contains areas whose priority and necessity I would prefer to assess separately. Furthermore, considering the substantial budget of ₳39,787,316 and the two-year implementation period, I believe that a more modular proposal structure could have allowed the community and DReps to express clearer views on each initiative. Therefore, while I recognize the technical value and objectives of this proposal, I will abstain from voting on it.
