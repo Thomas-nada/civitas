@@ -1,0 +1,40 @@
+<!-- url: ipfs://bafkreib5ncoq3jbfmpltnm3de7vle2oeeul7y5utrnytk7guxfkfga5cwm -->
+# SIPO
+
+**Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
+**Vote:** Yes
+**Voter ID:** `drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh`
+
+---
+
+SIPO DRep votes YES on Cardano Vision 2026: Human Centred, Scalable, Post-Quantum Secure — IO Research.
+
+Governance Action ID: gov_action1ttgs45ulfxs0jwkfrecystc3flduhszmyzk8wnd7yw5za77tsg9qq4afmus
+Legacy Governance Action ID (CIP-105): 5ad10ad39f49a0f93ac91e70482f114fdbcbc05b20ac774dbe23a82efbcb820a#0
+DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
+Date: 2026-06-01
+
+Cardano Vision 2026 (CV26) is IO Research's end-to-end research-to-deployment programme for Cardano's 2030 objectives, building on CV25, which delivered approximately 20% above target. It funds a nine-partner R&D consortium — including the Universities of Edinburgh, Tokyo, Oxford, and Buenos Aires alongside ecosystem contributors such as Eryx — comprising 36 FTEs under the scientific leadership of Aggelos Kiayias. The programme is organised into seven work packages and delivers 42 outputs across the innovation pipeline: 38 papers and technical reports, 8 Cardano Problem Statements, 12 prototypes, and 5 Cardano Improvement Proposals. Its three cross-cutting themes — human-centred design (developer experience, SPO incentive alignment, minUTXO), scalability (Leios/Peras integration, L2 execution, and ZK-enabled scaling), and post-quantum security — are precisely the foundational capabilities SIPO prioritises for the maturation of Cardano's core infrastructure and its connection to next-generation cryptography.
+
+SIPO has consistently supported well-governed core infrastructure: Amaru and Dingo under SIPO's node-diversity doctrine, the browser / light node (Gerolamo), the IO-led core-protocol round, Blockfrost, and Pogun. In May 2026 SIPO supported the IO-led implementation initiatives — consensus (Leios), L2 scalability, developer experience, Plutus, and the Cardano upgrades / Babel fee work. CV26 is the upstream research engine that feeds those very initiatives: foundational science and Cardano Improvement Proposals flow downstream into mainnet implementation. Funding the implementation while withholding the research that underpins it would be inconsistent with that posture. This is public-goods research that cannot reasonably be self-funded, and a university-led consortium is uniquely positioned to deliver it.
+
+Disbursement is de-risked to the same standard SIPO has previously endorsed. Funds are administered on-chain through the audited SundaeLabs treasury smart-contract framework (audited by TxPipe and MLabs) — a Treasury Reserve Smart Contract with project-specific contracts managed by Intersect — and released in four equal 25% tranches subject to milestone acceptance attested to Intersect or a third-party assurer. An independent five-member Oversight Committee (Sundae Labs, Cardano Foundation, Dquadrant, Xerberus, and NMKR) verifies key administrative actions, and any funds not disbursed are returned to the Treasury proportionally on partial delivery or scope reduction. On-chain verification confirms the withdrawal recipient is a script credential rather than a single key, placing CV26 in the same on-chain-enforced escrow class as the IO, Tweag, and Gerolamo work SIPO has supported. This structure directly addresses the indirect-KPI risk inherent in research funding: the ₳32,916,000 is a milestone-gated ceiling with proportional clawback to the Treasury, not an unconditional payment.
+
+SIPO recently abstained on the Tweag core-infrastructure withdrawal for two reasons: its scale relative to the Net Change Limit, and an unsettled funding-responsibility split for a parallel direct draw alongside IO's core-protocol leadership. The second reason does not apply here — CV26 is IO Research's own clearly-scoped research mandate, with no role-allocation ambiguity. On scale, SIPO recognises that CV26 is the second-largest live treasury withdrawal and that, together with Tweag, it represents roughly half of SIPO's estimated remaining Net Change Limit, with IO's cumulative 2026 footprint the largest of any single entity; SIPO will continue to monitor the combined NCL footprint across the 2026 portfolio. On balance, the milestone-gated escrow with proportional refund keeps the headline figure a disciplined ceiling, and the strategic value of a research-to-deployment pipeline for security, scaling, and post-quantum readiness justifies support. SIPO therefore votes YES, with the following expectations: (1) a clear delineation between CV26's Leios/Peras research and Tweag's Peras mainnet implementation to avoid duplicated funding; (2) clarity on whether CV26's post-quantum and ZK research subsumes or complements the related Intersect-side cryptography proposals; (3) delivery of the committed quarterly updates, bi-annual Intersect reporting, and a year-end financial breakdown; and (4) proportional return to the Treasury of funds for any undelivered or reduced scope. SIPO's support is not unconditional approval of every line item but an endorsement of well-governed, milestone-gated core research. This vote is SIPO DRep's recorded position.
+
+---
+
+SIPO DRepとして、本提案「Cardano Vision 2026: Human Centred, Scalable, Post-Quantum Secure — IO Research」に賛成（YES）を投じます。
+
+Governance Action ID: gov_action1ttgs45ulfxs0jwkfrecystc3flduhszmyzk8wnd7yw5za77tsg9qq4afmus
+Legacy Governance Action ID (CIP-105): 5ad10ad39f49a0f93ac91e70482f114fdbcbc05b20ac774dbe23a82efbcb820a#0
+DRep: drep1yffld2866p00cyg3ejjdewtvazgah7jjgk0s9m7m5ytmmdq33v3zh
+Date: 2026-06-01
+
+Cardano Vision 2026（CV26）は、IO Research による Cardano の 2030 年目標に向けた研究→実装の一貫パイプラインであり、目標を約 20% 上回って実行された CV25 の継続です。エディンバラ・東京・オックスフォード・ブエノスアイレスの各大学に Eryx などのエコシステム貢献者を加えた 9 機関の R&D コンソーシアム（Aggelos Kiayias の科学的統括の下、計 36 FTE）が担います。7 つのワークパッケージで構成され、イノベーションパイプライン全体で 42 の成果物（38 本の論文・技術レポート、8 件の Cardano Problem Statement、12 件のプロトタイプ、5 件の Cardano Improvement Proposal）を提供します。3 つの横断テーマ — human-centred design（開発者体験・SPO インセンティブ整合・minUTXO）、スケーラビリティ（Leios/Peras 統合・L2 実行・ZK スケーリング）、ポスト量子セキュリティ — は、Cardano のコア基盤の成熟と次世代暗号への接続のために SIPO が優先する基盤的能力そのものです。
+
+SIPO は、適切にガバナンスされたコア基盤に一貫して賛成してきました：node 多様性ドクトリンの下での Amaru・Dingo、ブラウザ／軽量ノード（Gerolamo）、IO 主導のコアプロトコルラウンド、Blockfrost、Pogun です。2026 年 5 月には、IO 主導の実装イニシアチブ — コンセンサス（Leios）・L2 スケーラビリティ・開発者体験・Plutus・Cardano upgrades / Babel fee — を支持しました。CV26 はそれらのイニシアチブに供給される上流の研究エンジンであり、基礎科学と Cardano Improvement Proposal が下流のメインネット実装へと流れていきます。実装を資金化しながら、その土台となる研究を支えないことは、この姿勢と整合しません。これは自己資金で賄うことが現実的でない公共財としての研究であり、大学主導のコンソーシアムはそれを担うのに適した主体です。
+
+資金配分は、SIPO が従来承認してきたのと同一の標準で de-risk されています。資金は、監査済みの SundaeLabs トレジャリスマートコントラクトフレームワーク（TxPipe・MLabs による監査済み）— Intersect が管理する Treasury Reserve Smart Contract とプロジェクト固有のコントラクト — を通じてオンチェーンで管理され、Intersect または第三者検収者へのマイルストーン検収を条件に、25% ずつ 4 トランシェで解放されます。5 社からなる独立した Oversight Committee（Sundae Labs・Cardano Foundation・Dquadrant・Xerberus・NMKR）が主要な管理アクションを検証し、未配分の資金は部分履行・スコープ縮小時に比例して Treasury へ返還されます。オンチェーン検証により、引き出し先が単一鍵ではなく script credential であることを確認しており、CV26 は SIPO が支持してきた IO・Tweag・Gerolamo と同じオンチェーン強制の escrow クラスに属します。この構造は、研究資金に内在する KPI の間接性のリスクに直接対応します：₳32,916,000 は Treasury への比例返還を伴うマイルストーン解放の上限であって、無条件の支払いではありません。
+
+SIPO は先に、Tweag のコア基盤引き出しに対して 2 つの理由から棄権しました：Net Change Limit に対する規模と、IO がコアプロトコルを leading and funding する中での並行直接引き出しの資金責任分担が未確定であることです。後者は本件には当てはまりません — CV26 は IO Research 自身の明確にスコープされた研究マンデートであり、役割分担の曖昧さはありません。規模については、CV26 が現行ライブで 2 番目に大きいトレジャリー引き出しであり、Tweag と合わせると SIPO の推定残り Net Change Limit の約半分を占め、IO の 2026 年累計フットプリントが単一エンティティとして最大であることを SIPO は認識しています。SIPO は 2026 年ポートフォリオ全体の NCL フットプリントを引き続き注視します。総合的には、比例返還を伴うマイルストーン解放の escrow が表面額を規律ある上限に保ち、セキュリティ・スケーリング・ポスト量子耐性に資する研究→実装パイプラインの戦略的価値が支持を正当化します。したがって SIPO は、以下の期待事項とともに賛成を投じます：(1) 二重資金を避けるための、CV26 の Leios/Peras 研究と Tweag の Peras メインネット実装の明確な切り分け、(2) CV26 のポスト量子・ZK 研究が関連する Intersect 側の暗号提案を包含するのか補完するのかの明確化、(3) コミットされた四半期更新・半期 Intersect 報告・年末の財務内訳の提供、(4) 未履行・縮小スコープ分の Treasury への比例返還。SIPO の支持は全項目の無条件承認ではなく、適切にガバナンスされたマイルストーン解放型のコア研究への支持です。本投票は SIPO DRep の記録上の立場表明です。
