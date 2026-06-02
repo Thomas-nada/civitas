@@ -1,10 +1,10 @@
-<!-- url: ipfs://bafkreihx2y2jp3fotc7a3ahdfjichumuphndou3vitvb67bh4t7vogt4wu -->
+<!-- url: ipfs://bafkreiet2cejtc764c6fkeqiyocutkxtlfw2amitwv22g4lyjy2mdytre4 -->
 # Nimuë Lady of the Lake Pool
 
 **Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1ygj02llvuusnhphvhlxf7d2cxhs53twjnwwl5at3zwht4xc6xdgl4`
 
 ---
 
-Research is important, but given the large amount requested, the high number of proposals competing for treasury funds, and the remaining NCL, it would have been more responsible to give the community a choice between the different research items and their scope. Therefore, I abstain.
+After careful consideration, spending less than 10% of the available NCL on research doesn't seem all that extraordinary for a research-driven blockchain like Cardano. Therefore, I'm changing my vote from ABSTAIN to YES.
