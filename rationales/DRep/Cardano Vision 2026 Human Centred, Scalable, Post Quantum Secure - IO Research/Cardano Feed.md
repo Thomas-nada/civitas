@@ -1,0 +1,10 @@
+<!-- url: ipfs://bafkreidwm3u4m3p25chkbyw4mezms7t4bwmaegrlwwp2dlr3qdsuf6a62q -->
+# Cardano Feed
+
+**Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
+**Vote:** No
+**Voter ID:** `drep1yftjewhpvtdd8t7swtmtp44px94ns3laytmjc3u7f93qvhswmwv5f`
+
+---
+
+No.
