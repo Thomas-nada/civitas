@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 
-const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5,  7, 21, 45, 0);
-const CC_ELECTION_VOTING_END_MS      = Date.UTC(2026, 6, 14, 0, 0, 0);
-const CC_ELECTION_RESULTS_END_MS     = Date.UTC(2026, 6, 17, 0, 0, 0);
+const CC_ELECTION_REGISTRATION_END_MS = Date.UTC(2026, 5, 21, 21, 45, 0);
+const CC_ELECTION_VOTING_END_MS      = Date.UTC(2026, 6, 23, 21, 45, 0);
+const CC_ELECTION_RESULTS_END_MS     = Date.UTC(2026, 6, 27, 23, 59, 0);
 const CC_ELECTION_UPDATE_END_MS      = Date.UTC(2026, 8,  7, 0, 0, 0);
 const BUDGET_PROCESS_PROPOSAL_END_MS = Date.UTC(2026, 4,  8, 12, 0, 0);
 const BUDGET_PROCESS_REVIEW_END_MS   = Date.UTC(2026, 4, 22, 12, 0, 0);
@@ -31,14 +31,14 @@ function getBudgetProcessBanner(nowMs) {
 
 function getCcElectionBanner(nowMs) {
   if (nowMs < CC_ELECTION_REGISTRATION_END_MS) {
-    return <>Candidate registration is open from <strong>8 May 2026 at 21:45 UTC</strong> to <strong>7 June 2026 at 21:45 UTC</strong>.</>;
+    return <>Candidate registration is open from <strong>8 May 2026 at 21:45 UTC</strong> to <strong>21 June 2026 at 21:45 UTC</strong>.</>;
 
   }
   if (nowMs < CC_ELECTION_VOTING_END_MS) {
-    return <>CC Elections voting on the Hydra platform runs from <strong>13 June 2026</strong> to{" "}<strong>13 July 2026</strong>.</>;
+    return <>CC Elections voting on the Hydra platform runs from <strong>23 June 2026</strong> to{" "}<strong>23 July 2026</strong>.</>;
   }
   if (nowMs < CC_ELECTION_RESULTS_END_MS) {
-    return <>CC Elections voting has closed. Final results are scheduled for <strong>16 July 2026</strong>.</>;
+    return <>CC Elections voting has closed. Final results are scheduled for <strong>27 July 2026</strong>.</>;
   }
   if (nowMs < CC_ELECTION_UPDATE_END_MS) {
     return <>The Update Committee governance action submission is scheduled for <strong>1 August 2026</strong>.</>;
