@@ -8700,8 +8700,37 @@ const server = http.createServer(async (req, res) => {
               c.replace(/;\s*Domain=[^;]*/i, "").replace(/;\s*Secure/i, "").replace(/;\s*SameSite=[^;]*/i, "; SameSite=Lax")
             );
           }
-          res.writeHead(proxyRes.statusCode, resHeaders);
-          proxyRes.pipe(res);
+          // For the votes list, patch the cc-vote-2026 cycle with the updated registration end date
+          const isVotesEndpoint = /^\/api\/v0\/votes(\?|$)/.test(targetPath);
+          if (isVotesEndpoint && proxyRes.statusCode === 200) {
+            const respChunks = [];
+            proxyRes.on("data", c => respChunks.push(c));
+            proxyRes.on("end", () => {
+              try {
+                const raw = Buffer.concat(respChunks).toString("utf8");
+                const data = JSON.parse(raw);
+                const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+                for (const cycle of list) {
+                  if (cycle.slug === "cc-vote-2026") {
+                    cycle.submissionEndDate = "2026-06-21T21:45:00.000Z";
+                    cycle.votingStartDate   = "2026-06-23T21:45:00.000Z";
+                    cycle.votingEndDate     = "2026-07-23T21:45:00.000Z";
+                    break;
+                  }
+                }
+                const out = Buffer.from(JSON.stringify(data), "utf8");
+                resHeaders["Content-Length"] = out.length;
+                res.writeHead(proxyRes.statusCode, resHeaders);
+                res.end(out);
+              } catch {
+                res.writeHead(proxyRes.statusCode, resHeaders);
+                res.end(Buffer.concat(respChunks));
+              }
+            });
+          } else {
+            res.writeHead(proxyRes.statusCode, resHeaders);
+            proxyRes.pipe(res);
+          }
         }
       );
       proxyReq.on("error", () => { res.writeHead(502); res.end("Bad Gateway"); });
