@@ -1,20 +1,18 @@
-<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/IOR.jsonld -->
+<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/IOR_2.jsonld -->
 # Yoroi W₳llet
 
 **Proposal:** Cardano Vision 2026 Human Centred, Scalable, Post Quantum Secure - IO Research
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1ygr9tuapcanc3kpeyy4dc3vmrz9cfe5q7v9wj3x9j0ap3tswtre9j`
 
 ---
 
 Summary
-Yoroi DRep votes ABSTAIN on "Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research", recognising the scientific quality and track record of the program while remaining neutral on the proposed treasury allocation structure.
+Yoroi DRep votes YES on "Cardano Vision 2026: Human Centred, Scalable, Post Quantum Secure - IO Research". Yoroi previously voted ABSTAIN due to concerns that the proposal's bundled structure limited the ability to assess and prioritise individual research streams within a single funding decision. Following further review, we concluded that the strategic importance of the overall research program and IOR's demonstrated delivery record outweigh those governance concerns, leading us to update our vote to YES.
 Rationale
-Strong delivery record and strategic relevance
-IOR has demonstrated consistent delivery across its previous research mandates, producing peer-reviewed outputs that have contributed to Cardano's protocol development and long-term technical foundations. The topics covered in this proposal address important areas of future protocol evolution, including scalability, post-quantum readiness, interoperability, governance, and developer experience.
-Scale and breadth create evaluation challenges
-At 32,916,667 ADA across seven work packages, the proposal spans a broad range of research domains, from initiatives closely tied to current roadmap priorities through to longer-horizon exploratory work. This breadth reflects an ambitious and comprehensive research agenda, but it also makes it more difficult to assess the relative priority and expected value of individual components within a single funding decision.
-Greater granularity would improve allocation confidence
-Yoroi would have welcomed greater visibility into how treasury resources are distributed across the various workstreams, particularly where implementation timelines and expected outcomes differ significantly. While there are clear benefits to coordinating related research efforts under a unified program, the bundled structure provides limited opportunity for DReps to express differentiated views on individual areas of work.
+• Strategic importance of the research agenda
+The proposal addresses several areas that are important to Cardano's future development, including scalability, post-quantum security, interoperability, governance, identity, and developer experience. While not every workstream carries the same level of urgency, together they represent a coordinated investment in Cardano's long-term technical foundations.
+• Benefits outweigh structural concerns
+Our original abstention reflected a preference for greater visibility into how individual research priorities could be evaluated within a proposal of this scale. While we continue to believe that additional granularity would improve future treasury decision-making, we no longer consider the bundled structure sufficient reason to withhold support. Given IOR's proven delivery record and the strategic value of maintaining Cardano's research pipeline, we believe supporting the proposal is the better outcome for the ecosystem.
 Conclusion
-Yoroi recognises the strategic importance of maintaining a strong research pipeline for Cardano and respects the track record behind this proposal. Our abstention should not be interpreted as opposition to the research program itself. Rather, it reflects a neutral position between the evident value of the proposed work and a preference for greater clarity around prioritisation and allocation within a treasury request of this scale.
+Yoroi supports this proposal because the value of sustaining Cardano's long-term research capabilities outweighs our concerns regarding the proposal's structure.
