@@ -354,6 +354,14 @@ let pendingSnapshot = null;
 let pendingSnapshotBuiltAt = null;
 const sseClients = new Set();
 
+// ── CIP index / content cache ─────────────────────────────────────────────
+const CIP_INDEX_TTL_MS = Number(process.env.CIP_INDEX_TTL_MS || 24 * 60 * 60 * 1000);
+const CIP_CONTENT_TTL_MS = Number(process.env.CIP_CONTENT_TTL_MS || 24 * 60 * 60 * 1000);
+const CIP_FETCH_BATCH = 15;
+const GITHUB_TOKEN = String(process.env.GITHUB_TOKEN || "").trim();
+let cipIndexCache = { fetchedAt: 0, cips: [] };
+const cipContentCache = {};
+
 // ── Survey / Label-17 index cache ─────────────────────────────────────────
 const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
 const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
@@ -6448,6 +6456,19 @@ async function runStartupInitialization() {
 const MAX_METADATA_STR_BYTES = 64;
 const LABEL17_TEXT_FIELDS = new Set(["title", "description", "question", "customValue"]);
 
+// v3 integer ↔ string mappings
+const L17_INT_TO_ROLE       = { 0: "DRep", 1: "SPO", 2: "CC", 3: "Stakeholder" };
+const L17_INT_TO_WEIGHTING  = { 0: "CredentialBased", 1: "StakeBased", 2: "PledgeBased" };
+const L17_INT_TO_METHOD     = {
+  0: "urn:cardano:poll-method:single-choice:v1",
+  1: "urn:cardano:poll-method:multi-select:v1",
+  2: "urn:cardano:poll-method:ranking:v1",
+  3: "urn:cardano:poll-method:numeric-range:v1",
+  4: "urn:cardano:poll-method:custom:v1",
+};
+
+// ── v1 (legacy object-based) helpers ────────────────────────────────────────
+
 function shouldJoinLabel17StringArray(value, parentKey = "") {
   if (!Array.isArray(value) || value.length <= 1) return false;
   if (!value.every((v) => typeof v === "string")) return false;
@@ -6471,13 +6492,125 @@ function label17FromMeta(value, parentKey = "") {
   return value;
 }
 
+// ── CIP helpers ───────────────────────────────────────────────────────────
+
+function parseCipFrontMatter(raw) {
+  const match = String(raw || "").match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return {};
+  const lines = match[1].split(/\r?\n/);
+  const result = {};
+  let currentKey = null;
+  for (const line of lines) {
+    // Indented list item (Authors, Discussions, etc.)
+    if (currentKey && /^\s+-\s/.test(line)) {
+      if (!Array.isArray(result[currentKey])) result[currentKey] = [];
+      result[currentKey].push(line.replace(/^\s+-\s*/, "").trim());
+      continue;
+    }
+    // Reset list context on non-indented lines
+    if (/^\S/.test(line)) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx > 0) {
+        currentKey = line.slice(0, colonIdx).trim();
+        const value = line.slice(colonIdx + 1).trim();
+        result[currentKey] = value === "" ? [] : value;
+      }
+    }
+  }
+  return result;
+}
+
+function stripCipFrontMatter(raw) {
+  return String(raw || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+}
+
+function cipFolderToNumber(folderName) {
+  const n = parseInt(String(folderName || "").replace(/^CIP-0*/, "") || "0", 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function fetchCipIndex() {
+  const headers = { "Accept": "application/vnd.github.v3+json", "User-Agent": "civitas-app" };
+  if (GITHUB_TOKEN) headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+  const listRes = await fetch(
+    "https://api.github.com/repos/cardano-foundation/CIPs/contents/",
+    { headers }
+  );
+  if (!listRes.ok) throw new Error(`GitHub API error ${listRes.status} fetching CIP list`);
+  const items = await listRes.json();
+  const cipFolders = items
+    .filter((item) => item.type === "dir" && /^CIP-\d/.test(item.name))
+    .map((item) => item.name)
+    .sort();
+
+  const cips = [];
+  for (let i = 0; i < cipFolders.length; i += CIP_FETCH_BATCH) {
+    const batch = cipFolders.slice(i, i + CIP_FETCH_BATCH);
+    const results = await Promise.all(batch.map(async (folder) => {
+      try {
+        const rawUrl = `https://raw.githubusercontent.com/cardano-foundation/CIPs/master/${folder}/README.md`;
+        const r = await fetch(rawUrl, { headers: { "User-Agent": "civitas-app" } });
+        if (!r.ok) return null;
+        const text = await r.text();
+        const fm = parseCipFrontMatter(text);
+        return {
+          id: folder,
+          number: cipFolderToNumber(folder),
+          title: String(fm.Title || fm.title || folder).trim(),
+          status: String(fm.Status || fm.status || "").trim(),
+          category: String(fm.Category || fm.category || "").trim(),
+          created: String(fm.Created || fm.created || "").trim(),
+        };
+      } catch {
+        return null;
+      }
+    }));
+    cips.push(...results.filter(Boolean));
+  }
+  return cips.sort((a, b) => a.number - b.number);
+}
+
+async function fetchCipContent(cipId) {
+  const rawUrl = `https://raw.githubusercontent.com/cardano-foundation/CIPs/master/${cipId}/README.md`;
+  const r = await fetch(rawUrl, { headers: { "User-Agent": "civitas-app" } });
+  if (!r.ok) return null;
+  const raw = await r.text();
+  const fm = parseCipFrontMatter(raw);
+  const content = stripCipFrontMatter(raw);
+  return {
+    id: cipId,
+    number: cipFolderToNumber(cipId),
+    title: String(fm.Title || fm.title || cipId).trim(),
+    status: String(fm.Status || fm.status || "").trim(),
+    category: String(fm.Category || fm.category || "").trim(),
+    authors: Array.isArray(fm.Authors) ? fm.Authors : (fm.Authors ? [fm.Authors] : []),
+    created: String(fm.Created || fm.created || "").trim(),
+    license: String(fm.License || fm.license || "").trim(),
+    frontMatter: fm,
+    content,
+  };
+}
+
+// Returns "surveyDetails" | "surveyResponse" for v1,
+//         "surveyDefinitionsV3" | "surveyResponsesV3" | "cancellationsV3" for v3,
+//         null for unrecognised.
 function label17KindFromMeta(meta) {
-  if (!meta || typeof meta !== "object") return null;
-  const hasDetails = "surveyDetails" in meta;
+  // v3: envelope is [tag, payload_array]
+  if (Array.isArray(meta) && meta.length === 2 && typeof meta[0] === "number" && Array.isArray(meta[1])) {
+    if (meta[0] === 0) return "surveyDefinitionsV3";
+    if (meta[0] === 1) return "surveyResponsesV3";
+    if (meta[0] === 2) return "cancellationsV3";
+    return null;
+  }
+  // v1: named object keys
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
+  const hasDetails  = "surveyDetails"  in meta;
   const hasResponse = "surveyResponse" in meta;
   if ((hasDetails && hasResponse) || (!hasDetails && !hasResponse)) return null;
   return hasDetails ? "surveyDetails" : "surveyResponse";
 }
+
+// ── v1 survey entry ──────────────────────────────────────────────────────────
 
 function label17SurveyFromEntry(entry, txInfo) {
   const meta = entry?.json_metadata;
@@ -6487,11 +6620,200 @@ function label17SurveyFromEntry(entry, txInfo) {
   if (!details || typeof details !== "object") return null;
   return {
     surveyTxId: entry.tx_hash,
+    surveyIndex: 0,
     details,
     msg: restored.msg || null,
     slot: txInfo?.slot ?? null,
     blockTime: txInfo?.block_time ?? null,
   };
+}
+
+// ── v3 parsing helpers ───────────────────────────────────────────────────────
+
+// Join chunked text (string or array-of-strings) back to a single string.
+function l17JoinText(v) {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && v.every((s) => typeof s === "string")) return v.join("");
+  return String(v ?? "");
+}
+
+// Blockfrost represents CBOR bytes as "0x<hex>" strings in json_metadata.
+// Returns bare hex string (no 0x prefix), or null.
+function l17ExtractBytesHex(v) {
+  let hex = null;
+  if (typeof v === "string") hex = v;
+  else if (v && typeof v === "object" && !Array.isArray(v) && typeof v.bytes === "string") hex = v.bytes;
+  if (!hex) return null;
+  return hex.startsWith("0x") ? hex.slice(2) : hex;
+}
+
+// Parse a v3 question array → normalised question object.
+function l17ParseV3Question(q, index) {
+  if (!Array.isArray(q) || q.length < 2) return null;
+  const [tag, promptRaw, ...rest] = q;
+  const prompt = l17JoinText(promptRaw);
+  const questionId = `q${index}`;
+  const methodType = L17_INT_TO_METHOD[tag];
+  if (!methodType) return null;
+
+  if (tag === 0) { // single-choice
+    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText) };
+  }
+  if (tag === 1) { // multi-select
+    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText), maxSelections: rest[1] ?? 2 };
+  }
+  if (tag === 2) { // ranking
+    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText), maxRanked: rest[1] ?? null };
+  }
+  if (tag === 3) { // numeric-range
+    const c = rest[0] ?? [];
+    return {
+      questionId, question: prompt, methodType,
+      numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) }
+    };
+  }
+  if (tag === 4) { // custom
+    return { questionId, question: prompt, methodType };
+  }
+  return null;
+}
+
+// Parse a v3 answer array → normalised answer object using the survey's question list.
+function l17ParseV3Answer(answerArr, questions) {
+  if (!Array.isArray(answerArr) || answerArr.length < 3) return null;
+  const [tag, questionIndex, value] = answerArr;
+  const q = questions[questionIndex];
+  if (!q) return null;
+  if (tag === 0) return { questionId: q.questionId, selection: [value] };
+  if (tag === 1) return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };
+  if (tag === 2) return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };
+  if (tag === 3) return { questionId: q.questionId, numericValue: value };
+  if (tag === 4) return { questionId: q.questionId, customValue: value };
+  return null;
+}
+
+// Parse v3 survey definitions from metadata envelope.
+// Returns array of survey objects (a single tx can define multiple surveys).
+function l17SurveysFromV3Meta(meta, txHash, txInfo) {
+  // meta = [0, [definition, ...]]
+  const definitions = meta[1];
+  if (!Array.isArray(definitions) || definitions.length === 0) return [];
+  const surveys = [];
+  for (let surveyIndex = 0; surveyIndex < definitions.length; surveyIndex++) {
+    const def = definitions[surveyIndex];
+    if (!Array.isArray(def) || def.length < 7) continue;
+
+    const specVersion = def[0];
+    let titleRaw, descRaw, questionsRaw, roleWeightingRaw, endEpoch, isTimelocked = false;
+
+    if (specVersion === 2) {
+      // CIP-179 v2: [specVersion, owner, title, description, questions, roleWeighting, endEpoch]
+      if (def.length < 7) continue;
+      titleRaw       = def[2];
+      descRaw        = def[3];
+      questionsRaw   = def[4];
+      roleWeightingRaw = def[5];
+      endEpoch       = def[6];
+    } else if (specVersion === 3) {
+      // mpizenberg draft v3 (timelocked): [specVersion, owner, title, description, roleWeighting, endEpoch, submissionMode, questions]
+      if (def.length < 8) continue;
+      titleRaw       = def[2];
+      descRaw        = def[3];
+      roleWeightingRaw = def[4];
+      endEpoch       = def[5];
+      isTimelocked   = Array.isArray(def[6]) && def[6][0] === 1;
+      questionsRaw   = def[7];
+    } else {
+      continue; // unknown specVersion
+    }
+
+    const title       = l17JoinText(titleRaw);
+    const description = l17JoinText(descRaw);
+
+    // roleWeighting: Blockfrost encodes CBOR integer map keys as string integers: {"0":0,"1":1}
+    const roleWeighting = {};
+    if (roleWeightingRaw && typeof roleWeightingRaw === "object" && !Array.isArray(roleWeightingRaw)) {
+      for (const [k, v] of Object.entries(roleWeightingRaw)) {
+        const role     = L17_INT_TO_ROLE[parseInt(k, 10)];
+        const weighting = L17_INT_TO_WEIGHTING[Number(v)];
+        if (role && weighting) roleWeighting[role] = weighting;
+      }
+    }
+
+    const questions = (Array.isArray(questionsRaw) ? questionsRaw : [])
+      .map((q, i) => l17ParseV3Question(q, i))
+      .filter(Boolean);
+
+    surveys.push({
+      surveyTxId: txHash,
+      surveyIndex,
+      details: { specVersion, title, description, roleWeighting, endEpoch, questions, isTimelocked },
+      msg: null,
+      slot: txInfo?.slot ?? null,
+      blockTime: txInfo?.block_time ?? null,
+    });
+  }
+  return surveys;
+}
+
+// Parse v3 survey responses from metadata envelope.
+// Returns array of raw response objects (answers not yet normalised to questionIds).
+function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAddress, responseStakeAda) {
+  // meta = [1, [response, ...]]
+  const responses = meta[1];
+  if (!Array.isArray(responses) || responses.length === 0) return [];
+  const out = [];
+  for (let responseIndex = 0; responseIndex < responses.length; responseIndex++) {
+    const resp = responses[responseIndex];
+    if (!Array.isArray(resp) || resp.length < 4) continue;
+
+    let surveyRefRaw, roleInt, answersRaw, specVersion;
+
+    if (Array.isArray(resp[0])) {
+      // CIP-179 v2: [survey_ref, role, credential, answers]  (no specVersion)
+      if (resp.length < 4) continue;
+      surveyRefRaw = resp[0];
+      roleInt      = resp[1];
+      answersRaw   = resp[3];
+      specVersion  = 2;
+    } else {
+      // mpizenberg v3: [specVersion, survey_ref, role, credential, answers]
+      if (resp.length < 5) continue;
+      specVersion  = resp[0];
+      surveyRefRaw = resp[1];
+      roleInt      = resp[2];
+      answersRaw   = resp[4];
+    }
+
+    let surveyTxId = null;
+    let surveyIndex = 0;
+    if (Array.isArray(surveyRefRaw) && surveyRefRaw.length === 2) {
+      surveyTxId  = l17ExtractBytesHex(surveyRefRaw[0]);
+      surveyIndex = Number(surveyRefRaw[1] ?? 0);
+    }
+    if (!surveyTxId) continue;
+
+    const responderRole = L17_INT_TO_ROLE[Number(roleInt)];
+    if (!responderRole) continue;
+
+    out.push({
+      txId: txHash,
+      inputAddress,
+      slot: txInfo?.slot ?? null,
+      txIndexInBlock: txInfo?.index ?? 0,
+      blockTime: txInfo?.block_time ?? null,
+      responderRole,
+      surveyTxId,
+      surveyIndex,
+      rawAnswersV3: Array.isArray(answersRaw) ? answersRaw : [],
+      answers: [], // populated in post-processing pass
+      specVersion,
+      rewardAddress,
+      responseStakeAda: Number.isFinite(responseStakeAda) ? responseStakeAda : 0,
+      responseCredential: rewardAddress ?? inputAddress ?? txHash,
+    });
+  }
+  return out;
 }
 
 function label17ResolveResponseWeight(response, weighting) {
@@ -6535,8 +6857,16 @@ async function fetchSurveyByTxHash(txHash) {
   ]);
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
-  const entry = rows.find((row) => String(row?.label || "") === "17");
+  const entry = rows.find((row) => ["17", "171717"].includes(String(row?.label || "")));
   if (!entry) return null;
+
+  const meta = entry?.json_metadata;
+  const kind = label17KindFromMeta(meta);
+
+  if (kind === "surveyDefinitionsV3") {
+    const surveyObjects = l17SurveysFromV3Meta(meta, safeHash, txInfo);
+    return surveyObjects[0] ?? null; // return first (most common case)
+  }
   return label17SurveyFromEntry({ ...entry, tx_hash: safeHash }, txInfo);
 }
 
@@ -6560,17 +6890,18 @@ async function buildLabel17Index() {
 async function _runLabel17Build() {
   const now = Date.now();
 
-  // Scan recent label-17 traffic newest-first and only keep survey-related entries.
+  // Scan both the canonical label (17) and the demo/test label (171717).
+  // 171717 is used by existing tools to avoid polluting production label-17 data during testing.
   const relevantEntries = [];
-  let page = 1;
-  while (page <= LABEL17_MAX_PAGES) {
-    const entries = await blockfrostGet(`/metadata/txs/labels/17?page=${page}&count=100&order=desc`).catch(() => []);
-    if (!Array.isArray(entries) || entries.length === 0) break;
-    relevantEntries.push(
-      ...entries.filter((entry) => label17KindFromMeta(entry?.json_metadata))
-    );
-    if (entries.length < 100) break;
-    page++;
+  for (const metaLabel of ["17", "171717"]) {
+    let page = 1;
+    while (page <= LABEL17_MAX_PAGES) {
+      const entries = await blockfrostGet(`/metadata/txs/labels/${metaLabel}?page=${page}&count=100&order=desc`).catch(() => []);
+      if (!Array.isArray(entries) || entries.length === 0) break;
+      relevantEntries.push(...entries.filter((entry) => label17KindFromMeta(entry?.json_metadata)));
+      if (entries.length < 100) break;
+      page++;
+    }
   }
 
   const surveys = [];
@@ -6591,6 +6922,9 @@ async function _runLabel17Build() {
     batch.forEach((h, idx) => { txInfoCache[h] = results[idx]; });
   }
 
+  // Raw v3 responses (need a second pass to normalise answers against survey questions)
+  const rawV3Responses = [];
+
   for (const entry of relevantEntries) {
     const meta = entry?.json_metadata;
     const kind = label17KindFromMeta(meta);
@@ -6600,6 +6934,27 @@ async function _runLabel17Build() {
 
     const txInfo = txInfoCache[txHash];
 
+    // ── v3 survey definitions ─────────────────────────────────────────────────
+    if (kind === "surveyDefinitionsV3") {
+      try {
+        const surveyObjects = l17SurveysFromV3Meta(meta, txHash, txInfo);
+        surveys.push(...surveyObjects);
+      } catch { /* skip malformed */ }
+      continue;
+    }
+
+    // ── v3 survey responses ───────────────────────────────────────────────────
+    if (kind === "surveyResponsesV3") {
+      const inputAddress = await resolveInputAddress(txHash, utxoCache);
+      const { rewardAddress, responseStakeAda } = await resolveStakeInfo(inputAddress, addressInfoCache, accountCache);
+      try {
+        const raws = l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAddress, responseStakeAda);
+        rawV3Responses.push(...raws);
+      } catch { /* skip malformed */ }
+      continue;
+    }
+
+    // ── v1 survey details ─────────────────────────────────────────────────────
     if (kind === "surveyDetails") {
       try {
         const survey = label17SurveyFromEntry(entry, txInfo);
@@ -6609,31 +6964,13 @@ async function _runLabel17Build() {
       continue;
     }
 
+    // ── v1 survey responses ───────────────────────────────────────────────────
     if (kind === "surveyResponse") {
       const surveyTxId = meta?.surveyResponse?.surveyTxId;
       if (typeof surveyTxId !== "string") continue;
 
-      if (!utxoCache[txHash]) {
-        utxoCache[txHash] = await blockfrostGet(`/txs/${txHash}/utxos`).catch(() => null);
-      }
-      const inputAddress = utxoCache[txHash]?.inputs?.[0]?.address ?? null;
-      let rewardAddress = null;
-      if (typeof inputAddress === "string" && inputAddress.startsWith("stake")) {
-        rewardAddress = inputAddress;
-      } else if (typeof inputAddress === "string" && inputAddress) {
-        if (!addressInfoCache[inputAddress]) {
-          addressInfoCache[inputAddress] = await blockfrostGet(`/addresses/${inputAddress}`).catch(() => null);
-        }
-        rewardAddress = addressInfoCache[inputAddress]?.stake_address ?? null;
-      }
-
-      let responseStakeAda = 0;
-      if (typeof rewardAddress === "string" && rewardAddress) {
-        if (!accountCache[rewardAddress]) {
-          accountCache[rewardAddress] = await blockfrostGet(`/accounts/${rewardAddress}`).catch(() => null);
-        }
-        responseStakeAda = Number(accountCache[rewardAddress]?.controlled_amount || 0) / 1_000_000;
-      }
+      const inputAddress = await resolveInputAddress(txHash, utxoCache);
+      const { rewardAddress, responseStakeAda } = await resolveStakeInfo(inputAddress, addressInfoCache, accountCache);
 
       try {
         const restored = label17FromMeta(meta);
@@ -6658,6 +6995,21 @@ async function _runLabel17Build() {
     }
   }
 
+  // Post-process: normalise v3 answer tuples to {questionId, selection|numericValue} format
+  // using the survey's question list (indexed by surveyTxId).
+  const surveyByTxId = Object.fromEntries(surveys.map((s) => [s.surveyTxId, s]));
+  for (const rawResp of rawV3Responses) {
+    const survey = surveyByTxId[rawResp.surveyTxId];
+    const questions = survey?.details?.questions ?? [];
+    const normAnswers = rawResp.rawAnswersV3
+      .map((a) => l17ParseV3Answer(a, questions))
+      .filter(Boolean);
+    const finalResp = { ...rawResp, answers: normAnswers };
+    delete finalResp.rawAnswersV3;
+    if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
+    responsesBySurvey[rawResp.surveyTxId].push(finalResp);
+  }
+
   // Sort surveys newest-first
   surveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
   // Sort responses by slot ascending (for latest-wins dedup)
@@ -6669,9 +7021,41 @@ async function _runLabel17Build() {
   return label17Cache;
 }
 
+// Helper: fetch + cache tx input address
+async function resolveInputAddress(txHash, utxoCache) {
+  if (!utxoCache[txHash]) {
+    utxoCache[txHash] = await blockfrostGet(`/txs/${txHash}/utxos`).catch(() => null);
+  }
+  return utxoCache[txHash]?.inputs?.[0]?.address ?? null;
+}
+
+// Helper: resolve stake address + ADA amount from an input address
+async function resolveStakeInfo(inputAddress, addressInfoCache, accountCache) {
+  let rewardAddress = null;
+  if (typeof inputAddress === "string" && inputAddress.startsWith("stake")) {
+    rewardAddress = inputAddress;
+  } else if (typeof inputAddress === "string" && inputAddress) {
+    if (!addressInfoCache[inputAddress]) {
+      addressInfoCache[inputAddress] = await blockfrostGet(`/addresses/${inputAddress}`).catch(() => null);
+    }
+    rewardAddress = addressInfoCache[inputAddress]?.stake_address ?? null;
+  }
+  let responseStakeAda = 0;
+  if (typeof rewardAddress === "string" && rewardAddress) {
+    if (!accountCache[rewardAddress]) {
+      accountCache[rewardAddress] = await blockfrostGet(`/accounts/${rewardAddress}`).catch(() => null);
+    }
+    responseStakeAda = Number(accountCache[rewardAddress]?.controlled_amount || 0) / 1_000_000;
+  }
+  return { rewardAddress, responseStakeAda };
+}
+
 const METHOD_SINGLE_CHOICE = "urn:cardano:poll-method:single-choice:v1";
 const METHOD_MULTI_SELECT  = "urn:cardano:poll-method:multi-select:v1";
+const METHOD_RANKING       = "urn:cardano:poll-method:ranking:v1";
 const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
+
+const CHOICE_METHODS = new Set([METHOD_SINGLE_CHOICE, METHOD_MULTI_SELECT, METHOD_RANKING]);
 
 function label17TallySurvey(details, responses) {
   const questions = details?.questions ?? [];
@@ -6698,11 +7082,11 @@ function label17TallySurvey(details, responses) {
         methodType: q.methodType,
         weighted: weighting === "StakeBased" || weighting === "PledgeBased",
         weighting,
-        optionTallies: (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT)
+        optionTallies: CHOICE_METHODS.has(q.methodType)
           ? (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 }))
           : undefined,
         numericTally: null,
-        customTexts: (q.methodType !== METHOD_SINGLE_CHOICE && q.methodType !== METHOD_MULTI_SELECT && q.methodType !== METHOD_NUMERIC_RANGE)
+        customTexts: (!CHOICE_METHODS.has(q.methodType) && q.methodType !== METHOD_NUMERIC_RANGE)
           ? [] : undefined,
       };
 
@@ -6800,6 +7184,20 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/health") {
     json(res, 200, { ok: true, hasBlockfrostKey: Boolean(BLOCKFROST_API_KEY) });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/network") {
+    try {
+      const epochData = await blockfrostGet("/epochs/latest").catch(() => null);
+      const url2 = String(BLOCKFROST_BASE_URL || "");
+      const network = url2.includes("preprod") ? "preprod"
+        : url2.includes("preview") ? "preview"
+        : "mainnet";
+      json(res, 200, { network, currentEpoch: epochData?.epoch ?? null });
+    } catch (e) {
+      json(res, 500, { error: e?.message });
+    }
     return;
   }
 
@@ -8437,6 +8835,48 @@ const server = http.createServer(async (req, res) => {
       json(res, 502, { error: e?.message || "Failed to fetch live DRep data." });
     }
     return;
+  }
+
+  // ── CIP index ──────────────────────────────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/cips") {
+    try {
+      const now = Date.now();
+      if (!cipIndexCache.cips.length || (now - cipIndexCache.fetchedAt) > CIP_INDEX_TTL_MS) {
+        const cips = await fetchCipIndex();
+        cipIndexCache = { fetchedAt: now, cips };
+      }
+      json(res, 200, { cips: cipIndexCache.cips, cachedAt: new Date(cipIndexCache.fetchedAt).toISOString(), count: cipIndexCache.cips.length });
+    } catch (e) {
+      // Return stale cache if available rather than a hard error
+      if (cipIndexCache.cips.length) {
+        json(res, 200, { cips: cipIndexCache.cips, cachedAt: new Date(cipIndexCache.fetchedAt).toISOString(), count: cipIndexCache.cips.length, stale: true });
+      } else {
+        json(res, 502, { error: e?.message || "Failed to fetch CIP index." });
+      }
+    }
+    return;
+  }
+
+  // ── CIP detail ─────────────────────────────────────────────────────────────
+  {
+    const cipMatch = url.pathname.match(/^\/api\/cips\/(CIP-[\w-]+)$/i);
+    if (req.method === "GET" && cipMatch) {
+      const cipId = cipMatch[1].toUpperCase();
+      try {
+        const now = Date.now();
+        const cached = cipContentCache[cipId];
+        if (!cached || (now - cached.fetchedAt) > CIP_CONTENT_TTL_MS) {
+          const data = await fetchCipContent(cipId);
+          if (!data) { json(res, 404, { error: "CIP not found." }); return; }
+          cipContentCache[cipId] = { ...data, fetchedAt: now };
+        }
+        const { fetchedAt, ...payload } = cipContentCache[cipId];
+        json(res, 200, { ...payload, cachedAt: new Date(fetchedAt).toISOString() });
+      } catch (e) {
+        json(res, 502, { error: e?.message || "Failed to fetch CIP." });
+      }
+      return;
+    }
   }
 
   if (url.pathname.startsWith("/api/")) {

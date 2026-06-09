@@ -38,6 +38,8 @@ const BugsPage = lazy(() => import("./pages/BugsPage"));
 const ConstitutionPage = lazy(() => import("./pages/ConstitutionPage"));
 const VoterProfilePage = lazy(() => import("./pages/VoterProfilePage"));
 const ProposalDetailPage = lazy(() => import("./pages/ProposalDetailPage"));
+const CipListPage = lazy(() => import("./pages/CipListPage"));
+const CipDetailPage = lazy(() => import("./pages/CipDetailPage"));
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -382,6 +384,8 @@ export default function App() {
           <Route path="/constitution" element={<ConstitutionPage />} />
           <Route path="/bugs" element={<BugsPage />} />
           <Route path="/guide" element={<GuidePage />} />
+          <Route path="/cips" element={<CipListPage />} />
+          <Route path="/cips/:cipId" element={<CipDetailPage />} />
           <Route path="/about/changelog" element={<AboutChangelogPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/actions" replace />} />

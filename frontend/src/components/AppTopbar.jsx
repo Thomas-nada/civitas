@@ -34,6 +34,7 @@ const NAV_GROUPS = [
     links: [
       { to: "/stats", label: "Governance Stats" },
       { to: "/guide", label: "Governance Guides" },
+      { to: "/cips", label: "CIP Library" },
       { to: "/about", label: "About Civitas" }
     ]
   }
