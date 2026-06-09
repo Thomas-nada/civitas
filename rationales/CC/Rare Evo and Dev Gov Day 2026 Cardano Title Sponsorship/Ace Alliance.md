@@ -1,0 +1,20 @@
+<!-- url: ipfs://QmbHojJyKDUG2ri2bpAjDpzHj4YRb321V64Zh8zPGuvzyC -->
+# Ace Alliance
+
+**Proposal:** Rare Evo and Dev Gov Day 2026 Cardano Title Sponsorship
+**Vote:** Yes
+**Voter ID:** `71aa5b3a9240a02a89c4e2839579ec5eb60c410af0a5bb483e1b8f04`
+
+---
+
+A [PDF version][pdf-link] of this rationale is also made available.
+
+[pdf-link]: ipfs://TBD
+
+"Rare Evo and Dev Gov Day 2026: Cardano Title Sponsorship" (3f4b022c9913d52f9f39a8c82a1b9ebe5143fb745f3531f9366c7268bf9b9ce4#0) is a Treasury Withdrawals Governance Action seeking 2,750,000 ada to position the Cardano ecosystem as the title sponsor of Rare Evo 2026 and Cardano Dev Gov Day 2026, two community-led conferences held July 28-31, 2026 at ARIA Las Vegas. The proposer is Rare Network, the operator of Rare Evo since 2020 and of Cardano Dev Gov Day since 2025. As a Treasury Withdrawal the action is governed by both the general proposal standards of Article II, Section 6 and the additional standards of Article II, Section 7 of the Cardano Constitution.
+
+Article II.6's procedural standards are satisfied. The action anchors to an IPFS-hosted document with the on-chain blake2b-256 hash 0b26f47137d669af9776bf74076388d1952f8a0451bad655653b4e42dbf50c3e, a content-addressed form that is immutable once posted, and the metadata supplies the title, abstract, motivation, budget breakdown, milestone schedule with acceptance criteria, and supporting references required by II.6.2.
+
+Article II.7 is satisfied. Under Article II.7.1, the proposal specifies the purpose (title sponsorship of two community-led conferences and associated production, livestream, and ecosystem programming), the delivery period (July 28-31, 2026 with milestone-based reporting following), the costs (a line-by-line breakdown allocating 1,166,667 ada to Cardano Dev Gov Day 2026, 833,333 ada to Rare Evo 2026 title sponsorship, and 750,000 ada to Intersect administration, audit, fees, tax withholdings, and a Dev Gov Day 2027 venue deposit), and the refund circumstances (all unused funds return to the Cardano Treasury, a force majeure clause covers event cancellation, and 20% of VIP ticket revenue is returned to the Treasury). Article II.7.2's disclosure requirement is satisfied by the proposal's identification of prior Cardano ecosystem activities including the coordination of the Project Catalyst Fund 12 launch campaign and the Amplify Cardano pilot, characterized in the proposal as partnership and coordination roles rather than as direct treasury receipts by the proposer; the constitutional requirement is disclosure, and the proposal supplies it. Article II.7.3 is satisfied because the 2,750,000 ada requested is well within the 350,000,000 ada Net Change Limit in force for the period spanning epochs 613 through 713, as the proposal itself observes.
+
+Articles II.7.4, II.7.5, and II.7.6 are satisfied through the Intersect-administered Treasury Reserve Smart Contract pattern previously found constitutional by this Committee. Under Article II.7.5, the proposal designates Intersect as administrator, operating the Sundae-Labs-audited TRSC framework with a single Treasury Reserve Smart Contract and Project-Specific Smart Contracts. An Oversight Committee of five external, independent third-party entities provides the checks against unilateral administrative control. Under Article II.7.4, the proposal allocates audit and oversight costs within the overhead applied to the request, with an Admin and Audit Fees line item, and commits to Intersect's reporting obligations and milestone-based disbursement controls. Under Article II.7.6, the on-chain withdrawal destination is stake17xzc8pt7fgf0lc0x7eq6z7z6puhsxmzktna7dluahrj6g6ghh5qjr, which is a script-locked stake address (CIP-19 mainnet header byte 0xf1), is not delegated to any stake pool, and is delegated to the predefined always-abstain DRep at the time of submission. The destination is the same Intersect TRSC stake address that received the constitutional Treasury Withdrawals previously published by this Committee.
