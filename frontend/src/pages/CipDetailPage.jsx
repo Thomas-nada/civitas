@@ -17,8 +17,8 @@ function statusPillMod(status) {
 
 function formatCipId(id) {
   if (!id) return "";
-  const m = id.match(/^CIP-0*(\d+)$/);
-  if (m) return `CIP-${m[1]}`;
+  const m = id.match(/^(CIP|CPS)-0*(\d+)$/);
+  if (m) return `${m[1]}-${m[2]}`;
   return id;
 }
 

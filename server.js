@@ -6525,7 +6525,7 @@ function stripCipFrontMatter(raw) {
 }
 
 function cipFolderToNumber(folderName) {
-  const n = parseInt(String(folderName || "").replace(/^CIP-0*/, "") || "0", 10);
+  const n = parseInt(String(folderName || "").replace(/^(?:CIP|CPS)-0*/, "") || "0", 10);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -6539,7 +6539,7 @@ async function fetchCipIndex() {
   if (!listRes.ok) throw new Error(`GitHub API error ${listRes.status} fetching CIP list`);
   const items = await listRes.json();
   const cipFolders = items
-    .filter((item) => item.type === "dir" && /^CIP-\d/.test(item.name))
+    .filter((item) => item.type === "dir" && /^(?:CIP|CPS)-\d/.test(item.name))
     .map((item) => item.name)
     .sort();
 
@@ -6555,6 +6555,7 @@ async function fetchCipIndex() {
         const fm = parseCipFrontMatter(text);
         return {
           id: folder,
+          type: folder.startsWith("CPS-") ? "CPS" : "CIP",
           number: cipFolderToNumber(folder),
           title: String(fm.Title || fm.title || folder).trim(),
           status: String(fm.Status || fm.status || "").trim(),
@@ -6567,7 +6568,8 @@ async function fetchCipIndex() {
     }));
     cips.push(...results.filter(Boolean));
   }
-  return cips.sort((a, b) => a.number - b.number);
+  // Alphabetical by folder id: all CIP-* before CPS-*, each group by number
+  return cips.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 async function fetchCipContent(cipId) {

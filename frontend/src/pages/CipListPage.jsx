@@ -14,10 +14,9 @@ function statusPillMod(status) {
 }
 
 function formatCipId(id) {
-  // CIP-0001 → CIP-1 for display, keep padded form as-is for special ones
   if (!id) return "";
-  const m = id.match(/^CIP-0*(\d+)$/);
-  if (m) return `CIP-${m[1]}`;
+  const m = id.match(/^(CIP|CPS)-0*(\d+)$/);
+  if (m) return `${m[1]}-${m[2]}`;
   return id;
 }
 
@@ -31,6 +30,7 @@ export default function CipListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -66,6 +66,7 @@ export default function CipListPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cips.filter((c) => {
+      if (typeFilter && c.type !== typeFilter) return false;
       if (statusFilter && c.status !== statusFilter) return false;
       if (categoryFilter && c.category !== categoryFilter) return false;
       if (!q) return true;
@@ -75,7 +76,7 @@ export default function CipListPage() {
         c.id.toLowerCase().includes(q)
       );
     });
-  }, [cips, query, statusFilter, categoryFilter]);
+  }, [cips, query, typeFilter, statusFilter, categoryFilter]);
 
   return (
     <main className="page shell stats-page">
@@ -87,6 +88,20 @@ export default function CipListPage() {
       </section>
 
       <section className="stats-section stats-section--wide">
+        {/* Type toggle: All / CIP / CPS */}
+        <div className="mode-switcher" style={{ marginBottom: "1rem" }}>
+          {["", "CIP", "CPS"].map((t) => (
+            <button
+              key={t || "all"}
+              type="button"
+              className={`mode-btn${typeFilter === t ? " active" : ""}`}
+              onClick={() => setTypeFilter(t)}
+            >
+              {t || "All"}
+            </button>
+          ))}
+        </div>
+
         <div className="proposal-vote-filters">
           <label className="proposal-vote-filters-search">
             <span>Search</span>
@@ -116,7 +131,7 @@ export default function CipListPage() {
           </label>
           {!loading && (
             <p className="muted proposal-vote-filters-count">
-              Showing <strong>{filtered.length}</strong> of <strong>{cips.length}</strong> CIPs
+              Showing <strong>{filtered.length}</strong> of <strong>{cips.length}</strong>
             </p>
           )}
         </div>
