@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmV8BzKFLpF1w6PXQmRFL5Mt6QUxyFJsMZqPhvm3Q6BK9P -->
+<!-- url: ipfs://bafkreifgsvgdspev4nqhll2utabi2siwy3q7m34rkwnsonvx2jxpokgaba -->
 # BWtake(長崎)Japan
 
 **Proposal:** Reduce the committeeMinSize parameter from 7 to 5
