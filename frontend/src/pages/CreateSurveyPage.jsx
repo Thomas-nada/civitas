@@ -1,59 +1,54 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
-import { buildAndSubmitSurveyCreation } from "../services/surveyTxService";
-
-const SHELLEY_EPOCH_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-
-function approxCurrentEpoch() {
-  const delta = Math.floor(Date.now() / 1000) - SHELLEY_EPOCH_START_UNIX;
-  return delta < 0 ? 0 : 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
-}
-
-function epochToDate(epoch) {
-  if (!epoch) return null;
-  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208) * EPOCH_DURATION_SECONDS) * 1000);
-}
-
-const METHOD_SINGLE_CHOICE = "urn:cardano:poll-method:single-choice:v1";
-const METHOD_MULTI_SELECT  = "urn:cardano:poll-method:multi-select:v1";
-const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
+import {
+  buildAndSubmitSurveyCreation,
+  Q_CUSTOM, Q_SINGLE_CHOICE, Q_MULTI_SELECT, Q_RANKING, Q_NUMERIC_RANGE,
+  Q_POINTS_ALLOCATION, Q_RATING,
+  ROLE_TO_INT,
+} from "../services/surveyTxService";
+import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
 
 const METHOD_LABELS = {
-  [METHOD_SINGLE_CHOICE]: "Single choice",
-  [METHOD_MULTI_SELECT]:  "Multi-select",
-  [METHOD_NUMERIC_RANGE]: "Numeric range",
+  [Q_CUSTOM]:            "Custom",
+  [Q_SINGLE_CHOICE]:     "Single choice",
+  [Q_MULTI_SELECT]:      "Multi-select",
+  [Q_RANKING]:           "Ranking",
+  [Q_NUMERIC_RANGE]:     "Numeric range",
+  [Q_POINTS_ALLOCATION]: "Points allocation",
+  [Q_RATING]:            "Rating",
 };
 
 const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
-const ROLE_WEIGHTINGS = {
-  DRep: ["CredentialBased", "StakeBased"],
-  SPO:  ["CredentialBased", "StakeBased", "PledgeBased"],
-  CC:   ["CredentialBased"],
-  Stakeholder: ["StakeBased"],
-};
 
 function newQuestion() {
   return {
     id: crypto.randomUUID(),
-    questionId: "",
-    question: "",
-    methodType: METHOD_SINGLE_CHOICE,
+    tag: Q_SINGLE_CHOICE,
+    prompt: "",
     options: ["", ""],
+    minSelections: 0,
     maxSelections: 2,
-    numericConstraints: { minValue: 0, maxValue: 100, step: 1 },
+    minRanked: 0,
+    maxRanked: 2,
+    minValue: 0,
+    maxValue: 100,
+    step: null,
+    budget: 100,
+    ratingScale: [1, 5],
   };
 }
 
 function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
-  const isChoice = q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT;
-  const isMulti  = q.methodType === METHOD_MULTI_SELECT;
-  const isNumeric = q.methodType === METHOD_NUMERIC_RANGE;
+  const isChoice        = q.tag === Q_SINGLE_CHOICE || q.tag === Q_MULTI_SELECT;
+  const isRanking       = q.tag === Q_RANKING;
+  const isMulti         = q.tag === Q_MULTI_SELECT;
+  const isNumeric       = q.tag === Q_NUMERIC_RANGE;
+  const isPoints        = q.tag === Q_POINTS_ALLOCATION;
+  const isRating        = q.tag === Q_RATING;
+  const hasOptions      = isChoice || isRanking || isPoints || isRating;
 
-  function setField(field, value) {
-    onChange({ ...q, [field]: value });
-  }
+  function setField(field, value) { onChange({ ...q, [field]: value }); }
 
   function setOption(i, value) {
     const opts = [...q.options];
@@ -61,9 +56,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
     onChange({ ...q, options: opts });
   }
 
-  function addOption() {
-    onChange({ ...q, options: [...q.options, ""] });
-  }
+  function addOption() { onChange({ ...q, options: [...q.options, ""] }); }
 
   function removeOption(i) {
     if (q.options.length <= 2) return;
@@ -82,37 +75,26 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
       </div>
 
       <label>
-        Question ID <span className="muted">(unique slug, e.g. "q1")</span>
-        <input
-          type="text"
-          placeholder="q1"
-          value={q.questionId}
-          onChange={(e) => setField("questionId", e.target.value.replace(/\s+/g, "_").toLowerCase())}
-          required
-        />
-      </label>
-
-      <label>
         Question text
         <input
           type="text"
           placeholder="What is your question?"
-          value={q.question}
-          onChange={(e) => setField("question", e.target.value)}
+          value={q.prompt}
+          onChange={(e) => setField("prompt", e.target.value)}
           required
         />
       </label>
 
       <label>
         Method type
-        <select value={q.methodType} onChange={(e) => setField("methodType", e.target.value)}>
+        <select value={q.tag} onChange={(e) => setField("tag", Number(e.target.value))}>
           {Object.entries(METHOD_LABELS).map(([val, lbl]) => (
             <option key={val} value={val}>{lbl}</option>
           ))}
         </select>
       </label>
 
-      {isChoice ? (
+      {hasOptions ? (
         <div className="options-editor">
           <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.4rem" }}>Options</p>
           {q.options.map((opt, i) => (
@@ -129,18 +111,95 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
             </div>
           ))}
           <button type="button" className="btn-ghost btn-sm" onClick={addOption}>+ Add option</button>
+
           {isMulti ? (
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+              <label>
+                Min selections
+                <input
+                  type="number"
+                  min={0}
+                  max={q.options.length}
+                  value={q.minSelections}
+                  onChange={(e) => setField("minSelections", Number(e.target.value))}
+                  style={{ width: "80px" }}
+                />
+              </label>
+              <label>
+                Max selections
+                <input
+                  type="number"
+                  min={1}
+                  max={q.options.length}
+                  value={q.maxSelections}
+                  onChange={(e) => setField("maxSelections", Number(e.target.value))}
+                  style={{ width: "80px" }}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {isRanking ? (
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+              <label>
+                Min ranked
+                <input
+                  type="number"
+                  min={0}
+                  max={q.options.length}
+                  value={q.minRanked}
+                  onChange={(e) => setField("minRanked", Number(e.target.value))}
+                  style={{ width: "80px" }}
+                />
+              </label>
+              <label>
+                Max ranked
+                <input
+                  type="number"
+                  min={1}
+                  max={q.options.length}
+                  value={q.maxRanked}
+                  onChange={(e) => setField("maxRanked", Number(e.target.value))}
+                  style={{ width: "80px" }}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {isPoints ? (
             <label style={{ marginTop: "0.5rem" }}>
-              Max selections
+              Budget (total points to allocate)
               <input
                 type="number"
                 min={1}
-                max={q.options.length}
-                value={q.maxSelections}
-                onChange={(e) => setField("maxSelections", Number(e.target.value))}
-                style={{ width: "80px" }}
+                value={q.budget}
+                onChange={(e) => setField("budget", Number(e.target.value))}
+                style={{ width: "120px" }}
               />
             </label>
+          ) : null}
+
+          {isRating ? (
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+              <label>
+                Rating min
+                <input
+                  type="number"
+                  value={q.ratingScale[0]}
+                  onChange={(e) => setField("ratingScale", [Number(e.target.value), q.ratingScale[1]])}
+                  style={{ width: "80px" }}
+                />
+              </label>
+              <label>
+                Rating max
+                <input
+                  type="number"
+                  value={q.ratingScale[1]}
+                  onChange={(e) => setField("ratingScale", [q.ratingScale[0], Number(e.target.value)])}
+                  style={{ width: "80px" }}
+                />
+              </label>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -149,18 +208,19 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
         <div className="numeric-editor">
           <label>
             Min value
-            <input type="number" value={q.numericConstraints.minValue}
-              onChange={(e) => setField("numericConstraints", { ...q.numericConstraints, minValue: Number(e.target.value) })} />
+            <input type="number" value={q.minValue}
+              onChange={(e) => setField("minValue", Number(e.target.value))} />
           </label>
           <label>
             Max value
-            <input type="number" value={q.numericConstraints.maxValue}
-              onChange={(e) => setField("numericConstraints", { ...q.numericConstraints, maxValue: Number(e.target.value) })} />
+            <input type="number" value={q.maxValue}
+              onChange={(e) => setField("maxValue", Number(e.target.value))} />
           </label>
           <label>
-            Step (optional)
-            <input type="number" min={1} value={q.numericConstraints.step ?? 1}
-              onChange={(e) => setField("numericConstraints", { ...q.numericConstraints, step: Number(e.target.value) })} />
+            Step <span className="muted">(optional)</span>
+            <input type="number" min={1} value={q.step ?? ""}
+              placeholder="1"
+              onChange={(e) => setField("step", e.target.value === "" ? null : Number(e.target.value))} />
           </label>
         </div>
       ) : null}
@@ -168,66 +228,117 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
   );
 }
 
-function validate(form) {
+function validate(form, currentEpoch) {
   const errors = [];
   if (!form.title.trim()) errors.push("Title is required.");
   if (!form.description.trim()) errors.push("Description is required.");
-  if (form.endEpoch <= approxCurrentEpoch()) errors.push("End epoch must be in the future.");
-  if (Object.keys(form.roleWeighting).length === 0) errors.push("Select at least one eligible role.");
+  if (currentEpoch != null && form.endEpoch <= currentEpoch) errors.push("End epoch must be in the future.");
+  if (form.eligibleRoles.length === 0) errors.push("Select at least one eligible role.");
   if (form.questions.length === 0) errors.push("Add at least one question.");
   for (const [i, q] of form.questions.entries()) {
-    if (!q.questionId.trim()) errors.push(`Question ${i + 1}: Question ID is required.`);
-    if (!q.question.trim()) errors.push(`Question ${i + 1}: Question text is required.`);
-    if (q.methodType !== METHOD_NUMERIC_RANGE) {
+    if (!q.prompt.trim()) errors.push(`Question ${i + 1}: Question text is required.`);
+    if (q.tag !== Q_NUMERIC_RANGE && q.tag !== Q_CUSTOM) {
       if (q.options.some((o) => !o.trim())) errors.push(`Question ${i + 1}: All options must have text.`);
       if (q.options.length < 2) errors.push(`Question ${i + 1}: At least 2 options required.`);
     }
-    if (q.methodType === METHOD_NUMERIC_RANGE && q.numericConstraints.minValue >= q.numericConstraints.maxValue) {
+    if (q.tag === Q_NUMERIC_RANGE && q.minValue >= q.maxValue) {
       errors.push(`Question ${i + 1}: Min value must be less than max value.`);
     }
+    if (q.tag === Q_MULTI_SELECT && q.minSelections > q.maxSelections) {
+      errors.push(`Question ${i + 1}: Min selections cannot exceed max selections.`);
+    }
+    if (q.tag === Q_RANKING && q.minRanked > q.maxRanked) {
+      errors.push(`Question ${i + 1}: Min ranked cannot exceed max ranked.`);
+    }
   }
-  const qIds = form.questions.map((q) => q.questionId);
-  if (new Set(qIds).size !== qIds.length) errors.push("Question IDs must be unique.");
   return errors;
 }
 
-function buildPayload(form) {
+function buildSurveyForm(form) {
   return {
-    specVersion: "1.0.0",
     title: form.title,
     description: form.description,
+    endEpoch: form.endEpoch,
+    eligibleRoles: form.eligibleRoles,
     questions: form.questions.map((q) => {
-      const base = {
-        questionId: q.questionId,
-        question: q.question,
-        methodType: q.methodType,
-      };
-      if (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT) {
+      const base = { tag: q.tag, prompt: q.prompt };
+      if (q.tag === Q_SINGLE_CHOICE) {
         base.options = q.options.filter((o) => o.trim());
-        if (q.methodType === METHOD_MULTI_SELECT) base.maxSelections = q.maxSelections;
-      }
-      if (q.methodType === METHOD_NUMERIC_RANGE) {
-        base.numericConstraints = q.numericConstraints;
+      } else if (q.tag === Q_MULTI_SELECT) {
+        base.options = q.options.filter((o) => o.trim());
+        base.minSelections = q.minSelections;
+        base.maxSelections = q.maxSelections;
+      } else if (q.tag === Q_RANKING) {
+        base.options = q.options.filter((o) => o.trim());
+        base.minRanked = q.minRanked;
+        base.maxRanked = q.maxRanked;
+      } else if (q.tag === Q_NUMERIC_RANGE) {
+        base.minValue = q.minValue;
+        base.maxValue = q.maxValue;
+        if (q.step) base.step = q.step;
+      } else if (q.tag === Q_POINTS_ALLOCATION) {
+        base.options = q.options.filter((o) => o.trim());
+        base.budget = q.budget;
+      } else if (q.tag === Q_RATING) {
+        base.options = q.options.filter((o) => o.trim());
+        base.ratingScale = q.ratingScale;
       }
       return base;
     }),
-    roleWeighting: form.roleWeighting,
-    endEpoch: form.endEpoch,
   };
+}
+
+// Preview of the v4 on-chain payload (JSON-friendly approximation)
+function buildPreviewPayload(form) {
+  const eligibleRoleInts = form.eligibleRoles.map((r) => ROLE_TO_INT[r]).filter((n) => n !== undefined);
+  const questions = form.questions.map((q) => {
+    const prompt = q.prompt || "(empty)";
+    const opts = q.options.filter(Boolean);
+    switch (q.tag) {
+      case Q_CUSTOM:            return [0, prompt, "(content_anchor)"];
+      case Q_SINGLE_CHOICE:     return [1, prompt, opts];
+      case Q_MULTI_SELECT:      return [2, prompt, opts, q.minSelections, q.maxSelections];
+      case Q_RANKING:           return [3, prompt, opts, q.minRanked, q.maxRanked];
+      case Q_NUMERIC_RANGE:     return q.step ? [4, prompt, [q.minValue, q.maxValue, q.step]] : [4, prompt, [q.minValue, q.maxValue]];
+      case Q_POINTS_ALLOCATION: return [5, prompt, opts, q.budget];
+      case Q_RATING:            return [6, prompt, opts, q.ratingScale];
+      default:                  return null;
+    }
+  }).filter(Boolean);
+
+  // v4 definition map (shown as object with integer keys)
+  const definition = {
+    0: 4,
+    1: [0, "<owner_vkeyhash>"],
+    2: form.title,
+    3: form.description,
+    4: eligibleRoleInts,
+    5: form.endEpoch,
+    6: [0],
+    7: questions,
+  };
+
+  return { 17: [0, [definition]] };
 }
 
 export default function CreateSurveyPage() {
   const { walletApi } = useContext(WalletContext);
   const navigate = useNavigate();
-  const currentEpoch = approxCurrentEpoch();
+  const currentEpoch = useCurrentEpoch();
 
   const [form, setForm] = useState({
     title: "",
     description: "",
-    endEpoch: currentEpoch + 2,
-    roleWeighting: { DRep: "CredentialBased" },
+    endEpoch: 0,
+    eligibleRoles: ["DRep"],
     questions: [newQuestion()],
   });
+
+  useEffect(() => {
+    if (currentEpoch != null && form.endEpoch === 0) {
+      setForm((prev) => ({ ...prev, endEpoch: currentEpoch + 2 }));
+    }
+  }, [currentEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState([]);
@@ -253,18 +364,11 @@ export default function CreateSurveyPage() {
 
   function toggleRole(role, checked) {
     setForm((prev) => {
-      const rw = { ...prev.roleWeighting };
-      if (checked) {
-        rw[role] = ROLE_WEIGHTINGS[role][0];
-      } else {
-        delete rw[role];
-      }
-      return { ...prev, roleWeighting: rw };
+      const roles = checked
+        ? [...prev.eligibleRoles, role]
+        : prev.eligibleRoles.filter((r) => r !== role);
+      return { ...prev, eligibleRoles: roles };
     });
-  }
-
-  function setWeighting(role, weighting) {
-    setForm((prev) => ({ ...prev, roleWeighting: { ...prev.roleWeighting, [role]: weighting } }));
   }
 
   function updateQuestion(i, q) {
@@ -281,18 +385,14 @@ export default function CreateSurveyPage() {
     setField("questions", [...form.questions, newQuestion()]);
   }
 
-  const endDate = epochToDate(form.endEpoch);
-  const payload = buildPayload(form);
-
   async function handleSubmit(e) {
     e.preventDefault();
-    const errs = validate(form);
+    const errs = validate(form, currentEpoch);
     if (errs.length > 0) { setErrors(errs); return; }
     setErrors([]);
     setSubmitting(true);
     try {
-      const result = await buildAndSubmitSurveyCreation(walletApi, payload);
-      // Trigger a server-side index refresh so the new survey appears sooner
+      const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(form));
       fetch("/api/surveys/refresh", { method: "POST" }).catch(() => {});
       navigate(`/surveys/${result.surveyTxId}`);
     } catch (err) {
@@ -308,7 +408,7 @@ export default function CreateSurveyPage() {
         <div>
           <Link className="muted back-link" to="/surveys">← All Surveys</Link>
           <h1>Create Survey</h1>
-          <p className="muted">Build an on-chain poll recorded as Cardano metadata (label 17).</p>
+          <p className="muted">Build an on-chain poll recorded as Cardano metadata (label 17, CIP-0179 v4).</p>
         </div>
       </header>
 
@@ -328,28 +428,24 @@ export default function CreateSurveyPage() {
           </label>
         </section>
 
-        {/* Eligibility & weighting */}
+        {/* Eligible roles */}
         <section className="panel">
-          <h2>Eligibility & Weighting</h2>
+          <h2>Eligible Roles</h2>
           <p className="muted" style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-            Select which roles can respond and how votes are weighted.
+            Select which roles may submit a response. Weighting and aggregation are determined by the consuming tool, not encoded on-chain.
           </p>
           <div className="role-weighting-grid">
             {ALL_ROLES.map((role) => {
-              const checked = role in form.roleWeighting;
+              const checked = form.eligibleRoles.includes(role);
               return (
                 <div key={role} className={`role-weighting-row${checked ? " checked" : ""}`}>
                   <label className="role-check-label">
                     <input type="checkbox" checked={checked} onChange={(e) => toggleRole(role, e.target.checked)} />
                     <strong>{role}</strong>
                   </label>
-                  {checked ? (
-                    <select value={form.roleWeighting[role]} onChange={(e) => setWeighting(role, e.target.value)}>
-                      {ROLE_WEIGHTINGS[role].map((w) => <option key={w} value={w}>{w}</option>)}
-                    </select>
-                  ) : (
+                  {!checked ? (
                     <span className="muted" style={{ fontSize: "0.82rem" }}>Not eligible</span>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -361,12 +457,11 @@ export default function CreateSurveyPage() {
           <h2>Duration</h2>
           <label>
             End epoch (inclusive)
-            <input type="number" min={currentEpoch + 1}
-              value={form.endEpoch} onChange={(e) => setField("endEpoch", Number(e.target.value))} />
+            <input type="number" min={(currentEpoch ?? 0) + 1}
+              value={form.endEpoch || ""} onChange={(e) => setField("endEpoch", Number(e.target.value))} />
           </label>
           <p className="muted" style={{ fontSize: "0.82rem" }}>
-            Current epoch: ~{currentEpoch}
-            {endDate ? ` · Epoch ${form.endEpoch} ends ~${endDate.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}` : ""}
+            {currentEpoch != null ? `Current epoch: ${currentEpoch}` : "Loading current epoch…"}
           </p>
         </section>
 
@@ -389,10 +484,10 @@ export default function CreateSurveyPage() {
         {/* Metadata preview */}
         <section className="panel">
           <button type="button" className="btn-ghost" onClick={() => setPreviewOpen((o) => !o)}>
-            {previewOpen ? "Hide" : "Preview"} metadata JSON
+            {previewOpen ? "Hide" : "Preview"} on-chain format (CIP-0179 v4)
           </button>
           {previewOpen ? (
-            <pre className="metadata-preview">{JSON.stringify({ 17: { surveyDetails: payload } }, null, 2)}</pre>
+            <pre className="metadata-preview">{JSON.stringify(buildPreviewPayload(form), null, 2)}</pre>
           ) : null}
         </section>
 

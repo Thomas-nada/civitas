@@ -6456,16 +6456,30 @@ async function runStartupInitialization() {
 const MAX_METADATA_STR_BYTES = 64;
 const LABEL17_TEXT_FIELDS = new Set(["title", "description", "question", "customValue"]);
 
-// v3 integer ↔ string mappings
-const L17_INT_TO_ROLE       = { 0: "DRep", 1: "SPO", 2: "CC", 3: "Stakeholder" };
-const L17_INT_TO_WEIGHTING  = { 0: "CredentialBased", 1: "StakeBased", 2: "PledgeBased" };
-const L17_INT_TO_METHOD     = {
+// Integer ↔ string mappings
+const L17_INT_TO_ROLE      = { 0: "DRep", 1: "SPO", 2: "CC", 3: "Stakeholder", 4: "Owner" };
+const L17_INT_TO_WEIGHTING = { 0: "CredentialBased", 1: "StakeBased", 2: "PledgeBased" };
+
+// v2/v3 question type tags (0=single-choice … 4=custom)
+const L17_INT_TO_METHOD_V2 = {
   0: "urn:cardano:poll-method:single-choice:v1",
   1: "urn:cardano:poll-method:multi-select:v1",
   2: "urn:cardano:poll-method:ranking:v1",
   3: "urn:cardano:poll-method:numeric-range:v1",
   4: "urn:cardano:poll-method:custom:v1",
 };
+// v4 question type tags (0=custom, 1=single-choice … 6=rating)
+const L17_INT_TO_METHOD_V4 = {
+  0: "urn:cardano:poll-method:custom:v1",
+  1: "urn:cardano:poll-method:single-choice:v2",
+  2: "urn:cardano:poll-method:multi-select:v2",
+  3: "urn:cardano:poll-method:ranking:v1",
+  4: "urn:cardano:poll-method:numeric-range:v2",
+  5: "urn:cardano:poll-method:points-allocation:v1",
+  6: "urn:cardano:poll-method:rating:v1",
+};
+// Alias kept for any code still referencing L17_INT_TO_METHOD
+const L17_INT_TO_METHOD = L17_INT_TO_METHOD_V2;
 
 // ── v1 (legacy object-based) helpers ────────────────────────────────────────
 
@@ -6680,6 +6694,63 @@ function l17ParseV3Question(q, index) {
   return null;
 }
 
+// Parse a v4 question array (new tag numbering) → normalised question object.
+function l17ParseV4Question(q, index) {
+  if (!Array.isArray(q) || q.length < 2) return null;
+  const [tag, promptRaw, ...rest] = q;
+  const prompt = l17JoinText(promptRaw);
+  const questionId = `q${index}`;
+  const methodType = L17_INT_TO_METHOD_V4[tag];
+  if (!methodType) return null;
+
+  switch (tag) {
+    case 0: // custom: [0, prompt, content_anchor]
+      return { questionId, question: prompt, methodType };
+    case 1: // single-choice: [1, prompt, options, ?required]
+      return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText) };
+    case 2: { // multi-select: [2, prompt, options, min_selections, max_selections, ?required]
+      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
+      return { questionId, question: prompt, methodType, options: opts, minSelections: rest[1] ?? 0, maxSelections: rest[2] ?? 2 };
+    }
+    case 3: { // ranking: [3, prompt, options, min_ranked, max_ranked, ?required]
+      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
+      return { questionId, question: prompt, methodType, options: opts, minRanked: rest[1] ?? 0, maxRanked: rest[2] ?? null };
+    }
+    case 4: { // numeric-range: [4, prompt, [min, max, ?step], ?required]
+      const c = rest[0] ?? [];
+      return { questionId, question: prompt, methodType, numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) } };
+    }
+    case 5: { // points-allocation: [5, prompt, options, budget, ?required]
+      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
+      return { questionId, question: prompt, methodType, options: opts, budget: rest[1] ?? 100 };
+    }
+    case 6: { // rating: [6, prompt, options, rating_scale, ?required]
+      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
+      return { questionId, question: prompt, methodType, options: opts };
+    }
+    default:
+      return null;
+  }
+}
+
+// Parse a v4 answer array → normalised answer object.
+function l17ParseV4Answer(answerArr, questions) {
+  if (!Array.isArray(answerArr) || answerArr.length < 3) return null;
+  const [tag, questionIndex, value] = answerArr;
+  const q = questions[questionIndex];
+  if (!q) return null;
+  switch (tag) {
+    case 0: return { questionId: q.questionId, customValue: value };                                       // custom
+    case 1: return { questionId: q.questionId, selection: [value] };                                       // single-choice
+    case 2: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };        // multi-select
+    case 3: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [] };             // ranking
+    case 4: return { questionId: q.questionId, numericValue: value };                                      // numeric-range
+    case 5: return { questionId: q.questionId, pointsAllocation: Array.isArray(value) ? value : [] };     // points-allocation
+    case 6: return { questionId: q.questionId, ratings: Array.isArray(value) ? value : [] };              // rating
+    default: return null;
+  }
+}
+
 // Parse a v3 answer array → normalised answer object using the survey's question list.
 function l17ParseV3Answer(answerArr, questions) {
   if (!Array.isArray(answerArr) || answerArr.length < 3) return null;
@@ -6703,6 +6774,43 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
   const surveys = [];
   for (let surveyIndex = 0; surveyIndex < definitions.length; surveyIndex++) {
     const def = definitions[surveyIndex];
+
+    // v4: definition is an integer-keyed CBOR map.
+    // Blockfrost represents CBOR maps with integer keys as objects with string-integer keys: {"0":4,"1":[...],...}
+    if (!Array.isArray(def) && def !== null && typeof def === "object") {
+      const specVersion = Number(def["0"]);
+      if (specVersion !== 4) continue;
+
+      const titleRaw        = def["2"];
+      const descRaw         = def["3"];
+      const eligibleRoleInts = Array.isArray(def["4"]) ? def["4"] : [];
+      const endEpoch        = def["5"];
+      const submissionMode  = def["6"];
+      const isTimelocked    = Array.isArray(submissionMode) && submissionMode[0] === 1;
+      const questionsRaw    = def["7"];
+
+      const title       = l17JoinText(titleRaw);
+      const description = l17JoinText(descRaw);
+      const eligibleRoles = eligibleRoleInts
+        .map((i) => L17_INT_TO_ROLE[Number(i)])
+        .filter(Boolean);
+
+      const questions = (Array.isArray(questionsRaw) ? questionsRaw : [])
+        .map((q, i) => l17ParseV4Question(q, i))
+        .filter(Boolean);
+
+      surveys.push({
+        surveyTxId: txHash,
+        surveyIndex,
+        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked },
+        msg: null,
+        slot: txInfo?.slot ?? null,
+        blockTime: txInfo?.block_time ?? null,
+      });
+      continue;
+    }
+
+    // v2/v3: definition is a positional array
     if (!Array.isArray(def) || def.length < 7) continue;
 
     const specVersion = def[0];
@@ -6711,32 +6819,32 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
     if (specVersion === 2) {
       // CIP-179 v2: [specVersion, owner, title, description, questions, roleWeighting, endEpoch]
       if (def.length < 7) continue;
-      titleRaw       = def[2];
-      descRaw        = def[3];
-      questionsRaw   = def[4];
+      titleRaw         = def[2];
+      descRaw          = def[3];
+      questionsRaw     = def[4];
       roleWeightingRaw = def[5];
-      endEpoch       = def[6];
+      endEpoch         = def[6];
     } else if (specVersion === 3) {
-      // mpizenberg draft v3 (timelocked): [specVersion, owner, title, description, roleWeighting, endEpoch, submissionMode, questions]
+      // draft v3 (timelocked): [specVersion, owner, title, description, roleWeighting, endEpoch, submissionMode, questions]
       if (def.length < 8) continue;
-      titleRaw       = def[2];
-      descRaw        = def[3];
+      titleRaw         = def[2];
+      descRaw          = def[3];
       roleWeightingRaw = def[4];
-      endEpoch       = def[5];
-      isTimelocked   = Array.isArray(def[6]) && def[6][0] === 1;
-      questionsRaw   = def[7];
+      endEpoch         = def[5];
+      isTimelocked     = Array.isArray(def[6]) && def[6][0] === 1;
+      questionsRaw     = def[7];
     } else {
-      continue; // unknown specVersion
+      continue;
     }
 
     const title       = l17JoinText(titleRaw);
     const description = l17JoinText(descRaw);
 
-    // roleWeighting: Blockfrost encodes CBOR integer map keys as string integers: {"0":0,"1":1}
+    // Blockfrost encodes CBOR integer map keys as string integers: {"0":0,"1":1}
     const roleWeighting = {};
     if (roleWeightingRaw && typeof roleWeightingRaw === "object" && !Array.isArray(roleWeightingRaw)) {
       for (const [k, v] of Object.entries(roleWeightingRaw)) {
-        const role     = L17_INT_TO_ROLE[parseInt(k, 10)];
+        const role      = L17_INT_TO_ROLE[parseInt(k, 10)];
         const weighting = L17_INT_TO_WEIGHTING[Number(v)];
         if (role && weighting) roleWeighting[role] = weighting;
       }
@@ -6767,24 +6875,34 @@ function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAdd
   const out = [];
   for (let responseIndex = 0; responseIndex < responses.length; responseIndex++) {
     const resp = responses[responseIndex];
-    if (!Array.isArray(resp) || resp.length < 4) continue;
 
     let surveyRefRaw, roleInt, answersRaw, specVersion;
 
-    if (Array.isArray(resp[0])) {
-      // CIP-179 v2: [survey_ref, role, credential, answers]  (no specVersion)
-      if (resp.length < 4) continue;
-      surveyRefRaw = resp[0];
-      roleInt      = resp[1];
-      answersRaw   = resp[3];
-      specVersion  = 2;
+    if (!Array.isArray(resp) && resp !== null && typeof resp === "object") {
+      // v4: response is an integer-keyed CBOR map → Blockfrost gives {"0":4,"1":[...],...}
+      specVersion  = Number(resp["0"]);
+      if (specVersion !== 4) continue;
+      surveyRefRaw = resp["1"];
+      roleInt      = resp["2"];
+      answersRaw   = resp["4"];
+    } else if (Array.isArray(resp)) {
+      if (Array.isArray(resp[0])) {
+        // v2: [survey_ref, role, credential, answers]  (no specVersion prefix)
+        if (resp.length < 4) continue;
+        surveyRefRaw = resp[0];
+        roleInt      = resp[1];
+        answersRaw   = resp[3];
+        specVersion  = 2;
+      } else {
+        // draft v3: [specVersion, survey_ref, role, credential, answers]
+        if (resp.length < 5) continue;
+        specVersion  = resp[0];
+        surveyRefRaw = resp[1];
+        roleInt      = resp[2];
+        answersRaw   = resp[4];
+      }
     } else {
-      // mpizenberg v3: [specVersion, survey_ref, role, credential, answers]
-      if (resp.length < 5) continue;
-      specVersion  = resp[0];
-      surveyRefRaw = resp[1];
-      roleInt      = resp[2];
-      answersRaw   = resp[4];
+      continue;
     }
 
     let surveyTxId = null;
@@ -6997,14 +7115,14 @@ async function _runLabel17Build() {
     }
   }
 
-  // Post-process: normalise v3 answer tuples to {questionId, selection|numericValue} format
-  // using the survey's question list (indexed by surveyTxId).
+  // Post-process: normalise answer tuples using the survey's question list.
   const surveyByTxId = Object.fromEntries(surveys.map((s) => [s.surveyTxId, s]));
   for (const rawResp of rawV3Responses) {
     const survey = surveyByTxId[rawResp.surveyTxId];
     const questions = survey?.details?.questions ?? [];
+    const parseAnswer = rawResp.specVersion === 4 ? l17ParseV4Answer : l17ParseV3Answer;
     const normAnswers = rawResp.rawAnswersV3
-      .map((a) => l17ParseV3Answer(a, questions))
+      .map((a) => parseAnswer(a, questions))
       .filter(Boolean);
     const finalResp = { ...rawResp, answers: normAnswers };
     delete finalResp.rawAnswersV3;
@@ -7052,12 +7170,20 @@ async function resolveStakeInfo(inputAddress, addressInfoCache, accountCache) {
   return { rewardAddress, responseStakeAda };
 }
 
-const METHOD_SINGLE_CHOICE = "urn:cardano:poll-method:single-choice:v1";
-const METHOD_MULTI_SELECT  = "urn:cardano:poll-method:multi-select:v1";
-const METHOD_RANKING       = "urn:cardano:poll-method:ranking:v1";
-const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
-
-const CHOICE_METHODS = new Set([METHOD_SINGLE_CHOICE, METHOD_MULTI_SELECT, METHOD_RANKING]);
+// Choice method URNs — all versioned variants
+const CHOICE_METHODS = new Set([
+  "urn:cardano:poll-method:single-choice:v1",
+  "urn:cardano:poll-method:single-choice:v2",
+  "urn:cardano:poll-method:multi-select:v1",
+  "urn:cardano:poll-method:multi-select:v2",
+  "urn:cardano:poll-method:ranking:v1",
+  "urn:cardano:poll-method:points-allocation:v1",
+  "urn:cardano:poll-method:rating:v1",
+]);
+const NUMERIC_METHODS = new Set([
+  "urn:cardano:poll-method:numeric-range:v1",
+  "urn:cardano:poll-method:numeric-range:v2",
+]);
 
 function label17TallySurvey(details, responses) {
   const questions = details?.questions ?? [];
@@ -7073,8 +7199,11 @@ function label17TallySurvey(details, responses) {
   }
   const deduped = Object.values(latestByKey);
 
-  const roleWeighting = details.roleWeighting ?? {};
-  const roleTallies = Object.entries(roleWeighting).map(([role, weighting]) => {
+  // v4 surveys use eligibleRoles[] with no weighting; v2/v3 use roleWeighting{}.
+  const roleEntries = details.eligibleRoles
+    ? details.eligibleRoles.map((role) => [role, "CredentialBased"])
+    : Object.entries(details.roleWeighting ?? {});
+  const roleTallies = roleEntries.map(([role, weighting]) => {
     const roleResps = deduped.filter((r) => r.responderRole === role);
     const roleWeightTotal = roleResps.reduce((sum, response) => sum + label17ResolveResponseWeight(response, weighting), 0);
     const questionTallies = questions.map((q) => {
@@ -7088,7 +7217,7 @@ function label17TallySurvey(details, responses) {
           ? (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 }))
           : undefined,
         numericTally: null,
-        customTexts: (!CHOICE_METHODS.has(q.methodType) && q.methodType !== METHOD_NUMERIC_RANGE)
+        customTexts: (!CHOICE_METHODS.has(q.methodType) && !NUMERIC_METHODS.has(q.methodType))
           ? [] : undefined,
       };
 
@@ -7104,14 +7233,14 @@ function label17TallySurvey(details, responses) {
               qt.optionTallies[idx].weight += responseWeight;
             }
           }
-        } else if (q.methodType === METHOD_NUMERIC_RANGE && answer.numericValue != null) {
+        } else if (NUMERIC_METHODS.has(q.methodType) && answer.numericValue != null) {
           numericValues.push({ value: Number(answer.numericValue), weight: responseWeight });
         } else if (qt.customTexts != null && answer.customValue != null) {
           qt.customTexts.push(typeof answer.customValue === "string" ? answer.customValue : JSON.stringify(answer.customValue));
         }
       }
 
-      if (q.methodType === METHOD_NUMERIC_RANGE && numericValues.length > 0) {
+      if (NUMERIC_METHODS.has(q.methodType) && numericValues.length > 0) {
         const sorted = [...numericValues].sort((a, b) => a.value - b.value);
         const rawValues = sorted.map((entry) => entry.value);
         const totalWeight = sorted.reduce((sum, entry) => sum + Number(entry.weight || 0), 0);

@@ -2,19 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
-
-const SHELLEY_EPOCH_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-
-function approxCurrentEpoch() {
-  const delta = Math.floor(Date.now() / 1000) - SHELLEY_EPOCH_START_UNIX;
-  return delta < 0 ? null : 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
-}
-
-function epochEndDate(epoch) {
-  if (!epoch) return null;
-  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208 + 1) * EPOCH_DURATION_SECONDS) * 1000);
-}
+import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
 
 function fmtDate(ts) {
   if (!ts) return "—";
@@ -37,13 +25,14 @@ function RolePill({ role }) {
   );
 }
 
-function SurveyCard({ survey }) {
-  const currentEpoch = approxCurrentEpoch();
+function SurveyCard({ survey, currentEpoch }) {
   const isActive = currentEpoch != null && survey.details?.endEpoch != null
     ? currentEpoch <= survey.details.endEpoch
     : true;
-  const endDate = epochEndDate(survey.details?.endEpoch);
-  const roles = Object.keys(survey.details?.roleWeighting ?? {});
+  // Support v4 (eligibleRoles[]) and legacy v2/v3 (roleWeighting{})
+  const roles = Array.isArray(survey.details?.eligibleRoles)
+    ? survey.details.eligibleRoles
+    : Object.keys(survey.details?.roleWeighting ?? {});
   const questionCount = survey.details?.questions?.length ?? 0;
 
   return (
@@ -55,7 +44,6 @@ function SurveyCard({ survey }) {
           </span>
           <span className="muted" style={{ fontSize: "0.8rem" }}>
             Epoch {survey.details?.endEpoch ?? "?"}
-            {endDate ? ` · ${endDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
           </span>
         </div>
         <div className="survey-card-roles">
@@ -117,7 +105,7 @@ export default function SurveysListPage() {
     })();
   }, []);
 
-  const currentEpoch = approxCurrentEpoch();
+  const currentEpoch = useCurrentEpoch();
 
   const filtered = surveys.filter((s) => {
     if (roleFilter !== "All") {
@@ -200,7 +188,7 @@ export default function SurveysListPage() {
 
       {!loading && filtered.length > 0 ? (
         <section className="survey-list">
-          {filtered.map((s) => <SurveyCard key={s.surveyTxId} survey={s} />)}
+          {filtered.map((s) => <SurveyCard key={s.surveyTxId} survey={s} currentEpoch={currentEpoch} />)}
         </section>
       ) : null}
     </main>

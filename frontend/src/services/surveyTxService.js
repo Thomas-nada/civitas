@@ -1,22 +1,42 @@
 /**
- * CIP-0179 survey transaction building.
- * Ported from the reference implementation (TestnetBlockchain.ts).
- * Uses the MeshJS Transaction class already available in Civitas.
+ * CIP-0179 v4 survey transaction building.
+ * Definition and response records are integer-keyed CBOR maps.
+ * Question type tags: 0=custom, 1=single-choice, 2=multi-select,
+ *   3=ranking, 4=numeric-range, 5=points-allocation, 6=rating.
+ * Role eligibility replaces role weighting (no weighting in v4).
  */
-import { Transaction } from "@meshsdk/core";
+import { Transaction, resolvePaymentKeyHash } from "@meshsdk/core";
 
 const METADATA_LABEL = 17;
-const MAX_METADATA_STR_BYTES = 64;
+const SPEC_VERSION = 4;
 
-function chunkString(str, maxBytes) {
+export const ROLE_TO_INT = { DRep: 0, SPO: 1, CC: 2, Stakeholder: 3, Owner: 4 };
+
+export const Q_CUSTOM            = 0;
+export const Q_SINGLE_CHOICE     = 1;
+export const Q_MULTI_SELECT      = 2;
+export const Q_RANKING           = 3;
+export const Q_NUMERIC_RANGE     = 4;
+export const Q_POINTS_ALLOCATION = 5;
+export const Q_RATING            = 6;
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function chunkText(str) {
   const encoder = new TextEncoder();
   const encoded = encoder.encode(str);
-  if (encoded.length <= maxBytes) return [str];
+  if (encoded.length <= 64) return str;
   const decoder = new TextDecoder();
   const chunks = [];
   let offset = 0;
   while (offset < encoded.length) {
-    let end = Math.min(offset + maxBytes, encoded.length);
+    let end = Math.min(offset + 64, encoded.length);
     while (end > offset && (encoded[end] & 0xc0) === 0x80) end--;
     chunks.push(decoder.decode(encoded.slice(offset, end)));
     offset = end;
@@ -24,40 +44,46 @@ function chunkString(str, maxBytes) {
   return chunks;
 }
 
-function toCardanoMetadata(value) {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") {
-    const chunks = chunkString(value, MAX_METADATA_STR_BYTES);
-    return chunks.length === 1 ? chunks[0] : chunks;
-  }
-  if (typeof value === "number") {
-    return Number.isInteger(value) ? value : String(value);
-  }
-  if (typeof value === "boolean") return value ? 1 : 0;
-  if (Array.isArray(value)) return value.map(toCardanoMetadata);
-  if (typeof value === "object") {
-    const result = new Map();
-    for (const [k, v] of Object.entries(value)) {
-      if (v === undefined) continue;
-      result.set(k, toCardanoMetadata(v));
+function encodeQuestion(q) {
+  const prompt = chunkText(q.prompt);
+  switch (q.tag) {
+    case Q_CUSTOM:
+      // [0, prompt, content_anchor]
+      return [Q_CUSTOM, prompt, q.contentAnchor ?? ""];
+    case Q_SINGLE_CHOICE:
+      // [1, prompt, options, ?required]
+      return [Q_SINGLE_CHOICE, prompt, q.options.map(chunkText)];
+    case Q_MULTI_SELECT:
+      // [2, prompt, options, min_selections, max_selections, ?required]
+      return [Q_MULTI_SELECT, prompt, q.options.map(chunkText), q.minSelections ?? 0, q.maxSelections];
+    case Q_RANKING:
+      // [3, prompt, options, min_ranked, max_ranked, ?required]
+      return [Q_RANKING, prompt, q.options.map(chunkText), q.minRanked ?? 0, q.maxRanked ?? q.options.length];
+    case Q_NUMERIC_RANGE: {
+      // [4, prompt, [min, max, ?step], ?required]
+      const c = q.step != null ? [q.minValue, q.maxValue, q.step] : [q.minValue, q.maxValue];
+      return [Q_NUMERIC_RANGE, prompt, c];
     }
-    return result;
+    case Q_POINTS_ALLOCATION:
+      // [5, prompt, options, budget, ?required]
+      return [Q_POINTS_ALLOCATION, prompt, q.options.map(chunkText), q.budget ?? 100];
+    case Q_RATING:
+      // [6, prompt, options, rating_scale, ?required]
+      return [Q_RATING, prompt, q.options.map(chunkText), q.ratingScale ?? [1, 5]];
+    default:
+      throw new Error(`Unsupported question type tag: ${q.tag}`);
   }
-  return String(value);
 }
 
-async function buildAndSubmitMetadataTx(walletApi, innerPayload) {
+async function buildAndSubmitMetadataTx(walletApi, payload) {
   const utxos = await walletApi.getUtxos();
   if (!utxos || utxos.length === 0) {
     throw new Error("No UTxOs found in wallet. Fund your wallet with ADA and try again.");
   }
   const changeAddress = await walletApi.getChangeAddress();
-  const safeContent = toCardanoMetadata(innerPayload);
-
   const tx = new Transaction({ initiator: walletApi });
   tx.sendLovelace(changeAddress, "2000000");
-  tx.setMetadata(METADATA_LABEL, safeContent);
-
+  tx.setMetadata(METADATA_LABEL, payload);
   const unsignedTx = await tx.build();
   const signedTx = await walletApi.signTx(unsignedTx);
   const txHash = await walletApi.submitTx(signedTx);
@@ -65,41 +91,79 @@ async function buildAndSubmitMetadataTx(walletApi, innerPayload) {
 }
 
 /**
- * Build and submit a survey creation transaction.
- * @param {object} walletApi  - BrowserWallet instance from WalletContext
- * @param {object} surveyDetails - CIP-0179 surveyDetails object
+ * Build and submit a CIP-179 v4 survey creation transaction.
+ * @param {object} walletApi   - BrowserWallet instance
+ * @param {object} surveyForm  - { title, description, endEpoch, eligibleRoles, questions }
+ *   eligibleRoles: string[]  e.g. ["DRep", "SPO"]
+ *   questions: [{ tag, prompt, options?, minSelections?, maxSelections?,
+ *                 minRanked?, maxRanked?, minValue?, maxValue?, step?,
+ *                 budget?, ratingScale?, contentAnchor? }]
  * @returns {Promise<{surveyTxId: string}>}
  */
-export async function buildAndSubmitSurveyCreation(walletApi, surveyDetails) {
-  const canonicalDetails = {
-    specVersion: surveyDetails.specVersion ?? "1.0.0",
-    title: surveyDetails.title,
-    description: surveyDetails.description,
-    questions: surveyDetails.questions,
-    roleWeighting: surveyDetails.roleWeighting,
-    endEpoch: surveyDetails.endEpoch,
-  };
-  const innerPayload = { surveyDetails: canonicalDetails };
-  const txHash = await buildAndSubmitMetadataTx(walletApi, innerPayload);
+export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
+  const changeAddress = await walletApi.getChangeAddress();
+  const ownerKeyHashHex = resolvePaymentKeyHash(changeAddress);
+  const owner = [0, hexToBytes(ownerKeyHashHex)]; // [VKeyHash, hash_bytes]
+
+  const eligibleRoleInts = (surveyForm.eligibleRoles ?? [])
+    .map((r) => ROLE_TO_INT[r])
+    .filter((n) => n !== undefined);
+
+  // v4 definition: integer-keyed map
+  // Key 0: spec_version  Key 1: owner  Key 2: title  Key 3: description
+  // Key 4: eligible_roles  Key 5: end_epoch  Key 6: submission_mode  Key 7: questions
+  const definition = new Map([
+    [0, SPEC_VERSION],
+    [1, owner],
+    [2, chunkText(surveyForm.title)],
+    [3, chunkText(surveyForm.description)],
+    [4, eligibleRoleInts],
+    [5, surveyForm.endEpoch],
+    [6, [0]], // submission_mode: public
+    [7, surveyForm.questions.map(encodeQuestion)],
+  ]);
+
+  // envelope: [tag=0 (definitions), [definition]]
+  const txHash = await buildAndSubmitMetadataTx(walletApi, [0, [definition]]);
   return { surveyTxId: txHash };
 }
 
 /**
- * Build and submit a survey response transaction.
- * @param {object} walletApi     - BrowserWallet instance from WalletContext
- * @param {string} surveyTxId   - Transaction ID of the survey definition
- * @param {string} responderRole - "DRep" | "SPO" | "CC" | "Stakeholder"
- * @param {Array}  answers       - [{questionId, selection?, numericValue?, customValue?}]
+ * Build and submit a CIP-179 v4 survey response transaction.
+ * @param {object} walletApi     - BrowserWallet instance
+ * @param {string} surveyTxId    - Transaction hash of the survey definition
+ * @param {number} surveyIndex   - Position of the survey in the definitions array
+ * @param {string} responderRole - "DRep"|"SPO"|"CC"|"Stakeholder"|"Owner"
+ * @param {Array}  answers       - v4 answer tuples: [tag, questionIndex, value]
+ *   Custom:        [0, qi, any]
+ *   Single-choice: [1, qi, optionIndex]
+ *   Multi-select:  [2, qi, [optionIndices]]
+ *   Ranking:       [3, qi, [rankedOptionIndices]]
+ *   Numeric-range: [4, qi, intValue]
+ *   Points-alloc:  [5, qi, [[optIdx, points], ...]]
+ *   Rating:        [6, qi, [[optIdx, score], ...]]
  * @returns {Promise<{txId: string}>}
  */
-export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, responderRole, answers) {
-  const canonicalResponse = {
-    specVersion: "1.0.0",
-    surveyTxId,
-    responderRole,
-    answers,
-  };
-  const innerPayload = { surveyResponse: canonicalResponse };
-  const txHash = await buildAndSubmitMetadataTx(walletApi, innerPayload);
+export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, surveyIndex, responderRole, answers) {
+  const changeAddress = await walletApi.getChangeAddress();
+  const responderKeyHashHex = resolvePaymentKeyHash(changeAddress);
+  const credential = [0, hexToBytes(responderKeyHashHex)];
+
+  const surveyRef = [hexToBytes(surveyTxId), surveyIndex];
+  const roleInt = ROLE_TO_INT[responderRole];
+  if (roleInt === undefined) throw new Error(`Unknown responder role: ${responderRole}`);
+
+  // v4 response: integer-keyed map
+  // Key 0: spec_version  Key 1: survey_ref  Key 2: role  Key 3: credential  Key 4: answers
+  const response = new Map([
+    [0, SPEC_VERSION],
+    [1, surveyRef],
+    [2, roleInt],
+    [3, credential],
+    [4, answers],
+  ]);
+
+  // envelope: [tag=1 (responses), [response]]
+  const txHash = await buildAndSubmitMetadataTx(walletApi, [1, [response]]);
   return { txId: txHash };
 }

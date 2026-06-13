@@ -1,22 +1,10 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { WalletContext } from "../context/WalletContext";
 import { buildAndSubmitSurveyResponse } from "../services/surveyTxService";
-
-const SHELLEY_EPOCH_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-
-function approxCurrentEpoch() {
-  const delta = Math.floor(Date.now() / 1000) - SHELLEY_EPOCH_START_UNIX;
-  return delta < 0 ? null : 208 + Math.floor(delta / EPOCH_DURATION_SECONDS);
-}
-
-function epochEndDate(epoch) {
-  if (!epoch) return null;
-  return new Date((SHELLEY_EPOCH_START_UNIX + (epoch - 208 + 1) * EPOCH_DURATION_SECONDS) * 1000);
-}
 
 function fmtDate(ts) {
   if (!ts) return "—";
@@ -37,24 +25,63 @@ function shortAddr(addr) {
   return `${addr.slice(0, 10)}…${addr.slice(-8)}`;
 }
 
-const METHOD_SINGLE_CHOICE = "urn:cardano:poll-method:single-choice:v1";
-const METHOD_MULTI_SELECT  = "urn:cardano:poll-method:multi-select:v1";
-const METHOD_NUMERIC_RANGE = "urn:cardano:poll-method:numeric-range:v1";
+// ── Method type helpers (handle all CIP-0179 versions) ────────────────────────
+
+function isSingleChoice(m)  { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:single-choice:"); }
+function isMultiSelect(m)   { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:multi-select:"); }
+function isRanking(m)       { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:ranking:"); }
+function isNumericRange(m)  { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:numeric-range:"); }
+function isPointsAlloc(m)   { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:points-allocation:"); }
+function isRating(m)        { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:rating:"); }
+function isCustom(m)        { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:custom:"); }
+function isChoiceOrRank(m)  { return isSingleChoice(m) || isMultiSelect(m) || isRanking(m); }
+
+// Returns the v4 answer tag for a question's methodType.
+// v4 tags: 0=custom 1=single-choice 2=multi-select 3=ranking 4=numeric 5=points-alloc 6=rating
+function getV4AnswerTag(methodType) {
+  if (isCustom(methodType))       return 0;
+  if (isSingleChoice(methodType)) return 1;
+  if (isMultiSelect(methodType))  return 2;
+  if (isRanking(methodType))      return 3;
+  if (isNumericRange(methodType)) return 4;
+  if (isPointsAlloc(methodType))  return 5;
+  if (isRating(methodType))       return 6;
+  return null;
+}
 
 const METHOD_LABELS = {
-  [METHOD_SINGLE_CHOICE]: "Single choice",
-  [METHOD_MULTI_SELECT]: "Multi-select",
-  [METHOD_NUMERIC_RANGE]: "Numeric range",
+  "urn:cardano:poll-method:single-choice:v1":     "Single choice",
+  "urn:cardano:poll-method:single-choice:v2":     "Single choice",
+  "urn:cardano:poll-method:multi-select:v1":      "Multi-select",
+  "urn:cardano:poll-method:multi-select:v2":      "Multi-select",
+  "urn:cardano:poll-method:ranking:v1":           "Ranking",
+  "urn:cardano:poll-method:numeric-range:v1":     "Numeric range",
+  "urn:cardano:poll-method:numeric-range:v2":     "Numeric range",
+  "urn:cardano:poll-method:points-allocation:v1": "Points allocation",
+  "urn:cardano:poll-method:rating:v1":            "Rating",
+  "urn:cardano:poll-method:custom:v1":            "Custom",
 };
+
+function methodLabel(m) {
+  return METHOD_LABELS[m] ?? "Custom";
+}
 
 const ROLE_COLORS = {
-  DRep: "var(--mint)",
-  SPO: "var(--amber)",
-  CC: "#a78bfa",
+  DRep:        "var(--mint)",
+  SPO:         "var(--amber)",
+  CC:          "#a78bfa",
   Stakeholder: "rgba(200,200,210,0.6)",
+  Owner:       "rgba(200,200,210,0.4)",
 };
 
-// ── Pending poller: retries load() until survey is indexed ───────────────────
+// Derive eligible roles from survey details — supports both v4 (eligibleRoles[])
+// and legacy v2/v3 (roleWeighting{}) shapes returned by the API.
+function getSurveyRoles(details) {
+  if (Array.isArray(details?.eligibleRoles)) return details.eligibleRoles;
+  return Object.keys(details?.roleWeighting ?? {});
+}
+
+// ── Pending poller ───────────────────────────────────────────────────────────
 
 function PendingPoller({ onFound }) {
   const [attempts, setAttempts] = useState(0);
@@ -135,21 +162,18 @@ function NumericTallyChart({ numericTally }) {
 }
 
 function QuestionTallyCard({ qt, totalResponses, totalWeight }) {
-  const isChoice = qt.methodType === METHOD_SINGLE_CHOICE || qt.methodType === METHOD_MULTI_SELECT;
-  const isNumeric = qt.methodType === METHOD_NUMERIC_RANGE;
+  const label = methodLabel(qt.methodType);
+  const showOption = isChoiceOrRank(qt.methodType);
+  const showNumeric = isNumericRange(qt.methodType);
   return (
     <div className="panel question-tally-card">
       <div className="question-tally-header">
-        <p className="muted question-tally-method">
-          {qt.methodType === METHOD_SINGLE_CHOICE ? "Single choice" :
-           qt.methodType === METHOD_MULTI_SELECT  ? "Multi-select" :
-           qt.methodType === METHOD_NUMERIC_RANGE ? "Numeric range" : "Custom"}
-        </p>
+        <p className="muted question-tally-method">{label}</p>
         {qt.weighted ? <span className="question-tally-weight-badge">Weighted by stake</span> : null}
       </div>
       <h4>{qt.question}</h4>
-      {isChoice   ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
-      {isNumeric  ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
+      {showOption   ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
+      {showNumeric  ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
       {qt.customTexts?.length > 0 ? (
         <ul className="custom-text-list">
           {qt.customTexts.map((t, i) => <li key={i}>{t}</li>)}
@@ -162,18 +186,28 @@ function QuestionTallyCard({ qt, totalResponses, totalWeight }) {
 // ── Response form ────────────────────────────────────────────────────────────
 
 function QuestionInput({ question, value, onChange }) {
-  const isChoice = question.methodType === METHOD_SINGLE_CHOICE || question.methodType === METHOD_MULTI_SELECT;
-  const isMulti  = question.methodType === METHOD_MULTI_SELECT;
-  const isNumeric = question.methodType === METHOD_NUMERIC_RANGE;
+  const m = question.methodType;
+  const isChoice  = isSingleChoice(m) || isMultiSelect(m);
+  const isRank    = isRanking(m);
+  const isMulti   = isMultiSelect(m);
+  const isNumeric = isNumericRange(m);
   const nc = question.numericConstraints ?? { minValue: 0, maxValue: 100 };
   const selection = value?.selection ?? [];
   const maxSelections = Number(question.maxSelections || 0) || null;
+  const maxRanked = Number(question.maxRanked || 0) || null;
 
   function handleCheckbox(idx, checked) {
-    const sel = selection;
-    if (checked && maxSelections && sel.length >= maxSelections && !sel.includes(idx)) return;
-    const next = checked ? [...sel, idx] : sel.filter((i) => i !== idx);
+    if (checked && maxSelections && selection.length >= maxSelections && !selection.includes(idx)) return;
+    const next = checked ? [...selection, idx] : selection.filter((i) => i !== idx);
     onChange({ selection: next });
+  }
+
+  function handleRankToggle(idx) {
+    if (selection.includes(idx)) {
+      onChange({ selection: selection.filter((i) => i !== idx) });
+    } else if (!maxRanked || selection.length < maxRanked) {
+      onChange({ selection: [...selection, idx] });
+    }
   }
 
   if (isChoice) {
@@ -200,6 +234,36 @@ function QuestionInput({ question, value, onChange }) {
             <span className="response-option-text">{opt}</span>
           </label>
         ))}
+      </div>
+    );
+  }
+
+  if (isRank) {
+    return (
+      <div className="question-input-options">
+        {(question.options ?? []).map((opt, idx) => {
+          const rank = selection.indexOf(idx);
+          const ranked = rank !== -1;
+          const disabled = !ranked && maxRanked && selection.length >= maxRanked;
+          return (
+            <label
+              key={idx}
+              className={`response-option${ranked ? " selected" : ""}${disabled ? " disabled" : ""}`}
+              onClick={() => !disabled && handleRankToggle(idx)}
+              style={{ cursor: disabled ? "not-allowed" : "pointer" }}
+            >
+              <span className={`response-option-indicator${ranked ? " selected" : ""}`}>
+                {ranked ? rank + 1 : "+"}
+              </span>
+              <span className="response-option-text">{opt}</span>
+            </label>
+          );
+        })}
+        {selection.length > 0 ? (
+          <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>
+            Ranked order: {selection.map((i) => question.options?.[i]).join(" → ")}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -235,9 +299,8 @@ function QuestionInput({ question, value, onChange }) {
 
 function ResponseForm({ survey, isActive, onSubmitted }) {
   const { walletApi, walletDrep } = useContext(WalletContext);
-  const roles = Object.keys(survey.details?.roleWeighting ?? {});
+  const roles = getSurveyRoles(survey.details);
 
-  // Determine default role based on wallet state
   const defaultRole = useMemo(() => {
     if (walletDrep && roles.includes("DRep")) return "DRep";
     return roles[0] ?? "DRep";
@@ -261,18 +324,37 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setSubmitError("");
-    const answersArr = questions.map((q) => ({
-      questionId: q.questionId,
-      ...(answers[q.questionId] ?? {}),
-    })).filter((a) => a.selection?.length > 0 || a.numericValue != null || a.customValue != null);
 
-    if (answersArr.length === 0) {
+    // Build v4 answer tuples: [tag, questionIndex, value]
+    const v4Answers = questions.flatMap((q, questionIndex) => {
+      const answer = answers[q.questionId];
+      if (!answer) return [];
+      const tag = getV4AnswerTag(q.methodType);
+      if (tag === null) return [];
+
+      if (isSingleChoice(q.methodType)) {
+        if (!answer.selection?.length) return [];
+        return [[tag, questionIndex, answer.selection[0]]];
+      }
+      if (isMultiSelect(q.methodType) || isRanking(q.methodType)) {
+        if (!answer.selection?.length) return [];
+        return [[tag, questionIndex, answer.selection]];
+      }
+      if (isNumericRange(q.methodType)) {
+        if (answer.numericValue == null) return [];
+        return [[tag, questionIndex, answer.numericValue]];
+      }
+      return [];
+    });
+
+    if (v4Answers.length === 0) {
       setSubmitError("Please answer at least one question.");
       return;
     }
     setSubmitting(true);
     try {
-      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, responderRole, answersArr);
+      const surveyIndex = survey.surveyIndex ?? 0;
+      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers);
       setSubmitted(true);
       onSubmitted?.(result.txId);
     } catch (err) {
@@ -311,13 +393,23 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
         <section key={q.questionId} className="question-block">
           <div className="question-header">
             <span className="question-number">Question {index + 1}</span>
-            <span className="question-method-pill">{METHOD_LABELS[q.methodType] ?? "Custom"}</span>
+            <span className="question-method-pill">{methodLabel(q.methodType)}</span>
           </div>
           <p className="question-prompt">{q.question}</p>
-          {q.methodType === METHOD_MULTI_SELECT && q.maxSelections ? (
-            <p className="muted question-hint">Select up to {q.maxSelections}. Currently selected: {answers[q.questionId]?.selection?.length ?? 0}</p>
+          {isMultiSelect(q.methodType) ? (
+            <p className="muted question-hint">
+              {q.minSelections > 0 ? `Select ${q.minSelections}–${q.maxSelections ?? "∞"}.` : `Select up to ${q.maxSelections ?? "∞"}.`}
+              {" "}Currently selected: {answers[q.questionId]?.selection?.length ?? 0}
+            </p>
           ) : null}
-          {q.methodType === METHOD_NUMERIC_RANGE ? (
+          {isRanking(q.methodType) ? (
+            <p className="muted question-hint">
+              Click options in your preferred order (most preferred first).
+              {q.maxRanked ? ` Rank up to ${q.maxRanked}.` : ""}
+              {q.minRanked > 0 ? ` At least ${q.minRanked} required.` : ""}
+            </p>
+          ) : null}
+          {isNumericRange(q.methodType) ? (
             <p className="muted question-hint">Move the slider to choose a value between {q.numericConstraints?.minValue ?? 0} and {q.numericConstraints?.maxValue ?? 100}.</p>
           ) : null}
           <QuestionInput
@@ -372,10 +464,9 @@ export default function SurveyDetailPage() {
     description: details.description || "On-chain Cardano governance survey weighted by stake and voting power."
   });
   const questions = details.questions ?? [];
-  const roles = Object.keys(details.roleWeighting ?? {});
-  const currentEpoch = approxCurrentEpoch();
+  const roles = getSurveyRoles(details);
+  const currentEpoch = useCurrentEpoch();
   const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
-  const endDate = epochEndDate(details.endEpoch);
 
   const roleTallies = tally.roleTallies ?? [];
   const [selectedRole, setSelectedRole] = useState(null);
@@ -396,7 +487,6 @@ export default function SurveyDetailPage() {
   );
 
   if (error) {
-    // Survey may not be indexed yet — poll for it
     return (
       <main className="shell">
         <header className="hero"><h1>Survey</h1></header>
@@ -432,7 +522,6 @@ export default function SurveyDetailPage() {
         <div className="survey-meta-item">
           <span className="muted">Ends epoch</span>
           <strong>{details.endEpoch ?? "—"}</strong>
-          {endDate ? <span className="muted" style={{ fontSize: "0.8rem" }}>{endDate.toLocaleDateString()}</span> : null}
         </div>
         <div className="survey-meta-item">
           <span className="muted">Eligible roles</span>
@@ -486,7 +575,6 @@ export default function SurveyDetailPage() {
       {/* Results tab */}
       {tab === "results" ? (
         <section>
-          {/* Role selector if multiple roles */}
           {roleTallies.length > 1 ? (
             <div className="survey-role-filter">
               <span className="muted" style={{ fontSize: "0.82rem" }}>View tally by role:</span>
@@ -568,11 +656,21 @@ export default function SurveyDetailPage() {
       {/* Respond tab */}
       {tab === "respond" && walletApi ? (
         <section className="panel">
-          <ResponseForm
-            survey={survey}
-            isActive={isActive}
-            onSubmitted={() => { setTimeout(() => load(true), 3000); }}
-          />
+          {details.isTimelocked ? (
+            <div>
+              <h3>Sealed Survey</h3>
+              <p className="muted">
+                This survey uses timelock encryption — responses are sealed until the reveal round.
+                Submission requires a compatible timelocked voting tool.
+              </p>
+            </div>
+          ) : (
+            <ResponseForm
+              survey={survey}
+              isActive={isActive}
+              onSubmitted={() => { setTimeout(() => load(true), 3000); }}
+            />
+          )}
         </section>
       ) : null}
     </main>
