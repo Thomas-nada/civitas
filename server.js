@@ -6977,17 +6977,14 @@ async function fetchSurveyByTxHash(txHash) {
   ]);
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
-  const entry = rows.find((row) => ["17", "171717"].includes(String(row?.label || "")));
+  const entry = rows.find((row) => String(row?.label || "") === "17");
   if (!entry) return null;
 
   const meta = entry?.json_metadata;
-  const kind = label17KindFromMeta(meta);
+  if (label17KindFromMeta(meta) !== "surveyDefinitionsV3") return null;
 
-  if (kind === "surveyDefinitionsV3") {
-    const surveyObjects = l17SurveysFromV3Meta(meta, safeHash, txInfo);
-    return surveyObjects[0] ?? null; // return first (most common case)
-  }
-  return label17SurveyFromEntry({ ...entry, tx_hash: safeHash }, txInfo);
+  const surveyObjects = l17SurveysFromV3Meta(meta, safeHash, txInfo);
+  return surveyObjects[0] ?? null;
 }
 
 async function buildLabel17Index() {
@@ -7010,10 +7007,8 @@ async function buildLabel17Index() {
 async function _runLabel17Build() {
   const now = Date.now();
 
-  // Scan both the canonical label (17) and the demo/test label (171717).
-  // 171717 is used by existing tools to avoid polluting production label-17 data during testing.
   const relevantEntries = [];
-  for (const metaLabel of ["17", "171717"]) {
+  for (const metaLabel of ["17"]) {
     let page = 1;
     while (page <= LABEL17_MAX_PAGES) {
       const entries = await blockfrostGet(`/metadata/txs/labels/${metaLabel}?page=${page}&count=100&order=desc`).catch(() => []);
@@ -7074,45 +7069,7 @@ async function _runLabel17Build() {
       continue;
     }
 
-    // ── v1 survey details ─────────────────────────────────────────────────────
-    if (kind === "surveyDetails") {
-      try {
-        const survey = label17SurveyFromEntry(entry, txInfo);
-        if (!survey) continue;
-        surveys.push(survey);
-      } catch { /* skip malformed */ }
-      continue;
-    }
-
-    // ── v1 survey responses ───────────────────────────────────────────────────
-    if (kind === "surveyResponse") {
-      const surveyTxId = meta?.surveyResponse?.surveyTxId;
-      if (typeof surveyTxId !== "string") continue;
-
-      const inputAddress = await resolveInputAddress(txHash, utxoCache);
-      const { rewardAddress, responseStakeAda } = await resolveStakeInfo(inputAddress, addressInfoCache, accountCache);
-
-      try {
-        const restored = label17FromMeta(meta);
-        const resp = restored.surveyResponse;
-        if (!resp || typeof resp !== "object") continue;
-        if (!responsesBySurvey[surveyTxId]) responsesBySurvey[surveyTxId] = [];
-        responsesBySurvey[surveyTxId].push({
-          txId: txHash,
-          inputAddress,
-          slot: txInfo?.slot ?? null,
-          txIndexInBlock: txInfo?.index ?? 0,
-          blockTime: txInfo?.block_time ?? null,
-          responderRole: resp.responderRole,
-          surveyTxId: resp.surveyTxId,
-          answers: resp.answers ?? [],
-          specVersion: resp.specVersion,
-          rewardAddress,
-          responseStakeAda: Number.isFinite(responseStakeAda) ? responseStakeAda : 0,
-          responseCredential: rewardAddress ?? inputAddress ?? txHash,
-        });
-      } catch { /* skip malformed */ }
-    }
+    // v1 surveys (legacy object-based format) are no longer indexed.
   }
 
   // Post-process: normalise answer tuples using the survey's question list.
