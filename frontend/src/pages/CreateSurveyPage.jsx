@@ -27,6 +27,7 @@ function newQuestion() {
     tag: Q_SINGLE_CHOICE,
     prompt: "",
     required: false,
+    contentAnchor: "",
     options: ["", ""],
     minSelections: 0,
     maxSelections: 2,
@@ -40,7 +41,8 @@ function newQuestion() {
   };
 }
 
-function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
+function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveDown }) {
+  const isCustom        = q.tag === Q_CUSTOM;
   const isChoice        = q.tag === Q_SINGLE_CHOICE || q.tag === Q_MULTI_SELECT;
   const isRanking       = q.tag === Q_RANKING;
   const isMulti         = q.tag === Q_MULTI_SELECT;
@@ -57,22 +59,48 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
     onChange({ ...q, options: opts });
   }
 
-  function addOption() { onChange({ ...q, options: [...q.options, ""] }); }
+  function addOption() {
+    const opts = [...q.options, ""];
+    // Grow maxSelections/maxRanked with the option count
+    onChange({
+      ...q,
+      options: opts,
+      maxSelections: isMulti ? opts.length : q.maxSelections,
+      maxRanked: isRanking ? opts.length : q.maxRanked,
+    });
+  }
 
   function removeOption(i) {
     if (q.options.length <= 2) return;
-    onChange({ ...q, options: q.options.filter((_, idx) => idx !== i) });
+    const opts = q.options.filter((_, idx) => idx !== i);
+    onChange({
+      ...q,
+      options: opts,
+      maxSelections: isMulti ? Math.min(q.maxSelections, opts.length) : q.maxSelections,
+      minSelections: isMulti ? Math.min(q.minSelections, opts.length) : q.minSelections,
+      maxRanked: isRanking ? Math.min(q.maxRanked, opts.length) : q.maxRanked,
+      minRanked: isRanking ? Math.min(q.minRanked, opts.length) : q.minRanked,
+    });
   }
 
   return (
     <div className="question-editor-card">
       <div className="question-editor-header">
         <span className="muted" style={{ fontWeight: 600 }}>Question {index + 1}</span>
-        {canRemove ? (
-          <button type="button" className="btn-ghost btn-sm" onClick={onRemove} style={{ color: "#ef4444" }}>
+        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+          <button
+            type="button" className="btn-ghost btn-sm" onClick={onMoveUp}
+            disabled={index === 0} title="Move up" aria-label="Move question up"
+          >↑</button>
+          <button
+            type="button" className="btn-ghost btn-sm" onClick={onMoveDown}
+            disabled={index === total - 1} title="Move down" aria-label="Move question down"
+          >↓</button>
+          <button type="button" className="btn-ghost btn-sm" onClick={onRemove}
+            disabled={total <= 1} style={{ color: total > 1 ? "#ef4444" : undefined }}>
             Remove
           </button>
-        ) : null}
+        </div>
       </div>
 
       <label>
@@ -95,6 +123,18 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
         </select>
       </label>
 
+      {isCustom ? (
+        <label>
+          Content anchor <span className="muted">(URI — required for custom questions)</span>
+          <input
+            type="url"
+            placeholder="https://…"
+            value={q.contentAnchor}
+            onChange={(e) => setField("contentAnchor", e.target.value)}
+          />
+        </label>
+      ) : null}
+
       {hasOptions ? (
         <div className="options-editor">
           <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.4rem" }}>Options</p>
@@ -114,7 +154,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           <button type="button" className="btn-ghost btn-sm" onClick={addOption}>+ Add option</button>
 
           {isMulti ? (
-            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
               <label>
                 Min selections
                 <input
@@ -122,7 +162,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
                   min={0}
                   max={q.options.length}
                   value={q.minSelections}
-                  onChange={(e) => setField("minSelections", Number(e.target.value))}
+                  onChange={(e) => setField("minSelections", Math.min(Number(e.target.value), q.maxSelections))}
                   style={{ width: "80px" }}
                 />
               </label>
@@ -130,10 +170,10 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
                 Max selections
                 <input
                   type="number"
-                  min={1}
+                  min={Math.max(1, q.minSelections)}
                   max={q.options.length}
                   value={q.maxSelections}
-                  onChange={(e) => setField("maxSelections", Number(e.target.value))}
+                  onChange={(e) => setField("maxSelections", Math.min(Number(e.target.value), q.options.length))}
                   style={{ width: "80px" }}
                 />
               </label>
@@ -141,7 +181,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           ) : null}
 
           {isRanking ? (
-            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
               <label>
                 Min ranked
                 <input
@@ -149,7 +189,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
                   min={0}
                   max={q.options.length}
                   value={q.minRanked}
-                  onChange={(e) => setField("minRanked", Number(e.target.value))}
+                  onChange={(e) => setField("minRanked", Math.min(Number(e.target.value), q.maxRanked))}
                   style={{ width: "80px" }}
                 />
               </label>
@@ -157,10 +197,10 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
                 Max ranked
                 <input
                   type="number"
-                  min={1}
+                  min={Math.max(1, q.minRanked)}
                   max={q.options.length}
                   value={q.maxRanked}
-                  onChange={(e) => setField("maxRanked", Number(e.target.value))}
+                  onChange={(e) => setField("maxRanked", Math.min(Number(e.target.value), q.options.length))}
                   style={{ width: "80px" }}
                 />
               </label>
@@ -168,7 +208,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           ) : null}
 
           {isPoints ? (
-            <label style={{ marginTop: "0.5rem" }}>
+            <label style={{ marginTop: "0.75rem" }}>
               Budget (total points to allocate)
               <input
                 type="number"
@@ -181,7 +221,7 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           ) : null}
 
           {isRating ? (
-            <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
               <label>
                 Rating min
                 <input
@@ -220,14 +260,14 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           <label>
             Step <span className="muted">(optional)</span>
             <input type="number" min={1} value={q.step ?? ""}
-              placeholder="1"
+              placeholder="any"
               onChange={(e) => setField("step", e.target.value === "" ? null : Number(e.target.value))} />
           </label>
         </div>
       ) : null}
 
-      {q.tag !== Q_CUSTOM ? (
-        <label className="required-checkbox-label" style={{ flexDirection: "row", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+      {!isCustom ? (
+        <label className="required-checkbox-label" style={{ flexDirection: "row", alignItems: "center", gap: "0.5rem", marginTop: "0.75rem" }}>
           <input type="checkbox" checked={q.required ?? false} onChange={(e) => setField("required", e.target.checked)} />
           Required <span className="muted" style={{ fontSize: "0.8rem" }}>(response must answer this question)</span>
         </label>
@@ -243,20 +283,34 @@ function validate(form, currentEpoch) {
   if (currentEpoch != null && form.endEpoch <= currentEpoch) errors.push("End epoch must be in the future.");
   if (form.eligibleRoles.length === 0) errors.push("Select at least one eligible role.");
   if (form.questions.length === 0) errors.push("Add at least one question.");
+  if (form.contentAnchor.trim() && !/^https?:\/\/.+/.test(form.contentAnchor.trim())) {
+    errors.push("Survey content anchor must be a valid http(s) URL.");
+  }
   for (const [i, q] of form.questions.entries()) {
-    if (!q.prompt.trim()) errors.push(`Question ${i + 1}: Question text is required.`);
-    if (q.tag !== Q_NUMERIC_RANGE && q.tag !== Q_CUSTOM) {
-      if (q.options.some((o) => !o.trim())) errors.push(`Question ${i + 1}: All options must have text.`);
-      if (q.options.length < 2) errors.push(`Question ${i + 1}: At least 2 options required.`);
+    const n = i + 1;
+    if (!q.prompt.trim()) errors.push(`Question ${n}: Question text is required.`);
+    if (q.tag === Q_CUSTOM) {
+      if (!q.contentAnchor?.trim()) errors.push(`Question ${n}: Custom questions require a content anchor URI.`);
+    } else if (q.tag !== Q_NUMERIC_RANGE) {
+      if (q.options.some((o) => !o.trim())) errors.push(`Question ${n}: All options must have text.`);
+      if (q.options.length < 2) errors.push(`Question ${n}: At least 2 options required.`);
     }
     if (q.tag === Q_NUMERIC_RANGE && q.minValue >= q.maxValue) {
-      errors.push(`Question ${i + 1}: Min value must be less than max value.`);
+      errors.push(`Question ${n}: Min value must be less than max value.`);
     }
-    if (q.tag === Q_MULTI_SELECT && q.minSelections > q.maxSelections) {
-      errors.push(`Question ${i + 1}: Min selections cannot exceed max selections.`);
+    if (q.tag === Q_MULTI_SELECT) {
+      if (q.minSelections > q.maxSelections) errors.push(`Question ${n}: Min selections cannot exceed max selections.`);
+      if (q.maxSelections > q.options.length) errors.push(`Question ${n}: Max selections cannot exceed option count (${q.options.length}).`);
     }
-    if (q.tag === Q_RANKING && q.minRanked > q.maxRanked) {
-      errors.push(`Question ${i + 1}: Min ranked cannot exceed max ranked.`);
+    if (q.tag === Q_RANKING) {
+      if (q.minRanked > q.maxRanked) errors.push(`Question ${n}: Min ranked cannot exceed max ranked.`);
+      if (q.maxRanked > q.options.length) errors.push(`Question ${n}: Max ranked cannot exceed option count (${q.options.length}).`);
+    }
+    if (q.tag === Q_POINTS_ALLOCATION && q.budget < 1) {
+      errors.push(`Question ${n}: Budget must be at least 1.`);
+    }
+    if (q.tag === Q_RATING && q.ratingScale[0] >= q.ratingScale[1]) {
+      errors.push(`Question ${n}: Rating min must be less than rating max.`);
     }
   }
   return errors;
@@ -266,12 +320,15 @@ function buildSurveyForm(form) {
   return {
     title: form.title,
     description: form.description,
+    contentAnchor: form.contentAnchor.trim() || undefined,
     endEpoch: form.endEpoch,
     eligibleRoles: form.eligibleRoles,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
       if (q.required && q.tag !== Q_CUSTOM) base.required = true;
-      if (q.tag === Q_SINGLE_CHOICE) {
+      if (q.tag === Q_CUSTOM) {
+        base.contentAnchor = q.contentAnchor.trim();
+      } else if (q.tag === Q_SINGLE_CHOICE) {
         base.options = q.options.filter((o) => o.trim());
       } else if (q.tag === Q_MULTI_SELECT) {
         base.options = q.options.filter((o) => o.trim());
@@ -297,25 +354,27 @@ function buildSurveyForm(form) {
   };
 }
 
-// Preview of the v4 on-chain payload (JSON-friendly approximation)
+// Preview of the v4 on-chain payload (JSON-friendly approximation of the CBOR map)
 function buildPreviewPayload(form) {
   const eligibleRoleInts = form.eligibleRoles.map((r) => ROLE_TO_INT[r]).filter((n) => n !== undefined);
   const questions = form.questions.map((q) => {
     const prompt = q.prompt || "(empty)";
     const opts = q.options.filter(Boolean);
+    const req = q.required && q.tag !== Q_CUSTOM ? [true] : [];
     switch (q.tag) {
-      case Q_CUSTOM:            return [0, prompt, "(content_anchor)"];
-      case Q_SINGLE_CHOICE:     return [1, prompt, opts];
-      case Q_MULTI_SELECT:      return [2, prompt, opts, q.minSelections, q.maxSelections];
-      case Q_RANKING:           return [3, prompt, opts, q.minRanked, q.maxRanked];
-      case Q_NUMERIC_RANGE:     return q.step ? [4, prompt, [q.minValue, q.maxValue, q.step]] : [4, prompt, [q.minValue, q.maxValue]];
-      case Q_POINTS_ALLOCATION: return [5, prompt, opts, q.budget];
-      case Q_RATING:            return [6, prompt, opts, q.ratingScale];
+      case Q_CUSTOM:            return [0, prompt, q.contentAnchor || "(content_anchor)"];
+      case Q_SINGLE_CHOICE:     return [1, prompt, opts, ...req];
+      case Q_MULTI_SELECT:      return [2, prompt, opts, q.minSelections, q.maxSelections, ...req];
+      case Q_RANKING:           return [3, prompt, opts, q.minRanked, q.maxRanked, ...req];
+      case Q_NUMERIC_RANGE:     return q.step
+        ? [4, prompt, [q.minValue, q.maxValue, q.step], ...req]
+        : [4, prompt, [q.minValue, q.maxValue], ...req];
+      case Q_POINTS_ALLOCATION: return [5, prompt, opts, q.budget, ...req];
+      case Q_RATING:            return [6, prompt, opts, q.ratingScale, ...req];
       default:                  return null;
     }
   }).filter(Boolean);
 
-  // v4 definition map (shown as object with integer keys)
   const definition = {
     0: 4,
     1: [0, "<owner_vkeyhash>"],
@@ -326,6 +385,7 @@ function buildPreviewPayload(form) {
     6: [0],
     7: questions,
   };
+  if (form.contentAnchor.trim()) definition[8] = form.contentAnchor.trim();
 
   return { 17: [0, [definition]] };
 }
@@ -338,6 +398,7 @@ export default function CreateSurveyPage() {
   const [form, setForm] = useState({
     title: "",
     description: "",
+    contentAnchor: "",
     endEpoch: 0,
     eligibleRoles: ["DRep"],
     questions: [newQuestion()],
@@ -387,7 +448,16 @@ export default function CreateSurveyPage() {
   }
 
   function removeQuestion(i) {
+    if (form.questions.length <= 1) return;
     setField("questions", form.questions.filter((_, idx) => idx !== i));
+  }
+
+  function moveQuestion(i, dir) {
+    const qs = [...form.questions];
+    const j = i + dir;
+    if (j < 0 || j >= qs.length) return;
+    [qs[i], qs[j]] = [qs[j], qs[i]];
+    setField("questions", qs);
   }
 
   function addQuestion() {
@@ -434,6 +504,15 @@ export default function CreateSurveyPage() {
             Description
             <textarea rows={3} placeholder="Explain the purpose and context of this survey."
               value={form.description} onChange={(e) => setField("description", e.target.value)} required />
+          </label>
+          <label>
+            Content anchor <span className="muted">(optional — URI linking to supporting document)</span>
+            <input
+              type="url"
+              placeholder="https://…"
+              value={form.contentAnchor}
+              onChange={(e) => setField("contentAnchor", e.target.value)}
+            />
           </label>
         </section>
 
@@ -482,12 +561,16 @@ export default function CreateSurveyPage() {
               key={q.id}
               q={q}
               index={i}
+              total={form.questions.length}
               onChange={(updated) => updateQuestion(i, updated)}
               onRemove={() => removeQuestion(i)}
-              canRemove={form.questions.length > 1}
+              onMoveUp={() => moveQuestion(i, -1)}
+              onMoveDown={() => moveQuestion(i, 1)}
             />
           ))}
-          <button type="button" className="btn-ghost" onClick={addQuestion}>+ Add question</button>
+          <button type="button" className="btn-ghost" onClick={addQuestion} style={{ marginTop: "0.5rem" }}>
+            + Add question
+          </button>
         </section>
 
         {/* Metadata preview */}

@@ -107,6 +107,7 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
   // v4 definition: integer-keyed map
   // Key 0: spec_version  Key 1: owner  Key 2: title  Key 3: description
   // Key 4: eligible_roles  Key 5: end_epoch  Key 6: submission_mode  Key 7: questions
+  // Key 8: content_anchor (optional URI)
   const definition = new Map([
     [0, SPEC_VERSION],
     [1, owner],
@@ -116,6 +117,7 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
     [5, surveyForm.endEpoch],
     [6, [0]], // submission_mode: public
     [7, surveyForm.questions.map(encodeQuestion)],
+    ...(surveyForm.contentAnchor?.trim() ? [[8, chunkText(surveyForm.contentAnchor.trim())]] : []),
   ]);
 
   // envelope: [tag=0 (definitions), [definition]]
