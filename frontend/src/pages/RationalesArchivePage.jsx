@@ -55,6 +55,17 @@ function formatDateTime(value) {
   });
 }
 
+function parseIpfsSourceUrl(raw) {
+  const match = String(raw || "").match(/<!--\s*url:\s*(https?:\/\/\S+)\s*-->/);
+  return match?.[1]?.trim() || "";
+}
+
+function resolveIpfsGateway(url) {
+  if (!url) return "";
+  if (/^ipfs:\/\//.test(url)) return `https://ipfs.blockfrost.dev/ipfs/${url.slice(7)}`;
+  return url;
+}
+
 function parseVote(text) {
   const match = String(text || "").match(/\*{0,2}vote\*{0,2}\s*[:\-–]\s*(.+)/i);
   if (!match) return "Unknown";
@@ -153,12 +164,31 @@ async function fetchMarkdown(entry, signal) {
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Could not load ${entry.file}.`);
   const raw = await res.text();
+
+  // Fetch the IPFS source document to extract the author signature image
+  const ipfsUrl = parseIpfsSourceUrl(raw);
+  let authorImageUrl = "";
+  if (ipfsUrl) {
+    try {
+      const ipfsRes = await fetch(ipfsUrl, { signal });
+      if (ipfsRes.ok) {
+        const json = await ipfsRes.json();
+        for (const author of (Array.isArray(json?.authors) ? json.authors : [])) {
+          const rawUrl = String(author?.imageUrl || author?.image || "").trim();
+          if (rawUrl) { authorImageUrl = resolveIpfsGateway(rawUrl); break; }
+        }
+      }
+    } catch {}
+  }
+
   const data = {
     ...entry,
     raw,
     vote: parseVote(raw),
     voterId: parseVoterId(raw),
-    body: stripArchiveMetadata(raw)
+    body: stripArchiveMetadata(raw),
+    ipfsUrl,
+    authorImageUrl,
   };
   writeCache(cacheKey, data);
   return data;
@@ -764,6 +794,16 @@ export default function RationalesArchivePage() {
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {selectedRationale.body || selectedRationale.raw || "No rationale body text available."}
                 </ReactMarkdown>
+                {selectedRationale.authorImageUrl ? (
+                  <div className="rationale-author-image">
+                    <p className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.4rem" }}>Signature</p>
+                    <img
+                      src={selectedRationale.authorImageUrl}
+                      alt="Author signature"
+                      className="rationale-signature-img"
+                    />
+                  </div>
+                ) : null}
               </div>
             </>
           ) : null}

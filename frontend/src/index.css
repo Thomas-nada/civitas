@@ -3599,6 +3599,20 @@ tbody tr.active {
   margin-bottom: 0;
 }
 
+.rationale-author-image {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rationale-signature-img {
+  max-width: 240px;
+  max-height: 120px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: block;
+}
+
 .payload-markdown p,
 .payload-markdown ul,
 .payload-markdown ol,

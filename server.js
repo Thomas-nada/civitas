@@ -1822,7 +1822,7 @@ function extractRationaleSections(payload) {
 
 async function resolveVoteRationaleData(rationaleUrl) {
   const url = String(rationaleUrl || "").trim();
-  if (!url) return { text: "", sections: [], reachable: false, payload: null };
+  if (!url) return { text: "", sections: [], reachable: false, payload: null, authorImageUrl: "" };
   if (voteRationaleCache.has(url)) {
     const cached = voteRationaleCache.get(url);
     if (cached && typeof cached === "object") {
@@ -1830,10 +1830,11 @@ async function resolveVoteRationaleData(rationaleUrl) {
         text: String(cached.text || ""),
         sections: Array.isArray(cached.sections) ? cached.sections : [],
         reachable: cached.reachable === true,
-        payload: cached.payload && typeof cached.payload === "object" ? cached.payload : null
+        payload: cached.payload && typeof cached.payload === "object" ? cached.payload : null,
+        authorImageUrl: String(cached.authorImageUrl || "")
       };
     }
-    return { text: String(cached || ""), sections: [], reachable: false, payload: null };
+    return { text: String(cached || ""), sections: [], reachable: false, payload: null, authorImageUrl: "" };
   }
 
   const candidates = normalizeIpfsUrl(url);
@@ -1843,6 +1844,7 @@ async function resolveVoteRationaleData(rationaleUrl) {
   let resolvedText = "";
   let resolvedSections = [];
   let resolvedPayload = null;
+  let resolvedAuthorImageUrl = "";
   let reachable = false;
   for (const candidate of candidates) {
     const raw = await fetchTextWithTimeout(candidate, 8000);
@@ -1853,6 +1855,7 @@ async function resolveVoteRationaleData(rationaleUrl) {
       resolvedPayload = jsonPayload && typeof jsonPayload === "object" ? jsonPayload : null;
       resolvedSections = extractRationaleSections(jsonPayload);
       resolvedText = pickRationaleText(jsonPayload);
+      resolvedAuthorImageUrl = extractAuthorImageUrl(jsonPayload);
       if (!resolvedText && typeof raw === "string") resolvedText = cleanPlainText(raw);
     } catch {
       resolvedText = cleanPlainText(raw);
@@ -1864,10 +1867,23 @@ async function resolveVoteRationaleData(rationaleUrl) {
     text: resolvedText || "",
     sections: resolvedSections,
     reachable,
-    payload: resolvedPayload
+    payload: resolvedPayload,
+    authorImageUrl: resolvedAuthorImageUrl
   };
   voteRationaleCache.set(url, out);
   return out;
+}
+
+function extractAuthorImageUrl(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  for (const author of (Array.isArray(payload.authors) ? payload.authors : [])) {
+    if (!author || typeof author !== "object") continue;
+    const raw = String(author.imageUrl || author.image || "").trim();
+    if (!raw) continue;
+    if (raw.startsWith("ipfs://")) return `https://ipfs.blockfrost.dev/ipfs/${raw.slice(7)}`;
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  }
+  return "";
 }
 
 function isValidRationaleUrlFormat(url) {
@@ -8501,6 +8517,7 @@ const server = http.createServer(async (req, res) => {
     try {
       let rationaleText = "";
       let rationaleSections = [];
+      let authorImageUrl = "";
       let latestVoteTxHash = voteTxHashParam;
       if (!rationaleText && latestVoteTxHash) {
         const cachedTx = voteTxRationaleCache[latestVoteTxHash];
@@ -8607,6 +8624,7 @@ const server = http.createServer(async (req, res) => {
           if (metaPayload) {
             rationaleSections = extractRationaleSections(metaPayload);
             rationaleText = pickRationaleText(metaPayload);
+            if (!authorImageUrl) authorImageUrl = extractAuthorImageUrl(metaPayload);
           }
           if (!rationaleText && typeof row.rationale === "string" && row.rationale.trim()) {
             rationaleText = cleanPlainText(row.rationale);
@@ -8678,16 +8696,20 @@ const server = http.createServer(async (req, res) => {
           }
         }
       }
-      if (!rationaleText) {
+      if (!rationaleText || !authorImageUrl) {
         const resolved = await resolveVoteRationaleData(resolvedUrl);
-        rationaleText = resolved.text;
-        if (rationaleSections.length === 0) rationaleSections = resolved.sections || [];
+        if (!rationaleText) {
+          rationaleText = resolved.text;
+          if (rationaleSections.length === 0) rationaleSections = resolved.sections || [];
+        }
+        if (!authorImageUrl) authorImageUrl = resolved.authorImageUrl || "";
       }
       const payload = {
         ok: true,
         url: resolvedUrl || "",
         rationaleText: rationaleText || "",
         rationaleSections,
+        authorImageUrl: authorImageUrl || "",
         found: Boolean(rationaleText)
       };
       if (latestVoteTxHash && (payload.found || payload.url)) {

@@ -504,6 +504,7 @@ export default function ProposalDetailPage() {
   const [error, setError] = useState("");
   const [rationaleModal, setRationaleModal] = useState({ open: false, key: "", title: "", proposalId: "" });
   const [voteRationaleText, setVoteRationaleText] = useState({});
+  const [voteRationaleImage, setVoteRationaleImage] = useState({});
   const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
   const [voteRationaleError, setVoteRationaleError] = useState({});
   const [detailTab, setDetailTab] = useState("votes");
@@ -706,6 +707,10 @@ export default function ProposalDetailPage() {
         ...prev,
         [key]: markdownBody || "No rationale body text available."
       }));
+      const imageUrl = String(data?.authorImageUrl || "").trim();
+      if (imageUrl) {
+        setVoteRationaleImage((prev) => ({ ...prev, [key]: imageUrl }));
+      }
     } catch (e) {
       setVoteRationaleError((prev) => ({ ...prev, [key]: e.message || "Failed to load rationale." }));
     } finally {
@@ -983,6 +988,16 @@ export default function ProposalDetailPage() {
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
                   </ReactMarkdown>
+                  {voteRationaleImage[rationaleModal.key] ? (
+                    <div className="rationale-author-image">
+                      <p className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.4rem" }}>Signature</p>
+                      <img
+                        src={voteRationaleImage[rationaleModal.key]}
+                        alt="Author signature"
+                        className="rationale-signature-img"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
