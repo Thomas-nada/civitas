@@ -26,6 +26,7 @@ function newQuestion() {
     id: crypto.randomUUID(),
     tag: Q_SINGLE_CHOICE,
     prompt: "",
+    required: false,
     options: ["", ""],
     minSelections: 0,
     maxSelections: 2,
@@ -224,6 +225,13 @@ function QuestionEditor({ q, index, onChange, onRemove, canRemove }) {
           </label>
         </div>
       ) : null}
+
+      {q.tag !== Q_CUSTOM ? (
+        <label className="required-checkbox-label" style={{ flexDirection: "row", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+          <input type="checkbox" checked={q.required ?? false} onChange={(e) => setField("required", e.target.checked)} />
+          Required <span className="muted" style={{ fontSize: "0.8rem" }}>(response must answer this question)</span>
+        </label>
+      ) : null}
     </div>
   );
 }
@@ -262,6 +270,7 @@ function buildSurveyForm(form) {
     eligibleRoles: form.eligibleRoles,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
+      if (q.required && q.tag !== Q_CUSTOM) base.required = true;
       if (q.tag === Q_SINGLE_CHOICE) {
         base.options = q.options.filter((o) => o.trim());
       } else if (q.tag === Q_MULTI_SELECT) {

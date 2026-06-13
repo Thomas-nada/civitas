@@ -6694,6 +6694,16 @@ function l17ParseV3Question(q, index) {
   return null;
 }
 
+// Resolve options_or_count: inline array of labels OR uint count (external-content mode).
+// When a count is given, we generate placeholder labels so the tally machinery still works.
+function l17ResolveOptionsOrCount(v) {
+  if (Array.isArray(v)) return v.map(l17JoinText);
+  if (typeof v === "number" && Number.isInteger(v) && v >= 2) {
+    return Array.from({ length: v }, (_, i) => `Option ${i + 1}`);
+  }
+  return [];
+}
+
 // Parse a v4 question array (new tag numbering) → normalised question object.
 function l17ParseV4Question(q, index) {
   if (!Array.isArray(q) || q.length < 2) return null;
@@ -6703,30 +6713,31 @@ function l17ParseV4Question(q, index) {
   const methodType = L17_INT_TO_METHOD_V4[tag];
   if (!methodType) return null;
 
+  // Optional trailing required flag (last element if boolean, per CIP spec)
+  const lastEl = rest[rest.length - 1];
+  const required = typeof lastEl === "boolean" ? lastEl : false;
+
   switch (tag) {
-    case 0: // custom: [0, prompt, content_anchor]
-      return { questionId, question: prompt, methodType };
-    case 1: // single-choice: [1, prompt, options, ?required]
-      return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText) };
-    case 2: { // multi-select: [2, prompt, options, min_selections, max_selections, ?required]
-      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
-      return { questionId, question: prompt, methodType, options: opts, minSelections: rest[1] ?? 0, maxSelections: rest[2] ?? 2 };
+    case 0: // custom: [0, prompt, content_anchor, ?required]
+      return { questionId, question: prompt, methodType, required };
+    case 1: // single-choice: [1, prompt, options_or_count, ?required]
+      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), required };
+    case 2: { // multi-select: [2, prompt, options_or_count, min_selections, max_selections, ?required]
+      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), minSelections: rest[1] ?? 0, maxSelections: rest[2] ?? 2, required };
     }
-    case 3: { // ranking: [3, prompt, options, min_ranked, max_ranked, ?required]
-      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
-      return { questionId, question: prompt, methodType, options: opts, minRanked: rest[1] ?? 0, maxRanked: rest[2] ?? null };
+    case 3: { // ranking: [3, prompt, options_or_count, min_ranked, max_ranked, ?required]
+      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), minRanked: rest[1] ?? 0, maxRanked: rest[2] ?? null, required };
     }
     case 4: { // numeric-range: [4, prompt, [min, max, ?step], ?required]
-      const c = rest[0] ?? [];
-      return { questionId, question: prompt, methodType, numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) } };
+      const c = Array.isArray(rest[0]) ? rest[0] : [];
+      return { questionId, question: prompt, methodType, numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) }, required };
     }
-    case 5: { // points-allocation: [5, prompt, options, budget, ?required]
-      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
-      return { questionId, question: prompt, methodType, options: opts, budget: rest[1] ?? 100 };
+    case 5: { // points-allocation: [5, prompt, options_or_count, budget, ?required]
+      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), budget: rest[1] ?? 100, required };
     }
-    case 6: { // rating: [6, prompt, options, rating_scale, ?required]
-      const opts = Array.isArray(rest[0]) ? rest[0].map(l17JoinText) : [];
-      return { questionId, question: prompt, methodType, options: opts };
+    case 6: { // rating: [6, prompt, options_or_count, rating_scale, ?required]
+      const scale = Array.isArray(rest[1]) ? rest[1] : (typeof rest[1] === "number" ? [1, rest[1]] : [1, 5]);
+      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), ratingScale: scale, required };
     }
     default:
       return null;
@@ -6788,6 +6799,7 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
       const submissionMode  = def["6"];
       const isTimelocked    = Array.isArray(submissionMode) && submissionMode[0] === 1;
       const questionsRaw    = def["7"];
+      const contentAnchorRaw = def["8"] ?? null;
 
       const title       = l17JoinText(titleRaw);
       const description = l17JoinText(descRaw);
@@ -6799,10 +6811,15 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
         .map((q, i) => l17ParseV4Question(q, i))
         .filter(Boolean);
 
+      // content_anchor: [chunked_text_uri, blake2b_256_hash]
+      const contentAnchor = Array.isArray(contentAnchorRaw)
+        ? { uri: l17JoinText(contentAnchorRaw[0]), hash: l17ExtractBytesHex(contentAnchorRaw[1]) }
+        : null;
+
       surveys.push({
         surveyTxId: txHash,
         surveyIndex,
-        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked },
+        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(contentAnchor ? { contentAnchor } : {}) },
         msg: null,
         slot: txInfo?.slot ?? null,
         blockTime: txInfo?.block_time ?? null,
@@ -7025,6 +7042,8 @@ async function _runLabel17Build() {
   const utxoCache = {};
   const addressInfoCache = {};
   const accountCache = {};
+  // "txHash:index" refs that have been cancelled
+  const cancelledRefs = new Set();
 
   // Fetch tx info in parallel batches of 10
   const txHashes = [...new Set(relevantEntries.map((e) => e.tx_hash).filter(Boolean))];
@@ -7069,32 +7088,65 @@ async function _runLabel17Build() {
       continue;
     }
 
+    // ── cancellations ──────────────────────────────────────────────────────────
+    if (kind === "cancellationsV3") {
+      try {
+        const items = meta[1];
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          // item is a survey_ref [tx_id_bytes, index] or a map with key "1" holding the ref
+          let surveyRef = Array.isArray(item) ? item
+            : (item !== null && typeof item === "object" ? item["1"] : null);
+          if (!Array.isArray(surveyRef) || surveyRef.length < 2) continue;
+          const cancelTxId = l17ExtractBytesHex(surveyRef[0]);
+          const cancelIdx  = Number(surveyRef[1] ?? 0);
+          if (cancelTxId) cancelledRefs.add(`${cancelTxId}:${cancelIdx}`);
+        }
+      } catch { /* skip malformed */ }
+      continue;
+    }
+
     // v1 surveys (legacy object-based format) are no longer indexed.
   }
 
-  // Post-process: normalise answer tuples using the survey's question list.
+  // Post-process: normalise answer tuples; enforce required-question validation.
   const surveyByTxId = Object.fromEntries(surveys.map((s) => [s.surveyTxId, s]));
   for (const rawResp of rawV3Responses) {
     const survey = surveyByTxId[rawResp.surveyTxId];
+    // Skip responses to cancelled surveys
+    if (cancelledRefs.has(`${rawResp.surveyTxId}:${rawResp.surveyIndex}`)) continue;
     const questions = survey?.details?.questions ?? [];
     const parseAnswer = rawResp.specVersion === 4 ? l17ParseV4Answer : l17ParseV3Answer;
     const normAnswers = rawResp.rawAnswersV3
       .map((a) => parseAnswer(a, questions))
       .filter(Boolean);
+
+    // Reject the entire response if any required question has no answer
+    const requiredIds = questions.filter((q) => q.required).map((q) => q.questionId);
+    if (requiredIds.length > 0) {
+      const answeredIds = new Set(normAnswers.map((a) => a.questionId));
+      if (requiredIds.some((id) => !answeredIds.has(id))) continue;
+    }
+
     const finalResp = { ...rawResp, answers: normAnswers };
     delete finalResp.rawAnswersV3;
     if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
     responsesBySurvey[rawResp.surveyTxId].push(finalResp);
   }
 
+  // Filter out cancelled surveys
+  const activeSurveys = surveys.filter(
+    (s) => !cancelledRefs.has(`${s.surveyTxId}:${s.surveyIndex}`)
+  );
+
   // Sort surveys newest-first
-  surveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
-  // Sort responses by slot ascending (for latest-wins dedup)
+  activeSurveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
+  // Sort responses by slot/txIndex ascending (for latest-wins dedup)
   for (const list of Object.values(responsesBySurvey)) {
     list.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.txIndexInBlock ?? 0) - (b.txIndexInBlock ?? 0));
   }
 
-  label17Cache = { fetchedAt: now, surveys, responsesBySurvey };
+  label17Cache = { fetchedAt: now, surveys: activeSurveys, responsesBySurvey };
   return label17Cache;
 }
 
@@ -7127,20 +7179,20 @@ async function resolveStakeInfo(inputAddress, addressInfoCache, accountCache) {
   return { rewardAddress, responseStakeAda };
 }
 
-// Choice method URNs — all versioned variants
+// Method type sets used by the tally function
 const CHOICE_METHODS = new Set([
   "urn:cardano:poll-method:single-choice:v1",
   "urn:cardano:poll-method:single-choice:v2",
   "urn:cardano:poll-method:multi-select:v1",
   "urn:cardano:poll-method:multi-select:v2",
   "urn:cardano:poll-method:ranking:v1",
-  "urn:cardano:poll-method:points-allocation:v1",
-  "urn:cardano:poll-method:rating:v1",
 ]);
 const NUMERIC_METHODS = new Set([
   "urn:cardano:poll-method:numeric-range:v1",
   "urn:cardano:poll-method:numeric-range:v2",
 ]);
+const POINTS_METHODS = new Set(["urn:cardano:poll-method:points-allocation:v1"]);
+const RATING_METHODS = new Set(["urn:cardano:poll-method:rating:v1"]);
 
 function label17TallySurvey(details, responses) {
   const questions = details?.questions ?? [];
@@ -7164,40 +7216,80 @@ function label17TallySurvey(details, responses) {
     const roleResps = deduped.filter((r) => r.responderRole === role);
     const roleWeightTotal = roleResps.reduce((sum, response) => sum + label17ResolveResponseWeight(response, weighting), 0);
     const questionTallies = questions.map((q) => {
+      const isChoice  = CHOICE_METHODS.has(q.methodType);
+      const isNumeric = NUMERIC_METHODS.has(q.methodType);
+      const isPoints  = POINTS_METHODS.has(q.methodType);
+      const isRating  = RATING_METHODS.has(q.methodType);
+
       const qt = {
         questionId: q.questionId,
         question: q.question,
         methodType: q.methodType,
+        required: q.required ?? false,
         weighted: weighting === "StakeBased" || weighting === "PledgeBased",
         weighting,
-        optionTallies: CHOICE_METHODS.has(q.methodType)
+        abstainCount: 0,
+        optionTallies: isChoice
           ? (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 }))
           : undefined,
+        pointsTally: isPoints
+          ? (q.options ?? []).map((label, index) => ({ index, label, totalPoints: 0, weight: 0 }))
+          : undefined,
+        ratingTally: isRating
+          ? (q.options ?? []).map((label, index) => ({ index, label, scoreSum: 0, weightedScoreSum: 0, count: 0, weight: 0, meanScore: null }))
+          : undefined,
         numericTally: null,
-        customTexts: (!CHOICE_METHODS.has(q.methodType) && !NUMERIC_METHODS.has(q.methodType))
-          ? [] : undefined,
+        customTexts: (!isChoice && !isNumeric && !isPoints && !isRating) ? [] : undefined,
       };
 
       const numericValues = [];
       for (const r of roleResps) {
         const answer = (r.answers ?? []).find((a) => a.questionId === q.questionId);
-        if (!answer) continue;
+        if (!answer) {
+          qt.abstainCount++;
+          continue;
+        }
         const responseWeight = label17ResolveResponseWeight(r, weighting);
-        if (qt.optionTallies) {
+
+        if (isChoice) {
           for (const idx of (answer.selection ?? [])) {
             if (idx >= 0 && idx < qt.optionTallies.length) {
               qt.optionTallies[idx].count++;
               qt.optionTallies[idx].weight += responseWeight;
             }
           }
-        } else if (NUMERIC_METHODS.has(q.methodType) && answer.numericValue != null) {
+        } else if (isPoints && Array.isArray(answer.pointsAllocation)) {
+          for (const [idx, pts] of answer.pointsAllocation) {
+            if (idx >= 0 && idx < qt.pointsTally.length) {
+              qt.pointsTally[idx].totalPoints += pts;
+              qt.pointsTally[idx].weight += responseWeight;
+            }
+          }
+        } else if (isRating && Array.isArray(answer.ratings)) {
+          for (const [idx, score] of answer.ratings) {
+            if (idx >= 0 && idx < qt.ratingTally.length) {
+              qt.ratingTally[idx].scoreSum += score;
+              qt.ratingTally[idx].weightedScoreSum += score * responseWeight;
+              qt.ratingTally[idx].count++;
+              qt.ratingTally[idx].weight += responseWeight;
+            }
+          }
+        } else if (isNumeric && answer.numericValue != null) {
           numericValues.push({ value: Number(answer.numericValue), weight: responseWeight });
         } else if (qt.customTexts != null && answer.customValue != null) {
           qt.customTexts.push(typeof answer.customValue === "string" ? answer.customValue : JSON.stringify(answer.customValue));
         }
       }
 
-      if (NUMERIC_METHODS.has(q.methodType) && numericValues.length > 0) {
+      // Finalize rating mean scores
+      if (isRating) {
+        for (const entry of qt.ratingTally) {
+          entry.meanScore = entry.count > 0 ? entry.scoreSum / entry.count : null;
+          entry.weightedMeanScore = entry.weight > 0 ? entry.weightedScoreSum / entry.weight : null;
+        }
+      }
+
+      if (isNumeric && numericValues.length > 0) {
         const sorted = [...numericValues].sort((a, b) => a.value - b.value);
         const rawValues = sorted.map((entry) => entry.value);
         const totalWeight = sorted.reduce((sum, entry) => sum + Number(entry.weight || 0), 0);

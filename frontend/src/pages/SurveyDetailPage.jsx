@@ -127,6 +127,51 @@ function OptionTallyChart({ optionTallies, totalResponses, totalWeight = 0, weig
   );
 }
 
+function PointsAllocTallyChart({ pointsTally }) {
+  if (!pointsTally || pointsTally.length === 0) return <p className="muted">No responses yet.</p>;
+  const total = pointsTally.reduce((s, o) => s + o.totalPoints, 0);
+  const max = Math.max(...pointsTally.map((o) => o.totalPoints), 1);
+  return (
+    <div className="option-tally-list">
+      {pointsTally.map((opt) => (
+        <div key={opt.index} className="option-tally-row">
+          <span className="option-tally-label">{opt.label}</span>
+          <div className="option-tally-bar-wrap">
+            <div className="option-tally-bar" style={{ width: `${(opt.totalPoints / max) * 100}%` }} />
+          </div>
+          <div className="option-tally-stat">
+            <span className="option-tally-count">{opt.totalPoints} pts</span>
+          </div>
+          <span className="muted option-tally-percent">
+            {total > 0 ? `${((opt.totalPoints / total) * 100).toFixed(1)}%` : "—"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RatingTallyChart({ ratingTally }) {
+  if (!ratingTally || ratingTally.length === 0) return <p className="muted">No responses yet.</p>;
+  const maxScore = Math.max(...ratingTally.map((o) => o.meanScore ?? 0), 1);
+  return (
+    <div className="option-tally-list">
+      {ratingTally.map((opt) => (
+        <div key={opt.index} className="option-tally-row">
+          <span className="option-tally-label">{opt.label}</span>
+          <div className="option-tally-bar-wrap">
+            <div className="option-tally-bar" style={{ width: `${((opt.meanScore ?? 0) / maxScore) * 100}%` }} />
+          </div>
+          <div className="option-tally-stat">
+            <span className="option-tally-count">{opt.meanScore != null ? opt.meanScore.toFixed(2) : "—"}</span>
+            <span className="muted option-tally-subcount">{opt.count} ratings</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NumericTallyChart({ numericTally }) {
   if (!numericTally || numericTally.values.length === 0) return <p className="muted">No responses yet.</p>;
   const weighted = Boolean(numericTally.weighted);
@@ -163,27 +208,128 @@ function NumericTallyChart({ numericTally }) {
 
 function QuestionTallyCard({ qt, totalResponses, totalWeight }) {
   const label = methodLabel(qt.methodType);
-  const showOption = isChoiceOrRank(qt.methodType);
+  const showOption  = isChoiceOrRank(qt.methodType);
+  const showPoints  = isPointsAlloc(qt.methodType);
+  const showRating  = isRating(qt.methodType);
   const showNumeric = isNumericRange(qt.methodType);
   return (
     <div className="panel question-tally-card">
       <div className="question-tally-header">
         <p className="muted question-tally-method">{label}</p>
-        {qt.weighted ? <span className="question-tally-weight-badge">Weighted by stake</span> : null}
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {qt.required ? (
+            <span className="question-tally-weight-badge" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444", borderColor: "rgba(239,68,68,0.3)" }}>Required</span>
+          ) : null}
+          {qt.weighted ? <span className="question-tally-weight-badge">Weighted by stake</span> : null}
+        </div>
       </div>
       <h4>{qt.question}</h4>
-      {showOption   ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
-      {showNumeric  ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
+      {showOption  ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
+      {showPoints  ? <PointsAllocTallyChart pointsTally={qt.pointsTally} /> : null}
+      {showRating  ? <RatingTallyChart ratingTally={qt.ratingTally} /> : null}
+      {showNumeric ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
       {qt.customTexts?.length > 0 ? (
         <ul className="custom-text-list">
           {qt.customTexts.map((t, i) => <li key={i}>{t}</li>)}
         </ul>
+      ) : null}
+      {qt.abstainCount > 0 ? (
+        <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem" }}>
+          {qt.abstainCount} abstain{qt.abstainCount !== 1 ? "s" : ""}
+        </p>
       ) : null}
     </div>
   );
 }
 
 // ── Response form ────────────────────────────────────────────────────────────
+
+function PointsAllocInput({ question, value, onChange }) {
+  const budget = question.budget ?? 100;
+  const options = question.options ?? [];
+  const allocMap = useMemo(() => {
+    const m = {};
+    for (const [idx, pts] of (value?.pointsAllocation ?? [])) m[idx] = pts;
+    return m;
+  }, [value]);
+  const allocated = Object.values(allocMap).reduce((s, v) => s + Number(v || 0), 0);
+  const remaining = budget - allocated;
+
+  function setPoints(idx, pts) {
+    const next = { ...allocMap, [idx]: Math.max(0, Number(pts)) };
+    const tuples = Object.entries(next)
+      .filter(([, v]) => Number(v) > 0)
+      .map(([k, v]) => [Number(k), Number(v)]);
+    onChange({ pointsAllocation: tuples });
+  }
+
+  return (
+    <div className="question-input-points">
+      <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.4rem" }}>
+        Budget: {budget} points — <strong style={{ color: remaining < 0 ? "#ef4444" : "inherit" }}>{remaining} remaining</strong>
+      </p>
+      {options.map((opt, idx) => (
+        <div key={idx} className="points-alloc-row">
+          <span className="points-alloc-label">{opt}</span>
+          <input
+            type="number"
+            min={0}
+            max={budget}
+            value={allocMap[idx] ?? 0}
+            onChange={(e) => setPoints(idx, e.target.value)}
+            style={{ width: "80px" }}
+          />
+          <span className="muted" style={{ fontSize: "0.78rem" }}>pts</span>
+        </div>
+      ))}
+      {remaining < 0 ? (
+        <p style={{ color: "#ef4444", fontSize: "0.82rem", marginTop: "0.3rem" }}>
+          Over budget by {Math.abs(remaining)} points.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RatingInput({ question, value, onChange }) {
+  const [minR, maxR] = question.ratingScale ?? [1, 5];
+  const options = question.options ?? [];
+  const ratingsMap = useMemo(() => {
+    const m = {};
+    for (const [idx, score] of (value?.ratings ?? [])) m[idx] = score;
+    return m;
+  }, [value]);
+
+  function setScore(idx, score) {
+    const next = { ...ratingsMap, [idx]: Number(score) };
+    const tuples = Object.entries(next).map(([k, v]) => [Number(k), Number(v)]);
+    onChange({ ratings: tuples });
+  }
+
+  return (
+    <div className="question-input-rating">
+      {options.map((opt, idx) => {
+        const score = ratingsMap[idx] ?? minR;
+        return (
+          <div key={idx} className="rating-row">
+            <span className="rating-label">{opt}</span>
+            <input
+              type="range"
+              min={minR}
+              max={maxR}
+              step={1}
+              value={score}
+              onChange={(e) => setScore(idx, e.target.value)}
+              className="survey-range-input rating-range"
+            />
+            <strong className="rating-value">{score}</strong>
+          </div>
+        );
+      })}
+      <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>Scale: {minR}–{maxR}</p>
+    </div>
+  );
+}
 
 function QuestionInput({ question, value, onChange }) {
   const m = question.methodType;
@@ -294,6 +440,14 @@ function QuestionInput({ question, value, onChange }) {
     );
   }
 
+  if (isPointsAlloc(m)) {
+    return <PointsAllocInput question={question} value={value} onChange={onChange} />;
+  }
+
+  if (isRating(m)) {
+    return <RatingInput question={question} value={value} onChange={onChange} />;
+  }
+
   return <p className="muted" style={{ fontSize: "0.82rem" }}>Custom method — free response</p>;
 }
 
@@ -314,7 +468,11 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   const questions = survey.details?.questions ?? [];
   const answeredCount = questions.filter((q) => {
     const answer = answers[q.questionId];
-    return answer?.selection?.length > 0 || answer?.numericValue != null || answer?.customValue != null;
+    return answer?.selection?.length > 0
+      || answer?.numericValue != null
+      || answer?.customValue != null
+      || answer?.pointsAllocation?.length > 0
+      || answer?.ratings?.length > 0;
   }).length;
 
   const handleAnswer = useCallback((questionId, val) => {
@@ -343,6 +501,14 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
       if (isNumericRange(q.methodType)) {
         if (answer.numericValue == null) return [];
         return [[tag, questionIndex, answer.numericValue]];
+      }
+      if (isPointsAlloc(q.methodType)) {
+        if (!answer.pointsAllocation?.length) return [];
+        return [[tag, questionIndex, answer.pointsAllocation]];
+      }
+      if (isRating(q.methodType)) {
+        if (!answer.ratings?.length) return [];
+        return [[tag, questionIndex, answer.ratings]];
       }
       return [];
     });
@@ -411,6 +577,15 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
           ) : null}
           {isNumericRange(q.methodType) ? (
             <p className="muted question-hint">Move the slider to choose a value between {q.numericConstraints?.minValue ?? 0} and {q.numericConstraints?.maxValue ?? 100}.</p>
+          ) : null}
+          {isPointsAlloc(q.methodType) ? (
+            <p className="muted question-hint">Distribute {q.budget ?? 100} points among the options below.</p>
+          ) : null}
+          {isRating(q.methodType) ? (
+            <p className="muted question-hint">Rate each option on a scale of {q.ratingScale?.[0] ?? 1}–{q.ratingScale?.[1] ?? 5}.</p>
+          ) : null}
+          {q.required ? (
+            <p className="muted question-hint" style={{ color: "#ef4444" }}>Required</p>
           ) : null}
           <QuestionInput
             question={q}
@@ -514,6 +689,11 @@ export default function SurveyDetailPage() {
           </div>
           <h1 className="survey-hero-title">{details.title || "Survey"}</h1>
           {details.description ? <p className="muted survey-hero-description">{details.description}</p> : null}
+          {details.contentAnchor ? (
+            <a className="ext-link" href={details.contentAnchor} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+              Reference document ↗
+            </a>
+          ) : null}
         </div>
       </header>
 

@@ -46,30 +46,25 @@ function chunkText(str) {
 
 function encodeQuestion(q) {
   const prompt = chunkText(q.prompt);
+  const req = q.required === true ? [true] : [];
   switch (q.tag) {
     case Q_CUSTOM:
-      // [0, prompt, content_anchor]
+      // [0, prompt, content_anchor] — required not supported for custom
       return [Q_CUSTOM, prompt, q.contentAnchor ?? ""];
     case Q_SINGLE_CHOICE:
-      // [1, prompt, options, ?required]
-      return [Q_SINGLE_CHOICE, prompt, q.options.map(chunkText)];
+      return [Q_SINGLE_CHOICE, prompt, q.options.map(chunkText), ...req];
     case Q_MULTI_SELECT:
-      // [2, prompt, options, min_selections, max_selections, ?required]
-      return [Q_MULTI_SELECT, prompt, q.options.map(chunkText), q.minSelections ?? 0, q.maxSelections];
+      return [Q_MULTI_SELECT, prompt, q.options.map(chunkText), q.minSelections ?? 0, q.maxSelections, ...req];
     case Q_RANKING:
-      // [3, prompt, options, min_ranked, max_ranked, ?required]
-      return [Q_RANKING, prompt, q.options.map(chunkText), q.minRanked ?? 0, q.maxRanked ?? q.options.length];
+      return [Q_RANKING, prompt, q.options.map(chunkText), q.minRanked ?? 0, q.maxRanked ?? q.options.length, ...req];
     case Q_NUMERIC_RANGE: {
-      // [4, prompt, [min, max, ?step], ?required]
       const c = q.step != null ? [q.minValue, q.maxValue, q.step] : [q.minValue, q.maxValue];
-      return [Q_NUMERIC_RANGE, prompt, c];
+      return [Q_NUMERIC_RANGE, prompt, c, ...req];
     }
     case Q_POINTS_ALLOCATION:
-      // [5, prompt, options, budget, ?required]
-      return [Q_POINTS_ALLOCATION, prompt, q.options.map(chunkText), q.budget ?? 100];
+      return [Q_POINTS_ALLOCATION, prompt, q.options.map(chunkText), q.budget ?? 100, ...req];
     case Q_RATING:
-      // [6, prompt, options, rating_scale, ?required]
-      return [Q_RATING, prompt, q.options.map(chunkText), q.ratingScale ?? [1, 5]];
+      return [Q_RATING, prompt, q.options.map(chunkText), q.ratingScale ?? [1, 5], ...req];
     default:
       throw new Error(`Unsupported question type tag: ${q.tag}`);
   }

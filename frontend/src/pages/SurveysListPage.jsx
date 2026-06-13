@@ -109,7 +109,9 @@ export default function SurveysListPage() {
 
   const filtered = surveys.filter((s) => {
     if (roleFilter !== "All") {
-      const roles = Object.keys(s.details?.roleWeighting ?? {});
+      const roles = Array.isArray(s.details?.eligibleRoles)
+        ? s.details.eligibleRoles
+        : Object.keys(s.details?.roleWeighting ?? {});
       if (!roles.includes(roleFilter)) return false;
     }
     if (statusFilter !== "All") {
