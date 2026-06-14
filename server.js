@@ -6814,6 +6814,9 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
       const endEpoch        = def["5"];
       const submissionMode  = def["6"];
       const isTimelocked    = Array.isArray(submissionMode) && submissionMode[0] === 1;
+      // v4 sealed: [1, chain_hash_bytes, round, padding]  (indices 2 and 3)
+      const sealedDrandRound = isTimelocked ? (Number(submissionMode[2]) || null) : null;
+      const sealedPadding    = isTimelocked ? (Number(submissionMode[3]) || 256) : null;
       const questionsRaw    = def["7"];
       const contentAnchorRaw = def["8"] ?? null;
 
@@ -6835,7 +6838,7 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
       surveys.push({
         surveyTxId: txHash,
         surveyIndex,
-        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(contentAnchor ? { contentAnchor } : {}) },
+        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(sealedDrandRound != null ? { drandRound: sealedDrandRound, padding: sealedPadding } : {}), ...(contentAnchor ? { contentAnchor } : {}) },
         msg: null,
         slot: txInfo?.slot ?? null,
         blockTime: txInfo?.block_time ?? null,

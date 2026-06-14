@@ -1,5 +1,6 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { roundTime, defaultChainInfo } from "tlock-js";
 import { WalletContext } from "../context/WalletContext";
 import {
   buildAndSubmitSurveyCreation,
@@ -280,6 +281,59 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
   );
 }
 
+function SealedConfigPanel({ drandRound, padding, onRoundChange, onPaddingChange }) {
+  const revealDate = useMemo(() => {
+    const n = Number(drandRound);
+    if (!drandRound || isNaN(n) || n <= 0) return null;
+    try {
+      const ms = roundTime(defaultChainInfo, n);
+      return new Date(ms);
+    } catch {
+      return null;
+    }
+  }, [drandRound]);
+
+  const isPast = revealDate && revealDate < new Date();
+
+  return (
+    <div className="cs-sealed-panel">
+      <div className="cs-sealed-panel-grid">
+        <span className="cs-sealed-panel-key">chain</span>
+        <span className="cs-sealed-panel-val">drand quicknet</span>
+        <span className="cs-sealed-panel-key">round</span>
+        <div>
+          <input
+            className="cs-sealed-input"
+            type="text"
+            placeholder="e.g. 4827019"
+            value={drandRound}
+            onChange={(e) => onRoundChange(e.target.value)}
+          />
+          {revealDate ? (
+            <div style={{
+              fontSize: "0.68rem",
+              fontFamily: "'IBM Plex Mono', monospace",
+              marginTop: "4px",
+              color: isPast ? "var(--rose)" : "var(--mint)",
+            }}>
+              {isPast ? "⚠ " : "◎ "}
+              reveal {revealDate.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+              {isPast ? " (already passed)" : ""}
+            </div>
+          ) : null}
+        </div>
+        <span className="cs-sealed-panel-key">padding</span>
+        <input
+          className="cs-sealed-input"
+          type="text"
+          value={padding}
+          onChange={(e) => onPaddingChange(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
 function validate(form, currentEpoch) {
   const errors = [];
   if (!form.title.trim()) errors.push("Title is required.");
@@ -393,7 +447,7 @@ function buildPreviewPayload(form) {
     4: eligibleRoleInts,
     5: form.endEpoch,
     6: form.isTimelocked
-      ? [1, Number(form.drandRound) || 0, Number(form.padding) || 256]
+      ? [1, "<52db9b…e971>", Number(form.drandRound) || 0, Number(form.padding) || 256]
       : [0],
     7: questions,
   };
@@ -639,27 +693,12 @@ export default function CreateSurveyPage() {
               </div>
 
               {form.isTimelocked ? (
-                <div className="cs-sealed-panel">
-                  <div className="cs-sealed-panel-grid">
-                    <span className="cs-sealed-panel-key">chain</span>
-                    <span className="cs-sealed-panel-val">drand quicknet</span>
-                    <span className="cs-sealed-panel-key">round</span>
-                    <input
-                      className="cs-sealed-input"
-                      type="text"
-                      placeholder="e.g. 4827019"
-                      value={form.drandRound}
-                      onChange={(e) => setField("drandRound", e.target.value)}
-                    />
-                    <span className="cs-sealed-panel-key">padding</span>
-                    <input
-                      className="cs-sealed-input"
-                      type="text"
-                      value={form.padding}
-                      onChange={(e) => setField("padding", e.target.value)}
-                    />
-                  </div>
-                </div>
+                <SealedConfigPanel
+                  drandRound={form.drandRound}
+                  padding={form.padding}
+                  onRoundChange={(v) => setField("drandRound", v)}
+                  onPaddingChange={(v) => setField("padding", v)}
+                />
               ) : null}
             </div>
 

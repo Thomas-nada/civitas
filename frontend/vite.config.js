@@ -4,8 +4,15 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    target: "es2020",
+  },
+  optimizeDeps: {
+    esbuildOptions: { target: "es2020", supported: { bigint: true } },
+  },
   server: {
     proxy: {
+      "/api": { target: "http://localhost:8080", changeOrigin: false },
       "/ekklesia-proxy": {
         target: "https://hydra-voting.intersectmbo.org",
         changeOrigin: true,

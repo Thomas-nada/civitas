@@ -12,13 +12,15 @@
   "dependencies": {
     "@meshsdk/core": "^1.9.0-beta.100",
     "blakejs": "^1.2.1",
+    "drand-client": "^1.4.2",
     "drep-accountability-dashboard": "file:..",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.0",
     "recharts": "^2.15.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "tlock-js": "^0.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

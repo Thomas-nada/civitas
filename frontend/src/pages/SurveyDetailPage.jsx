@@ -526,7 +526,10 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
     setSubmitting(true);
     try {
       const surveyIndex = survey.surveyIndex ?? 0;
-      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers);
+      const sealOpts = isSealed && survey.details?.drandRound
+        ? { drandRound: survey.details.drandRound, padding: survey.details.padding ?? 256 }
+        : undefined;
+      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers, sealOpts);
       setSubmitted(true);
       onSubmitted?.(result.txId);
     } catch (err) {

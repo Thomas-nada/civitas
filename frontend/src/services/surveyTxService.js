@@ -6,9 +6,13 @@
  * Role eligibility replaces role weighting (no weighting in v4).
  */
 import { Transaction, resolvePaymentKeyHash } from "@meshsdk/core";
+import { timelockEncrypt, mainnetClient, Buffer as TlockBuffer } from "tlock-js";
 
 export const METADATA_LABEL = 80085; // TODO: revert to 17 after mainnet testing
 const SPEC_VERSION = 4;
+
+// drand quicknet mainnet chain hash (32 bytes)
+const QUICKNET_CHAIN_HASH_HEX = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
 
 export const ROLE_TO_INT = { DRep: 0, SPO: 1, CC: 2, Stakeholder: 3, Owner: 4 };
 
@@ -116,8 +120,8 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
     [4, eligibleRoleInts],
     [5, surveyForm.endEpoch],
     [6, surveyForm.isTimelocked
-      ? [1, surveyForm.drandRound ?? 0, surveyForm.padding ?? 256]
-      : [0]], // submission_mode: 0=public, 1=sealed (with drand round + padding)
+      ? [1, hexToBytes(QUICKNET_CHAIN_HASH_HEX), surveyForm.drandRound ?? 0, surveyForm.padding ?? 256]
+      : [0]], // submission_mode: 0=public, 1=[chain_hash, round, padding]=sealed
     [7, surveyForm.questions.map(encodeQuestion)],
     ...(surveyForm.contentAnchor?.trim() ? [[8, chunkText(surveyForm.contentAnchor.trim())]] : []),
   ]);
@@ -128,22 +132,42 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
 }
 
 /**
+ * Timelock-encrypt plaintext answers for a sealed survey.
+ * Serialises answers to JSON bytes, pads to paddingSize, encrypts with drand quicknet tlock,
+ * then returns the armored ciphertext chunked into ≤64-byte Uint8Arrays.
+ */
+async function sealAnswers(answers, drandRound, paddingSize) {
+  const encoder = new TextEncoder();
+  let plainBytes = encoder.encode(JSON.stringify(answers));
+
+  if (plainBytes.length < paddingSize) {
+    const padded = new Uint8Array(paddingSize);
+    padded.set(plainBytes);
+    plainBytes = padded;
+  }
+
+  const client = mainnetClient();
+  const armored = await timelockEncrypt(drandRound, TlockBuffer.from(plainBytes), client);
+
+  const cipherBytes = encoder.encode(armored);
+  const chunks = [];
+  for (let i = 0; i < cipherBytes.length; i += 64) {
+    chunks.push(cipherBytes.slice(i, i + 64));
+  }
+  return chunks;
+}
+
+/**
  * Build and submit a CIP-179 v4 survey response transaction.
- * @param {object} walletApi     - BrowserWallet instance
- * @param {string} surveyTxId    - Transaction hash of the survey definition
- * @param {number} surveyIndex   - Position of the survey in the definitions array
- * @param {string} responderRole - "DRep"|"SPO"|"CC"|"Stakeholder"|"Owner"
- * @param {Array}  answers       - v4 answer tuples: [tag, questionIndex, value]
- *   Custom:        [0, qi, any]
- *   Single-choice: [1, qi, optionIndex]
- *   Multi-select:  [2, qi, [optionIndices]]
- *   Ranking:       [3, qi, [rankedOptionIndices]]
- *   Numeric-range: [4, qi, intValue]
- *   Points-alloc:  [5, qi, [[optIdx, points], ...]]
- *   Rating:        [6, qi, [[optIdx, score], ...]]
+ * @param {object}  walletApi     - BrowserWallet instance
+ * @param {string}  surveyTxId   - Transaction hash of the survey definition
+ * @param {number}  surveyIndex  - Position of the survey in the definitions array
+ * @param {string}  responderRole - "DRep"|"SPO"|"CC"|"Stakeholder"|"Owner"
+ * @param {Array}   answers      - v4 answer tuples: [tag, questionIndex, value]
+ * @param {object}  [sealOpts]   - { drandRound: number, padding: number } for sealed surveys
  * @returns {Promise<{txId: string}>}
  */
-export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, surveyIndex, responderRole, answers) {
+export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, surveyIndex, responderRole, answers, sealOpts) {
   const changeAddress = await walletApi.getChangeAddress();
   const responderKeyHashHex = resolvePaymentKeyHash(changeAddress);
   const credential = [0, hexToBytes(responderKeyHashHex)];
@@ -152,14 +176,20 @@ export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, survey
   const roleInt = ROLE_TO_INT[responderRole];
   if (roleInt === undefined) throw new Error(`Unknown responder role: ${responderRole}`);
 
+  // For sealed surveys, key 4 is chunked_bytes (tlock ciphertext) instead of plaintext answers
+  let responseAnswers = answers;
+  if (sealOpts?.drandRound) {
+    responseAnswers = await sealAnswers(answers, sealOpts.drandRound, sealOpts.padding ?? 256);
+  }
+
   // v4 response: integer-keyed map
-  // Key 0: spec_version  Key 1: survey_ref  Key 2: role  Key 3: credential  Key 4: answers
+  // Key 0: spec_version  Key 1: survey_ref  Key 2: role  Key 3: credential  Key 4: answers/ciphertext
   const response = new Map([
     [0, SPEC_VERSION],
     [1, surveyRef],
     [2, roleInt],
     [3, credential],
-    [4, answers],
+    [4, responseAnswers],
   ]);
 
   // envelope: [tag=1 (responses), [response]]
