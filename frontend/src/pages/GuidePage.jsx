@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 
 const tocGroups = [
@@ -24,7 +24,9 @@ const tocGroups = [
       { id: "tool-drep-voting", label: "Voting as a DRep" },
       { id: "tool-drep-registration", label: "DRep Registration" },
       // { id: "tool-submit-actions", label: "Submit Actions" }, // hidden: WIP
-      { id: "tool-cc-cold-credentials", label: "CC Credentials" }
+      { id: "tool-cc-cold-credentials", label: "CC Credentials" },
+      { id: "tool-survey-create", label: "Creating a Survey" },
+      { id: "tool-survey-respond", label: "Responding to a Survey" }
     ]
   },
   {
@@ -590,7 +592,10 @@ export default function GuidePage() {
   });
   const [history, setHistory] = useState([]);
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
-  const [activeSection, setActiveSection] = useState("cardano-governance");
+  const [searchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState(
+    () => searchParams.get("section") ?? "cardano-governance"
+  );
   const [ccWizardTrack, setCcWizardTrack] = useState("individual");
   const [ccWizardStep, setCcWizardStep] = useState(0);
   const [ccCopyNotice, setCcCopyNotice] = useState("");
@@ -1605,6 +1610,188 @@ export default function GuidePage() {
                   ) : null}
                 </>
               )}
+            </div>
+          </section>
+        );
+
+      case "tool-survey-create":
+        return (
+          <section className="wiki-section panel">
+            <h2>Use Civitas: Creating a Survey</h2>
+            <p className="wiki-lead">
+              Surveys let DReps, SPOs, committee members, and ada holders gather on-chain sentiment
+              from the community. Each survey is a Cardano transaction — responses are permanent,
+              verifiable, and tied to real stake.
+            </p>
+
+            <h3>Before you start</h3>
+            <ul>
+              <li>Connect a Cardano wallet (top-right corner). Connecting is free.</li>
+              <li>Your wallet needs a small amount of ADA to cover the transaction fee when you publish — typically under 1 ADA.</li>
+              <li>Your wallet address must match at least one of the roles you target (DRep, SPO, CC Member, or Stakeholder).</li>
+            </ul>
+
+            <h3>Step 1 — Open the survey builder</h3>
+            <p>
+              Go to <strong>Surveys</strong> in the navigation bar and click <strong>Create Survey</strong>.
+              The form opens with a live JSON preview on the right so you can see exactly what will be submitted on-chain.
+            </p>
+
+            <h3>Step 2 — Fill in the basics</h3>
+            <ul>
+              <li><strong>Title</strong> — a short, clear name for the survey (max 80 characters).</li>
+              <li><strong>Description</strong> — explain what you are asking and why (optional but recommended).</li>
+              <li><strong>Content Anchor</strong> — optional URL to a full document (e.g. a GitHub page or IPFS link) if your survey needs more context than fits in the description.</li>
+            </ul>
+
+            <h3>Step 3 — Set the audience</h3>
+            <p>
+              Under <strong>Eligible Roles</strong>, tick every role that should be able to respond.
+              You can select any combination of DRep, SPO, Constitutional Committee Member, and Stakeholder.
+              At least one role is required.
+            </p>
+
+            <h3>Step 4 — Set the end epoch</h3>
+            <p>
+              Choose the Cardano epoch after which responses will no longer be accepted.
+              Each epoch lasts approximately five days.
+              Pick a number far enough in the future that respondents have time to participate.
+            </p>
+
+            <h3>Step 5 — Choose Public or Sealed</h3>
+            <p>By default surveys are <strong>Public</strong>: every response is readable on-chain the moment it is submitted.</p>
+            <p>
+              Switch to <strong>Sealed</strong> if you want responses to remain encrypted until a reveal date.
+              This prevents respondents from being influenced by earlier answers.
+            </p>
+            <p>When Sealed is active, a date-and-time picker appears:</p>
+            <ul>
+              <li>Pick the date and time you want responses to become readable.</li>
+              <li>Civitas automatically calculates the corresponding drand randomness-beacon round — you do not need to touch any numbers yourself.</li>
+              <li>The reveal time must be at least one hour in the future.</li>
+            </ul>
+            <p>
+              Sealed responses are encrypted with <strong>timelock encryption</strong> (via the drand quicknet beacon)
+              and cannot be decrypted by anyone — including you — until that beacon round is reached.
+            </p>
+
+            <h3>Step 6 — Add questions</h3>
+            <p>Click <strong>Add Question</strong> and choose a question type:</p>
+            <ul>
+              <li><strong>Single Choice</strong> — pick exactly one option from a list.</li>
+              <li><strong>Multi-Select</strong> — tick all that apply.</li>
+              <li><strong>Ranking</strong> — drag options into order of preference.</li>
+              <li><strong>Numeric Range</strong> — enter a number between a min and max you define.</li>
+              <li><strong>Points Allocation</strong> — distribute a fixed number of points across options.</li>
+              <li><strong>Rating</strong> — star or score rating up to a maximum you set.</li>
+              <li><strong>Custom</strong> — a plain text or numeric free-entry field.</li>
+            </ul>
+            <p>
+              Mark a question <strong>Required</strong> if respondents must answer it.
+              Optional questions can be skipped.
+            </p>
+
+            <h3>Step 7 — Review and publish</h3>
+            <p>
+              Check the live JSON preview on the right to confirm everything looks correct.
+              When you are satisfied, click <strong>Publish Survey</strong>.
+              Your wallet will prompt you to sign the transaction.
+              After confirmation, you will be redirected to your new survey page.
+            </p>
+
+            <div className="wiki-callout">
+              <strong>Tip:</strong> The survey is final once published — questions, roles, and the sealed/public mode cannot be edited after the transaction lands on-chain.
+              Double-check everything before signing.
+            </div>
+          </section>
+        );
+
+      case "tool-survey-respond":
+        return (
+          <section className="wiki-section panel">
+            <h2>Use Civitas: Responding to a Survey</h2>
+            <p className="wiki-lead">
+              Responding to a survey submits your answers as a Cardano transaction.
+              Your response is permanently tied to your wallet address and verifiable by anyone.
+            </p>
+
+            <h3>Before you start</h3>
+            <ul>
+              <li>Connect a Cardano wallet (top-right corner). Connecting is free.</li>
+              <li>Your wallet needs a small amount of ADA to cover the transaction fee when you submit — typically under 1 ADA.</li>
+              <li>Your address must be associated with one of the roles the survey accepts (DRep, SPO, CC Member, or Stakeholder).</li>
+              <li>The survey must still be within its active epoch.</li>
+            </ul>
+
+            <h3>Step 1 — Find an active survey</h3>
+            <p>
+              Go to <strong>Surveys</strong> in the navigation bar.
+              The list shows all on-chain surveys.
+              Active surveys (within their end epoch) will accept new responses.
+            </p>
+
+            <h3>Step 2 — Open the survey</h3>
+            <p>
+              Click a survey to open its detail page.
+              You will see the questions, a list of existing responses, and a <strong>Submit Response</strong> tab.
+            </p>
+
+            <h3>Step 3 — Select your role</h3>
+            <p>
+              In the response form, choose the role you are responding as.
+              Only roles the survey creator designated as eligible are available.
+            </p>
+
+            <h3>Step 4 — Answer the questions</h3>
+            <p>Work through each question in the form:</p>
+            <ul>
+              <li>Required questions must be answered before you can submit.</li>
+              <li>Optional questions show a <strong>Skip</strong> button — click it to dim and skip that question. Click again to un-skip.</li>
+              <li>Skipped questions are recorded as no-answer and do not count in result tallies.</li>
+            </ul>
+
+            <h3>Step 5 — Submit your response</h3>
+            <p>
+              Once all required questions are answered, click the submit button at the bottom of the form.
+            </p>
+
+            <div className="wiki-table-wrap" style={{ marginBottom: "1rem" }}>
+              <table className="wiki-table">
+                <thead>
+                  <tr><th>Survey type</th><th>Button label</th><th>What happens</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Public</td>
+                    <td><span className="mono">Submit Response</span></td>
+                    <td>Answers are written on-chain in plain form and are readable immediately.</td>
+                  </tr>
+                  <tr>
+                    <td>Sealed</td>
+                    <td><span className="mono">Seal &amp; Submit →</span></td>
+                    <td>Answers are timelock-encrypted on your device and stored as ciphertext on-chain. Nobody can read them until the reveal date passes.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Step 6 — Sign in your wallet</h3>
+            <p>
+              Your wallet will open a signing prompt.
+              Review the metadata in the transaction details if you wish, then confirm.
+              After the transaction is accepted, a confirmation banner appears at the top of the page.
+            </p>
+
+            <h3>After submitting</h3>
+            <ul>
+              <li>Your response appears in the <strong>Responses</strong> tab once the transaction is confirmed on-chain (usually within one to two minutes).</li>
+              <li>For sealed surveys, your response row will show encrypted ciphertext until the reveal date. After that date, responses become readable automatically — no action is required from you.</li>
+              <li>You can submit only one response per wallet address per survey.</li>
+            </ul>
+
+            <div className="wiki-callout">
+              <strong>Note:</strong> Civitas does not store your answers anywhere other than on-chain.
+              There is no server-side record of your response separate from the Cardano blockchain.
             </div>
           </section>
         );

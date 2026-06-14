@@ -555,6 +555,15 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
 
   return (
     <form onSubmit={handleSubmit}>
+      <div style={{ marginTop: "12px", marginBottom: "4px" }}>
+        <Link
+          to="/guide?section=tool-survey-respond"
+          className="inline-link"
+          style={{ fontSize: "0.78rem" }}
+        >
+          How to respond to a survey →
+        </Link>
+      </div>
       {/* Role selector as chip buttons */}
       <div style={{ marginTop: "16px" }}>
         <div className="sq-meta-cell-label" style={{ marginBottom: "8px" }}>Responding as</div>

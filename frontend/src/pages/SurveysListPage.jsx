@@ -86,6 +86,22 @@ export default function SurveysListPage() {
             <span className="mono" style={{ fontSize: "0.88em" }}>metadata label 17</span>{" "}
             (CIP-0179).
           </p>
+          <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+            <Link
+              to="/guide?section=tool-survey-create"
+              className="inline-link"
+              style={{ fontSize: "0.78rem" }}
+            >
+              How to create a survey →
+            </Link>
+            <Link
+              to="/guide?section=tool-survey-respond"
+              className="inline-link"
+              style={{ fontSize: "0.78rem" }}
+            >
+              How to respond →
+            </Link>
+          </div>
         </div>
         {walletApi ? (
           <Link to="/surveys/create" className="btn-primary">+ Create Survey</Link>
