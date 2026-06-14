@@ -50,7 +50,7 @@ function chunkText(str) {
 
 function encodeQuestion(q) {
   const prompt = chunkText(q.prompt);
-  const req = q.required === true ? [true] : [];
+  const req = q.required === true ? [1] : [];
   switch (q.tag) {
     case Q_CUSTOM:
       // [0, prompt, content_anchor] — required not supported for custom
@@ -112,19 +112,19 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
   // Key 0: spec_version  Key 1: owner  Key 2: title  Key 3: description
   // Key 4: eligible_roles  Key 5: end_epoch  Key 6: submission_mode  Key 7: questions
   // Key 8: content_anchor (optional URI)
-  const definition = new Map([
-    [0, SPEC_VERSION],
-    [1, owner],
-    [2, chunkText(surveyForm.title)],
-    [3, chunkText(surveyForm.description)],
-    [4, eligibleRoleInts],
-    [5, surveyForm.endEpoch],
-    [6, surveyForm.isTimelocked
+  const definition = {
+    "0": SPEC_VERSION,
+    "1": owner,
+    "2": chunkText(surveyForm.title),
+    "3": chunkText(surveyForm.description),
+    "4": eligibleRoleInts,
+    "5": surveyForm.endEpoch,
+    "6": surveyForm.isTimelocked
       ? [1, hexToBytes(QUICKNET_CHAIN_HASH_HEX), surveyForm.drandRound ?? 0, surveyForm.padding ?? 256]
-      : [0]], // submission_mode: 0=public, 1=[chain_hash, round, padding]=sealed
-    [7, surveyForm.questions.map(encodeQuestion)],
-    ...(surveyForm.contentAnchor?.trim() ? [[8, chunkText(surveyForm.contentAnchor.trim())]] : []),
-  ]);
+      : [0],
+    "7": surveyForm.questions.map(encodeQuestion),
+    ...(surveyForm.contentAnchor?.trim() ? { "8": chunkText(surveyForm.contentAnchor.trim()) } : {}),
+  };
 
   // envelope: [tag=0 (definitions), [definition]]
   const txHash = await buildAndSubmitMetadataTx(walletApi, [0, [definition]]);
@@ -184,13 +184,13 @@ export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, survey
 
   // v4 response: integer-keyed map
   // Key 0: spec_version  Key 1: survey_ref  Key 2: role  Key 3: credential  Key 4: answers/ciphertext
-  const response = new Map([
-    [0, SPEC_VERSION],
-    [1, surveyRef],
-    [2, roleInt],
-    [3, credential],
-    [4, responseAnswers],
-  ]);
+  const response = {
+    "0": SPEC_VERSION,
+    "1": surveyRef,
+    "2": roleInt,
+    "3": credential,
+    "4": responseAnswers,
+  };
 
   // envelope: [tag=1 (responses), [response]]
   const txHash = await buildAndSubmitMetadataTx(walletApi, [1, [response]]);
