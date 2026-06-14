@@ -6,6 +6,7 @@ import {
   Q_CUSTOM, Q_SINGLE_CHOICE, Q_MULTI_SELECT, Q_RANKING, Q_NUMERIC_RANGE,
   Q_POINTS_ALLOCATION, Q_RATING,
   ROLE_TO_INT,
+  METADATA_LABEL,
 } from "../services/surveyTxService";
 import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
 
@@ -391,7 +392,7 @@ function buildPreviewPayload(form) {
   };
   if (form.contentAnchor.trim()) definition[8] = form.contentAnchor.trim();
 
-  return { 17: [0, [definition]] };
+  return { [METADATA_LABEL]: [0, [definition]] };
 }
 
 export default function CreateSurveyPage() {
