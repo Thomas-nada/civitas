@@ -606,10 +606,11 @@ export default function CreateSurveyPage() {
                   onClick={() => setField("isTimelocked", false)}
                 >
                   <div className="cs-mode-card-label">
-                    <span>🔓</span> Public
+                    <span className="cs-mode-card-radio" />
+                    Public
                   </div>
                   <p className="cs-mode-card-desc">
-                    Responses are visible on-chain immediately after submission. Anyone can read the tally in real time.
+                    Responses visible on-chain immediately. Anyone can read the tally in real time.
                   </p>
                 </button>
                 <button
@@ -618,10 +619,11 @@ export default function CreateSurveyPage() {
                   onClick={() => setField("isTimelocked", true)}
                 >
                   <div className="cs-mode-card-label">
-                    <span>🔒</span> Sealed
+                    <span className="cs-mode-card-radio" />
+                    Sealed
                   </div>
                   <p className="cs-mode-card-desc">
-                    Survey is marked as timelocked on-chain. Responses require a compatible sealed-voting tool to submit.
+                    Marked as timelocked on-chain. Responses require a compatible sealed-voting tool.
                   </p>
                 </button>
               </div>
