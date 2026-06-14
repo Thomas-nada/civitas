@@ -7,7 +7,7 @@
  */
 import { Transaction, resolvePaymentKeyHash } from "@meshsdk/core";
 
-const METADATA_LABEL = 17;
+const METADATA_LABEL = 80085; // TODO: revert to 17 after mainnet testing
 const SPEC_VERSION = 4;
 
 export const ROLE_TO_INT = { DRep: 0, SPO: 1, CC: 2, Stakeholder: 3, Owner: 4 };
