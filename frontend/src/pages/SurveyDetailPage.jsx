@@ -462,6 +462,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
 
   const [responderRole, setResponderRole] = useState(defaultRole);
   const [answers, setAnswers] = useState({});
+  const [skipped, setSkipped] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -478,6 +479,10 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   const handleAnswer = useCallback((questionId, val) => {
     setAnswers((prev) => ({ ...prev, [questionId]: val }));
   }, []);
+
+  function toggleSkip(questionId) {
+    setSkipped((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -531,74 +536,135 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   }
 
   if (!walletApi) return null;
-  if (!isActive) return <p className="muted">This survey has ended.</p>;
-  if (submitted) return <p className="pill good" style={{ padding: "0.6rem 1rem" }}>Response submitted! It will appear once confirmed on-chain.</p>;
+  if (!isActive) return <p className="muted" style={{ marginTop: "16px" }}>This survey has ended.</p>;
+  if (submitted) {
+    return (
+      <div className="sq-responded-banner" style={{ marginTop: "16px" }}>
+        <div className="sq-responded-check">✓</div>
+        <div>
+          <div className="sq-responded-title">Response submitted!</div>
+          <div className="sq-responded-sub">It will appear in results once confirmed on-chain.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="response-form">
-      <div className="response-form-header">
-        <div>
-          <h3>Submit Your Response</h3>
-          <p className="muted response-form-intro">
-            Answer what matters to you. You can submit once now and update later with a newer on-chain response.
-          </p>
-        </div>
-        <div className="response-progress-pill">
-          {answeredCount}/{questions.length} answered
+    <form onSubmit={handleSubmit}>
+      {/* Role selector as chip buttons */}
+      <div style={{ marginTop: "16px" }}>
+        <div className="sq-meta-cell-label" style={{ marginBottom: "8px" }}>Responding as</div>
+        <div className="sq-role-select-row">
+          {roles.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={`sq-role-select-btn${responderRole === r ? " selected" : ""}`}
+              onClick={() => setResponderRole(r)}
+            >
+              <span style={{
+                width: 7, height: 7, borderRadius: "50%",
+                background: ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)",
+                display: "inline-block", flex: "0 0 auto",
+              }} />
+              {r}
+            </button>
+          ))}
         </div>
       </div>
 
-      <label className="response-role-label">
-        <span>Your role</span>
-        <select value={responderRole} onChange={(e) => setResponderRole(e.target.value)}>
-          {roles.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-      </label>
+      {/* Question cards */}
+      {questions.map((q, index) => {
+        const isSkipped = Boolean(skipped[q.questionId]);
+        return (
+          <div key={q.questionId} className="sq-qcard">
+            <div className="sq-qcard-header">
+              <div className="sq-qcard-left">
+                <span className="sq-qbadge">Q{index + 1}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="sq-qcard-meta-row">
+                    <span className="sq-qtype-label">{methodLabel(q.methodType)}</span>
+                    {q.required ? <span className="sq-required-badge">Required</span> : null}
+                  </div>
+                  <p className="sq-qprompt">{q.question}</p>
+                </div>
+              </div>
+              {!q.required ? (
+                <button
+                  type="button"
+                  className={`sq-skip-btn${isSkipped ? " skipped" : ""}`}
+                  onClick={() => toggleSkip(q.questionId)}
+                >
+                  {isSkipped ? "Unskip" : "Skip"}
+                </button>
+              ) : null}
+            </div>
 
-      {questions.map((q, index) => (
-        <section key={q.questionId} className="question-block">
-          <div className="question-header">
-            <span className="question-number">Question {index + 1}</span>
-            <span className="question-method-pill">{methodLabel(q.methodType)}</span>
+            {isSkipped ? (
+              <div className="sq-qbody">
+                <div className="sq-skipped-notice">
+                  <span>↩</span>
+                  <span>Skipping — won&apos;t be included in your response.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="sq-qbody">
+                {isMultiSelect(q.methodType) ? (
+                  <p className="sq-qhint">
+                    {q.minSelections > 0
+                      ? `Select ${q.minSelections}–${q.maxSelections ?? "∞"}.`
+                      : `Select up to ${q.maxSelections ?? "∞"}.`}
+                    {" "}Currently selected: {answers[q.questionId]?.selection?.length ?? 0}
+                  </p>
+                ) : null}
+                {isRanking(q.methodType) ? (
+                  <p className="sq-qhint">
+                    Click options in your preferred order (most preferred first).
+                    {q.maxRanked ? ` Rank up to ${q.maxRanked}.` : ""}
+                    {q.minRanked > 0 ? ` At least ${q.minRanked} required.` : ""}
+                  </p>
+                ) : null}
+                {isNumericRange(q.methodType) ? (
+                  <p className="sq-qhint">
+                    Move the slider to choose a value between{" "}
+                    {q.numericConstraints?.minValue ?? 0} and {q.numericConstraints?.maxValue ?? 100}.
+                  </p>
+                ) : null}
+                {isPointsAlloc(q.methodType) ? (
+                  <p className="sq-qhint">Distribute {q.budget ?? 100} points among the options below.</p>
+                ) : null}
+                {isRating(q.methodType) ? (
+                  <p className="sq-qhint">
+                    Rate each option on a scale of {q.ratingScale?.[0] ?? 1}–{q.ratingScale?.[1] ?? 5}.
+                  </p>
+                ) : null}
+                <QuestionInput
+                  question={q}
+                  value={answers[q.questionId]}
+                  onChange={(val) => handleAnswer(q.questionId, val)}
+                />
+              </div>
+            )}
           </div>
-          <p className="question-prompt">{q.question}</p>
-          {isMultiSelect(q.methodType) ? (
-            <p className="muted question-hint">
-              {q.minSelections > 0 ? `Select ${q.minSelections}–${q.maxSelections ?? "∞"}.` : `Select up to ${q.maxSelections ?? "∞"}.`}
-              {" "}Currently selected: {answers[q.questionId]?.selection?.length ?? 0}
-            </p>
-          ) : null}
-          {isRanking(q.methodType) ? (
-            <p className="muted question-hint">
-              Click options in your preferred order (most preferred first).
-              {q.maxRanked ? ` Rank up to ${q.maxRanked}.` : ""}
-              {q.minRanked > 0 ? ` At least ${q.minRanked} required.` : ""}
-            </p>
-          ) : null}
-          {isNumericRange(q.methodType) ? (
-            <p className="muted question-hint">Move the slider to choose a value between {q.numericConstraints?.minValue ?? 0} and {q.numericConstraints?.maxValue ?? 100}.</p>
-          ) : null}
-          {isPointsAlloc(q.methodType) ? (
-            <p className="muted question-hint">Distribute {q.budget ?? 100} points among the options below.</p>
-          ) : null}
-          {isRating(q.methodType) ? (
-            <p className="muted question-hint">Rate each option on a scale of {q.ratingScale?.[0] ?? 1}–{q.ratingScale?.[1] ?? 5}.</p>
-          ) : null}
-          {q.required ? (
-            <p className="muted question-hint" style={{ color: "#ef4444" }}>Required</p>
-          ) : null}
-          <QuestionInput
-            question={q}
-            value={answers[q.questionId]}
-            onChange={(val) => handleAnswer(q.questionId, val)}
-          />
-        </section>
-      ))}
+        );
+      })}
 
-      {submitError ? <p className="response-error">{submitError}</p> : null}
-      <button type="submit" className="btn-primary response-submit-btn" disabled={submitting}>
-        {submitting ? "Submitting…" : "Submit Response"}
-      </button>
+      {submitError ? (
+        <p style={{ marginTop: "14px", color: "var(--rose)", fontSize: "0.84rem" }}>{submitError}</p>
+      ) : null}
+
+      {/* Sticky submit bar */}
+      <div className="sq-sticky-bar">
+        <div className="sq-sticky-bar-inner">
+          <div style={{ flex: 1 }}>
+            <div className="sq-sticky-bar-label">{answeredCount} of {questions.length} answered</div>
+            <div className="sq-sticky-bar-sub">Responding as {responderRole}</div>
+          </div>
+          <button type="submit" className="btn-primary" disabled={submitting} style={{ whiteSpace: "nowrap" }}>
+            {submitting ? "Submitting…" : "Submit Response"}
+          </button>
+        </div>
+      </div>
     </form>
   );
 }
@@ -835,10 +901,43 @@ export default function SurveyDetailPage() {
 
       {/* Respond tab */}
       {tab === "respond" && walletApi ? (
-        <section className="panel">
+        <div className="sq-respond-shell">
+          <div className="sq-header-card">
+            <div className="sq-header-topline">
+              <span className={`sv-status-pill ${isActive ? "active" : "ended"}`}>
+                <span className="sv-status-dot" />
+                {isActive ? "Active" : "Ended"}
+              </span>
+              {roles.map((r) => {
+                const color = ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)";
+                return (
+                  <span key={r} className="pill" style={{ background: `${color}22`, borderColor: `${color}88`, color }}>
+                    {r}
+                  </span>
+                );
+              })}
+            </div>
+            <h2 className="sq-header-title">{details.title || "Survey"}</h2>
+            {details.description ? <p className="sq-header-desc">{details.description}</p> : null}
+            <div className="sq-meta-grid">
+              <div className="sq-meta-cell">
+                <div className="sq-meta-cell-label">Ends epoch</div>
+                <strong style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.92rem" }}>
+                  {details.endEpoch ?? "—"}
+                </strong>
+              </div>
+              <div className="sq-meta-cell">
+                <div className="sq-meta-cell-label">Questions</div>
+                <strong style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.92rem" }}>
+                  {questions.length}
+                </strong>
+              </div>
+            </div>
+          </div>
+
           {details.isTimelocked ? (
-            <div>
-              <h3>Sealed Survey</h3>
+            <div className="sq-qcard" style={{ marginTop: "16px" }}>
+              <h3 style={{ margin: "0 0 8px" }}>Sealed Survey</h3>
               <p className="muted">
                 This survey uses timelock encryption — responses are sealed until the reveal round.
                 Submission requires a compatible timelocked voting tool.
@@ -851,7 +950,7 @@ export default function SurveyDetailPage() {
               onSubmitted={() => { setTimeout(() => load(true), 3000); }}
             />
           )}
-        </section>
+        </div>
       ) : null}
     </main>
   );

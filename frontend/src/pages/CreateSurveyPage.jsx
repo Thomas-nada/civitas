@@ -84,25 +84,27 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
   }
 
   return (
-    <div className="question-editor-card">
-      <div className="question-editor-header">
-        <span className="muted" style={{ fontWeight: 600 }}>Question {index + 1}</span>
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+    <div className="cs-qeditor">
+      <div className="cs-qeditor-head">
+        <span className="cs-qeditor-badge">Q{index + 1}</span>
+        <span className="cs-qeditor-type-badge">{METHOD_LABELS[q.tag] ?? "Custom"}</span>
+        <div className="cs-qeditor-actions">
           <button
-            type="button" className="btn-ghost btn-sm" onClick={onMoveUp}
+            type="button" className="cs-icon-btn" onClick={onMoveUp}
             disabled={index === 0} title="Move up" aria-label="Move question up"
           >↑</button>
           <button
-            type="button" className="btn-ghost btn-sm" onClick={onMoveDown}
+            type="button" className="cs-icon-btn" onClick={onMoveDown}
             disabled={index === total - 1} title="Move down" aria-label="Move question down"
           >↓</button>
-          <button type="button" className="btn-ghost btn-sm" onClick={onRemove}
-            disabled={total <= 1} style={{ color: total > 1 ? "#ef4444" : undefined }}>
-            Remove
-          </button>
+          <button
+            type="button" className="cs-icon-btn danger" onClick={onRemove}
+            disabled={total <= 1}
+          >✕</button>
         </div>
       </div>
 
+      <div className="cs-qeditor-inner">
       <label>
         Question text
         <input
@@ -272,6 +274,7 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
           Required <span className="muted" style={{ fontSize: "0.8rem" }}>(response must answer this question)</span>
         </label>
       ) : null}
+      </div>{/* cs-qeditor-inner */}
     </div>
   );
 }
@@ -323,6 +326,7 @@ function buildSurveyForm(form) {
     contentAnchor: form.contentAnchor.trim() || undefined,
     endEpoch: form.endEpoch,
     eligibleRoles: form.eligibleRoles,
+    isTimelocked: form.isTimelocked,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
       if (q.required && q.tag !== Q_CUSTOM) base.required = true;
@@ -382,7 +386,7 @@ function buildPreviewPayload(form) {
     3: form.description,
     4: eligibleRoleInts,
     5: form.endEpoch,
-    6: [0],
+    6: form.isTimelocked ? [1] : [0],
     7: questions,
   };
   if (form.contentAnchor.trim()) definition[8] = form.contentAnchor.trim();
@@ -401,6 +405,7 @@ export default function CreateSurveyPage() {
     contentAnchor: "",
     endEpoch: 0,
     eligibleRoles: ["DRep"],
+    isTimelocked: false,
     questions: [newQuestion()],
   });
 
@@ -412,7 +417,6 @@ export default function CreateSurveyPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
 
   if (!walletApi) {
     return (
@@ -481,120 +485,218 @@ export default function CreateSurveyPage() {
     }
   }
 
+  const previewJson = JSON.stringify(buildPreviewPayload(form), null, 2);
+  const previewBytes = new TextEncoder().encode(previewJson).length;
+
   return (
     <main className="shell">
-      <header className="hero dashboard-header">
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
         <div>
           <Link className="muted back-link" to="/surveys">← All Surveys</Link>
           <h1>Create Survey</h1>
           <p className="muted">Build an on-chain poll recorded as Cardano metadata (label 17, CIP-0179 v4).</p>
         </div>
-      </header>
+      </div>
 
-      <form onSubmit={handleSubmit} className="create-survey-form">
-        {/* Basic info */}
-        <section className="panel">
-          <h2>Survey Details</h2>
-          <label>
-            Title
-            <input type="text" placeholder="e.g. Dijkstra hard-fork CIP shortlist"
-              value={form.title} onChange={(e) => setField("title", e.target.value)} required />
-          </label>
-          <label>
-            Description
-            <textarea rows={3} placeholder="Explain the purpose and context of this survey."
-              value={form.description} onChange={(e) => setField("description", e.target.value)} required />
-          </label>
-          <label>
-            Content anchor <span className="muted">(optional — URI linking to supporting document)</span>
-            <input
-              type="url"
-              placeholder="https://…"
-              value={form.contentAnchor}
-              onChange={(e) => setField("contentAnchor", e.target.value)}
-            />
-          </label>
-        </section>
+      <form onSubmit={handleSubmit}>
+        <div className="cs-layout">
+          {/* ── Left column: form sections ── */}
+          <div>
+            {/* 01 · Basics */}
+            <div className="cs-section">
+              <p className="cs-section-label">01 · Basics</p>
+              <label className="cs-field-label">
+                Title
+                <input
+                  className="cs-text-input"
+                  type="text"
+                  placeholder="e.g. Dijkstra hard-fork CIP shortlist"
+                  value={form.title}
+                  onChange={(e) => setField("title", e.target.value)}
+                  required
+                />
+              </label>
+              <div className="cs-section-divider" />
+              <label className="cs-field-label">
+                Description
+                <textarea
+                  className="cs-text-input"
+                  rows={3}
+                  placeholder="Explain the purpose and context of this survey."
+                  value={form.description}
+                  onChange={(e) => setField("description", e.target.value)}
+                  required
+                />
+              </label>
+              <div className="cs-section-divider" />
+              <label className="cs-field-label">
+                Content anchor <span className="muted" style={{ fontWeight: 400 }}>(optional — URI linking to supporting document)</span>
+                <input
+                  className="cs-text-input"
+                  type="url"
+                  placeholder="https://…"
+                  value={form.contentAnchor}
+                  onChange={(e) => setField("contentAnchor", e.target.value)}
+                />
+              </label>
+            </div>
 
-        {/* Eligible roles */}
-        <section className="panel">
-          <h2>Eligible Roles</h2>
-          <p className="muted" style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-            Select which roles may submit a response. Weighting and aggregation are determined by the consuming tool, not encoded on-chain.
-          </p>
-          <div className="role-weighting-grid">
-            {ALL_ROLES.map((role) => {
-              const checked = form.eligibleRoles.includes(role);
-              return (
-                <div key={role} className={`role-weighting-row${checked ? " checked" : ""}`}>
-                  <label className="role-check-label">
-                    <input type="checkbox" checked={checked} onChange={(e) => toggleRole(role, e.target.checked)} />
-                    <strong>{role}</strong>
-                  </label>
-                  {!checked ? (
-                    <span className="muted" style={{ fontSize: "0.82rem" }}>Not eligible</span>
-                  ) : null}
+            {/* 02 · Audience */}
+            <div className="cs-section">
+              <p className="cs-section-label">02 · Audience</p>
+              <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "12px", lineHeight: 1.5 }}>
+                Select which roles may submit a response. Weighting is determined by the consuming tool, not encoded on-chain.
+              </div>
+              <div className="cs-role-chips">
+                {ALL_ROLES.map((role) => {
+                  const selected = form.eligibleRoles.includes(role);
+                  const color = {
+                    DRep: "var(--mint)",
+                    SPO: "var(--amber)",
+                    CC: "#a78bfa",
+                    Stakeholder: "rgba(200,200,210,0.7)",
+                  }[role] ?? "var(--mint)";
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      className={`cs-role-chip${selected ? " selected" : ""}`}
+                      onClick={() => toggleRole(role, !selected)}
+                    >
+                      <span className="cs-role-chip-dot" style={{ background: color }} />
+                      {role}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 03 · Duration & Mode */}
+            <div className="cs-section">
+              <p className="cs-section-label">03 · Duration &amp; Mode</p>
+              <div className="cs-epoch-row">
+                <div>
+                  <label className="cs-field-label" style={{ marginBottom: "10px" }}>End epoch (inclusive)</label>
+                  <div className="cs-epoch-stepper">
+                    <button
+                      type="button"
+                      className="cs-epoch-btn"
+                      onClick={() => setField("endEpoch", Math.max((currentEpoch ?? 0) + 1, form.endEpoch - 1))}
+                    >−</button>
+                    <span className="cs-epoch-value">{form.endEpoch || "—"}</span>
+                    <button
+                      type="button"
+                      className="cs-epoch-btn"
+                      onClick={() => setField("endEpoch", form.endEpoch + 1)}
+                    >+</button>
+                  </div>
                 </div>
-              );
-            })}
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", alignSelf: "flex-end", paddingBottom: "6px" }}>
+                  {currentEpoch != null ? `Current epoch: ${currentEpoch}` : "Loading…"}
+                </div>
+              </div>
+
+              <div className="cs-section-divider" />
+
+              <label className="cs-field-label" style={{ marginBottom: "10px" }}>Response mode</label>
+              <div className="cs-mode-cards">
+                <button
+                  type="button"
+                  className={`cs-mode-card${!form.isTimelocked ? " selected" : ""}`}
+                  onClick={() => setField("isTimelocked", false)}
+                >
+                  <div className="cs-mode-card-label">
+                    <span>🔓</span> Public
+                  </div>
+                  <p className="cs-mode-card-desc">
+                    Responses are visible on-chain immediately after submission. Anyone can read the tally in real time.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className={`cs-mode-card${form.isTimelocked ? " selected" : ""}`}
+                  onClick={() => setField("isTimelocked", true)}
+                >
+                  <div className="cs-mode-card-label">
+                    <span>🔒</span> Sealed
+                  </div>
+                  <p className="cs-mode-card-desc">
+                    Survey is marked as timelocked on-chain. Responses require a compatible sealed-voting tool to submit.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* 04 · Questions */}
+            <div className="cs-section">
+              <p className="cs-section-label">04 · Questions</p>
+              {form.questions.map((q, i) => (
+                <QuestionEditor
+                  key={q.id}
+                  q={q}
+                  index={i}
+                  total={form.questions.length}
+                  onChange={(updated) => updateQuestion(i, updated)}
+                  onRemove={() => removeQuestion(i)}
+                  onMoveUp={() => moveQuestion(i, -1)}
+                  onMoveDown={() => moveQuestion(i, 1)}
+                />
+              ))}
+
+              <div className="cs-add-q-dashed">
+                <p className="cs-add-q-title">Add a question</p>
+                <div className="cs-q-type-grid">
+                  {Object.entries(METHOD_LABELS).map(([val, lbl]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      className="cs-q-type-btn"
+                      onClick={() => {
+                        const q = newQuestion();
+                        q.tag = Number(val);
+                        setField("questions", [...form.questions, q]);
+                      }}
+                    >
+                      + {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </section>
 
-        {/* End epoch */}
-        <section className="panel">
-          <h2>Duration</h2>
-          <label>
-            End epoch (inclusive)
-            <input type="number" min={(currentEpoch ?? 0) + 1}
-              value={form.endEpoch || ""} onChange={(e) => setField("endEpoch", Number(e.target.value))} />
-          </label>
-          <p className="muted" style={{ fontSize: "0.82rem" }}>
-            {currentEpoch != null ? `Current epoch: ${currentEpoch}` : "Loading current epoch…"}
-          </p>
-        </section>
+          {/* ── Right column: live preview + publish ── */}
+          <div style={{ position: "sticky", top: "80px" }}>
+            <div className="cs-preview-panel">
+              <div className="cs-preview-head">
+                <div className="cs-preview-dots">
+                  <span className="cs-preview-dot" style={{ background: "#ef4444" }} />
+                  <span className="cs-preview-dot" style={{ background: "#f59e0b" }} />
+                  <span className="cs-preview-dot" style={{ background: "#22c55e" }} />
+                </div>
+                <span className="cs-preview-lbl">CIP-0179 v4 · live preview</span>
+              </div>
+              <div className="cs-preview-body">
+                <pre>{previewJson}</pre>
+              </div>
+              <div className="cs-preview-foot">
+                <span>~{previewBytes} bytes</span>
+              </div>
+            </div>
 
-        {/* Questions */}
-        <section className="panel">
-          <h2>Questions</h2>
-          {form.questions.map((q, i) => (
-            <QuestionEditor
-              key={q.id}
-              q={q}
-              index={i}
-              total={form.questions.length}
-              onChange={(updated) => updateQuestion(i, updated)}
-              onRemove={() => removeQuestion(i)}
-              onMoveUp={() => moveQuestion(i, -1)}
-              onMoveDown={() => moveQuestion(i, 1)}
-            />
-          ))}
-          <button type="button" className="btn-ghost" onClick={addQuestion} style={{ marginTop: "0.5rem" }}>
-            + Add question
-          </button>
-        </section>
+            {errors.length > 0 ? (
+              <div className="cs-errors">
+                {errors.map((e, i) => <p key={i}>{e}</p>)}
+              </div>
+            ) : null}
 
-        {/* Metadata preview */}
-        <section className="panel">
-          <button type="button" className="btn-ghost" onClick={() => setPreviewOpen((o) => !o)}>
-            {previewOpen ? "Hide" : "Preview"} on-chain format (CIP-0179 v4)
-          </button>
-          {previewOpen ? (
-            <pre className="metadata-preview">{JSON.stringify(buildPreviewPayload(form), null, 2)}</pre>
-          ) : null}
-        </section>
-
-        {/* Errors */}
-        {errors.length > 0 ? (
-          <section className="panel" style={{ borderLeft: "3px solid #ef4444" }}>
-            {errors.map((e, i) => <p key={i} style={{ color: "#ef4444" }}>{e}</p>)}
-          </section>
-        ) : null}
-
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-          <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? "Submitting transaction…" : "Create Survey"}
-          </button>
-          <Link to="/surveys" className="btn-ghost">Cancel</Link>
+            <button type="submit" className="cs-publish-btn" disabled={submitting}>
+              {submitting ? "Submitting transaction…" : "Publish Survey"}
+            </button>
+            <div style={{ textAlign: "center", marginTop: "10px" }}>
+              <Link to="/surveys" className="muted" style={{ fontSize: "0.82rem" }}>Cancel</Link>
+            </div>
+          </div>
         </div>
       </form>
     </main>

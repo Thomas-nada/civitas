@@ -16,70 +16,21 @@ const ROLE_COLORS = {
   Stakeholder: "rgba(200,200,210,0.6)",
 };
 
-function RolePill({ role }) {
-  const color = ROLE_COLORS[role] || "rgba(200,200,210,0.5)";
+const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
+
+function StatusPill({ isActive }) {
   return (
-    <span className="pill" style={{ background: `${color}22`, borderColor: `${color}88`, color }}>
-      {role}
+    <span className={`sv-status-pill ${isActive ? "active" : "ended"}`}>
+      <span className="sv-status-dot" />
+      {isActive ? "Active" : "Ended"}
     </span>
   );
 }
 
-function SurveyCard({ survey, currentEpoch }) {
-  const isActive = currentEpoch != null && survey.details?.endEpoch != null
-    ? currentEpoch <= survey.details.endEpoch
-    : true;
-  // Support v4 (eligibleRoles[]) and legacy v2/v3 (roleWeighting{})
-  const roles = Array.isArray(survey.details?.eligibleRoles)
-    ? survey.details.eligibleRoles
-    : Object.keys(survey.details?.roleWeighting ?? {});
-  const questionCount = survey.details?.questions?.length ?? 0;
-
-  return (
-    <article className="panel survey-card">
-      <div className="survey-card-header">
-        <div className="survey-card-status">
-          <span className={`pill ${isActive ? "good" : "muted-pill"}`}>
-            {isActive ? "Active" : "Ended"}
-          </span>
-          <span className="muted" style={{ fontSize: "0.8rem" }}>
-            Epoch {survey.details?.endEpoch ?? "?"}
-          </span>
-        </div>
-        <div className="survey-card-roles">
-          {roles.map((r) => <RolePill key={r} role={r} />)}
-        </div>
-      </div>
-
-      <h3 className="survey-card-title">
-        <Link className="inline-link" to={`/surveys/${survey.surveyTxId}`}>
-          {survey.details?.title || "Untitled Survey"}
-        </Link>
-      </h3>
-
-      {survey.details?.description ? (
-        <p className="muted survey-card-desc">
-          {survey.details.description.length > 200
-            ? survey.details.description.slice(0, 200) + "…"
-            : survey.details.description}
-        </p>
-      ) : null}
-
-      <div className="survey-card-meta">
-        <span className="muted">{questionCount} question{questionCount !== 1 ? "s" : ""}</span>
-        <span className="muted">Created {fmtDate(survey.blockTime)}</span>
-        <Link className="btn-sm" to={`/surveys/${survey.surveyTxId}`}>View Results →</Link>
-      </div>
-    </article>
-  );
-}
-
-const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
-
 export default function SurveysListPage() {
   useSeoMeta({
     title: "Governance Surveys",
-    description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power."
+    description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power.",
   });
   const { walletApi } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
@@ -115,9 +66,10 @@ export default function SurveysListPage() {
       if (!roles.includes(roleFilter)) return false;
     }
     if (statusFilter !== "All") {
-      const isActive = currentEpoch != null && s.details?.endEpoch != null
-        ? currentEpoch <= s.details.endEpoch
-        : true;
+      const isActive =
+        currentEpoch != null && s.details?.endEpoch != null
+          ? currentEpoch <= s.details.endEpoch
+          : true;
       if (statusFilter === "Active" && !isActive) return false;
       if (statusFilter === "Ended" && isActive) return false;
     }
@@ -126,73 +78,137 @@ export default function SurveysListPage() {
 
   return (
     <main className="shell">
-      <header className="hero dashboard-header">
+      <div className="sv-page-header">
         <div>
           <h1>On-Chain Surveys</h1>
           <p className="muted">
-            Community polls and governance surveys recorded on Cardano via{" "}
+            Community polls recorded on Cardano via{" "}
             <span className="mono" style={{ fontSize: "0.88em" }}>metadata label 17</span>{" "}
             (CIP-0179).
           </p>
         </div>
         {walletApi ? (
-          <Link to="/surveys/create" className="btn-primary">
-            + Create Survey
-          </Link>
+          <Link to="/surveys/create" className="btn-primary">+ Create Survey</Link>
         ) : null}
-      </header>
+      </div>
 
-      {/* Filters */}
-      <section className="controls dashboard-controls">
-        <label>
-          Role
-          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-            <option value="All">All roles</option>
-            {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </label>
-        <label>
-          Status
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="All">All statuses</option>
-            <option value="Active">Active</option>
-            <option value="Ended">Ended</option>
-          </select>
-        </label>
-      </section>
+      {/* Filter chips */}
+      <div className="sv-table-filters">
+        <div className="sv-filter-chips">
+          {["All", "Active", "Ended"].map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`sv-filter-chip${statusFilter === s ? " active" : ""}`}
+              onClick={() => setStatusFilter(s)}
+            >
+              {s === "All" ? "All statuses" : s}
+            </button>
+          ))}
+        </div>
+        <div className="sv-filter-divider" />
+        <div className="sv-filter-chips">
+          <button
+            type="button"
+            className={`sv-filter-chip${roleFilter === "All" ? " active" : ""}`}
+            onClick={() => setRoleFilter("All")}
+          >
+            All roles
+          </button>
+          {ALL_ROLES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={`sv-filter-chip${roleFilter === r ? " active" : ""}`}
+              onClick={() => setRoleFilter(r)}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error ? (
-        <section className="status-row">
-          <p className="muted">Error: {error}</p>
-        </section>
+        <p className="muted" style={{ marginTop: "0.75rem" }}>Error: {error}</p>
       ) : null}
 
-      {loading ? (
-        <section className="status-row">
-          <p className="muted">Loading surveys…</p>
-        </section>
-      ) : null}
+      <div className="sv-table-wrap">
+        <div className="sv-table-scroll">
+          <div className="sv-table-inner">
+            <div className="sv-table-head">
+              <span>Status</span>
+              <span>Survey</span>
+              <span style={{ textAlign: "center" }}>Qs</span>
+              <span>Roles</span>
+              <span style={{ textAlign: "right" }}>Ends</span>
+            </div>
 
-      {!loading && filtered.length === 0 ? (
-        <section className="status-row">
-          <p className="muted">
-            {surveys.length === 0
-              ? "No surveys found on-chain yet."
-              : "No surveys match the current filters."}
-          </p>
-          {!walletApi ? (
-            <p className="muted" style={{ marginTop: "0.5rem" }}>
-              Connect your wallet to create the first survey.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+            {loading ? (
+              <p className="sv-empty-row muted">Loading surveys…</p>
+            ) : filtered.length === 0 ? (
+              <p className="sv-empty-row muted">
+                {surveys.length === 0
+                  ? "No surveys found on-chain yet."
+                  : "No surveys match the current filters."}
+              </p>
+            ) : (
+              filtered.map((s) => {
+                const isActive =
+                  currentEpoch != null && s.details?.endEpoch != null
+                    ? currentEpoch <= s.details.endEpoch
+                    : true;
+                const roles = Array.isArray(s.details?.eligibleRoles)
+                  ? s.details.eligibleRoles
+                  : Object.keys(s.details?.roleWeighting ?? {});
+                const questionCount = s.details?.questions?.length ?? 0;
 
-      {!loading && filtered.length > 0 ? (
-        <section className="survey-list">
-          {filtered.map((s) => <SurveyCard key={s.surveyTxId} survey={s} currentEpoch={currentEpoch} />)}
-        </section>
-      ) : null}
+                return (
+                  <Link
+                    key={s.surveyTxId}
+                    className="sv-table-row"
+                    to={`/surveys/${s.surveyTxId}`}
+                  >
+                    <div>
+                      <StatusPill isActive={isActive} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="sv-survey-name">
+                        {s.details?.title || "Untitled Survey"}
+                      </div>
+                      {s.details?.description ? (
+                        <div className="sv-survey-desc-row">{s.details.description}</div>
+                      ) : null}
+                    </div>
+                    <div className="sv-q-count">{questionCount}</div>
+                    <div className="sv-role-chips">
+                      {roles.map((r) => {
+                        const color = ROLE_COLORS[r] || "rgba(200,200,210,0.5)";
+                        return (
+                          <span
+                            key={r}
+                            className="sv-role-chip"
+                            style={{
+                              color,
+                              borderColor: `${color}88`,
+                              background: `${color}18`,
+                            }}
+                          >
+                            {r}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="sv-ends-cell">
+                      <div className="sv-ends-epoch">Epoch {s.details?.endEpoch ?? "?"}</div>
+                      <div className="sv-ends-sub">{fmtDate(s.blockTime)}</div>
+                    </div>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

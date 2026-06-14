@@ -115,7 +115,7 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
     [3, chunkText(surveyForm.description)],
     [4, eligibleRoleInts],
     [5, surveyForm.endEpoch],
-    [6, [0]], // submission_mode: public
+    [6, surveyForm.isTimelocked ? [1] : [0]], // submission_mode: 0=public 1=sealed
     [7, surveyForm.questions.map(encodeQuestion)],
     ...(surveyForm.contentAnchor?.trim() ? [[8, chunkText(surveyForm.contentAnchor.trim())]] : []),
   ]);
