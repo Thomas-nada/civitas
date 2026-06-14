@@ -299,10 +299,15 @@ function SealedConfigPanel({ revealDateTime, onChange }) {
     return d.toISOString().slice(0, 16);
   }, []);
 
+  const tzLabel = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   return (
     <div className="cs-sealed-panel">
       <label className="cs-field-label" style={{ marginBottom: "8px" }}>
-        Reveal responses after
+        Reveal responses after{" "}
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.75em", color: "var(--text-muted)", fontWeight: 400 }}>
+          ({tzLabel})
+        </span>
       </label>
       <input
         className="cs-text-input cs-datetime-input"
