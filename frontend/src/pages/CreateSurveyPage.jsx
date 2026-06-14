@@ -286,6 +286,9 @@ function validate(form, currentEpoch) {
   if (!form.description.trim()) errors.push("Description is required.");
   if (currentEpoch != null && form.endEpoch <= currentEpoch) errors.push("End epoch must be in the future.");
   if (form.eligibleRoles.length === 0) errors.push("Select at least one eligible role.");
+  if (form.isTimelocked && (!form.drandRound || isNaN(Number(form.drandRound)))) {
+    errors.push("Sealed mode requires a valid drand round number.");
+  }
   if (form.questions.length === 0) errors.push("Add at least one question.");
   if (form.contentAnchor.trim() && !/^https?:\/\/.+/.test(form.contentAnchor.trim())) {
     errors.push("Survey content anchor must be a valid http(s) URL.");
@@ -328,6 +331,8 @@ function buildSurveyForm(form) {
     endEpoch: form.endEpoch,
     eligibleRoles: form.eligibleRoles,
     isTimelocked: form.isTimelocked,
+    drandRound: form.isTimelocked && form.drandRound ? Number(form.drandRound) : undefined,
+    padding: form.isTimelocked ? Number(form.padding) || 256 : undefined,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
       if (q.required && q.tag !== Q_CUSTOM) base.required = true;
@@ -387,7 +392,9 @@ function buildPreviewPayload(form) {
     3: form.description,
     4: eligibleRoleInts,
     5: form.endEpoch,
-    6: form.isTimelocked ? [1] : [0],
+    6: form.isTimelocked
+      ? [1, Number(form.drandRound) || 0, Number(form.padding) || 256]
+      : [0],
     7: questions,
   };
   if (form.contentAnchor.trim()) definition[8] = form.contentAnchor.trim();
@@ -407,6 +414,8 @@ export default function CreateSurveyPage() {
     endEpoch: 0,
     eligibleRoles: ["DRep"],
     isTimelocked: false,
+    drandRound: "",
+    padding: "256",
     questions: [newQuestion()],
   });
 
@@ -628,6 +637,30 @@ export default function CreateSurveyPage() {
                   </p>
                 </button>
               </div>
+
+              {form.isTimelocked ? (
+                <div className="cs-sealed-panel">
+                  <div className="cs-sealed-panel-grid">
+                    <span className="cs-sealed-panel-key">chain</span>
+                    <span className="cs-sealed-panel-val">drand quicknet</span>
+                    <span className="cs-sealed-panel-key">round</span>
+                    <input
+                      className="cs-sealed-input"
+                      type="text"
+                      placeholder="e.g. 4827019"
+                      value={form.drandRound}
+                      onChange={(e) => setField("drandRound", e.target.value)}
+                    />
+                    <span className="cs-sealed-panel-key">padding</span>
+                    <input
+                      className="cs-sealed-input"
+                      type="text"
+                      value={form.padding}
+                      onChange={(e) => setField("padding", e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* 04 · Questions */}

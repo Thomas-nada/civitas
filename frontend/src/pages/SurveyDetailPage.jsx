@@ -453,6 +453,7 @@ function QuestionInput({ question, value, onChange }) {
 
 function ResponseForm({ survey, isActive, onSubmitted }) {
   const { walletApi, walletDrep } = useContext(WalletContext);
+  const isSealed = Boolean(survey.details?.isTimelocked);
   const roles = getSurveyRoles(survey.details);
 
   const defaultRole = useMemo(() => {
@@ -600,16 +601,8 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
               ) : null}
             </div>
 
-            {isSkipped ? (
-              <div className="sq-qbody">
-                <div className="sq-skipped-notice">
-                  <span>↩</span>
-                  <span>Skipping — won&apos;t be included in your response.</span>
-                </div>
-              </div>
-            ) : (
-              <div className="sq-qbody">
-                {isMultiSelect(q.methodType) ? (
+            <div className={`sq-qbody${isSkipped ? " skipped" : ""}`}>
+              {isMultiSelect(q.methodType) ? (
                   <p className="sq-qhint">
                     {q.minSelections > 0
                       ? `Select ${q.minSelections}–${q.maxSelections ?? "∞"}.`
@@ -644,7 +637,6 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
                   onChange={(val) => handleAnswer(q.questionId, val)}
                 />
               </div>
-            )}
           </div>
         );
       })}
@@ -659,9 +651,15 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
           <div style={{ flex: 1 }}>
             <div className="sq-sticky-bar-label">{answeredCount} of {questions.length} answered</div>
             <div className="sq-sticky-bar-sub">Responding as {responderRole}</div>
+            {isSealed ? (
+              <div className="sq-sticky-bar-sealed">
+                <span>◆</span>
+                <span>sealed survey · responses visible at reveal</span>
+              </div>
+            ) : null}
           </div>
           <button type="submit" className="btn-primary" disabled={submitting} style={{ whiteSpace: "nowrap" }}>
-            {submitting ? "Submitting…" : "Submit Response"}
+            {submitting ? "Submitting…" : isSealed ? "Seal & Submit →" : "Submit Response"}
           </button>
         </div>
       </div>
@@ -935,21 +933,11 @@ export default function SurveyDetailPage() {
             </div>
           </div>
 
-          {details.isTimelocked ? (
-            <div className="sq-qcard" style={{ marginTop: "16px" }}>
-              <h3 style={{ margin: "0 0 8px" }}>Sealed Survey</h3>
-              <p className="muted">
-                This survey uses timelock encryption — responses are sealed until the reveal round.
-                Submission requires a compatible timelocked voting tool.
-              </p>
-            </div>
-          ) : (
-            <ResponseForm
-              survey={survey}
-              isActive={isActive}
-              onSubmitted={() => { setTimeout(() => load(true), 3000); }}
-            />
-          )}
+          <ResponseForm
+            survey={survey}
+            isActive={isActive}
+            onSubmitted={() => { setTimeout(() => load(true), 3000); }}
+          />
         </div>
       ) : null}
     </main>
