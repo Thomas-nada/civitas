@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { roundTime, defaultChainInfo } from "tlock-js";
+import { roundAt, defaultChainInfo } from "tlock-js";
 import { WalletContext } from "../context/WalletContext";
 import {
   buildAndSubmitSurveyCreation,
@@ -281,55 +281,53 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
   );
 }
 
-function SealedConfigPanel({ drandRound, padding, onRoundChange, onPaddingChange }) {
-  const revealDate = useMemo(() => {
-    const n = Number(drandRound);
-    if (!drandRound || isNaN(n) || n <= 0) return null;
+function SealedConfigPanel({ revealDateTime, onChange }) {
+  const { round, isPast } = useMemo(() => {
+    if (!revealDateTime) return { round: null, isPast: false };
     try {
-      const ms = roundTime(defaultChainInfo, n);
-      return new Date(ms);
+      const ms = new Date(revealDateTime).getTime();
+      const r = roundAt(ms, defaultChainInfo);
+      return { round: r, isPast: ms < Date.now() };
     } catch {
-      return null;
+      return { round: null, isPast: false };
     }
-  }, [drandRound]);
+  }, [revealDateTime]);
 
-  const isPast = revealDate && revealDate < new Date();
+  // Default min = now + 1 hour
+  const minDateTime = useMemo(() => {
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    return d.toISOString().slice(0, 16);
+  }, []);
 
   return (
     <div className="cs-sealed-panel">
-      <div className="cs-sealed-panel-grid">
-        <span className="cs-sealed-panel-key">chain</span>
-        <span className="cs-sealed-panel-val">drand quicknet</span>
-        <span className="cs-sealed-panel-key">round</span>
-        <div>
-          <input
-            className="cs-sealed-input"
-            type="text"
-            placeholder="e.g. 4827019"
-            value={drandRound}
-            onChange={(e) => onRoundChange(e.target.value)}
-          />
-          {revealDate ? (
-            <div style={{
-              fontSize: "0.68rem",
-              fontFamily: "'IBM Plex Mono', monospace",
-              marginTop: "4px",
-              color: isPast ? "var(--rose)" : "var(--mint)",
-            }}>
-              {isPast ? "⚠ " : "◎ "}
-              reveal {revealDate.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-              {isPast ? " (already passed)" : ""}
-            </div>
-          ) : null}
+      <label className="cs-field-label" style={{ marginBottom: "8px" }}>
+        Reveal responses after
+      </label>
+      <input
+        className="cs-text-input cs-datetime-input"
+        type="datetime-local"
+        min={minDateTime}
+        value={revealDateTime}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {revealDateTime ? (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          marginTop: "8px",
+          fontSize: "0.75rem",
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: isPast ? "var(--rose)" : "var(--mint)",
+        }}>
+          {isPast ? "⚠ date is in the past" : round ? `◆ sealed until this date · drand round ${round.toLocaleString()}` : null}
         </div>
-        <span className="cs-sealed-panel-key">padding</span>
-        <input
-          className="cs-sealed-input"
-          type="text"
-          value={padding}
-          onChange={(e) => onPaddingChange(e.target.value)}
-        />
-      </div>
+      ) : (
+        <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "6px" }}>
+          Responses will be unreadable on-chain until this moment passes.
+        </p>
+      )}
     </div>
   );
 }
@@ -340,8 +338,11 @@ function validate(form, currentEpoch) {
   if (!form.description.trim()) errors.push("Description is required.");
   if (currentEpoch != null && form.endEpoch <= currentEpoch) errors.push("End epoch must be in the future.");
   if (form.eligibleRoles.length === 0) errors.push("Select at least one eligible role.");
-  if (form.isTimelocked && (!form.drandRound || isNaN(Number(form.drandRound)))) {
-    errors.push("Sealed mode requires a valid drand round number.");
+  if (form.isTimelocked && !form.revealDateTime) {
+    errors.push("Sealed mode requires a reveal date and time.");
+  }
+  if (form.isTimelocked && form.revealDateTime && new Date(form.revealDateTime) <= new Date()) {
+    errors.push("Reveal date must be in the future.");
   }
   if (form.questions.length === 0) errors.push("Add at least one question.");
   if (form.contentAnchor.trim() && !/^https?:\/\/.+/.test(form.contentAnchor.trim())) {
@@ -385,8 +386,10 @@ function buildSurveyForm(form) {
     endEpoch: form.endEpoch,
     eligibleRoles: form.eligibleRoles,
     isTimelocked: form.isTimelocked,
-    drandRound: form.isTimelocked && form.drandRound ? Number(form.drandRound) : undefined,
-    padding: form.isTimelocked ? Number(form.padding) || 256 : undefined,
+    drandRound: form.isTimelocked && form.revealDateTime
+      ? roundAt(new Date(form.revealDateTime).getTime(), defaultChainInfo)
+      : undefined,
+    padding: form.isTimelocked ? 256 : undefined,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
       if (q.required && q.tag !== Q_CUSTOM) base.required = true;
@@ -447,7 +450,11 @@ function buildPreviewPayload(form) {
     4: eligibleRoleInts,
     5: form.endEpoch,
     6: form.isTimelocked
-      ? [1, "<52db9b…e971>", Number(form.drandRound) || 0, Number(form.padding) || 256]
+      ? [1, "<52db9b…e971>",
+          form.revealDateTime
+            ? roundAt(new Date(form.revealDateTime).getTime(), defaultChainInfo)
+            : 0,
+          256]
       : [0],
     7: questions,
   };
@@ -468,8 +475,7 @@ export default function CreateSurveyPage() {
     endEpoch: 0,
     eligibleRoles: ["DRep"],
     isTimelocked: false,
-    drandRound: "",
-    padding: "256",
+    revealDateTime: "",
     questions: [newQuestion()],
   });
 
@@ -694,10 +700,8 @@ export default function CreateSurveyPage() {
 
               {form.isTimelocked ? (
                 <SealedConfigPanel
-                  drandRound={form.drandRound}
-                  padding={form.padding}
-                  onRoundChange={(v) => setField("drandRound", v)}
-                  onPaddingChange={(v) => setField("padding", v)}
+                  revealDateTime={form.revealDateTime}
+                  onChange={(v) => setField("revealDateTime", v)}
                 />
               ) : null}
             </div>

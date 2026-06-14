@@ -8204,6 +8204,10 @@ textarea.cs-text-input {
   border-color: var(--amber);
 }
 
+.cs-datetime-input {
+  color-scheme: dark;
+}
+
 .cs-info-box-icon {
   width: 18px;
   height: 18px;
