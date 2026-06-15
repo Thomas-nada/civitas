@@ -9,7 +9,7 @@ import { Transaction, resolvePaymentKeyHash } from "@meshsdk/core";
 import { timelockEncrypt, mainnetClient, Buffer as TlockBuffer } from "tlock-js";
 import blakejs from "blakejs";
 
-export const METADATA_LABEL = 80085; // TODO: revert to 17 after mainnet testing
+export const METADATA_LABEL = 17; // CIP-0179 reserved metadata label
 const SPEC_VERSION = 4;
 
 // drand quicknet mainnet chain hash (32 bytes)
@@ -87,7 +87,8 @@ function encodeQuestion(q) {
     case Q_MULTI_SELECT:
       return [Q_MULTI_SELECT, prompt, q.options.map(chunkText), q.minSelections ?? 0, q.maxSelections, ...req];
     case Q_RANKING:
-      return [Q_RANKING, prompt, q.options.map(chunkText), q.minRanked ?? 0, q.maxRanked ?? q.options.length, ...req];
+      // min_ranked and max_ranked are both pos_uint (≥1) per spec
+      return [Q_RANKING, prompt, q.options.map(chunkText), Math.max(1, q.minRanked ?? 1), Math.max(1, q.maxRanked ?? q.options.length), ...req];
     case Q_NUMERIC_RANGE: {
       const c = q.step != null ? [q.minValue, q.maxValue, q.step] : [q.minValue, q.maxValue];
       return [Q_NUMERIC_RANGE, prompt, c, ...req];

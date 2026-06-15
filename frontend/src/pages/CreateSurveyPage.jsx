@@ -34,7 +34,7 @@ function newQuestion() {
     options: ["", ""],
     minSelections: 0,
     maxSelections: 2,
-    minRanked: 0,
+    minRanked: 1,
     maxRanked: 2,
     minValue: 0,
     maxValue: 100,
@@ -191,10 +191,10 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
                 Min ranked
                 <input
                   type="number"
-                  min={0}
+                  min={1}
                   max={q.options.length}
                   value={q.minRanked}
-                  onChange={(e) => setField("minRanked", Math.min(Number(e.target.value), q.maxRanked))}
+                  onChange={(e) => setField("minRanked", Math.min(Math.max(1, Number(e.target.value)), q.maxRanked))}
                   style={{ width: "80px" }}
                 />
               </label>

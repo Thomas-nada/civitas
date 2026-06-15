@@ -7052,7 +7052,7 @@ async function fetchSurveyByTxHash(txHash) {
   ]);
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
-  const entry = rows.find((row) => String(row?.label || "") === "17" || String(row?.label || "") === "80085");
+  const entry = rows.find((row) => String(row?.label || "") === "17");
   if (!entry) return null;
 
   const meta = entry?.json_metadata;
@@ -7083,7 +7083,7 @@ async function _runLabel17Build() {
   const now = Date.now();
 
   const relevantEntries = [];
-  for (const metaLabel of ["17", "80085"]) {
+  for (const metaLabel of ["17"]) {
     let page = 1;
     while (page <= LABEL17_MAX_PAGES) {
       const entries = await blockfrostGet(`/metadata/txs/labels/${metaLabel}?page=${page}&count=100&order=desc`).catch(() => []);
