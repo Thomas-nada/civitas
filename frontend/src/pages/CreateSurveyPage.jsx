@@ -4,6 +4,7 @@ import { roundAt, defaultChainInfo } from "tlock-js";
 import { WalletContext } from "../context/WalletContext";
 import {
   buildAndSubmitSurveyCreation,
+  hashAnchorContent,
   Q_CUSTOM, Q_SINGLE_CHOICE, Q_MULTI_SELECT, Q_RANKING, Q_NUMERIC_RANGE,
   Q_POINTS_ALLOCATION, Q_RATING,
   ROLE_TO_INT,
@@ -383,11 +384,12 @@ function validate(form, currentEpoch) {
   return errors;
 }
 
-function buildSurveyForm(form) {
+function buildSurveyForm(form, contentAnchorHash) {
   return {
     title: form.title,
     description: form.description,
-    contentAnchor: form.contentAnchor.trim() || undefined,
+    contentAnchorUrl: form.contentAnchor.trim() || undefined,
+    contentAnchorHash: contentAnchorHash || undefined,
     endEpoch: form.endEpoch,
     eligibleRoles: form.eligibleRoles,
     isTimelocked: form.isTimelocked,
@@ -463,7 +465,7 @@ function buildPreviewPayload(form) {
       : [0],
     7: questions,
   };
-  if (form.contentAnchor.trim()) definition[8] = form.contentAnchor.trim();
+  if (form.contentAnchor.trim()) definition[8] = [form.contentAnchor.trim(), "<blake2b-256 of content>"];
 
   return { [METADATA_LABEL]: [0, [definition]] };
 }
@@ -550,7 +552,10 @@ export default function CreateSurveyPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(form));
+      // best-effort content hash for the optional reference document (non-blocking)
+      const caUrl = form.contentAnchor.trim();
+      const caHash = caUrl ? await hashAnchorContent(caUrl) : null;
+      const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(form, caHash));
       fetch("/api/surveys/refresh", { method: "POST" }).catch(() => {});
       navigate(`/surveys/${result.surveyTxId}`);
     } catch (err) {

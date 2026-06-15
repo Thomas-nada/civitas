@@ -7,6 +7,7 @@
  */
 import { Transaction, resolvePaymentKeyHash } from "@meshsdk/core";
 import { timelockEncrypt, mainnetClient, Buffer as TlockBuffer } from "tlock-js";
+import blakejs from "blakejs";
 
 export const METADATA_LABEL = 80085; // TODO: revert to 17 after mainnet testing
 const SPEC_VERSION = 4;
@@ -30,6 +31,32 @@ function hexToBytes(hex) {
     bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
   }
   return bytes;
+}
+
+// CIP-0179 content_anchor = [chunked_text_uri, blake2b_256_hash(32 bytes)].
+// Used by both the survey definition (key 8) and the response rationale (key 5).
+// A 32-byte zero hash is used when no content hash is available (the hash is an
+// integrity hint and, for response rationale, purely informational per spec).
+function encodeContentAnchor(url, hashHex) {
+  const clean = String(hashHex || "").replace(/^0x/, "").trim().toLowerCase();
+  const hashBytes = /^[0-9a-f]{64}$/.test(clean) ? hexToBytes(clean) : new Uint8Array(32);
+  return [chunkText(String(url).trim()), hashBytes];
+}
+
+// Best-effort blake2b-256 of the content at an anchor URL. Returns 64-char hex
+// or null if the content can't be fetched (e.g. CORS). Never throws.
+export async function hashAnchorContent(url) {
+  try {
+    const raw = String(url || "").trim();
+    if (!raw) return null;
+    const target = raw.startsWith("ipfs://") ? `https://ipfs.io/ipfs/${raw.slice(7)}` : raw;
+    const res = await fetch(target);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return blakejs.blake2bHex(bytes, null, 32);
+  } catch {
+    return null;
+  }
 }
 
 function chunkText(str) {
@@ -123,7 +150,9 @@ export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
       ? [1, hexToBytes(QUICKNET_CHAIN_HASH_HEX), surveyForm.drandRound ?? 0, surveyForm.padding ?? 256]
       : [0],
     "7": surveyForm.questions.map(encodeQuestion),
-    ...(surveyForm.contentAnchor?.trim() ? { "8": chunkText(surveyForm.contentAnchor.trim()) } : {}),
+    ...(surveyForm.contentAnchorUrl?.trim()
+      ? { "8": encodeContentAnchor(surveyForm.contentAnchorUrl, surveyForm.contentAnchorHash) }
+      : {}),
   };
 
   // envelope: [tag=0 (definitions), [definition]]
@@ -165,9 +194,10 @@ async function sealAnswers(answers, drandRound, paddingSize) {
  * @param {string}  responderRole - "DRep"|"SPO"|"CC"|"Stakeholder"|"Owner"
  * @param {Array}   answers      - v4 answer tuples: [tag, questionIndex, value]
  * @param {object}  [sealOpts]   - { drandRound: number, padding: number } for sealed surveys
+ * @param {object}  [rationale]  - optional voter rationale { url: string, hash?: hex } → key 5
  * @returns {Promise<{txId: string}>}
  */
-export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, surveyIndex, responderRole, answers, sealOpts) {
+export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, surveyIndex, responderRole, answers, sealOpts, rationale) {
   const changeAddress = await walletApi.getChangeAddress();
   const responderKeyHashHex = resolvePaymentKeyHash(changeAddress);
   const credential = [0, hexToBytes(responderKeyHashHex)];
@@ -184,15 +214,45 @@ export async function buildAndSubmitSurveyResponse(walletApi, surveyTxId, survey
 
   // v4 response: integer-keyed map
   // Key 0: spec_version  Key 1: survey_ref  Key 2: role  Key 3: credential  Key 4: answers/ciphertext
+  // Key 5: content_anchor (optional voter rationale)
   const response = {
     "0": SPEC_VERSION,
     "1": surveyRef,
     "2": roleInt,
     "3": credential,
     "4": responseAnswers,
+    ...(rationale?.url?.trim() ? { "5": encodeContentAnchor(rationale.url, rationale.hash) } : {}),
   };
 
   // envelope: [tag=1 (responses), [response]]
   const txHash = await buildAndSubmitMetadataTx(walletApi, [1, [response]]);
+  return { txId: txHash };
+}
+
+/**
+ * Resolve the connected wallet's payment key hash (hex). Used to check whether
+ * the connected wallet owns a survey (and may therefore cancel it).
+ * @param {object} walletApi - BrowserWallet instance
+ * @returns {Promise<string>} payment key hash hex
+ */
+export async function getConnectedPaymentKeyHash(walletApi) {
+  const changeAddress = await walletApi.getChangeAddress();
+  return resolvePaymentKeyHash(changeAddress);
+}
+
+/**
+ * Build and submit a CIP-179 survey cancellation transaction. Per spec, the
+ * cancellation must be signed by the survey owner's credential — the backend
+ * only honours a cancellation whose signer matches the definition's owner key
+ * hash, so this must be sent from the same wallet that created the survey.
+ * @param {object} walletApi   - BrowserWallet instance
+ * @param {string} surveyTxId  - Transaction hash of the survey definition
+ * @param {number} surveyIndex - Position of the survey in the definitions array
+ * @returns {Promise<{txId: string}>}
+ */
+export async function buildAndSubmitSurveyCancellation(walletApi, surveyTxId, surveyIndex) {
+  const surveyRef = [hexToBytes(surveyTxId), surveyIndex ?? 0];
+  // envelope: [tag=2 (cancellations), [survey_ref]]
+  const txHash = await buildAndSubmitMetadataTx(walletApi, [2, [surveyRef]]);
   return { txId: txHash };
 }

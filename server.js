@@ -273,6 +273,29 @@ function bech32IdToHex(value) {
   }
 }
 
+// Extract the 28-byte payment key hash (hex) from a Cardano shelley address
+// (addr1…). The address payload is [header_byte][payment_part(28)][stake_part?];
+// for key-based payment credentials the payment part is the key hash. Returns
+// null for script-payment addresses, Byron addresses, or anything unparseable.
+function paymentKeyHashFromAddress(addr) {
+  const raw = String(addr || "").trim();
+  if (!raw || !bech32Codec || !raw.startsWith("addr")) return null;
+  try {
+    const decoded = bech32Codec.decode(raw, 2048);
+    const bytes = Buffer.from(bech32Codec.fromWords(decoded.words));
+    if (bytes.length < 29) return null;
+    // High nibble of header = address type. Types 0,1,2,3,6,7 have a key/script
+    // payment part in bytes[1..29]; type 1,3,5,7 use a script — odd low bit of
+    // the type nibble. We only treat key-payment types as a key hash.
+    const addrType = bytes[0] >> 4;
+    const paymentIsScript = addrType === 1 || addrType === 3 || addrType === 5 || addrType === 7;
+    if (paymentIsScript) return null;
+    return bytes.slice(1, 29).toString("hex").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 const CC_HOT_HEX_TO_HOT_CREDENTIAL = (() => {
   const map = new Map();
   for (const hotCredential of Object.keys(CC_NAME_OVERRIDES_BY_HOT)) {
@@ -365,7 +388,7 @@ const cipContentCache = {};
 // ── Survey / Label-17 index cache ─────────────────────────────────────────
 const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
 const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
-let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {} };
+let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set() };
 let label17BuildPromise = null;
 
 let epochBackfillState = {
@@ -6809,6 +6832,9 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
       const specVersion = Number(def["0"]);
       if (specVersion !== 4) continue;
 
+      const ownerRaw        = def["1"];
+      const ownerKeyHash    = Array.isArray(ownerRaw) && Number(ownerRaw[0]) === 0
+        ? l17ExtractBytesHex(ownerRaw[1]) : null;
       const titleRaw        = def["2"];
       const descRaw         = def["3"];
       const eligibleRoleInts = Array.isArray(def["4"]) ? def["4"] : [];
@@ -6839,7 +6865,7 @@ function l17SurveysFromV3Meta(meta, txHash, txInfo) {
       surveys.push({
         surveyTxId: txHash,
         surveyIndex,
-        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(sealedDrandRound != null ? { drandRound: sealedDrandRound, padding: sealedPadding } : {}), ...(contentAnchor ? { contentAnchor } : {}) },
+        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(ownerKeyHash ? { ownerKeyHash } : {}), ...(sealedDrandRound != null ? { drandRound: sealedDrandRound, padding: sealedPadding } : {}), ...(contentAnchor ? { contentAnchor } : {}) },
         msg: null,
         slot: txInfo?.slot ?? null,
         blockTime: txInfo?.block_time ?? null,
@@ -6913,7 +6939,7 @@ function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAdd
   for (let responseIndex = 0; responseIndex < responses.length; responseIndex++) {
     const resp = responses[responseIndex];
 
-    let surveyRefRaw, roleInt, answersRaw, specVersion;
+    let surveyRefRaw, roleInt, answersRaw, specVersion, responseAnchorRaw = null;
 
     if (!Array.isArray(resp) && resp !== null && typeof resp === "object") {
       // v4: response is an integer-keyed CBOR map → Blockfrost gives {"0":4,"1":[...],...}
@@ -6922,6 +6948,7 @@ function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAdd
       surveyRefRaw = resp["1"];
       roleInt      = resp["2"];
       answersRaw   = resp["4"];
+      responseAnchorRaw = resp["5"] ?? null; // optional voter rationale content_anchor
     } else if (Array.isArray(resp)) {
       if (Array.isArray(resp[0])) {
         // v2: [survey_ref, role, credential, answers]  (no specVersion prefix)
@@ -6953,6 +6980,11 @@ function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAdd
     const responderRole = L17_INT_TO_ROLE[Number(roleInt)];
     if (!responderRole) continue;
 
+    // Optional voter rationale (response key 5) = content_anchor [uri, hash].
+    const rationale = Array.isArray(responseAnchorRaw)
+      ? { uri: l17JoinText(responseAnchorRaw[0]), hash: l17ExtractBytesHex(responseAnchorRaw[1]) }
+      : null;
+
     out.push({
       txId: txHash,
       inputAddress,
@@ -6968,6 +7000,7 @@ function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAdd
       rewardAddress,
       responseStakeAda: Number.isFinite(responseStakeAda) ? responseStakeAda : 0,
       responseCredential: rewardAddress ?? inputAddress ?? txHash,
+      ...(rationale?.uri ? { rationale } : {}),
     });
   }
   return out;
@@ -7062,8 +7095,10 @@ async function _runLabel17Build() {
   const utxoCache = {};
   const addressInfoCache = {};
   const accountCache = {};
-  // "txHash:index" refs that have been cancelled
-  const cancelledRefs = new Set();
+  // "txHash:index" → Set of payment key hashes that submitted a cancellation for
+  // that ref. A cancellation is only honoured if the survey owner's key hash is
+  // in the set (the cancellation tx must be signed by the owner, per CIP-0179).
+  const cancelClaims = new Map();
 
   // Fetch tx info in parallel batches of 10
   const txHashes = [...new Set(relevantEntries.map((e) => e.tx_hash).filter(Boolean))];
@@ -7113,6 +7148,9 @@ async function _runLabel17Build() {
       try {
         const items = meta[1];
         if (!Array.isArray(items)) continue;
+        // Who signed this cancellation? Use the tx input's payment key hash.
+        const cancelInputAddr = await resolveInputAddress(txHash, utxoCache);
+        const cancellerKeyHash = paymentKeyHashFromAddress(cancelInputAddr);
         for (const item of items) {
           // item is a survey_ref [tx_id_bytes, index] or a map with key "1" holding the ref
           let surveyRef = Array.isArray(item) ? item
@@ -7120,13 +7158,28 @@ async function _runLabel17Build() {
           if (!Array.isArray(surveyRef) || surveyRef.length < 2) continue;
           const cancelTxId = l17ExtractBytesHex(surveyRef[0]);
           const cancelIdx  = Number(surveyRef[1] ?? 0);
-          if (cancelTxId) cancelledRefs.add(`${cancelTxId}:${cancelIdx}`);
+          if (!cancelTxId || !cancellerKeyHash) continue;
+          const key = `${cancelTxId}:${cancelIdx}`;
+          if (!cancelClaims.has(key)) cancelClaims.set(key, new Set());
+          cancelClaims.get(key).add(cancellerKeyHash);
         }
       } catch { /* skip malformed */ }
       continue;
     }
 
     // v1 surveys (legacy object-based format) are no longer indexed.
+  }
+
+  // Resolve which cancellation claims are valid: only those signed by the
+  // survey's own owner key hash count (CIP-0179 requires proof of ownership).
+  const ownerByRef = {};
+  for (const s of surveys) {
+    ownerByRef[`${s.surveyTxId}:${s.surveyIndex}`] = s.details?.ownerKeyHash || null;
+  }
+  const cancelledRefs = new Set();
+  for (const [ref, cancellers] of cancelClaims) {
+    const owner = ownerByRef[ref];
+    if (owner && cancellers.has(owner)) cancelledRefs.add(ref);
   }
 
   // Post-process: normalise answer tuples; enforce required-question validation.
@@ -7193,7 +7246,7 @@ async function _runLabel17Build() {
     list.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.txIndexInBlock ?? 0) - (b.txIndexInBlock ?? 0));
   }
 
-  label17Cache = { fetchedAt: now, surveys: activeSurveys, responsesBySurvey };
+  label17Cache = { fetchedAt: now, surveys: activeSurveys, responsesBySurvey, cancelledRefs };
   return label17Cache;
 }
 
@@ -8974,7 +9027,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── Surveys: force-refresh the label-17 index ────────────────────────────
   if (req.method === "POST" && url.pathname === "/api/surveys/refresh") {
-    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {} };
+    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set() };
     label17BuildPromise = null;
     buildLabel17Index().catch(() => {});
     json(res, 200, { ok: true });
@@ -9006,6 +9059,11 @@ const server = http.createServer(async (req, res) => {
         const survey = index.surveys.find((s) => s.surveyTxId === txHash)
           || await fetchSurveyByTxHash(txHash);
         if (!survey) { json(res, 404, { error: "Survey not found." }); return; }
+        // A survey dropped from the active list (because the owner cancelled it)
+        // can still be reached by direct link — flag it so the page can say so.
+        const cancelled = index.cancelledRefs instanceof Set
+          && index.cancelledRefs.has(`${survey.surveyTxId}:${survey.surveyIndex ?? 0}`);
+        if (cancelled) survey.cancelled = true;
         const responses = index.responsesBySurvey[txHash] || [];
         const tally = label17TallySurvey(survey.details, responses);
         json(res, 200, { survey, responses, tally, cachedAt: index.fetchedAt });

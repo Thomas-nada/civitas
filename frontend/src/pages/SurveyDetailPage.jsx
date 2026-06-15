@@ -4,7 +4,7 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { WalletContext } from "../context/WalletContext";
-import { buildAndSubmitSurveyResponse } from "../services/surveyTxService";
+import { buildAndSubmitSurveyResponse, buildAndSubmitSurveyCancellation, getConnectedPaymentKeyHash, hashAnchorContent } from "../services/surveyTxService";
 import { timelockDecrypt, mainnetClient, roundTime, defaultChainInfo } from "tlock-js";
 
 function fmtDate(ts) {
@@ -607,6 +607,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   const [responderRole, setResponderRole] = useState(defaultRole);
   const [answers, setAnswers] = useState({});
   const [skipped, setSkipped] = useState({});
+  const [rationaleUrl, setRationaleUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -672,7 +673,9 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
       const sealOpts = isSealed && survey.details?.drandRound
         ? { drandRound: survey.details.drandRound, padding: survey.details.padding ?? 256 }
         : undefined;
-      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers, sealOpts);
+      const url = rationaleUrl.trim();
+      const rationale = url ? { url, hash: await hashAnchorContent(url) } : undefined;
+      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers, sealOpts, rationale);
       setSubmitted(true);
       onSubmitted?.(result.txId);
     } catch (err) {
@@ -796,6 +799,24 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
         );
       })}
 
+      {/* Optional voter rationale */}
+      <div className="sq-qcard" style={{ marginTop: "12px" }}>
+        <div className="sq-qcard-meta-row" style={{ marginBottom: "6px" }}>
+          <span className="sq-qtype-label">Rationale (optional)</span>
+        </div>
+        <p className="sq-qhint" style={{ marginTop: 0 }}>
+          Link to a document explaining your answer (e.g. a forum post or IPFS file). Recorded on-chain with your response.
+        </p>
+        <input
+          type="url"
+          className="cs-text-input"
+          placeholder="https://… or ipfs://…"
+          value={rationaleUrl}
+          onChange={(e) => setRationaleUrl(e.target.value)}
+          style={{ width: "100%" }}
+        />
+      </div>
+
       {submitError ? (
         <p style={{ marginTop: "14px", color: "var(--rose)", fontSize: "0.84rem" }}>{submitError}</p>
       ) : null}
@@ -883,6 +904,35 @@ export default function SurveyDetailPage() {
   const effectiveResponses = decryptedResponses ?? responses;
   const effectiveTally = decryptedResponses ? buildClientTally(questions, decryptedResponses) : tally;
 
+  // ── Owner-only cancellation ─────────────────────────────────────────────────
+  const ownerKeyHash = details?.ownerKeyHash ?? null;
+  const [connectedKeyHash, setConnectedKeyHash] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!walletApi) { setConnectedKeyHash(null); return; }
+    getConnectedPaymentKeyHash(walletApi)
+      .then((kh) => { if (!cancelled) setConnectedKeyHash((kh || "").toLowerCase()); })
+      .catch(() => { if (!cancelled) setConnectedKeyHash(null); });
+    return () => { cancelled = true; };
+  }, [walletApi]);
+  const isOwner = Boolean(ownerKeyHash && connectedKeyHash && ownerKeyHash.toLowerCase() === connectedKeyHash);
+  const isCancelled = Boolean(survey?.cancelled);
+  const [cancelState, setCancelState] = useState("idle"); // idle | submitting | done | error
+  const [cancelError, setCancelError] = useState("");
+
+  async function handleCancelSurvey() {
+    if (!window.confirm("Cancel this survey? This is permanent and on-chain. Existing responses will be hidden and no new responses will be accepted.")) return;
+    setCancelState("submitting");
+    setCancelError("");
+    try {
+      await buildAndSubmitSurveyCancellation(walletApi, survey.surveyTxId, survey.surveyIndex ?? 0);
+      setCancelState("done");
+    } catch (e) {
+      setCancelError(e?.message || "Cancellation failed.");
+      setCancelState("error");
+    }
+  }
+
   const roleTallies = effectiveTally.roleTallies ?? [];
   const [selectedRole, setSelectedRole] = useState(null);
   const visibleTally = selectedRole
@@ -932,14 +982,39 @@ export default function SurveyDetailPage() {
         <div className="survey-hero-copy">
           <div className="survey-hero-topline">
             <Link className="muted back-link" to="/surveys">← All Surveys</Link>
-            <span className={`pill ${isActive ? "good" : "muted-pill"}`}>{isActive ? "Active" : "Ended"}</span>
+            {isCancelled || cancelState === "done"
+              ? <span className="pill" style={{ background: "rgba(244,63,94,0.14)", borderColor: "rgba(244,63,94,0.45)", color: "var(--rose)" }}>Cancelled</span>
+              : <span className={`pill ${isActive ? "good" : "muted-pill"}`}>{isActive ? "Active" : "Ended"}</span>}
+            {isOwner ? <span className="pill" style={{ background: "rgba(84,228,188,0.12)", borderColor: "rgba(84,228,188,0.4)", color: "var(--mint)" }}>You own this</span> : null}
           </div>
           <h1 className="survey-hero-title">{details.title || "Survey"}</h1>
           {details.description ? <p className="muted survey-hero-description">{details.description}</p> : null}
-          {details.contentAnchor ? (
-            <a className="ext-link" href={details.contentAnchor} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+          {details.contentAnchor?.uri ? (
+            <a className="ext-link" href={details.contentAnchor.uri} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
               Reference document ↗
             </a>
+          ) : null}
+          {isOwner && !isCancelled && cancelState !== "done" ? (
+            <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="mode-btn"
+                style={{ borderColor: "rgba(244,63,94,0.5)", color: "var(--rose)" }}
+                disabled={cancelState === "submitting"}
+                onClick={handleCancelSurvey}
+              >
+                {cancelState === "submitting" ? "Cancelling…" : "Cancel this survey"}
+              </button>
+              <span className="muted" style={{ fontSize: "0.76rem" }}>Only you, the owner, can do this.</span>
+            </div>
+          ) : null}
+          {cancelState === "done" ? (
+            <p className="muted" style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--mint)" }}>
+              ✓ Cancellation submitted. It will drop off the active list once confirmed on-chain.
+            </p>
+          ) : null}
+          {cancelState === "error" ? (
+            <p style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--rose)" }}>{cancelError}</p>
           ) : null}
         </div>
       </header>
@@ -1107,6 +1182,12 @@ export default function SurveyDetailPage() {
                         target="_blank" rel="noreferrer">
                         {r.txId?.slice(0, 10)}…
                       </a>
+                      {r.rationale?.uri ? (
+                        <a className="ext-link" style={{ fontSize: "0.74rem", display: "block", marginTop: "2px" }}
+                          href={r.rationale.uri} target="_blank" rel="noreferrer" title="Voter rationale">
+                          rationale ↗
+                        </a>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
