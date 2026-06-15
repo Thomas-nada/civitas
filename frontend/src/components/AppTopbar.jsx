@@ -186,7 +186,7 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
   // "Acting as a DRep" model: the wallet may be a registered DRep, but the DRep
   // profile/badge only surface when the user signed in with the DRep key.
   const isRegisteredDrep = Boolean(wallet?.walletDrep);
-  const actingAsDrep = isRegisteredDrep && wallet?.preferredSignKey === "drep";
+  const actingAsDrep = Boolean(wallet?.actingAsDrep);
 
   const softCoercedDismissKey = useMemo(() => {
     const reward = String(wallet?.walletRewardAddress || "").trim().toLowerCase();

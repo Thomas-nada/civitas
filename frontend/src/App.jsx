@@ -390,6 +390,9 @@ export default function App() {
     multiSigDRepId,
     connectCardanoSigner,
     loggedIn: Boolean(walletName),
+    // Acting as a DRep = a real connected wallet that is a registered DRep
+    // on-chain AND signed in with the DRep key. Gates DRep-only actions (voting).
+    actingAsDrep: Boolean(walletApi) && Boolean(walletDrep) && preferredSignKey === "drep",
   }), [
     wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
     walletLovelace, walletDrep, walletError, walletMenuOpen,

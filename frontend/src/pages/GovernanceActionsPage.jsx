@@ -1184,7 +1184,10 @@ export default function GovernanceActionsPage() {
     [rows, batchVoteIds]
   );
   const batchVoteCount = selectedBatchVoteRows.length;
-  const showBatchVoteColumn = Boolean(wallet?.walletDrep);
+  // Voting is a DRep-only action: require a registered DRep signed in with the
+  // DRep key (non-DReps and stake-key sessions cannot select or cast votes).
+  const canVote = Boolean(wallet?.actingAsDrep);
+  const showBatchVoteColumn = canVote;
 
   const activeCount = rows.filter((row) => row.status === "Active").length;
   const enactedCount = rows.filter((row) => row.status === "Enacted").length;
@@ -1306,7 +1309,7 @@ export default function GovernanceActionsPage() {
   }
 
   async function submitVote() {
-    if (!selected || !wallet?.walletApi || !wallet?.walletDrep || !voteChoice) return;
+    if (!selected || !wallet?.walletApi || !canVote || !voteChoice) return;
     try {
       setVoteSubmitting(true);
       setVoteModalOpen(false);
@@ -1366,7 +1369,7 @@ export default function GovernanceActionsPage() {
     if (
       !rowsToVote.length ||
       !wallet?.walletApi ||
-      !wallet?.walletDrep ||
+      !canVote ||
       rowsToVote.some((item) => !item.draft.choice)
     ) return;
     try {
@@ -1554,7 +1557,7 @@ export default function GovernanceActionsPage() {
         </div>
       </section>
 
-      {wallet?.walletDrep ? (
+      {canVote ? (
         <section className="batch-vote-toolbar" aria-label="DRep voting controls">
           <div className="batch-vote-summary">
             <strong>{batchVoteCount}</strong>
@@ -1735,7 +1738,7 @@ export default function GovernanceActionsPage() {
         </div>
       </section>
       {/* Vote confirmation modal */}
-      {voteModalOpen && selected && voteChoice && wallet?.walletDrep ? (
+      {voteModalOpen && selected && voteChoice && canVote ? (
         <div className="image-modal-backdrop" role="presentation" onClick={() => setVoteModalOpen(false)}>
           <div className="image-modal vote-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="image-modal-close" onClick={() => setVoteModalOpen(false)}>
@@ -1812,7 +1815,7 @@ export default function GovernanceActionsPage() {
         </div>
       ) : null}
 
-      {batchVoteModalOpen && wallet?.walletDrep && selectedBatchVoteRows.length ? (() => {
+      {batchVoteModalOpen && canVote && selectedBatchVoteRows.length ? (() => {
         const total = selectedBatchVoteRows.length;
         const stepIdx = Math.min(batchVoteStep, total - 1);
         const row = selectedBatchVoteRows[stepIdx];
