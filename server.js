@@ -7138,21 +7138,20 @@ async function _runLabel17Build() {
     const questions = survey?.details?.questions ?? [];
 
     // Detect sealed ciphertext: v4 sealed responses store chunked bytes in key 4.
-    // Blockfrost returns CBOR bytes as {bytes: "hexstring"} objects.
-    // These can't be parsed as answer tuples — pass them through for client-side decryption.
+    // Blockfrost returns CBOR bytes as "0x<hex>" strings (or {bytes} objects) — use the
+    // shared l17ExtractBytesHex helper. These can't be parsed as answer tuples, so pass
+    // them through as sealedHexChunks for client-side tlock decryption after reveal.
     const isTimelocked = survey?.details?.isTimelocked ?? false;
-    const isSealedBytes = isTimelocked
-      && rawResp.specVersion === 4
-      && rawResp.rawAnswersV3.length > 0
-      && rawResp.rawAnswersV3.every(
-          (item) => item && typeof item === "object" && !Array.isArray(item) && typeof item.bytes === "string"
-        );
+    const sealedChunks = (isTimelocked && rawResp.specVersion === 4 && rawResp.rawAnswersV3.length > 0)
+      ? rawResp.rawAnswersV3.map((item) => l17ExtractBytesHex(item))
+      : null;
+    const isSealedBytes = Array.isArray(sealedChunks) && sealedChunks.every((h) => typeof h === "string" && h.length > 0);
 
     if (isSealedBytes) {
       const finalResp = {
         ...rawResp,
         answers: [],
-        sealedHexChunks: rawResp.rawAnswersV3.map((item) => item.bytes),
+        sealedHexChunks: sealedChunks,
       };
       delete finalResp.rawAnswersV3;
       if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
