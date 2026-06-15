@@ -39,12 +39,48 @@ function StatusPill({ isActive }) {
   );
 }
 
+function HowItWorks({ isConnected, onConnect }) {
+  const steps = [
+    { n: "1", title: "Browse", body: "Open any survey to read its questions and see live results — no wallet needed." },
+    { n: "2", title: "Connect a wallet", body: "Connect a Cardano wallet (top-right) to take part. Connecting is free." },
+    { n: "3", title: "Create or respond", body: "Publish your own survey or answer one. Each action is a small on-chain transaction (under ~1 ADA)." },
+  ];
+  return (
+    <div className="sv-howto panel">
+      <div className="sv-howto-intro">
+        <h2 className="sv-howto-title">What are on-chain surveys?</h2>
+        <p className="muted">
+          A way for the Cardano community — DReps, SPOs, committee members and ada holders — to ask and answer
+          questions directly on the blockchain. Every response is a verifiable transaction tied to a real wallet.
+        </p>
+      </div>
+      <div className="sv-howto-steps">
+        {steps.map((s) => (
+          <div key={s.n} className="sv-howto-step">
+            <span className="sv-howto-num">{s.n}</span>
+            <div>
+              <div className="sv-howto-step-title">{s.title}</div>
+              <p className="muted sv-howto-step-body">{s.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!isConnected ? (
+        <div className="sv-howto-cta">
+          <button type="button" className="btn-primary" onClick={onConnect}>Connect Wallet</button>
+          <span className="muted" style={{ fontSize: "0.8rem" }}>to create a survey or respond to one</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SurveysListPage() {
   useSeoMeta({
     title: "Governance Surveys",
     description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power.",
   });
-  const { walletApi } = useContext(WalletContext);
+  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -117,8 +153,14 @@ export default function SurveysListPage() {
         </div>
         {walletApi ? (
           <Link to="/surveys/create" className="btn-primary">+ Create Survey</Link>
-        ) : null}
+        ) : (
+          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
+            Connect wallet to create
+          </button>
+        )}
       </div>
+
+      <HowItWorks isConnected={Boolean(walletApi)} onConnect={() => setWalletMenuOpen(true)} />
 
       {/* Filter chips */}
       <div className="sv-table-filters">
@@ -174,11 +216,24 @@ export default function SurveysListPage() {
             {loading ? (
               <p className="sv-empty-row muted">Loading surveys…</p>
             ) : filtered.length === 0 ? (
-              <p className="sv-empty-row muted">
-                {surveys.length === 0
-                  ? "No surveys found on-chain yet."
-                  : "No surveys match the current filters."}
-              </p>
+              <div className="sv-empty-row" style={{ textAlign: "center", padding: "2rem 1rem" }}>
+                {surveys.length === 0 ? (
+                  <>
+                    <p className="muted" style={{ marginBottom: "0.75rem" }}>
+                      No surveys have been created yet. Be the first.
+                    </p>
+                    {walletApi ? (
+                      <Link to="/surveys/create" className="btn-primary">+ Create the first survey</Link>
+                    ) : (
+                      <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
+                        Connect wallet to create
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">No surveys match the current filters.</p>
+                )}
+              </div>
             ) : (
               filtered.map((s) => {
                 const isActive =

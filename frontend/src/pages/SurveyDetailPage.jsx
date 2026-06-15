@@ -826,7 +826,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
 
 export default function SurveyDetailPage() {
   const { txHash } = useParams();
-  const { walletApi } = useContext(WalletContext);
+  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1000,16 +1000,22 @@ export default function SurveyDetailPage() {
         <button type="button" className={`survey-tab${tab === "responses" ? " active" : ""}`} onClick={() => setTab("responses")}>
           Responses ({effectiveResponses.length})
         </button>
-        {walletApi ? (
-          <button type="button" className={`survey-tab${tab === "respond" ? " active" : ""}`} onClick={() => setTab("respond")}>
-            Submit Response
-          </button>
-        ) : null}
+        <button type="button" className={`survey-tab${tab === "respond" ? " active" : ""}`} onClick={() => setTab("respond")}>
+          Submit Response
+        </button>
       </div>
 
       {/* Results tab */}
       {tab === "results" ? (
         <section>
+          {questions.length > 0 ? (
+            <p className="muted" style={{ fontSize: "0.82rem", margin: "0 0 1rem" }}>
+              {isSealed
+                ? "Sealed survey: answers stay encrypted until the reveal date, then everyone can see the tally below. "
+                : "Each bar shows how responders answered. "}
+              Every wallet counts as one vote. Open the <strong>Responses</strong> tab to see each individual response on-chain.
+            </p>
+          ) : null}
           {isSealed && !isPastReveal && revealTimeMs != null ? (
             <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--amber)" }}>
               <span>◆</span>
@@ -1152,6 +1158,25 @@ export default function SurveyDetailPage() {
             onSubmitted={() => { setTimeout(() => load(true), 3000); }}
           />
         </div>
+      ) : null}
+
+      {/* Respond tab — wallet not connected */}
+      {tab === "respond" && !walletApi ? (
+        <section className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
+          <h2 style={{ marginTop: 0 }}>Connect your wallet to respond</h2>
+          <p className="muted" style={{ maxWidth: "440px", margin: "0 auto 1.25rem" }}>
+            Responding records your answers on-chain as a small transaction (under ~1 ADA).
+            Your wallet must be eligible for one of this survey's roles: {roles.join(", ") || "—"}.
+          </p>
+          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
+            Connect Wallet
+          </button>
+          <div style={{ marginTop: "1rem" }}>
+            <Link to="/guide?section=tool-survey-respond" className="inline-link" style={{ fontSize: "0.8rem" }}>
+              How responding works →
+            </Link>
+          </div>
+        </section>
       ) : null}
     </main>
   );
