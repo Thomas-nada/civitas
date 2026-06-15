@@ -9,6 +9,18 @@ function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
+const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
+const EPOCH_DURATION_SECONDS = 432000;
+
+// A survey accepts responses through `endEpoch`, so it ends when that epoch
+// completes — i.e. the start of the following epoch.
+function epochEndDate(endEpoch) {
+  if (endEpoch == null) return "—";
+  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
+  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 const ROLE_COLORS = {
   DRep: "var(--mint)",
   SPO: "var(--amber)",
@@ -216,7 +228,7 @@ export default function SurveysListPage() {
                     </div>
                     <div className="sv-ends-cell">
                       <div className="sv-ends-epoch">Epoch {s.details?.endEpoch ?? "?"}</div>
-                      <div className="sv-ends-sub">{fmtDate(s.blockTime)}</div>
+                      <div className="sv-ends-sub">~{epochEndDate(s.details?.endEpoch)}</div>
                     </div>
                   </Link>
                 );

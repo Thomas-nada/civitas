@@ -12,6 +12,17 @@ function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
+// A survey accepts responses through `endEpoch`, so it ends when that epoch
+// completes — i.e. the start of the following epoch.
+const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
+const EPOCH_DURATION_SECONDS = 432000;
+function epochEndDate(endEpoch) {
+  if (endEpoch == null) return "—";
+  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
+  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 function fmtAda(value, opts = {}) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return "—";
@@ -931,6 +942,9 @@ export default function SurveyDetailPage() {
         <div className="survey-meta-item">
           <span className="muted">Ends epoch</span>
           <strong>{details.endEpoch ?? "—"}</strong>
+          {details.endEpoch != null ? (
+            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(details.endEpoch)}</span>
+          ) : null}
         </div>
         <div className="survey-meta-item">
           <span className="muted">Eligible roles</span>
