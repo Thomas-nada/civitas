@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { WalletContext } from "../context/WalletContext";
 import { buildAndSubmitSurveyResponse } from "../services/surveyTxService";
+import { timelockDecrypt, mainnetClient, roundTime, defaultChainInfo } from "tlock-js";
 
 function fmtDate(ts) {
   if (!ts) return "—";
@@ -79,6 +80,137 @@ const ROLE_COLORS = {
 function getSurveyRoles(details) {
   if (Array.isArray(details?.eligibleRoles)) return details.eligibleRoles;
   return Object.keys(details?.roleWeighting ?? {});
+}
+
+// ── Sealed response decryption ────────────────────────────────────────────────
+
+async function decryptSealedResponses(responses) {
+  const client = mainnetClient();
+  const decoder = new TextDecoder();
+  const results = [];
+
+  for (const resp of responses) {
+    if (!resp.sealedHexChunks?.length) {
+      results.push(resp);
+      continue;
+    }
+    try {
+      // Reassemble hex chunks → Uint8Array
+      const totalBytes = resp.sealedHexChunks.reduce((s, h) => s + h.length / 2, 0);
+      const allBytes = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const hex of resp.sealedHexChunks) {
+        for (let i = 0; i < hex.length; i += 2) {
+          allBytes[offset++] = parseInt(hex.slice(i, i + 2), 16);
+        }
+      }
+      const armoredCiphertext = decoder.decode(allBytes);
+      const decryptedBuf = await timelockDecrypt(armoredCiphertext, client);
+      const jsonStr = decoder.decode(decryptedBuf).replace(/\0+$/, "").trim();
+      const v4Tuples = JSON.parse(jsonStr);
+      const answers = v4Tuples
+        .filter(Array.isArray)
+        .map(([tag, qi, value]) => {
+          switch (tag) {
+            case 0: return { questionId: `q${qi}`, customValue: value };
+            case 1: return { questionId: `q${qi}`, selection: [value] };
+            case 2: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [value] };
+            case 3: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [] };
+            case 4: return { questionId: `q${qi}`, numericValue: value };
+            case 5: return { questionId: `q${qi}`, pointsAllocation: Array.isArray(value) ? value : [] };
+            case 6: return { questionId: `q${qi}`, ratings: Array.isArray(value) ? value : [] };
+            default: return null;
+          }
+        })
+        .filter(Boolean);
+      results.push({ ...resp, answers, sealedHexChunks: undefined });
+    } catch (e) {
+      console.warn("tlock decrypt failed for", resp.txId, e.message);
+      results.push(resp);
+    }
+  }
+  return results;
+}
+
+function buildClientTally(questions, responses) {
+  const totalResponses = responses.length;
+  const questionTallies = questions.map((q) => {
+    const allAnswers = responses.flatMap((r) =>
+      (r.answers || []).filter((a) => a.questionId === q.questionId)
+    );
+    const responseCount = allAnswers.length;
+    const base = {
+      questionId: q.questionId,
+      question: q.question,
+      methodType: q.methodType,
+      required: q.required ?? false,
+      weighted: false,
+      responseCount,
+      abstainCount: Math.max(0, totalResponses - responseCount),
+    };
+    if (isChoiceOrRank(q.methodType)) {
+      const counts = {};
+      for (const ans of allAnswers)
+        for (const sel of (ans.selection || []))
+          counts[sel] = (counts[sel] || 0) + 1;
+      return {
+        ...base,
+        optionTallies: (q.options || []).map((opt, i) => ({
+          index: i, label: opt, count: counts[i] || 0, weight: 0,
+          pct: responseCount > 0 ? Math.round(((counts[i] || 0) / responseCount) * 100) : 0,
+        })),
+      };
+    }
+    if (isNumericRange(q.methodType)) {
+      const nums = allAnswers.map((a) => Number(a.numericValue)).filter((v) => Number.isFinite(v));
+      return {
+        ...base,
+        numericTally: {
+          values: nums,
+          min: nums.length ? Math.min(...nums) : null,
+          max: nums.length ? Math.max(...nums) : null,
+          mean: nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null,
+          median: nums.length ? [...nums].sort((a, b) => a - b)[Math.floor(nums.length / 2)] : null,
+        },
+      };
+    }
+    if (isPointsAlloc(q.methodType)) {
+      const sums = {}; let total = 0;
+      for (const ans of allAnswers)
+        for (const alloc of (ans.pointsAllocation || [])) {
+          const [idx, pts] = Array.isArray(alloc) ? alloc : [alloc.optionIndex, alloc.points];
+          sums[idx] = (sums[idx] || 0) + Number(pts || 0);
+          total += Number(pts || 0);
+        }
+      return {
+        ...base,
+        pointsTally: (q.options || []).map((opt, i) => ({
+          index: i, label: opt, totalPoints: sums[i] || 0,
+          pct: total > 0 ? Math.round(((sums[i] || 0) / total) * 100) : 0,
+        })),
+      };
+    }
+    if (isRating(q.methodType)) {
+      const rd = {};
+      for (const ans of allAnswers)
+        for (const r of (ans.ratings || [])) {
+          const [idx, score] = Array.isArray(r) ? r : [r.optionIndex, r.score];
+          if (!rd[idx]) rd[idx] = { sum: 0, count: 0 };
+          rd[idx].sum += Number(score || 0);
+          rd[idx].count++;
+        }
+      return {
+        ...base,
+        ratingTally: (q.options || []).map((opt, i) => ({
+          index: i, label: opt,
+          meanScore: rd[i] ? rd[i].sum / rd[i].count : null,
+          count: rd[i]?.count || 0,
+        })),
+      };
+    }
+    return { ...base, customTexts: allAnswers.map((a) => a.customValue).filter((v) => v != null) };
+  });
+  return { totalResponses, totalWeight: 0, questionTallies };
 }
 
 // ── Pending poller ───────────────────────────────────────────────────────────
@@ -719,16 +851,37 @@ export default function SurveyDetailPage() {
   const currentEpoch = useCurrentEpoch();
   const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
 
-  const roleTallies = tally.roleTallies ?? [];
+  // ── Sealed response decryption ──────────────────────────────────────────────
+  const isSealed = Boolean(details?.isTimelocked);
+  const drandRound = details?.drandRound ?? null;
+  const revealTimeMs = isSealed && drandRound != null ? roundTime(defaultChainInfo, drandRound) : null;
+  const isPastReveal = revealTimeMs != null && Date.now() > revealTimeMs;
+  const hasSealedChunks = responses.some((r) => r.sealedHexChunks?.length > 0);
+
+  const [decryptState, setDecryptState] = useState("idle"); // idle | decrypting | done | error
+  const [decryptedResponses, setDecryptedResponses] = useState(null);
+
+  useEffect(() => {
+    if (!isPastReveal || !hasSealedChunks || decryptState !== "idle") return;
+    setDecryptState("decrypting");
+    decryptSealedResponses(responses)
+      .then((dec) => { setDecryptedResponses(dec); setDecryptState("done"); })
+      .catch((e) => { console.error("Sealed decrypt error:", e); setDecryptState("error"); });
+  }, [isPastReveal, hasSealedChunks, decryptState, responses]);
+
+  const effectiveResponses = decryptedResponses ?? responses;
+  const effectiveTally = decryptedResponses ? buildClientTally(questions, decryptedResponses) : tally;
+
+  const roleTallies = effectiveTally.roleTallies ?? [];
   const [selectedRole, setSelectedRole] = useState(null);
   const visibleTally = selectedRole
     ? roleTallies.find((r) => r.role === selectedRole)
     : roleTallies.find((r) => r.responses > 0) ?? roleTallies[0];
-  const questionTallies = visibleTally?.questionTallies ?? tally.questionTallies ?? [];
-  const tallyResponseCount = visibleTally?.responses ?? tally.totalResponses ?? 0;
-  const tallyWeight = visibleTally?.totalWeight ?? tally.totalWeight ?? 0;
+  const questionTallies = visibleTally?.questionTallies ?? effectiveTally.questionTallies ?? [];
+  const tallyResponseCount = visibleTally?.responses ?? effectiveTally.totalResponses ?? 0;
+  const tallyWeight = visibleTally?.totalWeight ?? effectiveTally.totalWeight ?? 0;
   const showStakeWeight = roleTallies.some((row) => row.weighting === "StakeBased" && Number(row.totalWeight || 0) > 0)
-    || responses.some((response) => Number(response.responseStakeAda || 0) > 0);
+    || effectiveResponses.some((response) => Number(response.responseStakeAda || 0) > 0);
 
   if (loading) return (
     <main className="shell">
@@ -819,7 +972,7 @@ export default function SurveyDetailPage() {
       <div className="survey-tabs">
         <button type="button" className={`survey-tab${tab === "results" ? " active" : ""}`} onClick={() => setTab("results")}>Results</button>
         <button type="button" className={`survey-tab${tab === "responses" ? " active" : ""}`} onClick={() => setTab("responses")}>
-          Responses ({responses.length})
+          Responses ({effectiveResponses.length})
         </button>
         {walletApi ? (
           <button type="button" className={`survey-tab${tab === "respond" ? " active" : ""}`} onClick={() => setTab("respond")}>
@@ -831,6 +984,28 @@ export default function SurveyDetailPage() {
       {/* Results tab */}
       {tab === "results" ? (
         <section>
+          {isSealed && !isPastReveal && revealTimeMs != null ? (
+            <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--amber)" }}>
+              <span>◆</span>
+              <span>Sealed — responses are encrypted until <strong style={{ color: "var(--amber)" }}>{new Date(revealTimeMs).toLocaleString()}</strong></span>
+            </div>
+          ) : null}
+          {isSealed && isPastReveal && decryptState === "decrypting" ? (
+            <div className="panel" style={{ marginBottom: "1rem", fontSize: "0.82rem", color: "var(--text-muted)" }}>
+              Decrypting responses…
+            </div>
+          ) : null}
+          {isSealed && isPastReveal && decryptState === "error" ? (
+            <div className="panel" style={{ marginBottom: "1rem", fontSize: "0.82rem", color: "var(--rose)" }}>
+              Decryption failed — the drand beacon may not have published the signature yet. Try refreshing.
+            </div>
+          ) : null}
+          {isSealed && isPastReveal && decryptState === "done" ? (
+            <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--mint)" }}>
+              <span>✓</span>
+              <span>Responses revealed and decrypted</span>
+            </div>
+          ) : null}
           {roleTallies.length > 1 ? (
             <div className="survey-role-filter">
               <span className="muted" style={{ fontSize: "0.82rem" }}>View tally by role:</span>
@@ -847,13 +1022,13 @@ export default function SurveyDetailPage() {
             </div>
           ) : null}
 
-          {questionTallies.length === 0 ? (
+          {questionTallies.length === 0 && !(isSealed && !isPastReveal) ? (
             <div className="panel"><p className="muted">No responses yet — be the first to respond.</p></div>
-          ) : (
+          ) : questionTallies.length > 0 ? (
             questionTallies.map((qt) => (
               <QuestionTallyCard key={qt.questionId} qt={qt} totalResponses={tallyResponseCount} totalWeight={tallyWeight} />
             ))
-          )}
+          ) : null}
         </section>
       ) : null}
 
@@ -861,7 +1036,7 @@ export default function SurveyDetailPage() {
       {tab === "responses" ? (
         <section className="panel">
           <h2>Response List</h2>
-          {responses.length === 0 ? (
+          {effectiveResponses.length === 0 ? (
             <p className="muted">No responses yet.</p>
           ) : (
             <table>
@@ -875,7 +1050,7 @@ export default function SurveyDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {responses.map((r) => (
+                {effectiveResponses.map((r) => (
                   <tr key={r.txId}>
                     <td className="mono" style={{ fontSize: "0.82rem" }}>{shortAddr(r.inputAddress)}</td>
                     <td>

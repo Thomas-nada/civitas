@@ -6729,9 +6729,10 @@ function l17ParseV4Question(q, index) {
   const methodType = L17_INT_TO_METHOD_V4[tag];
   if (!methodType) return null;
 
-  // Optional trailing required flag (last element if boolean, per CIP spec)
+  // Optional trailing required flag: boolean true or integer 1 (we encode as 1 since Cardano
+  // metadata doesn't support booleans natively).
   const lastEl = rest[rest.length - 1];
-  const required = typeof lastEl === "boolean" ? lastEl : false;
+  const required = lastEl === true || lastEl === 1;
 
   switch (tag) {
     case 0: // custom: [0, prompt, content_anchor, ?required]
@@ -7135,6 +7136,30 @@ async function _runLabel17Build() {
     // Skip responses to cancelled surveys
     if (cancelledRefs.has(`${rawResp.surveyTxId}:${rawResp.surveyIndex}`)) continue;
     const questions = survey?.details?.questions ?? [];
+
+    // Detect sealed ciphertext: v4 sealed responses store chunked bytes in key 4.
+    // Blockfrost returns CBOR bytes as {bytes: "hexstring"} objects.
+    // These can't be parsed as answer tuples — pass them through for client-side decryption.
+    const isTimelocked = survey?.details?.isTimelocked ?? false;
+    const isSealedBytes = isTimelocked
+      && rawResp.specVersion === 4
+      && rawResp.rawAnswersV3.length > 0
+      && rawResp.rawAnswersV3.every(
+          (item) => item && typeof item === "object" && !Array.isArray(item) && typeof item.bytes === "string"
+        );
+
+    if (isSealedBytes) {
+      const finalResp = {
+        ...rawResp,
+        answers: [],
+        sealedHexChunks: rawResp.rawAnswersV3.map((item) => item.bytes),
+      };
+      delete finalResp.rawAnswersV3;
+      if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
+      responsesBySurvey[rawResp.surveyTxId].push(finalResp);
+      continue;
+    }
+
     const parseAnswer = rawResp.specVersion === 4 ? l17ParseV4Answer : l17ParseV3Answer;
     const normAnswers = rawResp.rawAnswersV3
       .map((a) => parseAnswer(a, questions))
