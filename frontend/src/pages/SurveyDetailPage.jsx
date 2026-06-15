@@ -23,6 +23,23 @@ function epochEndDate(endEpoch) {
   return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Split a string into ≤64-byte UTF-8 chunks (Cardano metadata string limit).
+// Returns the original string if it already fits, else an array of chunks.
+function chunkUtf64(str) {
+  const encoded = new TextEncoder().encode(str);
+  if (encoded.length <= 64) return str;
+  const decoder = new TextDecoder();
+  const chunks = [];
+  let offset = 0;
+  while (offset < encoded.length) {
+    let end = Math.min(offset + 64, encoded.length);
+    while (end > offset && (encoded[end] & 0xc0) === 0x80) end--;
+    chunks.push(decoder.decode(encoded.slice(offset, end)));
+    offset = end;
+  }
+  return chunks;
+}
+
 function fmtAda(value, opts = {}) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return "—";
@@ -123,7 +140,7 @@ async function decryptSealedResponses(responses) {
         .filter(Array.isArray)
         .map(([tag, qi, value]) => {
           switch (tag) {
-            case 0: return { questionId: `q${qi}`, customValue: value };
+            case 0: return { questionId: `q${qi}`, customValue: Array.isArray(value) ? value.join("") : value };
             case 1: return { questionId: `q${qi}`, selection: [value] };
             case 2: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [value] };
             case 3: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [] };
@@ -474,6 +491,27 @@ function RatingInput({ question, value, onChange }) {
   );
 }
 
+function CustomInput({ question, value, onChange }) {
+  return (
+    <div className="question-input-custom">
+      {question.contentAnchor?.uri ? (
+        <a className="ext-link" href={question.contentAnchor.uri} target="_blank" rel="noreferrer"
+          style={{ fontSize: "0.8rem", display: "inline-block", marginBottom: "8px" }}>
+          Reference for this question ↗
+        </a>
+      ) : null}
+      <textarea
+        className="cs-text-input"
+        rows={3}
+        placeholder="Type your answer…"
+        value={value?.customValue ?? ""}
+        onChange={(e) => onChange({ customValue: e.target.value })}
+        style={{ width: "100%", resize: "vertical" }}
+      />
+    </div>
+  );
+}
+
 function QuestionInput({ question, value, onChange }) {
   const m = question.methodType;
   const isChoice  = isSingleChoice(m) || isMultiSelect(m);
@@ -591,7 +629,7 @@ function QuestionInput({ question, value, onChange }) {
     return <RatingInput question={question} value={value} onChange={onChange} />;
   }
 
-  return <p className="muted" style={{ fontSize: "0.82rem" }}>Custom method — free response</p>;
+  return <CustomInput question={question} value={value} onChange={onChange} />;
 }
 
 function ResponseForm({ survey, isActive, onSubmitted }) {
@@ -614,9 +652,11 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   const questions = survey.details?.questions ?? [];
   const answeredCount = questions.filter((q) => {
     const answer = answers[q.questionId];
+    const hasCustom = answer?.customValue != null
+      && !(typeof answer.customValue === "string" && answer.customValue.trim() === "");
     return answer?.selection?.length > 0
       || answer?.numericValue != null
-      || answer?.customValue != null
+      || hasCustom
       || answer?.pointsAllocation?.length > 0
       || answer?.ratings?.length > 0;
   }).length;
@@ -659,6 +699,13 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
       if (isRating(q.methodType)) {
         if (!answer.ratings?.length) return [];
         return [[tag, questionIndex, answer.ratings]];
+      }
+      if (isCustom(q.methodType)) {
+        const text = typeof answer.customValue === "string" ? answer.customValue.trim() : answer.customValue;
+        if (text == null || text === "") return [];
+        // chunk long text into ≤64-byte pieces (Cardano metadata string limit)
+        const value = typeof text === "string" ? chunkUtf64(text) : text;
+        return [[tag, questionIndex, value]];
       }
       return [];
     });

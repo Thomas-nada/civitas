@@ -80,8 +80,8 @@ function encodeQuestion(q) {
   const req = q.required === true ? [1] : [];
   switch (q.tag) {
     case Q_CUSTOM:
-      // [0, prompt, content_anchor] — required not supported for custom
-      return [Q_CUSTOM, prompt, q.contentAnchor ?? ""];
+      // [0, prompt, content_anchor, ?required] where content_anchor = [uri, hash]
+      return [Q_CUSTOM, prompt, encodeContentAnchor(q.contentAnchorUrl ?? "", q.contentAnchorHash), ...req];
     case Q_SINGLE_CHOICE:
       return [Q_SINGLE_CHOICE, prompt, q.options.map(chunkText), ...req];
     case Q_MULTI_SELECT:

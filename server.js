@@ -6758,8 +6758,13 @@ function l17ParseV4Question(q, index) {
   const required = lastEl === true || lastEl === 1;
 
   switch (tag) {
-    case 0: // custom: [0, prompt, content_anchor, ?required]
-      return { questionId, question: prompt, methodType, required };
+    case 0: { // custom: [0, prompt, content_anchor, ?required]
+      const caRaw = rest[0];
+      const contentAnchor = Array.isArray(caRaw)
+        ? { uri: l17JoinText(caRaw[0]), hash: l17ExtractBytesHex(caRaw[1]) }
+        : (caRaw ? { uri: l17JoinText(caRaw) } : null);
+      return { questionId, question: prompt, methodType, required, ...(contentAnchor?.uri ? { contentAnchor } : {}) };
+    }
     case 1: // single-choice: [1, prompt, options_or_count, ?required]
       return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), required };
     case 2: { // multi-select: [2, prompt, options_or_count, min_selections, max_selections, ?required]
@@ -6791,7 +6796,7 @@ function l17ParseV4Answer(answerArr, questions) {
   const q = questions[questionIndex];
   if (!q) return null;
   switch (tag) {
-    case 0: return { questionId: q.questionId, customValue: value };                                       // custom
+    case 0: return { questionId: q.questionId, customValue: Array.isArray(value) ? value.join("") : value }; // custom (text may be chunked)
     case 1: return { questionId: q.questionId, selection: [value] };                                       // single-choice
     case 2: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };        // multi-select
     case 3: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [] };             // ranking

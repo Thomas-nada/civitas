@@ -399,9 +399,10 @@ function buildSurveyForm(form, contentAnchorHash) {
     padding: form.isTimelocked ? 256 : undefined,
     questions: form.questions.map((q) => {
       const base = { tag: q.tag, prompt: q.prompt };
-      if (q.required && q.tag !== Q_CUSTOM) base.required = true;
+      if (q.required) base.required = true;
       if (q.tag === Q_CUSTOM) {
-        base.contentAnchor = q.contentAnchor.trim();
+        base.contentAnchorUrl = q.contentAnchor.trim();
+        base.contentAnchorHash = q._contentAnchorHash || undefined;
       } else if (q.tag === Q_SINGLE_CHOICE) {
         base.options = q.options.filter((o) => o.trim());
       } else if (q.tag === Q_MULTI_SELECT) {
@@ -434,9 +435,9 @@ function buildPreviewPayload(form) {
   const questions = form.questions.map((q) => {
     const prompt = q.prompt || "(empty)";
     const opts = q.options.filter(Boolean);
-    const req = q.required && q.tag !== Q_CUSTOM ? [true] : [];
+    const req = q.required ? [true] : [];
     switch (q.tag) {
-      case Q_CUSTOM:            return [0, prompt, q.contentAnchor || "(content_anchor)"];
+      case Q_CUSTOM:            return [0, prompt, [q.contentAnchor || "(uri)", "<blake2b-256>"], ...req];
       case Q_SINGLE_CHOICE:     return [1, prompt, opts, ...req];
       case Q_MULTI_SELECT:      return [2, prompt, opts, q.minSelections, q.maxSelections, ...req];
       case Q_RANKING:           return [3, prompt, opts, q.minRanked, q.maxRanked, ...req];
@@ -552,10 +553,17 @@ export default function CreateSurveyPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      // best-effort content hash for the optional reference document (non-blocking)
+      // best-effort content hashes for the reference doc + any custom-question anchors (non-blocking)
       const caUrl = form.contentAnchor.trim();
       const caHash = caUrl ? await hashAnchorContent(caUrl) : null;
-      const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(form, caHash));
+      const questionsWithHashes = await Promise.all(form.questions.map(async (q) => {
+        if (q.tag === Q_CUSTOM && q.contentAnchor?.trim()) {
+          return { ...q, _contentAnchorHash: await hashAnchorContent(q.contentAnchor.trim()) };
+        }
+        return q;
+      }));
+      const formWithHashes = { ...form, questions: questionsWithHashes };
+      const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(formWithHashes, caHash));
       fetch("/api/surveys/refresh", { method: "POST" }).catch(() => {});
       navigate(`/surveys/${result.surveyTxId}`);
     } catch (err) {
