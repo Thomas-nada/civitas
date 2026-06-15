@@ -3423,18 +3423,39 @@ function saveNclCacheToDisk() {
   }
 }
 
+// CIP-1694 rule: a ratified treasury withdrawal is enacted exactly ONE epoch
+// after ratification — no exception. Data sources (Blockfrost/Koios) can lag in
+// reporting enacted_epoch, so once the ratified+1 boundary has passed we treat
+// the withdrawal as enacted and derive its enacted epoch as ratifiedEpoch + 1.
+function effectiveTreasuryEnactedEpoch(info, currentEpoch) {
+  const dataEnacted = Number(info?.enactedEpoch || 0);
+  if (dataEnacted > 0) return dataEnacted;
+  const ratified = Number(info?.ratifiedEpoch || 0);
+  const cur = Number(currentEpoch || 0);
+  if (ratified > 0 && cur >= ratified + 1) return ratified + 1;
+  return 0;
+}
+
 async function buildNclSummary(period) {
   const sourceSnapshot = pickBestSnapshotForApi(snapshot);
+  // Treasury withdrawals are read from the LIVE snapshot so we never miss recent
+  // ratifications — pickBestSnapshotForApi can fall back to a stale historical
+  // snapshot (same reasoning as /api/treasury). This keeps the enacted-withdrawal
+  // list in sync with the ratified list and the ratified+1 enactment rule.
+  const liveSnapshot =
+    snapshot && typeof snapshot === "object" && snapshot.proposalInfo ? snapshot : sourceSnapshot;
   const proposalInfo =
-    sourceSnapshot?.proposalInfo && typeof sourceSnapshot.proposalInfo === "object"
-      ? sourceSnapshot.proposalInfo
+    liveSnapshot?.proposalInfo && typeof liveSnapshot.proposalInfo === "object"
+      ? liveSnapshot.proposalInfo
       : {};
+
+  const nclCurrentEpoch = Number(liveSnapshot?.latestEpoch || sourceSnapshot?.latestEpoch || 0);
 
   const withdrawals = Object.entries(proposalInfo)
     .map(([proposalId, info]) => ({ proposalId, info: info || {} }))
     .filter(({ info }) => {
       const governanceType = String(info?.governanceType || "").toLowerCase();
-      const enactedEpoch = Number(info?.enactedEpoch || 0);
+      const enactedEpoch = effectiveTreasuryEnactedEpoch(info, nclCurrentEpoch);
       return governanceType.includes("treasury") &&
         Number.isFinite(enactedEpoch) &&
         enactedEpoch >= period.startEpoch &&
@@ -3445,7 +3466,7 @@ async function buildNclSummary(period) {
       return {
         proposalId: String(proposalId || ""),
         ratifiedEpoch: Number(info?.ratifiedEpoch || 0),
-        enactedEpoch: Number(info?.enactedEpoch || 0),
+        enactedEpoch: effectiveTreasuryEnactedEpoch(info, nclCurrentEpoch),
         amountLovelace,
         amountAda: amountLovelace / 1_000_000,
         metaUrl: String(info?.metadataUrl || "").trim(),
@@ -8990,14 +9011,17 @@ const server = http.createServer(async (req, res) => {
       };
     }
 
+    const treasuryCurrentEpoch = Number(snapshot?.latestEpoch || 0);
+
     const treasuryEntries = Object.entries(proposalInfo)
       .filter(([, info]) => String(info?.governanceType || "").toLowerCase().includes("treasury"));
 
     const ratified = treasuryEntries
       .filter(([, info]) => {
         const hasRatified = info?.ratifiedEpoch != null && Number(info.ratifiedEpoch) > 0;
-        const hasEnacted = info?.enactedEpoch != null && Number(info.enactedEpoch) > 0;
-        return hasRatified && !hasEnacted;
+        // Enacted (per the ratified+1 rule) → no longer pending payout.
+        const isEnacted = effectiveTreasuryEnactedEpoch(info, treasuryCurrentEpoch) > 0;
+        return hasRatified && !isEnacted;
       })
       .map(mapTreasuryProposal);
 
