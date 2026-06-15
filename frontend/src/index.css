@@ -1719,6 +1719,183 @@ a {
   padding: 0.7rem;
 }
 
+/* ── Login modal (richer sign-in chooser) ───────────────────────── */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 12, 0.62);
+  backdrop-filter: blur(3px);
+  padding: 1rem;
+}
+.login-modal {
+  width: min(380px, 94vw);
+  padding: 1.25rem 1.3rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.login-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.login-head h3 { margin: 0; font-size: 1.15rem; }
+.login-sub { margin: 0; font-size: 0.82rem; line-height: 1.4; }
+
+/* MultiSig toggle */
+.login-multisig {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.login-multisig input { position: absolute; opacity: 0; width: 0; height: 0; }
+.login-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex: 0 0 auto;
+}
+.login-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.login-multisig input:checked + .login-switch {
+  background: color-mix(in srgb, var(--mint) 32%, transparent);
+  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
+}
+.login-multisig input:checked + .login-switch::after {
+  transform: translateX(16px);
+  background: var(--mint);
+}
+
+/* Tabs */
+.login-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.25rem;
+}
+.login-tabs button {
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.login-tabs button.active {
+  background: color-mix(in srgb, var(--mint) 14%, transparent);
+  color: var(--mint);
+}
+
+/* Inputs / select */
+.login-input,
+.login-select {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: inherit;
+  font-size: 0.86rem;
+  font-family: inherit;
+}
+.login-select-wrap { position: relative; }
+.login-select { appearance: none; cursor: pointer; color-scheme: dark; }
+.login-select-wrap::after {
+  content: "▾";
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+/* Wallet list */
+.login-wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.login-wallet-btn {
+  padding: 0.6rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.login-wallet-btn:hover { border-color: color-mix(in srgb, var(--mint) 40%, transparent); }
+.login-wallet-btn.selected {
+  border-color: var(--mint);
+  background: color-mix(in srgb, var(--mint) 12%, transparent);
+  color: var(--mint);
+}
+
+/* Primary / cancel */
+.login-primary {
+  padding: 0.6rem;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.login-primary:not(:disabled) {
+  background: color-mix(in srgb, var(--mint) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
+  color: var(--mint);
+}
+.login-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.login-cancel {
+  padding: 0.55rem;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--rose) 45%, transparent);
+  background: color-mix(in srgb, var(--rose) 14%, transparent);
+  color: var(--rose);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.login-error { margin: 0; color: var(--rose); font-size: 0.8rem; }
+
 .wallet-connect-list {
   display: flex;
   gap: 0.6rem;

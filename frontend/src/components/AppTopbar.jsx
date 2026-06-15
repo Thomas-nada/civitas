@@ -183,6 +183,11 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
     return getSoftCoercedDrepMatch(walletDelegation?.delegatedDrepLiteralRaw);
   }, [walletDelegation]);
 
+  // "Acting as a DRep" model: the wallet may be a registered DRep, but the DRep
+  // profile/badge only surface when the user signed in with the DRep key.
+  const isRegisteredDrep = Boolean(wallet?.walletDrep);
+  const actingAsDrep = isRegisteredDrep && wallet?.preferredSignKey === "drep";
+
   const softCoercedDismissKey = useMemo(() => {
     const reward = String(wallet?.walletRewardAddress || "").trim().toLowerCase();
     const drepId = String(matchedSoftCoercedDrep?.id || "").trim().toLowerCase();
@@ -469,12 +474,12 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
                   onClick={() => wallet.setWalletMenuOpen((v) => !v)}
                   aria-label={wallet.walletApi ? `Wallet: ${wallet.walletName}` : "Connect wallet"}
                 >
-                  {wallet.walletApi
-                    ? `${wallet.walletName}${wallet.walletDrep ? " · DRep" : ""}`
+                  {wallet.loggedIn
+                    ? `${wallet.walletName}${actingAsDrep ? " · DRep" : ""}`
                     : "Connect Wallet"}
                 </button>
 
-                {wallet.walletApi && wallet.walletDrep ? (
+                {wallet.walletApi && actingAsDrep ? (
                   <Link
                     to={`/dreps/${encodeURIComponent(wallet.walletDrep.dRepIDCip105)}`}
                     className="my-drep-btn"
@@ -484,38 +489,25 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
                   </Link>
                 ) : null}
 
-                {wallet.walletMenuOpen ? (
+                {wallet.walletMenuOpen && wallet.loggedIn ? (
                   <div className="wallet-popover panel">
-                    {!wallet.walletApi ? (
-                      <>
-                        <p className="muted">Connect a CIP-30 wallet extension:</p>
-                        <div className="wallet-connect-list">
-                          {wallet.wallets.length === 0 ? (
-                            <p className="muted">No wallet extension detected.</p>
-                          ) : (
-                            wallet.wallets.map((w) => (
-                              <button
-                                key={w.key}
-                                type="button"
-                                className="mode-btn"
-                                onClick={() => wallet.connectWallet(w.key)}
-                              >
-                                {w.displayName}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </>
-                    ) : (
+                    {(
                       <div className="wallet-connected">
                         <p>
                           Connected: <strong>{wallet.walletName}</strong>
+                          {wallet.signerMode === "cardano-signer" ? <span className="muted"> (read-only)</span> : null}
                         </p>
                         <p>
                           Network: <strong>{networkLabel(wallet.walletNetworkId)}</strong>
                         </p>
-                        <p>
-                          Balance: <strong>{formatAda(wallet.walletLovelace)}</strong>
+                        {wallet.walletApi ? (
+                          <p>
+                            Balance: <strong>{formatAda(wallet.walletLovelace)}</strong>
+                          </p>
+                        ) : null}
+                        <p className="muted" style={{ fontSize: "0.78rem" }}>
+                          Signing with: <strong>{({ drep: "DRep key", stake: "Stake key", calidus: "Calidus key" })[wallet.preferredSignKey] || wallet.preferredSignKey}</strong>
+                          {wallet.multiSigDRepId ? <> · MultiSig <span className="mono">{wallet.multiSigDRepId.slice(0, 14)}…</span></> : null}
                         </p>
                         {SHOW_DELEGATION_AWARENESS_UI && matchedSoftCoercedDrep && !softCoercedDismissed ? (
                           <div className="wallet-antitrust-alert" role="alert">
@@ -541,8 +533,10 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
                             </div>
                           </div>
                         ) : null}
-                        {wallet.walletDrep ? (
+                        {actingAsDrep ? (
                           <p className="muted">DRep credential detected — you can vote on governance actions.</p>
+                        ) : isRegisteredDrep ? (
+                          <p className="muted">Signed in with your stake key. Switch to the DRep key at login to act as your DRep.</p>
                         ) : (
                           <p className="muted">No DRep credential — you can delegate to a DRep.</p>
                         )}

@@ -12,6 +12,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 // MeshSDK, bech32, and blakejs are loaded lazily on first wallet interaction
 // to keep them out of the initial JS bundle and improve page load performance.
 import AppTopbar from "./components/AppTopbar";
+import LoginModal from "./components/LoginModal";
 import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
 
@@ -238,10 +239,17 @@ export default function App() {
   const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
   const [walletError, setWalletError] = useState("");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  // Login chooser preferences (richer sign-in UI)
+  const [preferredSignKey, setPreferredSignKey] = useState("stake"); // 'drep' | 'stake' | 'calidus'
+  const [signerMode, setSignerMode] = useState("wallet");            // 'wallet' | 'cardano-signer'
+  const [multiSigDRepId, setMultiSigDRepId] = useState("");          // optional MultiSig DRep-ID
 
-  const connectWallet = useCallback(async (walletKey) => {
+  const connectWallet = useCallback(async (walletKey, opts = {}) => {
     try {
       setWalletError("");
+      if (opts.signKey) setPreferredSignKey(opts.signKey);
+      setMultiSigDRepId(opts.multiSigDRepId || "");
+      setSignerMode("wallet");
       // Lazy-load MeshSDK, bech32, and blakejs only when the user connects a wallet.
       const [{ BrowserWallet }, { bech32 }, blakejs] = await Promise.all([
         import("@meshsdk/core"),
@@ -279,7 +287,17 @@ export default function App() {
             credBytes[0] = 0x22;
             credBytes.set(keyHash, 1);
             const dRepIDCip105 = bech32.encode("drep", bech32.toWords(credBytes), 1000);
-            drep = { pubDRepKey, dRepIDCip105 };
+            // Every CIP-95 wallet exposes a DRep key even if the user never
+            // registered as a DRep. Only treat the wallet as a DRep when the
+            // credential is actually registered on-chain.
+            let registered = false;
+            try {
+              const reg = await fetch(`/api/drep-live?id=${encodeURIComponent(dRepIDCip105)}`);
+              registered = reg.ok;
+            } catch { registered = false; }
+            if (registered) {
+              drep = { pubDRepKey, dRepIDCip105 };
+            }
           }
         }
       } catch {
@@ -304,6 +322,34 @@ export default function App() {
     }
   }, [wallets]);
 
+  // CardanoSigner: a read-only identity from a manually entered stake address.
+  // No walletApi, so it can browse/identify but not submit transactions.
+  const connectCardanoSigner = useCallback(async (stakeAddress, opts = {}) => {
+    setWalletError("");
+    const addr = String(stakeAddress || "").trim();
+    try {
+      const { bech32 } = await import("bech32");
+      const decoded = bech32.decode(addr, 200);
+      if (decoded.prefix !== "stake" && decoded.prefix !== "stake_test") {
+        throw new Error("Enter a valid stake address (stake1… or stake_test1…).");
+      }
+      setWalletApi(null);
+      setSignerMode("cardano-signer");
+      setWalletName("CardanoSigner");
+      setWalletRewardAddress(addr);
+      setWalletNetworkId(decoded.prefix === "stake_test" ? 0 : 1);
+      setWalletLovelace("");
+      setWalletDrep(null);
+      if (opts.signKey) setPreferredSignKey(opts.signKey);
+      setMultiSigDRepId(opts.multiSigDRepId || "");
+      setWalletMenuOpen(false);
+      return true;
+    } catch (e) {
+      setWalletError(e?.message?.includes("valid") ? e.message : "Invalid stake address.");
+      return false;
+    }
+  }, []);
+
   const disconnectWallet = useCallback(() => {
     setWalletApi(null);
     setWalletName("");
@@ -313,6 +359,9 @@ export default function App() {
     setWalletDrep(null);
     setWalletError("");
     setWalletMenuOpen(false);
+    setSignerMode("wallet");
+    setMultiSigDRepId("");
+    setPreferredSignKey("stake");
     localStorage.removeItem("civitas.wallet");
   }, []);
 
@@ -333,11 +382,19 @@ export default function App() {
     walletMenuOpen,
     setWalletMenuOpen,
     connectWallet,
-    disconnectWallet
+    disconnectWallet,
+    // richer login chooser
+    preferredSignKey,
+    setPreferredSignKey,
+    signerMode,
+    multiSigDRepId,
+    connectCardanoSigner,
+    loggedIn: Boolean(walletName),
   }), [
     wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
     walletLovelace, walletDrep, walletError, walletMenuOpen,
-    connectWallet, disconnectWallet
+    connectWallet, disconnectWallet,
+    preferredSignKey, signerMode, multiSigDRepId, connectCardanoSigner
   ]);
 
   return (
@@ -349,6 +406,7 @@ export default function App() {
       </div>
       <ScrollToTopOnRouteChange />
       <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} />
+      <LoginModal />
       <InfoBanner />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
