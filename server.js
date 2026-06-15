@@ -7165,11 +7165,15 @@ async function _runLabel17Build() {
       .map((a) => parseAnswer(a, questions))
       .filter(Boolean);
 
-    // Reject the entire response if any required question has no answer
-    const requiredIds = questions.filter((q) => q.required).map((q) => q.questionId);
-    if (requiredIds.length > 0) {
-      const answeredIds = new Set(normAnswers.map((a) => a.questionId));
-      if (requiredIds.some((id) => !answeredIds.has(id))) continue;
+    // Reject the entire response if any required question has no answer.
+    // Skip this check for sealed surveys — the answers are encrypted and can't be validated server-side.
+    const isSealedSurvey = survey?.details?.isTimelocked ?? false;
+    if (!isSealedSurvey) {
+      const requiredIds = questions.filter((q) => q.required).map((q) => q.questionId);
+      if (requiredIds.length > 0) {
+        const answeredIds = new Set(normAnswers.map((a) => a.questionId));
+        if (requiredIds.some((id) => !answeredIds.has(id))) continue;
+      }
     }
 
     const finalResp = { ...rawResp, answers: normAnswers };
