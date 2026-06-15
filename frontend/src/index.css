@@ -8867,3 +8867,104 @@ textarea.cs-text-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Epoch Calendar ─────────────────────────────────────────────── */
+.ec-page { display: flex; flex-direction: column; gap: 1.1rem; }
+
+.ec-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1.1rem 1.4rem;
+  background: color-mix(in srgb, var(--mint) 8%, var(--bg-soft));
+  border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line));
+}
+.ec-countdown-title { margin: 0 0 0.5rem; font-size: 1.15rem; color: var(--mint); }
+.ec-countdown-times { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.86rem; }
+.ec-time-label {
+  display: inline-block; min-width: 44px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 700;
+  color: var(--text-muted);
+}
+.ec-countdown-units { display: flex; gap: 1.2rem; }
+.ec-unit { text-align: center; min-width: 48px; }
+.ec-unit-value {
+  font-family: 'Orbitron', sans-serif; font-size: 1.9rem; font-weight: 700; line-height: 1;
+  color: var(--text);
+}
+.ec-unit-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.25rem; }
+
+.ec-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ec-month-title { margin: 0; font-size: 1.5rem; flex: 1 1 auto; }
+.ec-mode-toggle {
+  display: inline-flex; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface-soft); padding: 0.2rem; gap: 0.2rem;
+}
+.ec-mode-toggle button {
+  padding: 0.35rem 0.85rem; border: 0; background: transparent; color: var(--text-muted);
+  font-size: 0.82rem; font-weight: 600; border-radius: 7px; cursor: pointer;
+}
+.ec-mode-toggle button.active { background: color-mix(in srgb, var(--mint) 16%, transparent); color: var(--mint); }
+.ec-nav { display: inline-flex; align-items: center; gap: 0.5rem; }
+.ec-today-btn {
+  padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface-soft); color: var(--text-muted); font-weight: 600; cursor: pointer;
+}
+.ec-arrows { display: inline-flex; gap: 0.2rem; }
+.ec-arrows button {
+  width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--text); font-size: 1.1rem; cursor: pointer;
+}
+.ec-arrows button:hover { border-color: color-mix(in srgb, var(--mint) 45%, transparent); }
+
+.ec-multi-title { margin: 0.6rem 0 0.4rem; font-size: 1.05rem; color: var(--text-muted); }
+
+.ec-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ec-weekday {
+  background: var(--surface-soft); padding: 0.5rem; text-align: center;
+  font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+}
+.ec-cell {
+  position: relative;
+  min-height: 92px;
+  padding: 0.4rem;
+  background: var(--bg-soft);
+  display: flex; flex-direction: column;
+}
+.ec-grid-compact .ec-cell { min-height: 64px; padding: 0.3rem; }
+.ec-cell-out { opacity: 0.4; }
+.ec-daynum { font-size: 0.8rem; color: var(--text-muted); align-self: flex-end; }
+.ec-cell-today { background: color-mix(in srgb, var(--mint) 30%, var(--bg-soft)); }
+.ec-cell-today .ec-daynum { color: var(--text); font-weight: 700; }
+.ec-today-tag {
+  margin: auto; font-weight: 700; color: var(--mint); font-size: 1rem;
+}
+.ec-cell-past { background: #1b2532; }
+.ec-cell-future { background: color-mix(in srgb, #4a90d9 70%, #1b2532); }
+.ec-epoch { margin-top: 0.1rem; text-align: center; }
+.ec-epoch-num { font-size: 0.86rem; color: #fff; }
+.ec-epoch-time {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.8); margin-top: 1px;
+}
+.ec-epoch-note { font-size: 0.72rem; margin-top: 0.25rem; color: var(--mint); font-weight: 600; line-height: 1.2; }
+.ec-cell-future .ec-epoch-note { color: #fff7d6; }
+.ec-grid-compact .ec-epoch-note { display: none; }
+.ec-today-inline { font-size: 0.68rem; color: var(--mint); font-weight: 700; margin-top: 2px; }
+
+.ec-footnote { font-size: 0.82rem; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .ec-cell { min-height: 70px; }
+  .ec-epoch-note { display: none; }
+  .ec-unit-value { font-size: 1.4rem; }
+}

@@ -32,6 +32,7 @@ const NAV_GROUPS = [
     key: "insights",
     label: "Insights",
     links: [
+      { to: "/epochs", label: "Epoch Calendar" },
       { to: "/stats", label: "Governance Stats" },
       { to: "/guide", label: "Governance Guides" },
       { to: "/cips", label: "CIP Library" },
