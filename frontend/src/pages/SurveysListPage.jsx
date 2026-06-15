@@ -30,7 +30,15 @@ const ROLE_COLORS = {
 
 const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
 
-function StatusPill({ isActive }) {
+function StatusPill({ isActive, isCancelled }) {
+  if (isCancelled) {
+    return (
+      <span className="sv-status-pill cancelled">
+        <span className="sv-status-dot" />
+        Cancelled
+      </span>
+    );
+  }
   return (
     <span className={`sv-status-pill ${isActive ? "active" : "ended"}`}>
       <span className="sv-status-dot" />
@@ -113,6 +121,10 @@ export default function SurveysListPage() {
         : Object.keys(s.details?.roleWeighting ?? {});
       if (!roles.includes(roleFilter)) return false;
     }
+    const isCancelled = Boolean(s.cancelled);
+    // Cancelled surveys are hidden unless the "Cancelled" filter is selected.
+    if (statusFilter === "Cancelled") return isCancelled;
+    if (isCancelled) return false;
     if (statusFilter !== "All") {
       const isActive =
         currentEpoch != null && s.details?.endEpoch != null
@@ -165,7 +177,7 @@ export default function SurveysListPage() {
       {/* Filter chips */}
       <div className="sv-table-filters">
         <div className="sv-filter-chips">
-          {["All", "Active", "Ended"].map((s) => (
+          {["All", "Active", "Ended", "Cancelled"].map((s) => (
             <button
               key={s}
               type="button"
@@ -252,7 +264,7 @@ export default function SurveysListPage() {
                     to={`/surveys/${s.surveyTxId}`}
                   >
                     <div>
-                      <StatusPill isActive={isActive} />
+                      <StatusPill isActive={isActive} isCancelled={Boolean(s.cancelled)} />
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div className="sv-survey-name">

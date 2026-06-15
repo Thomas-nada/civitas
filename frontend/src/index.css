@@ -7581,6 +7581,14 @@ html[data-easter="true"] .topbar::after {
 
 .sv-status-pill.ended .sv-status-dot { background: var(--text-muted); opacity: 0.5; }
 
+.sv-status-pill.cancelled {
+  color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 11%, transparent);
+  border-color: color-mix(in srgb, var(--rose) 38%, transparent);
+}
+
+.sv-status-pill.cancelled .sv-status-dot { background: var(--rose); }
+
 .sv-survey-name {
   font-size: 0.88rem;
   font-weight: 700;

@@ -7234,19 +7234,20 @@ async function _runLabel17Build() {
     responsesBySurvey[rawResp.surveyTxId].push(finalResp);
   }
 
-  // Filter out cancelled surveys
-  const activeSurveys = surveys.filter(
-    (s) => !cancelledRefs.has(`${s.surveyTxId}:${s.surveyIndex}`)
-  );
+  // Tag cancelled surveys rather than dropping them, so the UI can offer a
+  // "Cancelled" filter. They are excluded from the default list client-side.
+  for (const s of surveys) {
+    if (cancelledRefs.has(`${s.surveyTxId}:${s.surveyIndex}`)) s.cancelled = true;
+  }
 
   // Sort surveys newest-first
-  activeSurveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
+  surveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
   // Sort responses by slot/txIndex ascending (for latest-wins dedup)
   for (const list of Object.values(responsesBySurvey)) {
     list.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.txIndexInBlock ?? 0) - (b.txIndexInBlock ?? 0));
   }
 
-  label17Cache = { fetchedAt: now, surveys: activeSurveys, responsesBySurvey, cancelledRefs };
+  label17Cache = { fetchedAt: now, surveys, responsesBySurvey, cancelledRefs };
   return label17Cache;
 }
 
