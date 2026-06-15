@@ -282,11 +282,20 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
   );
 }
 
+// A <input type="datetime-local"> value ("YYYY-MM-DDTHH:mm") carries no timezone.
+// We interpret the entered value as UTC so every survey creator and viewer agrees
+// on the same absolute reveal instant regardless of their location.
+function revealMsUtc(dt) {
+  if (!dt) return NaN;
+  const iso = dt.length === 16 ? `${dt}:00Z` : `${dt}Z`;
+  return new Date(iso).getTime();
+}
+
 function SealedConfigPanel({ revealDateTime, onChange }) {
   const { round, isPast } = useMemo(() => {
     if (!revealDateTime) return { round: null, isPast: false };
     try {
-      const ms = new Date(revealDateTime).getTime();
+      const ms = revealMsUtc(revealDateTime);
       const r = roundAt(ms, defaultChainInfo);
       return { round: r, isPast: ms < Date.now() };
     } catch {
@@ -294,20 +303,18 @@ function SealedConfigPanel({ revealDateTime, onChange }) {
     }
   }, [revealDateTime]);
 
-  // Default min = now + 1 hour
+  // Default min = now + 1 hour, expressed in UTC (toISOString is UTC).
   const minDateTime = useMemo(() => {
     const d = new Date(Date.now() + 60 * 60 * 1000);
     return d.toISOString().slice(0, 16);
   }, []);
-
-  const tzLabel = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return (
     <div className="cs-sealed-panel">
       <label className="cs-field-label" style={{ marginBottom: "8px" }}>
         Reveal responses after{" "}
         <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.75em", color: "var(--text-muted)", fontWeight: 400 }}>
-          ({tzLabel})
+          (UTC)
         </span>
       </label>
       <input
@@ -347,7 +354,7 @@ function validate(form, currentEpoch) {
   if (form.isTimelocked && !form.revealDateTime) {
     errors.push("Sealed mode requires a reveal date and time.");
   }
-  if (form.isTimelocked && form.revealDateTime && new Date(form.revealDateTime) <= new Date()) {
+  if (form.isTimelocked && form.revealDateTime && revealMsUtc(form.revealDateTime) <= Date.now()) {
     errors.push("Reveal date must be in the future.");
   }
   if (form.questions.length === 0) errors.push("Add at least one question.");
@@ -394,7 +401,7 @@ function buildSurveyForm(form, contentAnchorHash) {
     eligibleRoles: form.eligibleRoles,
     isTimelocked: form.isTimelocked,
     drandRound: form.isTimelocked && form.revealDateTime
-      ? roundAt(new Date(form.revealDateTime).getTime(), defaultChainInfo)
+      ? roundAt(revealMsUtc(form.revealDateTime), defaultChainInfo)
       : undefined,
     padding: form.isTimelocked ? 256 : undefined,
     questions: form.questions.map((q) => {
@@ -460,7 +467,7 @@ function buildPreviewPayload(form) {
     6: form.isTimelocked
       ? [1, "<52db9b…e971>",
           form.revealDateTime
-            ? roundAt(new Date(form.revealDateTime).getTime(), defaultChainInfo)
+            ? roundAt(revealMsUtc(form.revealDateTime), defaultChainInfo)
             : 0,
           256]
       : [0],

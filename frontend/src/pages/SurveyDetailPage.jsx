@@ -1141,7 +1141,7 @@ export default function SurveyDetailPage() {
           {isSealed && !isPastReveal && revealTimeMs != null ? (
             <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--amber)" }}>
               <span>◆</span>
-              <span>Sealed — responses are encrypted until <strong style={{ color: "var(--amber)" }}>{new Date(revealTimeMs).toLocaleString()}</strong></span>
+              <span>Sealed — responses are encrypted until <strong style={{ color: "var(--amber)" }}>{new Date(revealTimeMs).toLocaleString(undefined, { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} UTC</strong></span>
             </div>
           ) : null}
           {isSealed && isPastReveal && decryptState === "decrypting" ? (
