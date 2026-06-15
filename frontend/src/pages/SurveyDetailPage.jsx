@@ -893,6 +893,13 @@ export default function SurveyDetailPage() {
   const tallyWeight = visibleTally?.totalWeight ?? effectiveTally.totalWeight ?? 0;
   const showStakeWeight = roleTallies.some((row) => row.weighting === "StakeBased" && Number(row.totalWeight || 0) > 0)
     || effectiveResponses.some((response) => Number(response.responseStakeAda || 0) > 0);
+  // v4 surveys count 1 vote per credential (CredentialBased weighting), so the tally
+  // "weight" is a vote count — not ADA. The stake shown per response is informational.
+  // Surface the aggregate as "Stake represented" (sum of responders' live stake).
+  const isStakeWeighted = roleTallies.some((row) => row.weighting === "StakeBased");
+  const totalStakeRepresented = effectiveResponses.reduce(
+    (sum, r) => sum + Number(r.responseStakeAda || 0), 0
+  );
 
   if (loading) return (
     <main className="shell">
@@ -960,12 +967,17 @@ export default function SurveyDetailPage() {
         </div>
         <div className="survey-meta-item">
           <span className="muted">Total responses</span>
-          <strong>{tally.totalResponses ?? 0}</strong>
+          <strong>{effectiveResponses.length}</strong>
         </div>
-        {showStakeWeight ? (
+        {isStakeWeighted ? (
           <div className="survey-meta-item">
             <span className="muted">Counted stake</span>
-            <strong>{fmtAda(tally.totalWeight ?? 0, { compact: true })}</strong>
+            <strong>{fmtAda(tallyWeight, { compact: true })}</strong>
+          </div>
+        ) : totalStakeRepresented > 0 ? (
+          <div className="survey-meta-item">
+            <span className="muted">Stake represented</span>
+            <strong>{fmtAda(totalStakeRepresented, { compact: true })}</strong>
           </div>
         ) : null}
         <div className="survey-meta-item">
