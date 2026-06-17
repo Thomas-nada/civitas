@@ -959,7 +959,7 @@ function GoogleCalendarHelpModal({ feedUrl, onClose, onCopy }) {
         <div className="ec-modal-head">
           <div>
             <span className="ec-modal-kicker ec-modal-kicker-voting">Google Calendar feed</span>
-            <h3>Google Calendar opened in a new tab</h3>
+            <h3>Feed URL copied</h3>
           </div>
           <button type="button" className="ec-modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
@@ -1103,8 +1103,7 @@ export default function EpochCalendarPage() {
       navigator.clipboard?.writeText(calendarFeedUrl).catch(() => null);
       setCalendarCopied(true);
       setCalendarHelpOpen(true);
-      setCalendarNotice("Google Calendar opened in a new tab. The Civitas feed URL was copied; paste it into the From URL field and click Add calendar.");
-      window.open("https://calendar.google.com/calendar/u/0/r/settings/addbyurl", "_blank", "noopener,noreferrer");
+      setCalendarNotice("Civitas copied the calendar feed URL. Open Google Calendar when you're ready, then paste it into the From URL field and click Add calendar.");
       return;
     }
     // Google's servers can't reach localhost, so a live subscription isn't
