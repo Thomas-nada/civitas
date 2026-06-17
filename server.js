@@ -1067,6 +1067,17 @@ function calendarPercentagesFromRow(row) {
   return parts.length ? parts.join(", ") : calendarVotePercentages(row);
 }
 
+function calendarSupportLines(row) {
+  const ccStats = calendarVoteSlices(row?.voteStats?.constitutional_committee || {});
+  const ccDen = Math.max(Number(row?.ccEligibleCount || 0), ccStats.total, 1);
+  const ccPct = (ccStats.yes / ccDen) * 100;
+  return [
+    row?.drepRequiredPct != null ? `DRep - ${calendarPctPair(row?.drepYesPowerPct, row?.drepRequiredPct)}` : null,
+    row?.ccRequiredPct != null ? `CC - ${calendarPctPair(ccPct, row?.ccRequiredPct)}` : null,
+    row?.spoRequiredPct != null ? `SPO - ${calendarPctPair(row?.spoYesPct, row?.spoRequiredPct)}` : null
+  ].filter(Boolean);
+}
+
 function buildCalendarFallbackVoteStats(snapshotObj) {
   const map = new Map();
   function ensure(proposalId) {
@@ -1359,9 +1370,28 @@ function calendarActionLabel(type, info, epoch) {
   return `Epoch ${epoch}: ${name}`;
 }
 
+function calendarActionTitle(type, info) {
+  const name = compactCalendarName(info?.actionName || "Governance action", 120);
+  if (type === "submitted") return `Submitted: ${name}`;
+  if (type === "voting") return `Voting: ${name}`;
+  if (type === "expires") return `Expires: ${name}`;
+  if (type === "expired") return `Expired: ${name}`;
+  if (type === "dropped") return `Dropped: ${name}`;
+  if (type === "ratified") return `Ratified: ${name}`;
+  if (type === "enacted") return `Enacted: ${name}`;
+  return name;
+}
+
+function buildCivitasActionUrl(baseUrl, proposalId) {
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+  if (!base || !proposalId) return "";
+  return `${base}/actions/${encodeURIComponent(proposalId)}`;
+}
+
 function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
   const referenceEpoch = Number(snapshotObj?.latestEpoch || 0) || epochAtMs(Date.now());
   const scope = String(options?.scope || "").toLowerCase();
+  const baseUrl = String(options?.baseUrl || "").replace(/\/+$/, "");
   // Default to a focused, subscribe-friendly window: ~2 months of recent history
   // plus ~1 year ahead. A full-history feed (thousands of events) is rejected by
   // Google's import. "full" scope is available for power users via ?scope=full.
@@ -1391,7 +1421,14 @@ function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
     for (const [proposalId, info] of Object.entries(proposalInfo)) {
       for (const type of calendarEventTypesAtEpoch(info, epoch, referenceEpoch)) {
         const row = proposalRows.get(proposalId) || info;
-        actions.push({ proposalId, type, label: calendarActionLabel(type, row, epoch) });
+        actions.push({
+          proposalId,
+          type,
+          label: calendarActionLabel(type, row, epoch),
+          title: calendarActionTitle(type, row),
+          supportLines: calendarSupportLines(row),
+          actionUrl: buildCivitasActionUrl(baseUrl, proposalId)
+        });
       }
     }
     const description = [
@@ -1399,7 +1436,7 @@ function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
       `Epoch ${epoch - 2} rewards are distributed.`,
       actions.length ? "" : null,
       actions.length ? "Governance action snapshot:" : null,
-      ...actions.map((event) => event.label)
+      ...actions.map((event) => event.title || event.label)
     ].filter((line) => line !== null).join("\n");
     lines.push(
       "BEGIN:VEVENT",
@@ -1418,11 +1455,22 @@ function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
         `DTSTAMP:${stamp}`,
         `DTSTART:${formatIcsDate(startMs)}`,
         `DTEND:${formatIcsDate(endMs)}`,
-        `SUMMARY:${icsEscape(event.label)}`,
+        `SUMMARY:${icsEscape(event.title || event.label)}`,
         `DESCRIPTION:${icsEscape([
-          `Epoch ${epoch} governance action snapshot.`,
-          event.label,
-          `Proposal: ${event.proposalId || "unknown"}`
+          event.title || event.label,
+          `Epoch ${epoch}`,
+          ...event.supportLines,
+          event.actionUrl ? "" : null,
+          event.actionUrl ? "Read on Civitas:" : null,
+          event.actionUrl || null
+        ].filter((line) => line !== null).join("\n"))}`,
+        ...(event.actionUrl ? [
+          `URL:${icsEscape(event.actionUrl)}`
+        ] : []),
+        `X-CIVITAS-PROPOSAL-ID:${icsEscape(event.proposalId || "unknown")}`,
+        `COMMENT:${icsEscape([
+          `Proposal: ${event.proposalId || "unknown"}`,
+          event.actionUrl || ""
         ].join("\n"))}`,
         "END:VEVENT"
       );
@@ -8153,7 +8201,10 @@ const server = http.createServer(async (req, res) => {
     const fromEpoch = Number(url.searchParams.get("from") || 0);
     const toEpoch = Number(url.searchParams.get("to") || 0);
     const scope = String(url.searchParams.get("scope") || "").trim().toLowerCase();
-    const content = buildEpochCalendarIcs(snapshot, fromEpoch, toEpoch, { scope });
+    const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
+    const proto = String(req.headers["x-forwarded-proto"] || (host.includes("localhost") ? "http" : "https")).split(",")[0].trim();
+    const baseUrl = host ? `${proto}://${host}` : "";
+    const content = buildEpochCalendarIcs(snapshot, fromEpoch, toEpoch, { scope, baseUrl });
     res.writeHead(200, {
       "Content-Type": "text/calendar; charset=utf-8",
       "Cache-Control": "public, max-age=900",
