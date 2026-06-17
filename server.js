@@ -1006,6 +1006,304 @@ function calendarVotePercentages(info) {
   return parts.length ? parts.join(", ") : "no voting threshold";
 }
 
+function isActiveCalendarDrep(drep) {
+  const status = String(drep?.status || "").trim().toLowerCase();
+  return status !== "expired" && status !== "retired";
+}
+
+function isCalendarNoConfidenceAction(governanceType) {
+  return String(governanceType || "").toLowerCase().includes("no confidence");
+}
+
+function isCalendarHardForkAction(governanceType) {
+  const type = String(governanceType || "").toLowerCase();
+  return type.includes("hard fork") || type.includes("hardfork");
+}
+
+function isCalendarAlwaysAbstainSpo(spo) {
+  const status = String(spo?.delegationStatus || "").toLowerCase();
+  const literal = String(spo?.delegatedDrepLiteralRaw || spo?.delegatedDrepLiteral || "").toLowerCase();
+  return status.includes("always abstain") || literal.includes("always_abstain");
+}
+
+function isCalendarAlwaysNoConfidenceSpo(spo) {
+  const status = String(spo?.delegationStatus || "").toLowerCase();
+  const literal = String(spo?.delegatedDrepLiteralRaw || spo?.delegatedDrepLiteral || "").toLowerCase();
+  return status.includes("always no confidence") || literal.includes("always_no_confidence");
+}
+
+function shouldUseCalendarNewSpoFormula(proposalId, submittedEpoch) {
+  const transitionAction = "gov_action1pvv5wmjqhwa4u85vu9f4ydmzu2mgt8n7et967ph2urhx53r70xusqnmm525";
+  if (String(proposalId || "") === transitionAction) return true;
+  const epoch = Number(submittedEpoch);
+  return Number.isFinite(epoch) && epoch >= 534;
+}
+
+function calendarVoteSlices(stats) {
+  const yes = Number(stats?.yes || 0);
+  const no = Number(stats?.no || 0);
+  const abstain = Number(stats?.abstain || 0);
+  const other = Number(stats?.noConfidence || 0) + Number(stats?.other || 0);
+  return { yes, no, abstain, other, total: yes + no + abstain + other };
+}
+
+function calendarPctPair(currentPct, requiredPct) {
+  if (requiredPct === null || requiredPct === undefined) return null;
+  const current = Number(currentPct);
+  const required = Number(requiredPct);
+  if (!Number.isFinite(required)) return null;
+  return `${Number.isFinite(current) ? current.toFixed(2) : "0.00"}%/${required.toFixed(2)}%`;
+}
+
+function calendarPercentagesFromRow(row) {
+  const ccStats = calendarVoteSlices(row?.voteStats?.constitutional_committee || {});
+  const ccDen = Math.max(Number(row?.ccEligibleCount || 0), ccStats.total, 1);
+  const ccPct = (ccStats.yes / ccDen) * 100;
+  const parts = [
+    row?.drepRequiredPct != null ? `DRep ${calendarPctPair(row?.drepYesPowerPct, row?.drepRequiredPct)}` : null,
+    row?.ccRequiredPct != null ? `CC ${calendarPctPair(ccPct, row?.ccRequiredPct)}` : null,
+    row?.spoRequiredPct != null ? `SPO ${calendarPctPair(row?.spoYesPct, row?.spoRequiredPct)}` : null
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : calendarVotePercentages(row);
+}
+
+function buildCalendarFallbackVoteStats(snapshotObj) {
+  const map = new Map();
+  function ensure(proposalId) {
+    if (!map.has(proposalId)) {
+      map.set(proposalId, {
+        drep: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+        constitutional_committee: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+        stake_pool: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+        other: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 }
+      });
+    }
+    return map.get(proposalId);
+  }
+  const collect = (rows, roleKey) => {
+    for (const actor of Array.isArray(rows) ? rows : []) {
+      for (const vote of actor.votes || []) {
+        const stats = ensure(vote.proposalId)[roleKey];
+        const v = String(vote.vote || "").toLowerCase();
+        if (v === "yes") stats.yes += 1;
+        else if (v === "no") stats.no += 1;
+        else if (v === "abstain") stats.abstain += 1;
+        else if (v.includes("no_confidence")) stats.noConfidence += 1;
+        else stats.other += 1;
+        stats.total += 1;
+      }
+    }
+  };
+  collect(snapshotObj?.dreps, "drep");
+  collect(snapshotObj?.committeeMembers, "constitutional_committee");
+  collect(snapshotObj?.spos, "stake_pool");
+  return map;
+}
+
+function buildCalendarDrepPowerStats(snapshotObj, proposalInfo) {
+  const byProposal = new Map();
+  const dreps = Array.isArray(snapshotObj?.dreps) ? snapshotObj.dreps : [];
+  const specialDreps = snapshotObj?.specialDreps || {};
+  const alwaysAbstainId = "drep_always_abstain";
+  const alwaysNoConfidenceId = "drep_always_no_confidence";
+  const alwaysAbstainPowerAda = Number(specialDreps?.alwaysAbstain?.votingPowerAda || 0);
+  const alwaysNoConfidencePowerAda = Number(specialDreps?.alwaysNoConfidence?.votingPowerAda || 0);
+  const knownDrepIds = new Set(dreps.map((drep) => drep.id));
+  const autoAbstainIds = new Set([alwaysAbstainId]);
+  let regularDrepStakeAda = dreps.reduce((sum, drep) => (
+    isActiveCalendarDrep(drep) ? sum + Number(drep.votingPowerAda || 0) : sum
+  ), 0);
+  if (knownDrepIds.has(alwaysAbstainId)) regularDrepStakeAda -= Number(dreps.find((drep) => drep.id === alwaysAbstainId)?.votingPowerAda || 0);
+  if (knownDrepIds.has(alwaysNoConfidenceId)) regularDrepStakeAda -= Number(dreps.find((drep) => drep.id === alwaysNoConfidenceId)?.votingPowerAda || 0);
+
+  for (const drep of dreps) {
+    const votes = drep.votes || [];
+    if (!votes.length) continue;
+    const name = String(drep.name || "").toLowerCase();
+    const id = String(drep.id || "").toLowerCase();
+    const allAbstain = votes.every((vote) => String(vote.vote || "").toLowerCase() === "abstain");
+    if ((name.includes("auto") && name.includes("abstain")) ||
+        (name.includes("always") && name.includes("abstain")) ||
+        (id.includes("always") && id.includes("abstain")) ||
+        (id.includes("auto") && id.includes("abstain")) ||
+        (allAbstain && (name.includes("abstain") || id.includes("abstain")))) {
+      autoAbstainIds.add(drep.id);
+    }
+  }
+
+  for (const drep of dreps) {
+    if (!isActiveCalendarDrep(drep)) continue;
+    const vp = Number(drep.votingPowerAda || 0);
+    for (const vote of drep.votes || []) {
+      const proposalId = vote.proposalId;
+      if (!byProposal.has(proposalId)) {
+        byProposal.set(proposalId, {
+          yesPowerAda: 0, noPowerAda: 0, noConfidencePowerAda: 0,
+          abstainActivePowerAda: 0, abstainAutoPowerAda: 0,
+          noConfidenceAutoPowerAda: 0, otherPowerAda: 0, votedPowerAda: 0
+        });
+      }
+      const stats = byProposal.get(proposalId);
+      const v = String(vote.vote || "").toLowerCase();
+      if (v === "yes") stats.yesPowerAda += vp;
+      else if (v === "no") stats.noPowerAda += vp;
+      else if (v === "abstain") {
+        if (autoAbstainIds.has(drep.id)) stats.abstainAutoPowerAda += vp;
+        else stats.abstainActivePowerAda += vp;
+      } else if (v.includes("no_confidence")) stats.noConfidencePowerAda += vp;
+      else stats.otherPowerAda += vp;
+      stats.votedPowerAda += vp;
+    }
+  }
+  for (const proposalId of Object.keys(proposalInfo || {})) {
+    if (!byProposal.has(proposalId)) {
+      byProposal.set(proposalId, {
+        yesPowerAda: 0, noPowerAda: 0, noConfidencePowerAda: 0,
+        abstainActivePowerAda: 0, abstainAutoPowerAda: 0,
+        noConfidenceAutoPowerAda: 0, otherPowerAda: 0, votedPowerAda: 0
+      });
+    }
+    const stats = byProposal.get(proposalId);
+    if (alwaysAbstainPowerAda > 0) {
+      stats.abstainAutoPowerAda += alwaysAbstainPowerAda;
+      stats.votedPowerAda += alwaysAbstainPowerAda;
+    }
+    if (alwaysNoConfidencePowerAda > 0) stats.noConfidenceAutoPowerAda += alwaysNoConfidencePowerAda;
+  }
+  return { regularDrepStakeAda: Math.max(regularDrepStakeAda, 0), alwaysNoConfidencePowerAda, byProposal };
+}
+
+function buildCalendarSpoPowerStats(snapshotObj, proposalInfo) {
+  const byProposal = new Map();
+  const proposalIds = Object.keys(proposalInfo || {});
+  function ensure(proposalId) {
+    if (!byProposal.has(proposalId)) {
+      byProposal.set(proposalId, {
+        activeYesPowerAda: 0, activeNoPowerAda: 0, activeAbstainPowerAda: 0,
+        passiveAlwaysAbstainPowerAda: 0, passiveAlwaysNoConfidencePowerAda: 0, passiveNoVotePowerAda: 0
+      });
+    }
+    return byProposal.get(proposalId);
+  }
+  for (const spo of Array.isArray(snapshotObj?.spos) ? snapshotObj.spos : []) {
+    const vp = Number(spo?.votingPowerAda || 0);
+    const votesByProposal = new Map((spo?.votes || []).map((vote) => [String(vote?.proposalId || ""), vote]));
+    for (const proposalId of proposalIds) {
+      const vote = votesByProposal.get(proposalId);
+      const stats = ensure(proposalId);
+      if (!vote) {
+        if (isCalendarAlwaysAbstainSpo(spo)) stats.passiveAlwaysAbstainPowerAda += vp;
+        else if (isCalendarAlwaysNoConfidenceSpo(spo)) stats.passiveAlwaysNoConfidencePowerAda += vp;
+        else stats.passiveNoVotePowerAda += vp;
+        continue;
+      }
+      const v = String(vote.vote || "").toLowerCase();
+      if (v === "yes") stats.activeYesPowerAda += vp;
+      else if (v === "no") stats.activeNoPowerAda += vp;
+      else if (v === "abstain") stats.activeAbstainPowerAda += vp;
+      else stats.passiveNoVotePowerAda += vp;
+    }
+  }
+  return { byProposal };
+}
+
+function buildCalendarActionRows(snapshotObj, proposalInfo) {
+  const fallbackVoteStats = buildCalendarFallbackVoteStats(snapshotObj);
+  const drepPowerStats = buildCalendarDrepPowerStats(snapshotObj, proposalInfo);
+  const spoPowerStats = buildCalendarSpoPowerStats(snapshotObj, proposalInfo);
+  const committeeMembers = Array.isArray(snapshotObj?.committeeMembers) ? snapshotObj.committeeMembers : [];
+  const committeeMinSize = Number(snapshotObj?.thresholdContext?.committeeMinSize || 0);
+  const rows = new Map();
+  for (const [proposalId, info] of Object.entries(proposalInfo || {})) {
+    const directVoteStats = info?.voteStats && Object.keys(info.voteStats).length > 0 ? info.voteStats : null;
+    const voteStats = directVoteStats || fallbackVoteStats.get(proposalId) || {};
+    const nomosDrep = info?.nomosModel?.drep || null;
+    const nomosSpo = info?.nomosModel?.spo || null;
+    const useNomosDrep = Boolean(nomosDrep) && (
+      Number(nomosDrep?.yesLovelace || 0) > 0 ||
+      Number(nomosDrep?.noLovelace || 0) > 0 ||
+      Number(nomosDrep?.notVotedLovelace || 0) > 0 ||
+      Number(nomosDrep?.activeAbstainLovelace || 0) > 0 ||
+      Number(nomosDrep?.noConfidenceLovelace || nomosDrep?.alwaysNoConfidenceLovelace || 0) > 0
+    );
+    const useNomosSpo = Boolean(nomosSpo) && (
+      Number(nomosSpo?.yesLovelace || 0) > 0 ||
+      Number(nomosSpo?.noLovelace || 0) > 0 ||
+      Number(nomosSpo?.notVotedLovelace || 0) > 0 ||
+      Number(nomosSpo?.activeAbstainLovelace || 0) > 0 ||
+      Number(nomosSpo?.alwaysAbstainLovelace || 0) > 0
+    );
+    const powerStats = drepPowerStats.byProposal.get(proposalId) || {};
+    const spoStats = spoPowerStats.byProposal.get(proposalId) || {};
+    const isNoConfidence = isCalendarNoConfidenceAction(info?.governanceType);
+    const totalActiveStakeAda = Number(drepPowerStats.regularDrepStakeAda || 0) + Number(drepPowerStats.alwaysNoConfidencePowerAda || 0);
+    const yesTotalAda = isNoConfidence ? Number(powerStats.yesPowerAda || 0) + Number(drepPowerStats.alwaysNoConfidencePowerAda || 0) : Number(powerStats.yesPowerAda || 0);
+    const noConfidenceTotalAda = isNoConfidence ? 0 : Number(powerStats.noConfidencePowerAda || 0) + Number(powerStats.noConfidenceAutoPowerAda || 0);
+    const noTotalAda = Number(powerStats.noPowerAda || 0);
+    const abstainActiveAda = Number(powerStats.abstainActivePowerAda || 0);
+    const notVotedAda = Math.max(totalActiveStakeAda - yesTotalAda - noTotalAda - noConfidenceTotalAda - abstainActiveAda, 0);
+    const drepOutcomeBaseAda = Math.max(totalActiveStakeAda - abstainActiveAda, 0);
+    const drepNoSideAda = noTotalAda + noConfidenceTotalAda + notVotedAda;
+    const drepYesPct = useNomosDrep ? Number(nomosDrep?.yesPct || 0) : (drepOutcomeBaseAda > 0 ? (yesTotalAda / drepOutcomeBaseAda) * 100 : null);
+    const drepNoPct = useNomosDrep ? Number(nomosDrep?.noPct || 0) : (drepOutcomeBaseAda > 0 ? (drepNoSideAda / drepOutcomeBaseAda) * 100 : null);
+
+    const activeYesAda = Number(spoStats.activeYesPowerAda || 0);
+    const activeNoAda = Number(spoStats.activeNoPowerAda || 0);
+    const activeAbstainAda = Number(spoStats.activeAbstainPowerAda || 0);
+    const passiveAlwaysAbstainAda = Number(spoStats.passiveAlwaysAbstainPowerAda || 0);
+    const passiveAlwaysNoConfidenceAda = Number(spoStats.passiveAlwaysNoConfidencePowerAda || 0);
+    const passiveNoVoteAda = Number(spoStats.passiveNoVotePowerAda || 0);
+    const effectiveTotalAda = Math.max(activeYesAda + activeNoAda + activeAbstainAda + passiveAlwaysAbstainAda + passiveAlwaysNoConfidenceAda + passiveNoVoteAda, 0);
+    let spoYesAda = activeYesAda;
+    let spoNoAda = activeNoAda;
+    let spoAbstainAda = activeAbstainAda;
+    let spoOutcomeDenAda = 0;
+    if (shouldUseCalendarNewSpoFormula(proposalId, info?.submittedEpoch)) {
+      let notVotedCalcAda = passiveNoVoteAda;
+      if (isCalendarHardForkAction(info?.governanceType)) {
+        spoAbstainAda = activeAbstainAda;
+        notVotedCalcAda = passiveNoVoteAda + passiveAlwaysNoConfidenceAda + passiveAlwaysAbstainAda;
+      } else if (isNoConfidence) {
+        spoYesAda = activeYesAda + passiveAlwaysNoConfidenceAda;
+        spoAbstainAda = activeAbstainAda + passiveAlwaysAbstainAda;
+      } else {
+        spoAbstainAda = activeAbstainAda + passiveAlwaysAbstainAda;
+      }
+      spoNoAda = activeNoAda + Math.max(notVotedCalcAda, 0);
+      spoOutcomeDenAda = Math.max(effectiveTotalAda - spoAbstainAda, 0);
+    } else {
+      spoNoAda = activeNoAda + passiveAlwaysNoConfidenceAda;
+      spoAbstainAda = activeAbstainAda + passiveAlwaysAbstainAda;
+      spoOutcomeDenAda = Math.max(activeYesAda + activeNoAda + passiveAlwaysNoConfidenceAda, 0);
+    }
+    const spoYesPct = useNomosSpo ? Number(nomosSpo?.yesPct || 0) : (spoOutcomeDenAda > 0 ? (spoYesAda / spoOutcomeDenAda) * 100 : null);
+    const submittedEpoch = Number(info?.submittedEpoch || 0);
+    const activeCommitteeCount = committeeMembers.filter((member) => String(member?.status || "").toLowerCase() === "active").length;
+    const ccEligibleFromEpoch = submittedEpoch > 0
+      ? committeeMembers.filter((member) => {
+          const start = Number(member?.seatStartEpoch || 0);
+          const end = Number(member?.expirationEpoch || 0);
+          if (start > 0 && submittedEpoch < start) return false;
+          if (end > 0 && submittedEpoch > end) return false;
+          return true;
+        }).length
+      : 0;
+    rows.set(proposalId, {
+      ...info,
+      proposalId,
+      voteStats,
+      drepYesPowerPct: drepYesPct,
+      drepNoPowerPct: drepNoPct,
+      spoYesPct,
+      drepRequiredPct: Number(info?.thresholdInfo?.drepRequiredPct || 0) > 0 ? Number(info.thresholdInfo.drepRequiredPct) : null,
+      spoRequiredPct: Number(info?.thresholdInfo?.poolRequiredPct || 0) > 0 ? Number(info.thresholdInfo.poolRequiredPct) : null,
+      ccRequiredPct: info?.thresholdInfo?.ccRequiredPct ?? null,
+      ccEligibleCount: ccEligibleFromEpoch > 0 ? ccEligibleFromEpoch : (activeCommitteeCount > 0 ? activeCommitteeCount : committeeMinSize)
+    });
+  }
+  return rows;
+}
+
 function calendarActionStatus(info) {
   if (!info) return "Unknown";
   if (String(info.outcome || "").toLowerCase() === "pending") return "Active";
@@ -1050,7 +1348,7 @@ function calendarEventTypesAtEpoch(info, epoch, referenceEpoch) {
 
 function calendarActionLabel(type, info, epoch) {
   const name = compactCalendarName(info?.actionName || "Governance action");
-  const pct = calendarVotePercentages(info);
+  const pct = calendarPercentagesFromRow(info);
   if (type === "submitted") return `Submitted: ${name}`;
   if (type === "voting") return `Voting: ${name} ${pct}`;
   if (type === "expires") return `Expires: ${name} ${pct}`;
@@ -1075,6 +1373,7 @@ function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
   const maxEpochs = fullScope ? 2500 : 120;
   const endEpoch = Math.max(startEpoch, Math.min(startEpoch + maxEpochs, requestedEndEpoch));
   const proposalInfo = compactProposalInfoForDashboard(snapshotObj?.proposalInfo || {});
+  const proposalRows = buildCalendarActionRows(snapshotObj, proposalInfo);
   const stamp = formatIcsDate(Date.now());
   const lines = [
     "BEGIN:VCALENDAR",
@@ -1091,7 +1390,8 @@ function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
     const actions = [];
     for (const [proposalId, info] of Object.entries(proposalInfo)) {
       for (const type of calendarEventTypesAtEpoch(info, epoch, referenceEpoch)) {
-        actions.push({ proposalId, type, label: calendarActionLabel(type, info, epoch) });
+        const row = proposalRows.get(proposalId) || info;
+        actions.push({ proposalId, type, label: calendarActionLabel(type, row, epoch) });
       }
     }
     const description = [
