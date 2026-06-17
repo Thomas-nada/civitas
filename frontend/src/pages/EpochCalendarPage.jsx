@@ -978,7 +978,7 @@ async function copyTextToClipboard(value) {
   return copied;
 }
 
-function GoogleCalendarHelpModal({ feedUrl, copyStatus, onClose, onCopy }) {
+function GoogleCalendarHelpModal({ feedUrl, copyStatus, copyFlash, onClose, onCopy }) {
   if (!feedUrl) return null;
   return (
     <div className="ec-modal-backdrop" role="presentation" onClick={onClose}>
@@ -994,7 +994,9 @@ function GoogleCalendarHelpModal({ feedUrl, copyStatus, onClose, onCopy }) {
         <div className="ec-google-feed-copy">
           <span>{copyStatus || "Feed URL copied to clipboard"}</span>
           <input readOnly value={feedUrl} onFocus={(event) => event.currentTarget.select()} />
-          <button type="button" className="ec-modal-secondary" onClick={onCopy}>Copy again</button>
+          <button type="button" className={`ec-modal-secondary ${copyFlash ? "copied" : ""}`} onClick={onCopy}>
+            {copyFlash ? "Copied!" : "Copy again"}
+          </button>
         </div>
 
         <ol className="ec-google-feed-steps">
@@ -1054,6 +1056,7 @@ export default function EpochCalendarPage() {
   const [calendarHelpOpen, setCalendarHelpOpen] = useState(false);
   const [calendarCopied, setCalendarCopied] = useState(false);
   const [calendarCopyStatus, setCalendarCopyStatus] = useState("");
+  const [calendarCopyFlash, setCalendarCopyFlash] = useState(false);
   const calendarFeedUrl = `${window.location.origin}/api/epoch-calendar.ics`;
 
   useEffect(() => {
@@ -1122,10 +1125,16 @@ export default function EpochCalendarPage() {
     [visibleEpochs, actionEvents]
   );
 
-  async function copyCalendarFeedUrl(statusPrefix = "Feed URL") {
+  async function copyCalendarFeedUrl(statusPrefix = "Feed URL", repeated = false) {
     const copied = await copyTextToClipboard(calendarFeedUrl);
     setCalendarCopied(copied);
-    setCalendarCopyStatus(copied ? `${statusPrefix} copied to clipboard` : "Copy failed. Select the URL field and copy it manually.");
+    setCalendarCopyStatus(copied
+      ? `${repeated ? "Copied again" : statusPrefix} at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+      : "Copy failed. Select the URL field and copy it manually.");
+    setCalendarCopyFlash(copied);
+    if (copied) {
+      window.setTimeout(() => setCalendarCopyFlash(false), 1400);
+    }
     return copied;
   }
 
@@ -1241,8 +1250,9 @@ export default function EpochCalendarPage() {
       <GoogleCalendarHelpModal
         feedUrl={calendarHelpOpen ? calendarFeedUrl : ""}
         copyStatus={calendarCopyStatus}
+        copyFlash={calendarCopyFlash}
         onClose={() => setCalendarHelpOpen(false)}
-        onCopy={() => copyCalendarFeedUrl("Feed URL")}
+        onCopy={() => copyCalendarFeedUrl("Feed URL", true)}
       />
 
       <p className="ec-footnote muted">

@@ -9399,6 +9399,11 @@ textarea.cs-text-input {
   color: var(--text-muted);
   cursor: pointer;
 }
+.ec-modal-secondary.copied {
+  border-color: color-mix(in srgb, var(--mint) 62%, var(--line));
+  background: var(--mint);
+  color: var(--bg);
+}
 
 .ec-epoch-modal { width: min(860px, 100%); }
 .ec-epoch-modal-list {
