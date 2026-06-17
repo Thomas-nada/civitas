@@ -951,7 +951,34 @@ function MonthGrid({ year, month, now, actionEvents, selectedEpoch, onSelectEpoc
   );
 }
 
-function GoogleCalendarHelpModal({ feedUrl, onClose, onCopy }) {
+async function copyTextToClipboard(value) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // Fall through to the older selection-based copy path.
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+  return copied;
+}
+
+function GoogleCalendarHelpModal({ feedUrl, copyStatus, onClose, onCopy }) {
   if (!feedUrl) return null;
   return (
     <div className="ec-modal-backdrop" role="presentation" onClick={onClose}>
@@ -965,7 +992,7 @@ function GoogleCalendarHelpModal({ feedUrl, onClose, onCopy }) {
         </div>
 
         <div className="ec-google-feed-copy">
-          <span>Feed URL copied to clipboard</span>
+          <span>{copyStatus || "Feed URL copied to clipboard"}</span>
           <input readOnly value={feedUrl} onFocus={(event) => event.currentTarget.select()} />
           <button type="button" className="ec-modal-secondary" onClick={onCopy}>Copy again</button>
         </div>
@@ -1026,6 +1053,7 @@ export default function EpochCalendarPage() {
   const [calendarNotice, setCalendarNotice] = useState("");
   const [calendarHelpOpen, setCalendarHelpOpen] = useState(false);
   const [calendarCopied, setCalendarCopied] = useState(false);
+  const [calendarCopyStatus, setCalendarCopyStatus] = useState("");
   const calendarFeedUrl = `${window.location.origin}/api/epoch-calendar.ics`;
 
   useEffect(() => {
@@ -1094,14 +1122,20 @@ export default function EpochCalendarPage() {
     [visibleEpochs, actionEvents]
   );
 
+  async function copyCalendarFeedUrl(statusPrefix = "Feed URL") {
+    const copied = await copyTextToClipboard(calendarFeedUrl);
+    setCalendarCopied(copied);
+    setCalendarCopyStatus(copied ? `${statusPrefix} copied to clipboard` : "Copy failed. Select the URL field and copy it manually.");
+    return copied;
+  }
+
   async function importVisibleCalendar() {
     // Single source of truth: the server feed, which auto-reflects the live
     // Civitas calendar each epoch. Subscribing to it (not importing a file) is
     // what keeps Google Calendar mirrored.
     const onLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
     if (!onLocalhost) {
-      navigator.clipboard?.writeText(calendarFeedUrl).catch(() => null);
-      setCalendarCopied(true);
+      await copyCalendarFeedUrl("Feed URL");
       setCalendarHelpOpen(true);
       setCalendarNotice("Civitas copied the calendar feed URL. Open Google Calendar when you're ready, then paste it into the From URL field and click Add calendar.");
       return;
@@ -1206,11 +1240,9 @@ export default function EpochCalendarPage() {
       <ActionModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       <GoogleCalendarHelpModal
         feedUrl={calendarHelpOpen ? calendarFeedUrl : ""}
+        copyStatus={calendarCopyStatus}
         onClose={() => setCalendarHelpOpen(false)}
-        onCopy={() => {
-          navigator.clipboard?.writeText(calendarFeedUrl).catch(() => null);
-          setCalendarCopied(true);
-        }}
+        onCopy={() => copyCalendarFeedUrl("Feed URL")}
       />
 
       <p className="ec-footnote muted">
