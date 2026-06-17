@@ -3067,10 +3067,12 @@ async function resolveDrepNameFromMetadataEnvelope(metadataEnvelope, nameCache, 
 // rationales) against their on-chain hash using the
 // @amanita-labs/cardano-governance-metadata library, and ADDS a non-blocking
 // `metadataVerification` field to the relevant API responses.
-// OFF by default — enable by setting env GOV_META_VERIFY_SHADOW=1 (also on the
-// production host). Results are cached by anchor (url+hash is immutable), so each
-// anchor is only fetched/verified once.
-const GOV_META_VERIFY_SHADOW = String(process.env.GOV_META_VERIFY_SHADOW || "") === "1";
+// Enabled by default; set GOV_META_VERIFY_SHADOW=0/false/off to disable.
+// Results are cached by anchor (url+hash is immutable), so each anchor is only
+// fetched/verified once.
+const GOV_META_VERIFY_SHADOW = !["0", "false", "off"].includes(
+  String(process.env.GOV_META_VERIFY_SHADOW ?? "1").trim().toLowerCase()
+);
 let govMetaLibPromise = null;
 const govMetaVerifyCache = new Map(); // `${url}|${hash}` -> verification result
 function loadGovMetaLib() {
