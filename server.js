@@ -160,6 +160,8 @@ const SNAPSHOT_SCHEMA_VERSION = Number(process.env.SNAPSHOT_SCHEMA_VERSION || 1)
 const SNAPSHOT_HISTORY_DIR = process.env.SNAPSHOT_HISTORY_DIR || path.join(__dirname, "snapshot_history");
 const NCL_SNAPSHOT_PATH = process.env.NCL_SNAPSHOT_PATH || path.join(__dirname, "snapshot.ncl.json");
 const EPOCH_SNAPSHOT_START_EPOCH = Number(process.env.EPOCH_SNAPSHOT_START_EPOCH || 507);
+const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
+const CARDANO_EPOCH_SECONDS = 432000;
 const VOTE_TX_TIME_MAX_LOOKUPS = Number(process.env.VOTE_TX_TIME_MAX_LOOKUPS || 40000);
 const VOTE_TX_TIME_CACHE_PATH = process.env.VOTE_TX_TIME_CACHE_PATH || path.join(__dirname, "cache.voteTxTimes.json");
 const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_LOOKUPS || 2000);
@@ -894,6 +896,7 @@ function compactProposalInfoForDashboard(proposalInfo) {
       expiredEpoch: Number(info?.expiredEpoch || 0),
       voteStats: info?.voteStats || {},
       thresholdInfo: info?.thresholdInfo || null,
+      nomosModel: info?.nomosModel || null,
       txHash: info?.txHash || null,
       certIndex: info?.certIndex ?? null,
       withdrawalAmountAda: withdrawalAmountAda || null
@@ -922,6 +925,211 @@ function compactVotesForDashboard(votes) {
       votedAt: vote?.votedAt || (votedAtUnix ? new Date(votedAtUnix * 1000).toISOString() : null)
     };
   });
+}
+
+function epochStartMs(epoch) {
+  return (SHELLEY_EPOCH_208_START_UNIX + (Number(epoch) - 208) * CARDANO_EPOCH_SECONDS) * 1000;
+}
+
+function epochAtMs(ms) {
+  return 208 + Math.floor((Number(ms) / 1000 - SHELLEY_EPOCH_208_START_UNIX) / CARDANO_EPOCH_SECONDS);
+}
+
+function icsEscape(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+// Fold a content line to <=75 OCTETS per RFC 5545, breaking only on whole
+// Unicode code points (never mid-character) and prefixing continuation lines
+// with a single space. Character-count folding corrupts multi-byte UTF-8 and
+// makes Google reject the feed.
+function foldIcsLine(line) {
+  const input = String(line || "");
+  const segments = [];
+  let current = "";
+  let currentBytes = 0;
+  for (const ch of input) {
+    const chBytes = Buffer.byteLength(ch, "utf8");
+    const limit = segments.length === 0 ? 75 : 74; // continuations carry a leading space
+    if (currentBytes + chBytes > limit) {
+      segments.push(current);
+      current = ch;
+      currentBytes = chBytes;
+    } else {
+      current += ch;
+      currentBytes += chBytes;
+    }
+  }
+  segments.push(current);
+  return segments.map((seg, i) => (i === 0 ? seg : ` ${seg}`)).join("\r\n");
+}
+
+function formatIcsDate(ms) {
+  return new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function stripCalendarText(value) {
+  return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function compactCalendarName(value, max = 96) {
+  const clean = stripCalendarText(value);
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+function calendarVotePercentages(info) {
+  const nomosDrep = info?.nomosModel?.drep || null;
+  const nomosSpo = info?.nomosModel?.spo || null;
+  const threshold = info?.thresholdInfo || {};
+  const parts = [];
+  const drepRequired = Number(threshold?.drepRequiredPct || 0);
+  if (drepRequired > 0) {
+    const yesPct = Number(nomosDrep?.yesPct ?? 0);
+    parts.push(`DRep ${Number.isFinite(yesPct) ? yesPct.toFixed(2) : "0.00"}%/${drepRequired.toFixed(2)}%`);
+  }
+  const ccRequired = Number(threshold?.ccRequiredPct || 0);
+  if (ccRequired > 0) {
+    const stats = info?.voteStats?.constitutional_committee || {};
+    const yes = Number(stats?.yes || 0);
+    const total = Math.max(Number(stats?.total || 0), 1);
+    parts.push(`CC ${((yes / total) * 100).toFixed(2)}%/${ccRequired.toFixed(2)}%`);
+  }
+  const spoRequired = Number(threshold?.poolRequiredPct || 0);
+  if (spoRequired > 0) {
+    const yesPct = Number(nomosSpo?.yesPct ?? 0);
+    parts.push(`SPO ${Number.isFinite(yesPct) ? yesPct.toFixed(2) : "0.00"}%/${spoRequired.toFixed(2)}%`);
+  }
+  return parts.length ? parts.join(", ") : "no voting threshold";
+}
+
+function calendarActionStatus(info) {
+  if (!info) return "Unknown";
+  if (String(info.outcome || "").toLowerCase() === "pending") return "Active";
+  const droppedEpoch = Number(info?.droppedEpoch || 0);
+  const expiredEpoch = Number(info?.expiredEpoch || 0);
+  const expirationEpoch = Number(info?.expirationEpoch || 0);
+  if (droppedEpoch > 0 && expiredEpoch > 0) return expirationEpoch > 0 && droppedEpoch < expirationEpoch ? "Dropped" : "Expired";
+  if (droppedEpoch > 0) return expirationEpoch > 0 && droppedEpoch >= expirationEpoch ? "Expired" : "Dropped";
+  if (expiredEpoch > 0) return "Expired";
+  if (Number(info?.enactedEpoch || 0) > 0) return "Enacted";
+  if (Number(info?.ratifiedEpoch || 0) > 0) return "Ratified";
+  return String(info.outcome || "Unknown");
+}
+
+function isCalendarInfoAction(info) {
+  const type = String(info?.governanceType || "").toLowerCase();
+  return type.includes("info action") || type === "info";
+}
+
+function calendarEventTypesAtEpoch(info, epoch, referenceEpoch) {
+  const status = calendarActionStatus(info);
+  const submittedEpoch = Number(info?.submittedEpoch || 0);
+  const expirationEpoch = Number(info?.expirationEpoch || 0);
+  const ratifiedEpoch = Number(info?.ratifiedEpoch || 0);
+  const enactedEpoch = Number(info?.enactedEpoch || 0) || (ratifiedEpoch > 0 && !isCalendarInfoAction(info) ? ratifiedEpoch + 1 : 0);
+  const droppedEpoch = Number(info?.droppedEpoch || 0);
+  const expiredEpoch = Number(info?.expiredEpoch || 0) || (status === "Expired" ? expirationEpoch : 0);
+  if (epoch > referenceEpoch) {
+    return status === "Active" && expirationEpoch === epoch ? ["expires"] : [];
+  }
+  const types = [];
+  if (submittedEpoch === epoch) types.push("submitted");
+  if (expiredEpoch === epoch) types.push("expired");
+  if (droppedEpoch === epoch && (!expirationEpoch || droppedEpoch < expirationEpoch)) types.push("dropped");
+  if (ratifiedEpoch === epoch) types.push("ratified");
+  if (enactedEpoch === epoch) types.push("enacted");
+  const terminalEpochs = [ratifiedEpoch, expiredEpoch, droppedEpoch, expirationEpoch].filter((n) => Number.isFinite(n) && n > 0);
+  const terminalEpoch = terminalEpochs.length ? Math.min(...terminalEpochs) : 0;
+  if (submittedEpoch > 0 && submittedEpoch < epoch && (!terminalEpoch || epoch < terminalEpoch)) types.push("voting");
+  return types;
+}
+
+function calendarActionLabel(type, info, epoch) {
+  const name = compactCalendarName(info?.actionName || "Governance action");
+  const pct = calendarVotePercentages(info);
+  if (type === "submitted") return `Submitted: ${name}`;
+  if (type === "voting") return `Voting: ${name} ${pct}`;
+  if (type === "expires") return `Expires: ${name} ${pct}`;
+  if (type === "expired") return `Expired: ${name} ${pct}`;
+  if (type === "dropped") return `Dropped: ${name} ${pct}`;
+  if (type === "ratified") return `Ratified: ${name} ${pct}`;
+  if (type === "enacted") return `Enacted: ${name}`;
+  return `Epoch ${epoch}: ${name}`;
+}
+
+function buildEpochCalendarIcs(snapshotObj, fromEpoch, toEpoch, options = {}) {
+  const referenceEpoch = Number(snapshotObj?.latestEpoch || 0) || epochAtMs(Date.now());
+  const scope = String(options?.scope || "").toLowerCase();
+  // Default to a focused, subscribe-friendly window: ~2 months of recent history
+  // plus ~1 year ahead. A full-history feed (thousands of events) is rejected by
+  // Google's import. "full" scope is available for power users via ?scope=full.
+  const fullScope = scope === "full";
+  const defaultStart = Math.max(208, referenceEpoch - 12);
+  const defaultEnd = referenceEpoch + 73;
+  const startEpoch = Math.max(208, Number(fromEpoch || 0) || (fullScope ? 208 : defaultStart));
+  const requestedEndEpoch = Number(toEpoch || 0) || (fullScope ? referenceEpoch + 1460 : defaultEnd);
+  const maxEpochs = fullScope ? 2500 : 120;
+  const endEpoch = Math.max(startEpoch, Math.min(startEpoch + maxEpochs, requestedEndEpoch));
+  const proposalInfo = compactProposalInfoForDashboard(snapshotObj?.proposalInfo || {});
+  const stamp = formatIcsDate(Date.now());
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Civitas//Cardano Epoch Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:Civitas Cardano Epoch Boundaries",
+    "X-WR-CALDESC:Epoch boundary snapshots with Cardano governance action state"
+  ];
+  for (let epoch = startEpoch; epoch <= endEpoch; epoch += 1) {
+    const startMs = epochStartMs(epoch);
+    const endMs = startMs + 15 * 60 * 1000;
+    const actions = [];
+    for (const [proposalId, info] of Object.entries(proposalInfo)) {
+      for (const type of calendarEventTypesAtEpoch(info, epoch, referenceEpoch)) {
+        actions.push({ proposalId, type, label: calendarActionLabel(type, info, epoch) });
+      }
+    }
+    const description = [
+      `Epoch ${epoch} boundary.`,
+      `Epoch ${epoch - 2} rewards are distributed.`,
+      actions.length ? "" : null,
+      actions.length ? "Governance action snapshot:" : null,
+      ...actions.map((event) => event.label)
+    ].filter((line) => line !== null).join("\n");
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:civitas-epoch-boundary-${epoch}@civitas`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${formatIcsDate(startMs)}`,
+      `DTEND:${formatIcsDate(endMs)}`,
+      `SUMMARY:${icsEscape(`Epoch ${epoch} boundary`)}`,
+      `DESCRIPTION:${icsEscape(description)}`,
+      "END:VEVENT"
+    );
+    actions.forEach((event, index) => {
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:${icsEscape(`civitas-epoch-${epoch}-${event.type}-${event.proposalId || index}@civitas`)}`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART:${formatIcsDate(startMs)}`,
+        `DTEND:${formatIcsDate(endMs)}`,
+        `SUMMARY:${icsEscape(event.label)}`,
+        `DESCRIPTION:${icsEscape([
+          `Epoch ${epoch} governance action snapshot.`,
+          event.label,
+          `Proposal: ${event.proposalId || "unknown"}`
+        ].join("\n"))}`,
+        "END:VEVENT"
+      );
+    });
+  }
+  lines.push("END:VCALENDAR");
+  return lines.map(foldIcsLine).join("\r\n");
 }
 
 function detectBlockfrostNetworkFromBaseUrl() {
@@ -1313,6 +1521,7 @@ function addKoiosVoteLookupEntry(lookup, row) {
   const rationale = {
     hasRationale: hasKoiosRationale(row),
     rationaleUrl: String(row.meta_url || row.anchor_url || "").trim(),
+    rationaleHash: String(row.meta_hash || row.anchor_hash || "").trim(),
     koiosVoterId: voterId,
     koiosRole: role
   };
@@ -2503,6 +2712,70 @@ async function resolveDrepNameFromMetadataEnvelope(metadataEnvelope, nameCache, 
   const resolved = resolveNameFromRawMetadata(rawPayload);
   nameCache.set(metadataUrl, resolved || "");
   return resolved || "";
+}
+
+// ── Governance metadata verification ────────────────────────────────────────
+// Verifies governance anchors (DRep registration, governance actions, vote
+// rationales) against their on-chain hash using the
+// @amanita-labs/cardano-governance-metadata library, and ADDS a non-blocking
+// `metadataVerification` field to the relevant API responses.
+// OFF by default — enable by setting env GOV_META_VERIFY_SHADOW=1 (also on the
+// production host). Results are cached by anchor (url+hash is immutable), so each
+// anchor is only fetched/verified once.
+const GOV_META_VERIFY_SHADOW = String(process.env.GOV_META_VERIFY_SHADOW || "") === "1";
+let govMetaLibPromise = null;
+const govMetaVerifyCache = new Map(); // `${url}|${hash}` -> verification result
+function loadGovMetaLib() {
+  if (!govMetaLibPromise) {
+    govMetaLibPromise = import("./frontend/node_modules/@amanita-labs/cardano-governance-metadata/dist/index.js")
+      .catch((e) => { console.warn("[gov-meta] library failed to load:", e?.message); return null; });
+  }
+  return govMetaLibPromise;
+}
+
+// Returns { cip, anchorHashValid, schemaValid, schemaError, ms } or null/{error}.
+// anchorHashValid (blake2b-256 of raw bytes vs on-chain hash) is the integrity
+// signal and works regardless of strict CIP schema conformance; schemaValid is a
+// softer diagnostic (many real DReps use non-standard enum values and fail it).
+async function shadowVerifyGovMetadata(url, onchainHash, label) {
+  if (!GOV_META_VERIFY_SHADOW) return null;
+  const anchorUrl = String(url || "").trim();
+  const expectHash = String(onchainHash || "").trim().toLowerCase();
+  if (!anchorUrl || !expectHash) return null;
+  const cacheKey = `${anchorUrl}|${expectHash}`;
+  if (govMetaVerifyCache.has(cacheKey)) return govMetaVerifyCache.get(cacheKey);
+  const t0 = Date.now();
+  try {
+    const lib = await loadGovMetaLib();
+    if (!lib) return null;
+    const fetched = await lib.fetchMetadata(anchorUrl);
+    if (!fetched?.success || !fetched.data) {
+      console.log(`[gov-meta-shadow] ${label} FETCH-FAILED ${anchorUrl}`);
+      return { fetched: false };
+    }
+    const bytes = fetched.data;
+    const computedHash = blake2b256(Buffer.from(bytes)).toString("hex");
+    const anchorHashValid = computedHash === expectHash;
+
+    let cip = null, schemaValid = null, schemaError = null;
+    try {
+      const json = fetched.json || JSON.parse(Buffer.from(bytes).toString("utf8"));
+      cip = lib.detectCipStandard(json);
+    } catch { /* detection best-effort */ }
+    try {
+      const r = await lib.resolve(anchorUrl, { anchorHash: onchainHash });
+      schemaValid = Boolean(r?.success);
+      if (!r?.success) schemaError = r?.error?.code || "FAILED";
+    } catch (e) { schemaValid = false; schemaError = e?.message || "ERROR"; }
+
+    const out = { cip, anchorHashValid, schemaValid, schemaError, ms: Date.now() - t0 };
+    console.log(`[gov-meta-shadow] ${label} cip=${cip} anchorHash=${anchorHashValid} schema=${schemaValid}${schemaError ? `(${schemaError})` : ""} ${out.ms}ms`);
+    govMetaVerifyCache.set(cacheKey, out);
+    return out;
+  } catch (e) {
+    console.warn(`[gov-meta-shadow] ${label} ERROR: ${e?.message}`);
+    return { error: e?.message };
+  }
 }
 
 async function resolveDrepProfileFromMetadataEnvelope(metadataEnvelope, payloadCache) {
@@ -7576,6 +7849,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/epoch-calendar.ics") {
+    const fromEpoch = Number(url.searchParams.get("from") || 0);
+    const toEpoch = Number(url.searchParams.get("to") || 0);
+    const scope = String(url.searchParams.get("scope") || "").trim().toLowerCase();
+    const content = buildEpochCalendarIcs(snapshot, fromEpoch, toEpoch, { scope });
+    res.writeHead(200, {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Cache-Control": "public, max-age=900",
+      "Access-Control-Allow-Origin": "*"
+    });
+    res.end(content);
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/accountability") {
     const requestedSnapshot = String(url.searchParams.get("snapshot") || "").trim();
     const requestedView = String(url.searchParams.get("view") || "all").trim().toLowerCase();
@@ -8335,6 +8622,9 @@ const server = http.createServer(async (req, res) => {
         txHash,
         governanceType: rawDetail?.governance_type ?? null,
       };
+      // Shadow-mode metadata verification (no-op unless GOV_META_VERIFY_SHADOW=1)
+      const proposalVerification = await shadowVerifyGovMetadata(payload.url, payload.hash, `proposal ${proposalId}`);
+      if (proposalVerification) payload.metadataVerification = proposalVerification;
       proposalMetadataCache.set(proposalId, { payload, cachedAt: Date.now() });
       json(res, 200, payload);
       return;
@@ -8607,7 +8897,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, cachedResult);
       return;
     }
-    if (voterRole === "drep" && proposalId && voterId) {
+    if (!GOV_META_VERIFY_SHADOW && voterRole === "drep" && proposalId && voterId) {
       const fastKey = `${proposalId}|${String(voterId || "").trim().toLowerCase()}`;
       const fast = drepRationaleByProposalVoter.get(fastKey);
       if (fast && typeof fast === "object" && (fast.rationaleText || fast.rationaleUrl)) {
@@ -8625,6 +8915,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     let resolvedUrl = rationaleUrl;
+    let resolvedHash = "";
     try {
       let rationaleText = "";
       let rationaleSections = [];
@@ -8721,6 +9012,7 @@ const server = http.createServer(async (req, res) => {
           latestVoteTxHash = String(row.tx_hash || row.txHash || "").trim().toLowerCase();
           resolvedUrl =
             String(row.meta_url || row.anchor_url || row.metadata_url || row.url || "").trim() || resolvedUrl;
+          resolvedHash = String(row.meta_hash || row.anchor_hash || "").trim() || resolvedHash;
           let metaPayload = null;
           if (row.meta_json && typeof row.meta_json === "object") {
             metaPayload = row.meta_json;
@@ -8835,6 +9127,26 @@ const server = http.createServer(async (req, res) => {
           fetchedAt: Date.now()
         };
         saveVoteTxRationaleCache();
+      }
+      // Shadow-mode rationale verification (no-op unless GOV_META_VERIFY_SHADOW=1;
+      // requires the on-chain anchor hash, available via the Koios vote lookup).
+      if (GOV_META_VERIFY_SHADOW && resolvedUrl && !resolvedHash && proposalId && voterId) {
+        const koiosRole = voterRole === "constitutional_committee" ? "ConstitutionalCommittee"
+          : voterRole === "drep" ? "DRep"
+          : (voterRole === "stake_pool" || voterRole === "spo") ? "SPO" : "";
+        const filters = [
+          `voter_id=eq.${encodeURIComponent(voterId)}`,
+          `proposal_id=eq.${encodeURIComponent(proposalId)}`,
+          "order=block_time.desc", "limit=1",
+        ];
+        if (koiosRole) filters.unshift(`voter_role=eq.${encodeURIComponent(koiosRole)}`);
+        const rows = await koiosGet(`/vote_list?${filters.join("&")}`).catch(() => []);
+        const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+        if (row) resolvedHash = String(row.meta_hash || row.anchor_hash || "").trim();
+      }
+      if (resolvedUrl && resolvedHash) {
+        const rv = await shadowVerifyGovMetadata(resolvedUrl, resolvedHash, `vote ${voterRole}/${proposalId.slice(0, 12)}`);
+        if (rv) payload.metadataVerification = rv;
       }
       voteRationaleResultCache.set(cacheKey, payload);
       json(res, 200, payload);
@@ -9135,7 +9447,12 @@ const server = http.createServer(async (req, res) => {
       let name = metadataValue ? resolveName(metadataValue.json_metadata, drepId) : "";
       if (!name && profile?.name) name = profile.name;
       if (!name && metadataValue) name = await resolveDrepNameFromMetadataEnvelope(metadataValue, new Map(), payloadCache);
+      // Shadow-mode metadata verification (no-op unless GOV_META_VERIFY_SHADOW=1)
+      const metadataVerification = metadataValue
+        ? await shadowVerifyGovMetadata(metadataValue.url, metadataValue.hash, `drep ${drepId}`)
+        : null;
       json(res, 200, {
+        ...(metadataVerification ? { metadataVerification } : {}),
         id: drepId,
         name: name || "",
         status: retired ? "retired" : expired ? "expired" : active ? "active" : "inactive",

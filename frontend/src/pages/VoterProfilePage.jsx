@@ -6,8 +6,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import { WalletContext } from "../context/WalletContext";
+import MetaVerifyPill from "../components/MetaVerifyPill";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
+// When true, the DRep profile always does the live lookup so the metadata
+// verification badge can render for every DRep (not just those missing from the
+// snapshot). Paired with the backend GOV_META_VERIFY_SHADOW flag — when that
+// flag is off, the live lookup simply returns no verification and no badge shows.
+const PREVIEW_METADATA_VERIFICATION = true;
 const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
 const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
 const DREP_DELEGATION_RISK_HIGH_CUTOFF = 75;
@@ -227,7 +234,8 @@ export default function VoterProfilePage({ actorType }) {
   useEffect(() => {
     if (actorType !== "drep" || !payload) return;
     // Skip when snapshot already has a non-zero power — no live fetch needed.
-    if (actorFromSnapshot && Number(actorFromSnapshot.votingPowerAda || 0) > 0) return;
+    // (Preview: always fetch so the metadata-verification badge can render.)
+    if (!PREVIEW_METADATA_VERIFICATION && actorFromSnapshot && Number(actorFromSnapshot.votingPowerAda || 0) > 0) return;
     let cancelled = false;
     setLiveLoading(true);
     fetch(`${API_BASE}/api/drep-live?id=${encodeURIComponent(decodedId)}`)
@@ -265,8 +273,6 @@ export default function VoterProfilePage({ actorType }) {
         const submittedAtUnix = Number(info?.submittedAtUnix || 0);
         const votedAtUnix = Number(vote?.votedAtUnix || 0);
         const votedEpoch = epochFromUnix(votedAtUnix) ?? (submittedEpoch > 0 ? submittedEpoch : null);
-        const comparableOutcome = String(vote?.outcome || "").toLowerCase();
-        const comparableVote = String(vote?.vote || "").toLowerCase();
         const responseHours = resolveVoteResponseHours(vote, proposalInfo);
         return {
           proposalId: String(vote?.proposalId || ""),
@@ -323,7 +329,7 @@ export default function VoterProfilePage({ actorType }) {
       rationaleQuality: row.rationaleCount > 0 ? round(row.rationaleSum / row.rationaleCount) : null
     }));
     let runningTotal = 0;
-    return sorted.map((row, idx) => {
+    return sorted.map((row) => {
       runningTotal += Number(row.totalCast || 0);
       return {
         ...row,
@@ -509,6 +515,7 @@ export default function VoterProfilePage({ actorType }) {
         <p className="eyebrow">Voter Profile</p>
         <h1>{actor.name || actor.id}</h1>
         <p className="muted mono">{actor.id}</p>
+        {isDrep ? <MetaVerifyPill verification={liveActor?.metadataVerification} /> : null}
         <p><Link className="inline-link" to={`${listPath}${snapshot ? `?snapshot=${encodeURIComponent(snapshot)}` : ""}`}>Back to dashboard</Link></p>
       </section>
 

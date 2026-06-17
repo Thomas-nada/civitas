@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@amanita-labs/cardano-governance-metadata": "^0.1.3",
     "@meshsdk/core": "^1.9.0-beta.100",
     "blakejs": "^1.2.1",
     "drand-client": "^1.4.2",

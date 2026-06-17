@@ -14,5 +14,7 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: 10000
+      - key: GOV_META_VERIFY_SHADOW
+        value: "1"
       - key: BLOCKFROST_API_KEY
         sync: false

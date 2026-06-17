@@ -2,6 +2,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
+import MetaVerifyPill from "../components/MetaVerifyPill";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -414,7 +415,6 @@ function VoteBarCard({ group, info }) {
   const ccDenominator = ccOutcomeBase > 0 ? ccOutcomeBase : (yes + no + ccNotVotedCount) || 1;
   const ccYesPct = (yes / ccDenominator) * 100;
   const ccNoPct = (no / ccDenominator) * 100;
-  const ccNotVotedPct = (ccNotVotedCount / ccDenominator) * 100;
 
   const yesPct = isCommittee ? ccYesPct : (isDrep ? drepYesPct : spoYesPct);
   const noPct  = isCommittee ? ccNoPct  : (isDrep ? drepNoPct  : spoNoPct);
@@ -506,6 +506,7 @@ export default function ProposalDetailPage() {
   const [voteRationaleText, setVoteRationaleText] = useState({});
   const [voteRationaleImage, setVoteRationaleImage] = useState({});
   const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
+  const [voteRationaleVerify, setVoteRationaleVerify] = useState({});
   const [voteRationaleError, setVoteRationaleError] = useState({});
   const [detailTab, setDetailTab] = useState("votes");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -552,7 +553,7 @@ export default function ProposalDetailPage() {
   }, [loadData]);
 
   // Live updates via SSE — silently refresh when server publishes a new snapshot.
-  const { isLive, lastUpdatedAt } = useSnapshotUpdates({
+  const { isLive } = useSnapshotUpdates({
     enabled: !snapshotKey,
     onUpdate: () => {
       if (!silentRefreshRef.current) {
@@ -711,6 +712,7 @@ export default function ProposalDetailPage() {
       if (imageUrl) {
         setVoteRationaleImage((prev) => ({ ...prev, [key]: imageUrl }));
       }
+      setVoteRationaleVerify((prev) => ({ ...prev, [key]: data?.metadataVerification || null }));
     } catch (e) {
       setVoteRationaleError((prev) => ({ ...prev, [key]: e.message || "Failed to load rationale." }));
     } finally {
@@ -760,6 +762,7 @@ export default function ProposalDetailPage() {
             )}
           </div>
         </div>
+        <MetaVerifyPill verification={metadata?.metadataVerification} style={{ marginTop: "0.5rem" }} />
         <div className="pdp-meta-strip">
           {info.governanceType && <span className="pdp-meta-type">{info.governanceType}</span>}
           {isTreasury && treasuryAmountAda > 0 && (
@@ -985,6 +988,9 @@ export default function ProposalDetailPage() {
                 <p className="muted">Error: {voteRationaleError[rationaleModal.key]}</p>
               ) : (
                 <div className="payload-markdown">
+                  {voteRationaleVerify[rationaleModal.key] ? (
+                    <MetaVerifyPill verification={voteRationaleVerify[rationaleModal.key]} style={{ marginBottom: "0.75rem" }} />
+                  ) : null}
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
                   </ReactMarkdown>
