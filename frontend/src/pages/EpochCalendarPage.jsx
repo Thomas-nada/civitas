@@ -951,6 +951,40 @@ function MonthGrid({ year, month, now, actionEvents, selectedEpoch, onSelectEpoc
   );
 }
 
+function GoogleCalendarHelpModal({ feedUrl, onClose, onCopy }) {
+  if (!feedUrl) return null;
+  return (
+    <div className="ec-modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="ec-modal ec-google-feed-modal" role="dialog" aria-modal="true" aria-label="Google Calendar feed instructions" onClick={(e) => e.stopPropagation()}>
+        <div className="ec-modal-head">
+          <div>
+            <span className="ec-modal-kicker ec-modal-kicker-voting">Google Calendar feed</span>
+            <h3>Google Calendar opened in a new tab</h3>
+          </div>
+          <button type="button" className="ec-modal-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="ec-google-feed-copy">
+          <span>Feed URL copied to clipboard</span>
+          <input readOnly value={feedUrl} onFocus={(event) => event.currentTarget.select()} />
+          <button type="button" className="ec-modal-secondary" onClick={onCopy}>Copy again</button>
+        </div>
+
+        <ol className="ec-google-feed-steps">
+          <li>In Google Calendar, use <strong>Other calendars</strong> and choose <strong>From URL</strong>.</li>
+          <li>Paste the copied Civitas feed URL into the calendar address field.</li>
+          <li>Click <strong>Add calendar</strong>. Google will keep checking the live feed for updates.</li>
+        </ol>
+
+        <div className="ec-modal-actions">
+          <a href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noreferrer" className="ec-modal-link">Open Google Calendar</a>
+          <button type="button" className="ec-modal-secondary" onClick={onClose}>Done</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function EpochCalendarPage() {
   useSeoMeta({
     title: "Epoch Calendar",
@@ -990,18 +1024,22 @@ export default function EpochCalendarPage() {
   const [popupEpoch, setPopupEpoch] = useState(null);
   const [expandedTypes, setExpandedTypes] = useState({});
   const [calendarNotice, setCalendarNotice] = useState("");
+  const [calendarHelpOpen, setCalendarHelpOpen] = useState(false);
+  const [calendarCopied, setCalendarCopied] = useState(false);
+  const calendarFeedUrl = `${window.location.origin}/api/epoch-calendar.ics`;
 
   useEffect(() => {
-    if (!selectedEvent && !popupEpoch) return undefined;
+    if (!selectedEvent && !popupEpoch && !calendarHelpOpen) return undefined;
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         setSelectedEvent(null);
         setPopupEpoch(null);
+        setCalendarHelpOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [selectedEvent, popupEpoch]);
+  }, [selectedEvent, popupEpoch, calendarHelpOpen]);
 
   function shiftMonth(delta) {
     setView((v) => {
@@ -1060,11 +1098,12 @@ export default function EpochCalendarPage() {
     // Single source of truth: the server feed, which auto-reflects the live
     // Civitas calendar each epoch. Subscribing to it (not importing a file) is
     // what keeps Google Calendar mirrored.
-    const feedUrl = `${window.location.origin}/api/epoch-calendar.ics`;
     const onLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
     if (!onLocalhost) {
-      navigator.clipboard?.writeText(feedUrl).catch(() => null);
-      setCalendarNotice("Feed URL copied. In Google Calendar: Other calendars → From URL → paste it. It then refreshes automatically as each epoch passes.");
+      navigator.clipboard?.writeText(calendarFeedUrl).catch(() => null);
+      setCalendarCopied(true);
+      setCalendarHelpOpen(true);
+      setCalendarNotice("Google Calendar opened in a new tab. The Civitas feed URL was copied; paste it into the From URL field and click Add calendar.");
       window.open("https://calendar.google.com/calendar/u/0/r/settings/addbyurl", "_blank", "noopener,noreferrer");
       return;
     }
@@ -1072,7 +1111,7 @@ export default function EpochCalendarPage() {
     // possible here. Download the real feed so you can test a one-time import;
     // use the deployed URL with "From URL" for an auto-updating mirror.
     try {
-      const res = await fetch(feedUrl);
+      const res = await fetch(calendarFeedUrl);
       if (!res.ok) throw new Error("feed unavailable");
       const content = await res.text();
       downloadIcs("cardano-epoch-calendar.ics", content);
@@ -1102,7 +1141,9 @@ export default function EpochCalendarPage() {
         </div>
 
         <div className="ec-nav">
-          <button type="button" className="ec-import-btn" onClick={importVisibleCalendar}>Google Calendar feed</button>
+          <button type="button" className={`ec-import-btn ${calendarCopied ? "copied" : ""}`} onClick={importVisibleCalendar}>
+            {calendarCopied ? "Feed copied" : "Google Calendar feed"}
+          </button>
           <button type="button" className="ec-today-btn" onClick={goToday}>today</button>
           <div className="ec-arrows">
             <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)}>‹</button>
@@ -1112,9 +1153,12 @@ export default function EpochCalendarPage() {
       </div>
 
       {calendarNotice ? (
-        <div className="ec-calendar-feed-note">
+        <div className="ec-calendar-feed-note" role="status" aria-live="polite">
           <span>{calendarNotice}</span>
-          <input readOnly value={`${window.location.origin}/api/epoch-calendar.ics`} onFocus={(event) => event.currentTarget.select()} />
+          <input readOnly value={calendarFeedUrl} onFocus={(event) => event.currentTarget.select()} />
+          {!["localhost", "127.0.0.1"].includes(window.location.hostname) ? (
+            <button type="button" onClick={() => setCalendarHelpOpen(true)}>Show steps</button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1161,6 +1205,14 @@ export default function EpochCalendarPage() {
         }}
       />
       <ActionModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      <GoogleCalendarHelpModal
+        feedUrl={calendarHelpOpen ? calendarFeedUrl : ""}
+        onClose={() => setCalendarHelpOpen(false)}
+        onCopy={() => {
+          navigator.clipboard?.writeText(calendarFeedUrl).catch(() => null);
+          setCalendarCopied(true);
+        }}
+      />
 
       <p className="ec-footnote muted">
         Epochs last 5 days and are shown as boundary points at {fmtUtcTime(epochStartMs(epochAt(now) + 1))} UTC. Staking rewards earned

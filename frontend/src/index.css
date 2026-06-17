@@ -8932,9 +8932,14 @@ textarea.cs-text-input {
   border-color: color-mix(in srgb, var(--mint) 32%, var(--line));
   background: color-mix(in srgb, var(--mint) 10%, var(--surface-soft));
 }
+.ec-import-btn.copied {
+  color: var(--bg);
+  border-color: color-mix(in srgb, var(--mint) 70%, var(--line));
+  background: var(--mint);
+}
 .ec-calendar-feed-note {
   display: grid;
-  grid-template-columns: minmax(220px, auto) minmax(260px, 1fr);
+  grid-template-columns: minmax(220px, auto) minmax(260px, 1fr) auto;
   gap: 0.65rem;
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line));
@@ -8953,6 +8958,17 @@ textarea.cs-text-input {
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.76rem;
+}
+.ec-calendar-feed-note button {
+  border: 1px solid color-mix(in srgb, var(--mint) 34%, var(--line));
+  border-radius: 7px;
+  padding: 0.45rem 0.75rem;
+  background: color-mix(in srgb, var(--mint) 10%, var(--surface-soft));
+  color: var(--mint);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
 }
 .ec-arrows { display: inline-flex; gap: 0.2rem; }
 .ec-arrows button {
@@ -9420,6 +9436,46 @@ textarea.cs-text-input {
   line-height: 1.35;
 }
 
+.ec-google-feed-modal {
+  max-width: 620px;
+}
+.ec-google-feed-copy {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--mint) 26%, var(--line));
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--mint) 7%, var(--surface-soft));
+}
+.ec-google-feed-copy span {
+  grid-column: 1 / -1;
+  color: var(--mint);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.ec-google-feed-copy input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.48rem 0.55rem;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+}
+.ec-google-feed-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.ec-google-feed-steps li + li {
+  margin-top: 0.45rem;
+}
+
 .ec-footnote { font-size: 0.82rem; line-height: 1.5; }
 
 @media (max-width: 640px) {
@@ -9428,6 +9484,7 @@ textarea.cs-text-input {
   .ec-action-list { display: none; }
   .ec-unit-value { font-size: 1.4rem; }
   .ec-calendar-feed-note { grid-template-columns: 1fr; }
+  .ec-calendar-feed-note button { width: 100%; }
   .ec-detail-head { flex-direction: column; }
   .ec-detail-list { grid-template-columns: 1fr; }
   .ec-detail-item { grid-template-columns: 1fr; gap: 0.3rem; }
@@ -9437,4 +9494,5 @@ textarea.cs-text-input {
   .ec-modal-secondary { text-align: center; }
   .ec-epoch-modal-row { grid-template-columns: auto 1fr; }
   .ec-epoch-modal-row > span:last-child { grid-column: 1 / -1; }
+  .ec-google-feed-copy { grid-template-columns: 1fr; }
 }
