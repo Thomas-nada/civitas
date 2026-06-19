@@ -1985,29 +1985,41 @@ async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
   if (!pid) return out;
   const limit = 1000;
   const maxRows = 10000;
-  let offset = 0;
-  while (offset < maxRows) {
+  async function fetchRows(offset, direct = false) {
     const query =
       `/vote_list?proposal_id=eq.${encodeURIComponent(pid)}` +
       `&order=block_time.desc&limit=${limit}&offset=${offset}`;
-    const rows = await koiosGet(query).catch(() => []);
-    if (!Array.isArray(rows) || rows.length === 0) break;
-    for (const row of rows) {
-      const tx = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
-      if (!tx || out.has(tx)) continue;
-      const rationaleUrl = String(row?.meta_url || row?.anchor_url || row?.metadata_url || row?.url || "").trim();
-      const rationaleHash = String(row?.meta_hash || row?.anchor_hash || "").trim();
-      const metaPayload = row?.meta_json && typeof row.meta_json === "object" ? row.meta_json : null;
-      out.set(tx, {
-        hasRationale: Boolean(rationaleUrl || rationaleHash || metaPayload),
-        rationaleUrl,
-        rationaleHash,
-        rationaleText: metaPayload ? pickRationaleText(metaPayload) : "",
-        rationaleSections: metaPayload ? extractRationaleSections(metaPayload) : []
-      });
+    if (!direct) return koiosGet(query).catch(() => []);
+    return fetchJsonWithTimeout(`https://api.koios.rest/api/v1${query}`, KOIOS_REQUEST_TIMEOUT_MS).catch(() => []);
+  }
+  async function collect(direct = false) {
+    let offset = 0;
+    while (offset < maxRows) {
+      const rows = await fetchRows(offset, direct);
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      for (const row of rows) {
+        const tx = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
+        if (!tx || out.has(tx)) continue;
+        const rationaleUrl = String(row?.meta_url || row?.anchor_url || row?.metadata_url || row?.url || "").trim();
+        const rationaleHash = String(row?.meta_hash || row?.anchor_hash || "").trim();
+        const metaPayload = row?.meta_json && typeof row.meta_json === "object" ? row.meta_json : null;
+        out.set(tx, {
+          hasRationale: Boolean(rationaleUrl || rationaleHash || metaPayload),
+          rationaleUrl,
+          rationaleHash,
+          rationaleText: metaPayload ? pickRationaleText(metaPayload) : "",
+          rationaleSections: metaPayload ? extractRationaleSections(metaPayload) : []
+        });
+      }
+      if (rows.length < limit) break;
+      offset += rows.length;
     }
-    if (rows.length < limit) break;
-    offset += rows.length;
+  }
+  await collect(false);
+  const hasRationaleSignal = Array.from(out.values()).some((signal) =>
+    Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
+  if (!hasRationaleSignal) {
+    await collect(true);
   }
   return out;
 }
