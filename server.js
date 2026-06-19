@@ -133,6 +133,8 @@ const DREP_PARTICIPATION_START_EPOCH = Number(process.env.DREP_PARTICIPATION_STA
 const GUARDRAILS_CACHE_TTL_MS = Number(process.env.GUARDRAILS_CACHE_TTL_MS || 120_000);
 const AUTO_START_SCHEDULER = String(process.env.AUTO_START_SCHEDULER || "false").toLowerCase() === "true";
 const SKIP_BOOT_HYDRATION = String(process.env.SKIP_BOOT_HYDRATION || "true").toLowerCase() === "true";
+const DREP_RATIONALE_WARM_ON_PUBLISH = String(process.env.DREP_RATIONALE_WARM_ON_PUBLISH || "false").toLowerCase() === "true";
+const PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH = String(process.env.PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH || "true").toLowerCase() !== "false";
 const SNAPSHOT_REMOTE_URL = String(process.env.SNAPSHOT_REMOTE_URL || "").trim();
 const SNAPSHOT_REMOTE_TIMEOUT_MS = Number(process.env.SNAPSHOT_REMOTE_TIMEOUT_MS || 12000);
 
@@ -6696,9 +6698,13 @@ function publishSnapshot(payload) {
   refreshAllThresholdInfo(snapshot);
   patchMissingProposalEpochs(snapshot);
   backfillMissingProposalMetadata(snapshot).catch(() => null);
-  saveSnapshotToDisk(snapshot);
-  saveSeedSnapshotToDisk(snapshot);
-  warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
+  if (PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH) {
+    saveSnapshotToDisk(snapshot);
+    saveSeedSnapshotToDisk(snapshot);
+  }
+  if (DREP_RATIONALE_WARM_ON_PUBLISH) {
+    warmDrepRationaleCacheFromSnapshot(snapshot).catch(() => null);
+  }
   backfillEpochSnapshotsFromCurrent(false);
   // Notify SSE clients that a fresh snapshot is available.
   if (sseClients.size > 0) {

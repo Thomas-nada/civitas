@@ -15,6 +15,10 @@ services:
       - key: PORT
         value: 10000
       - key: GOV_META_VERIFY_SHADOW
-        value: "1"
+        value: "0"
+      - key: DREP_RATIONALE_WARM_ON_PUBLISH
+        value: "false"
+      - key: PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH
+        value: "false"
       - key: BLOCKFROST_API_KEY
         sync: false
