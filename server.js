@@ -1999,12 +1999,15 @@ async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
       if (!Array.isArray(rows) || rows.length === 0) break;
       for (const row of rows) {
         const tx = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
-        if (!tx || out.has(tx)) continue;
+        if (!tx) continue;
         const rationaleUrl = String(row?.meta_url || row?.anchor_url || row?.metadata_url || row?.url || "").trim();
         const rationaleHash = String(row?.meta_hash || row?.anchor_hash || "").trim();
         const metaPayload = row?.meta_json && typeof row.meta_json === "object" ? row.meta_json : null;
+        const hasRationale = Boolean(rationaleUrl || rationaleHash || metaPayload);
+        const existing = out.get(tx);
+        if (existing && (existing.hasRationale || !hasRationale)) continue;
         out.set(tx, {
-          hasRationale: Boolean(rationaleUrl || rationaleHash || metaPayload),
+          hasRationale,
           rationaleUrl,
           rationaleHash,
           rationaleText: metaPayload ? pickRationaleText(metaPayload) : "",
