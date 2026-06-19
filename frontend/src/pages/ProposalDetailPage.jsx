@@ -98,6 +98,25 @@ function votePillMod(vote) {
   return "pill--unknown";
 }
 
+async function fetchBrowserKoiosVoteRationales(proposalId) {
+  const pid = String(proposalId || "").trim();
+  if (!pid) return [];
+  const url = `https://api.koios.rest/api/v1/vote_list?proposal_id=eq.${encodeURIComponent(pid)}&order=block_time.desc&limit=1000`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const rows = await res.json().catch(() => []);
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => {
+      const voteTxHash = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
+      const rationaleUrl = String(row?.meta_url || row?.anchor_url || row?.metadata_url || row?.url || "").trim();
+      const rationaleHash = String(row?.meta_hash || row?.anchor_hash || "").trim();
+      const hasRationale = Boolean(rationaleUrl || rationaleHash || row?.meta_json);
+      return { voteTxHash, hasRationale, rationaleUrl };
+    })
+    .filter((row) => row.voteTxHash && row.hasRationale);
+}
+
 const PREFERRED_SECTIONS = [
   ["abstract", "Abstract"],
   ["summary", "Summary"],
@@ -544,9 +563,13 @@ export default function ProposalDetailPage() {
       if (!res.ok) throw new Error(data.error || "Failed to load proposal.");
       setPayload(data);
       if (mRes.ok) setMetadata(mData);
-      if (vrRes.ok && Array.isArray(vrData?.votes)) {
+      let voteRationaleRows = vrRes.ok && Array.isArray(vrData?.votes) ? vrData.votes : [];
+      if (vrRes.ok && voteRationaleRows.length === 0) {
+        voteRationaleRows = await fetchBrowserKoiosVoteRationales(decodedProposalId).catch(() => []);
+      }
+      if (vrRes.ok && Array.isArray(voteRationaleRows)) {
         setVoteRationaleSignals(Object.fromEntries(
-          vrData.votes
+          voteRationaleRows
             .map((vote) => [String(vote?.voteTxHash || "").trim().toLowerCase(), {
               hasRationale: Boolean(vote?.hasRationale),
               rationaleUrl: String(vote?.rationaleUrl || "").trim()
