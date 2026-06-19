@@ -2413,6 +2413,63 @@ function lookupCgovSpoVoteRationale(lookup, vote) {
   return null;
 }
 
+async function fetchCgovVoteRationaleSignalsByTx(proposalId, debugStats = null) {
+  const out = new Map();
+  const pid = String(proposalId || "").trim();
+  const info = snapshot?.proposalInfo && typeof snapshot.proposalInfo === "object"
+    ? snapshot.proposalInfo[pid]
+    : null;
+  const proposalTxHash = String(info?.txHash || "").trim().toLowerCase();
+  const proposalCertIndex = Number(info?.certIndex);
+  if (!proposalTxHash || !Number.isInteger(proposalCertIndex) || proposalCertIndex < 0) {
+    if (debugStats) debugStats.cgovSkipped = "missing proposal tx hash or cert index";
+    return out;
+  }
+
+  function mergeLookup(lookup, source) {
+    if (!(lookup instanceof Map)) return;
+    for (const [key, signal] of lookup.entries()) {
+      if (!String(key || "").startsWith("tx:")) continue;
+      const tx = String(key).slice(3).trim().toLowerCase();
+      if (!tx || !signal || typeof signal !== "object") continue;
+      const rationaleUrl = String(signal.rationaleUrl || "").trim();
+      const rationaleHash = String(signal.rationaleHash || "").trim();
+      const hasRationale = Boolean(signal.hasRationale || rationaleUrl || rationaleHash || signal.rationaleText);
+      if (!hasRationale) continue;
+      const existing = out.get(tx);
+      if (existing?.hasRationale && existing?.rationaleUrl) continue;
+      out.set(tx, {
+        hasRationale: true,
+        rationaleUrl,
+        rationaleHash,
+        rationaleText: String(signal.rationaleText || ""),
+        rationaleSections: Array.isArray(signal.rationaleSections) ? signal.rationaleSections : [],
+        source
+      });
+    }
+  }
+
+  const [drepLookup, committeeLookup, spoLookup] = await Promise.all([
+    fetchCgovDrepVoteRationaleLookupForProposal(proposalTxHash, proposalCertIndex).catch((error) => {
+      if (debugStats) debugStats.cgovDrepError = error?.message || String(error || "cgov DRep lookup failed");
+      return null;
+    }),
+    fetchCgovCommitteeVoteRationaleLookupForProposal(proposalTxHash, proposalCertIndex).catch((error) => {
+      if (debugStats) debugStats.cgovCommitteeError = error?.message || String(error || "cgov committee lookup failed");
+      return null;
+    }),
+    fetchCgovSpoVoteRationaleLookupForProposal(proposalTxHash, proposalCertIndex).catch((error) => {
+      if (debugStats) debugStats.cgovSpoError = error?.message || String(error || "cgov SPO lookup failed");
+      return null;
+    })
+  ]);
+  mergeLookup(drepLookup, "cgov-drep");
+  mergeLookup(committeeLookup, "cgov-committee");
+  mergeLookup(spoLookup, "cgov-spo");
+  if (debugStats) debugStats.cgovRows = out.size;
+  return out;
+}
+
 function resolveRationalePresence(vote, koiosVote, koiosLookup) {
   if (hasVoteRationale(vote)) return true;
   if (koiosVote?.hasRationale) return true;
@@ -9720,7 +9777,17 @@ const server = http.createServer(async (req, res) => {
     try {
       const includeDebug = String(url.searchParams.get("debug") || "").toLowerCase() === "true";
       const debug = includeDebug ? {} : null;
-      const byTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId, debug);
+      const byTx = await fetchCgovVoteRationaleSignalsByTx(proposalId, debug);
+      const hasCgovRationaleSignal = Array.from(byTx.values()).some((signal) =>
+        Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
+      if (!hasCgovRationaleSignal) {
+        const koiosByTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId, debug);
+        for (const [tx, signal] of koiosByTx.entries()) {
+          if (!byTx.has(tx) || (!byTx.get(tx)?.rationaleUrl && signal?.rationaleUrl)) {
+            byTx.set(tx, signal);
+          }
+        }
+      }
       const votes = Array.from(byTx.entries())
         .filter(([, signal]) => signal && (signal.hasRationale || signal.rationaleUrl || signal.rationaleHash))
         .map(([voteTxHash, signal]) => ({
