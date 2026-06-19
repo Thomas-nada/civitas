@@ -9667,6 +9667,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/proposal-vote-rationales") {
+    const proposalId = String(url.searchParams.get("proposalId") || "").trim();
+    if (!proposalId) {
+      json(res, 400, { error: "Missing proposalId." });
+      return;
+    }
+    try {
+      const byTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId);
+      const votes = Array.from(byTx.entries())
+        .filter(([, signal]) => signal && (signal.hasRationale || signal.rationaleUrl || signal.rationaleHash))
+        .map(([voteTxHash, signal]) => ({
+          voteTxHash,
+          hasRationale: Boolean(signal.hasRationale || signal.rationaleUrl || signal.rationaleHash),
+          rationaleUrl: String(signal.rationaleUrl || ""),
+          rationaleHash: String(signal.rationaleHash || "")
+        }));
+      json(res, 200, { ok: true, proposalId, count: votes.length, votes });
+      return;
+    } catch (error) {
+      json(res, 500, { error: error.message || "Failed to fetch proposal vote rationales." });
+      return;
+    }
+  }
+
   if (req.method === "POST" && url.pathname === "/api/warm-rationales") {
     const opsLimit = consumeRateLimit({
       scope: "ops",

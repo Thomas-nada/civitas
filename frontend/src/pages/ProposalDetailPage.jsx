@@ -508,6 +508,7 @@ export default function ProposalDetailPage() {
   const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
   const [voteRationaleVerify, setVoteRationaleVerify] = useState({});
   const [voteRationaleError, setVoteRationaleError] = useState({});
+  const [voteRationaleSignals, setVoteRationaleSignals] = useState({});
   const [detailTab, setDetailTab] = useState("votes");
   const [roleFilter, setRoleFilter] = useState("all");
   const [voteFilter, setVoteFilter] = useState("all");
@@ -530,17 +531,29 @@ export default function ProposalDetailPage() {
       if (snapshotKey) params.set("snapshot", snapshotKey);
       params.set("view", "actions");
       params.set("proposalId", decodedProposalId);
-      const [res, mRes] = await Promise.all([
+      const [res, mRes, vrRes] = await Promise.all([
         fetch(`${API_BASE}/api/accountability?${params.toString()}`),
-        fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`)
+        fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`),
+        fetch(`${API_BASE}/api/proposal-vote-rationales?proposalId=${encodeURIComponent(decodedProposalId)}`)
       ]);
-      const [data, mData] = await Promise.all([
+      const [data, mData, vrData] = await Promise.all([
         res.json(),
-        mRes.json().catch(() => ({}))
+        mRes.json().catch(() => ({})),
+        vrRes.json().catch(() => ({}))
       ]);
       if (!res.ok) throw new Error(data.error || "Failed to load proposal.");
       setPayload(data);
       if (mRes.ok) setMetadata(mData);
+      if (vrRes.ok && Array.isArray(vrData?.votes)) {
+        setVoteRationaleSignals(Object.fromEntries(
+          vrData.votes
+            .map((vote) => [String(vote?.voteTxHash || "").trim().toLowerCase(), {
+              hasRationale: Boolean(vote?.hasRationale),
+              rationaleUrl: String(vote?.rationaleUrl || "").trim()
+            }])
+            .filter(([tx]) => Boolean(tx))
+        ));
+      }
     } catch (e) {
       if (!silent) setError(e.message || "Failed to load proposal.");
     } finally {
@@ -610,6 +623,9 @@ export default function ProposalDetailPage() {
           if (String(vote?.proposalId || "") !== decodedProposalId) continue;
           const votedAtUnix = Number(vote?.votedAtUnix || 0);
           const votedEpoch = epochFromUnix(votedAtUnix);
+          const txHash = String(vote?.voteTxHash || "").trim().toLowerCase();
+          const rationaleSignal = txHash ? voteRationaleSignals[txHash] : null;
+          const rationaleUrl = String(vote?.rationaleUrl || rationaleSignal?.rationaleUrl || "").trim();
           rows.push({
             role,
             voter: String(actor?.name || actor?.id || "Unknown"),
@@ -617,12 +633,12 @@ export default function ProposalDetailPage() {
             voterRole: role === "DRep" ? "drep" : role === "CC" ? "constitutional_committee" : "stake_pool",
             vote: String(vote?.vote || ""),
             outcome: String(vote?.outcome || ""),
-            voteTxHash: String(vote?.voteTxHash || "").trim(),
+            voteTxHash: txHash,
             votedAtUnix,
             votedAt: vote?.votedAt || null,
             votedEpoch,
-            rationaleUrl: String(vote?.rationaleUrl || "").trim(),
-            hasRationale: Boolean(vote?.hasRationale),
+            rationaleUrl,
+            hasRationale: Boolean(vote?.hasRationale || rationaleSignal?.hasRationale || rationaleUrl),
             votingPowerAda: Number(actor?.votingPowerAda || 0)
           });
         }
@@ -636,7 +652,7 @@ export default function ProposalDetailPage() {
       if (timeDelta !== 0) return timeDelta;
       return String(a.voter || "").localeCompare(String(b.voter || ""));
     });
-  }, [payload, decodedProposalId]);
+  }, [payload, decodedProposalId, voteRationaleSignals]);
 
   const filteredVotes = useMemo(() => {
     const normalizedQuery = String(voteSearch || "").trim().toLowerCase();
