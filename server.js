@@ -1751,7 +1751,8 @@ async function enrichProposalRationaleSignalsForActors({ proposalId, proposalInf
   const txHash = String(info?.txHash || "").trim().toLowerCase();
   const certIndex = Number(info?.certIndex);
   const hasCgovKey = txHash && Number.isInteger(certIndex) && certIndex >= 0;
-  const [koiosLookup, drepLookup, committeeLookup, spoLookup] = await Promise.all([
+  const [koiosSignalsByTx, koiosLookup, drepLookup, committeeLookup, spoLookup] = await Promise.all([
+    fetchKoiosVoteRationaleSignalsByTx(pid).catch(() => new Map()),
     fetchKoiosVoteRationaleLookup(pid).catch(() => null),
     hasCgovKey ? fetchCgovDrepVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null) : Promise.resolve(null),
     hasCgovKey ? fetchCgovCommitteeVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null) : Promise.resolve(null),
@@ -1765,6 +1766,7 @@ async function enrichProposalRationaleSignalsForActors({ proposalId, proposalInf
         if (String(vote?.proposalId || "") !== pid) continue;
         const tx = String(vote?.voteTxHash || "").trim().toLowerCase();
         const pseudoVote = { tx_hash: tx, voter: voterId, voter_role: role };
+        applyRationaleSignalToVote(vote, koiosSignalsByTx instanceof Map ? koiosSignalsByTx.get(tx) : null);
         applyRationaleSignalToVote(vote, lookupKoiosVoteRationale(koiosLookup, pseudoVote));
         if (role === "drep") {
           applyRationaleSignalToVote(vote, lookupCgovDrepVoteRationale(drepLookup, voterId, tx));
@@ -1975,6 +1977,39 @@ async function fetchKoiosVoteRationaleLookup(proposalId) {
     lookup.__unresolved = true;
   }
   return lookup;
+}
+
+async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
+  const out = new Map();
+  const pid = String(proposalId || "").trim();
+  if (!pid) return out;
+  const limit = 1000;
+  const maxRows = 10000;
+  let offset = 0;
+  while (offset < maxRows) {
+    const query =
+      `/vote_list?proposal_id=eq.${encodeURIComponent(pid)}` +
+      `&order=block_time.desc&limit=${limit}&offset=${offset}`;
+    const rows = await koiosGet(query).catch(() => []);
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    for (const row of rows) {
+      const tx = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
+      if (!tx || out.has(tx)) continue;
+      const rationaleUrl = String(row?.meta_url || row?.anchor_url || row?.metadata_url || row?.url || "").trim();
+      const rationaleHash = String(row?.meta_hash || row?.anchor_hash || "").trim();
+      const metaPayload = row?.meta_json && typeof row.meta_json === "object" ? row.meta_json : null;
+      out.set(tx, {
+        hasRationale: Boolean(rationaleUrl || rationaleHash || metaPayload),
+        rationaleUrl,
+        rationaleHash,
+        rationaleText: metaPayload ? pickRationaleText(metaPayload) : "",
+        rationaleSections: metaPayload ? extractRationaleSections(metaPayload) : []
+      });
+    }
+    if (rows.length < limit) break;
+    offset += rows.length;
+  }
+  return out;
 }
 
 async function fetchKoiosVotingSummariesByProposalIds(proposalIds) {
