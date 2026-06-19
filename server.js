@@ -1949,6 +1949,116 @@ function buildKoiosInFilter(values) {
   return encodeURIComponent(`in.(${joined})`);
 }
 
+function decodeCborValue(buffer, offset = 0) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (offset >= bytes.length) throw new Error("CBOR decode overflow");
+  const first = bytes[offset++];
+  const major = first >> 5;
+  const additional = first & 31;
+  function readLength() {
+    if (additional < 24) return additional;
+    if (additional === 24) return bytes[offset++];
+    if (additional === 25) {
+      const value = bytes.readUInt16BE(offset);
+      offset += 2;
+      return value;
+    }
+    if (additional === 26) {
+      const value = bytes.readUInt32BE(offset);
+      offset += 4;
+      return value;
+    }
+    if (additional === 27) {
+      const value = Number(bytes.readBigUInt64BE(offset));
+      offset += 8;
+      return value;
+    }
+    throw new Error("Unsupported indefinite CBOR length");
+  }
+  if (major === 0) return { value: readLength(), offset };
+  if (major === 1) return { value: -1 - readLength(), offset };
+  if (major === 2) {
+    const length = readLength();
+    const value = bytes.subarray(offset, offset + length);
+    offset += length;
+    return { value, offset };
+  }
+  if (major === 3) {
+    const length = readLength();
+    const value = bytes.subarray(offset, offset + length).toString("utf8");
+    offset += length;
+    return { value, offset };
+  }
+  if (major === 4) {
+    const length = readLength();
+    const value = [];
+    for (let i = 0; i < length; i += 1) {
+      const decoded = decodeCborValue(bytes, offset);
+      value.push(decoded.value);
+      offset = decoded.offset;
+    }
+    return { value, offset };
+  }
+  if (major === 5) {
+    const length = readLength();
+    const value = new Map();
+    for (let i = 0; i < length; i += 1) {
+      const keyDecoded = decodeCborValue(bytes, offset);
+      offset = keyDecoded.offset;
+      const valueDecoded = decodeCborValue(bytes, offset);
+      offset = valueDecoded.offset;
+      value.set(keyDecoded.value, valueDecoded.value);
+    }
+    return { value, offset };
+  }
+  if (major === 6) {
+    readLength();
+    return decodeCborValue(bytes, offset);
+  }
+  if (major === 7) {
+    if (additional === 20) return { value: false, offset };
+    if (additional === 21) return { value: true, offset };
+    if (additional === 22 || additional === 23) return { value: null, offset };
+    if (additional === 24) return { value: bytes[offset++], offset };
+    if (additional === 25) {
+      offset += 2;
+      return { value: null, offset };
+    }
+    if (additional === 26) {
+      const value = bytes.readFloatBE(offset);
+      offset += 4;
+      return { value, offset };
+    }
+    if (additional === 27) {
+      const value = bytes.readDoubleBE(offset);
+      offset += 8;
+      return { value, offset };
+    }
+  }
+  throw new Error("Unsupported CBOR value");
+}
+
+function extractVoteAnchorUrlsFromTxCbor(cborHex) {
+  const hex = String(cborHex || "").trim();
+  if (!hex) return [];
+  const decoded = decodeCborValue(Buffer.from(hex, "hex")).value;
+  const body = Array.isArray(decoded) ? decoded[0] : decoded instanceof Map ? decoded : null;
+  if (!(body instanceof Map)) return [];
+  const votingProcedures = body.get(19);
+  if (!(votingProcedures instanceof Map)) return [];
+  const urls = [];
+  for (const govActions of votingProcedures.values()) {
+    if (!(govActions instanceof Map)) continue;
+    for (const procedure of govActions.values()) {
+      const anchor = Array.isArray(procedure) ? procedure[1] : null;
+      if (!Array.isArray(anchor)) continue;
+      const url = String(anchor[0] || "").trim();
+      if (url) urls.push(url);
+    }
+  }
+  return Array.from(new Set(urls));
+}
+
 async function fetchKoiosVoteRationaleLookup(proposalId) {
   const lookup = new Map();
   const limit = 1000;
@@ -2467,6 +2577,67 @@ async function fetchCgovVoteRationaleSignalsByTx(proposalId, debugStats = null) 
   mergeLookup(committeeLookup, "cgov-committee");
   mergeLookup(spoLookup, "cgov-spo");
   if (debugStats) debugStats.cgovRows = out.size;
+  return out;
+}
+
+async function fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debugStats = null) {
+  const out = new Map();
+  const pid = String(proposalId || "").trim();
+  if (!pid || !BLOCKFROST_API_KEY) {
+    if (debugStats) debugStats.blockfrostSkipped = !pid ? "missing proposal id" : "missing Blockfrost key";
+    return out;
+  }
+  const votes = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const rows = await blockfrostGet(`/governance/proposals/${encodeURIComponent(pid)}/votes?count=100&page=${page}&order=desc`)
+      .catch((error) => {
+        if (debugStats) debugStats.blockfrostVotesError = error?.message || String(error || "Blockfrost votes request failed");
+        return [];
+      });
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    votes.push(...rows);
+    if (rows.length < 100) break;
+  }
+  if (debugStats) debugStats.blockfrostVoteRows = votes.length;
+  const txHashes = Array.from(new Set(votes
+    .map((vote) => String(vote?.tx_hash || vote?.vote_tx_hash || vote?.txHash || "").trim().toLowerCase())
+    .filter(Boolean)));
+  let resolved = 0;
+  for (let i = 0; i < txHashes.length; i += 4) {
+    const chunk = txHashes.slice(i, i + 4);
+    const entries = await Promise.all(chunk.map(async (txHash) => {
+      const cached = voteTxRationaleCache[txHash];
+      const cachedUrl = String(cached?.rationaleUrl || "").trim();
+      if (cachedUrl) return [txHash, cachedUrl];
+      const tx = await blockfrostGet(`/txs/${encodeURIComponent(txHash)}/cbor`).catch((error) => {
+        if (debugStats) debugStats.blockfrostCborError = error?.message || String(error || "Blockfrost CBOR request failed");
+        return null;
+      });
+      const cborHex = String(tx?.cbor || tx?.tx_cbor || tx?.cbor_hex || "").trim();
+      const urls = extractVoteAnchorUrlsFromTxCbor(cborHex);
+      return [txHash, urls[0] || ""];
+    }));
+    for (const [txHash, rationaleUrl] of entries) {
+      if (!txHash || !rationaleUrl) continue;
+      resolved += 1;
+      out.set(txHash, {
+        hasRationale: true,
+        rationaleUrl,
+        rationaleHash: "",
+        source: "blockfrost-cbor"
+      });
+      voteTxRationaleCache[txHash] = {
+        ...(voteTxRationaleCache[txHash] && typeof voteTxRationaleCache[txHash] === "object"
+          ? voteTxRationaleCache[txHash]
+          : {}),
+        hasRationale: true,
+        rationaleUrl,
+        fetchedAt: Date.now()
+      };
+    }
+  }
+  if (resolved > 0) saveVoteTxRationaleCache();
+  if (debugStats) debugStats.blockfrostResolvedRows = resolved;
   return out;
 }
 
@@ -9781,6 +9952,16 @@ const server = http.createServer(async (req, res) => {
       const hasCgovRationaleSignal = Array.from(byTx.values()).some((signal) =>
         Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
       if (!hasCgovRationaleSignal) {
+        const blockfrostByTx = await fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debug);
+        for (const [tx, signal] of blockfrostByTx.entries()) {
+          if (!byTx.has(tx) || (!byTx.get(tx)?.rationaleUrl && signal?.rationaleUrl)) {
+            byTx.set(tx, signal);
+          }
+        }
+      }
+      const hasBlockfrostRationaleSignal = Array.from(byTx.values()).some((signal) =>
+        Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
+      if (!hasBlockfrostRationaleSignal) {
         const koiosByTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId, debug);
         for (const [tx, signal] of koiosByTx.entries()) {
           if (!byTx.has(tx) || (!byTx.get(tx)?.rationaleUrl && signal?.rationaleUrl)) {
