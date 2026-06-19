@@ -2038,7 +2038,17 @@ function decodeCborValue(buffer, offset = 0) {
   throw new Error("Unsupported CBOR value");
 }
 
-function extractVoteAnchorUrlsFromTxCbor(cborHex) {
+function cborGovActionKeyMatches(value, targetTxHash, targetCertIndex) {
+  const targetHash = String(targetTxHash || "").trim().toLowerCase();
+  const targetIndex = Number(targetCertIndex);
+  if (!targetHash || !Number.isInteger(targetIndex)) return false;
+  if (!Array.isArray(value) || value.length < 2) return false;
+  const hash = Buffer.isBuffer(value[0]) ? value[0].toString("hex") : "";
+  const index = Number(value[1]);
+  return hash === targetHash && index === targetIndex;
+}
+
+function extractVoteAnchorUrlsFromTxCbor(cborHex, targetTxHash = "", targetCertIndex = null) {
   const hex = String(cborHex || "").trim();
   if (!hex) return [];
   const decoded = decodeCborValue(Buffer.from(hex, "hex")).value;
@@ -2049,7 +2059,8 @@ function extractVoteAnchorUrlsFromTxCbor(cborHex) {
   const urls = [];
   for (const govActions of votingProcedures.values()) {
     if (!(govActions instanceof Map)) continue;
-    for (const procedure of govActions.values()) {
+    for (const [govActionKey, procedure] of govActions.entries()) {
+      if (targetTxHash && !cborGovActionKeyMatches(govActionKey, targetTxHash, targetCertIndex)) continue;
       const anchor = Array.isArray(procedure) ? procedure[1] : null;
       if (!Array.isArray(anchor)) continue;
       const url = String(anchor[0] || "").trim();
@@ -2587,6 +2598,15 @@ async function fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debugStats = 
     if (debugStats) debugStats.blockfrostSkipped = !pid ? "missing proposal id" : "missing Blockfrost key";
     return out;
   }
+  const proposalInfo = snapshot?.proposalInfo && typeof snapshot.proposalInfo === "object"
+    ? snapshot.proposalInfo[pid]
+    : null;
+  const proposalTxHash = String(proposalInfo?.txHash || "").trim().toLowerCase();
+  const proposalCertIndex = Number(proposalInfo?.certIndex);
+  if (!proposalTxHash || !Number.isInteger(proposalCertIndex) || proposalCertIndex < 0) {
+    if (debugStats) debugStats.blockfrostSkipped = "missing proposal tx hash or cert index";
+    return out;
+  }
   const votes = [];
   for (let page = 1; page <= 20; page += 1) {
     const rows = await blockfrostGet(`/governance/proposals/${encodeURIComponent(pid)}/votes?count=100&page=${page}&order=desc`)
@@ -2606,15 +2626,12 @@ async function fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debugStats = 
   for (let i = 0; i < txHashes.length; i += 4) {
     const chunk = txHashes.slice(i, i + 4);
     const entries = await Promise.all(chunk.map(async (txHash) => {
-      const cached = voteTxRationaleCache[txHash];
-      const cachedUrl = String(cached?.rationaleUrl || "").trim();
-      if (cachedUrl) return [txHash, cachedUrl];
       const tx = await blockfrostGet(`/txs/${encodeURIComponent(txHash)}/cbor`).catch((error) => {
         if (debugStats) debugStats.blockfrostCborError = error?.message || String(error || "Blockfrost CBOR request failed");
         return null;
       });
       const cborHex = String(tx?.cbor || tx?.tx_cbor || tx?.cbor_hex || "").trim();
-      const urls = extractVoteAnchorUrlsFromTxCbor(cborHex);
+      const urls = extractVoteAnchorUrlsFromTxCbor(cborHex, proposalTxHash, proposalCertIndex);
       return [txHash, urls[0] || ""];
     }));
     for (const [txHash, rationaleUrl] of entries) {
@@ -2626,17 +2643,8 @@ async function fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debugStats = 
         rationaleHash: "",
         source: "blockfrost-cbor"
       });
-      voteTxRationaleCache[txHash] = {
-        ...(voteTxRationaleCache[txHash] && typeof voteTxRationaleCache[txHash] === "object"
-          ? voteTxRationaleCache[txHash]
-          : {}),
-        hasRationale: true,
-        rationaleUrl,
-        fetchedAt: Date.now()
-      };
     }
   }
-  if (resolved > 0) saveVoteTxRationaleCache();
   if (debugStats) debugStats.blockfrostResolvedRows = resolved;
   return out;
 }
@@ -9654,7 +9662,7 @@ const server = http.createServer(async (req, res) => {
       let rationaleSections = [];
       let authorImageUrl = "";
       let latestVoteTxHash = voteTxHashParam;
-      if (!rationaleText && latestVoteTxHash) {
+      if (!rationaleUrl && !rationaleText && latestVoteTxHash) {
         const cachedTx = voteTxRationaleCache[latestVoteTxHash];
         if (cachedTx && typeof cachedTx === "object") {
           if (!resolvedUrl) resolvedUrl = String(cachedTx.rationaleUrl || "").trim();
@@ -9848,7 +9856,7 @@ const server = http.createServer(async (req, res) => {
         authorImageUrl: authorImageUrl || "",
         found: Boolean(rationaleText)
       };
-      if (latestVoteTxHash && (payload.found || payload.url)) {
+      if (!proposalId && latestVoteTxHash && (payload.found || payload.url)) {
         voteTxRationaleCache[latestVoteTxHash] = {
           ...(voteTxRationaleCache[latestVoteTxHash] && typeof voteTxRationaleCache[latestVoteTxHash] === "object"
             ? voteTxRationaleCache[latestVoteTxHash]
