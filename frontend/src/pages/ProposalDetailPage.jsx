@@ -529,6 +529,7 @@ export default function ProposalDetailPage() {
       const params = new URLSearchParams();
       if (snapshotKey) params.set("snapshot", snapshotKey);
       params.set("view", "actions");
+      params.set("proposalId", decodedProposalId);
       const [res, mRes] = await Promise.all([
         fetch(`${API_BASE}/api/accountability?${params.toString()}`),
         fetch(`${API_BASE}/api/proposal-metadata?proposalId=${encodeURIComponent(decodedProposalId)}`)

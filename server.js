@@ -1730,6 +1730,60 @@ function compactActorsForDashboard(rows) {
   }));
 }
 
+function applyRationaleSignalToVote(vote, signal) {
+  if (!vote || typeof vote !== "object" || !signal || typeof signal !== "object") return;
+  const signalUrl = String(signal.rationaleUrl || signal.meta_url || signal.anchor_url || "").trim();
+  const signalHas = Boolean(signal.hasRationale || signalUrl || signal.rationaleHash);
+  if (signalHas && vote.hasRationale !== true) vote.hasRationale = true;
+  if (signalUrl && !String(vote.rationaleUrl || "").trim()) vote.rationaleUrl = signalUrl;
+  if (Number(signal.rationaleBodyLength || 0) > Number(vote.rationaleBodyLength || 0)) {
+    vote.rationaleBodyLength = Number(signal.rationaleBodyLength || 0);
+  }
+  if (Number(signal.rationaleSectionCount || 0) > Number(vote.rationaleSectionCount || 0)) {
+    vote.rationaleSectionCount = Number(signal.rationaleSectionCount || 0);
+  }
+}
+
+async function enrichProposalRationaleSignalsForActors({ proposalId, proposalInfo, dreps, committeeMembers, spos }) {
+  const pid = String(proposalId || "").trim();
+  if (!pid) return;
+  const info = proposalInfo && typeof proposalInfo === "object" ? proposalInfo[pid] : null;
+  const txHash = String(info?.txHash || "").trim().toLowerCase();
+  const certIndex = Number(info?.certIndex);
+  const hasCgovKey = txHash && Number.isInteger(certIndex) && certIndex >= 0;
+  const [koiosLookup, drepLookup, committeeLookup, spoLookup] = await Promise.all([
+    fetchKoiosVoteRationaleLookup(pid).catch(() => null),
+    hasCgovKey ? fetchCgovDrepVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null) : Promise.resolve(null),
+    hasCgovKey ? fetchCgovCommitteeVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null) : Promise.resolve(null),
+    hasCgovKey ? fetchCgovSpoVoteRationaleLookupForProposal(txHash, certIndex).catch(() => null) : Promise.resolve(null)
+  ]);
+
+  const visit = (actors, role) => {
+    for (const actor of Array.isArray(actors) ? actors : []) {
+      const voterId = String(actor?.id || actor?.koiosVoterId || "").trim();
+      for (const vote of Array.isArray(actor?.votes) ? actor.votes : []) {
+        if (String(vote?.proposalId || "") !== pid) continue;
+        const tx = String(vote?.voteTxHash || "").trim().toLowerCase();
+        const pseudoVote = { tx_hash: tx, voter: voterId, voter_role: role };
+        applyRationaleSignalToVote(vote, lookupKoiosVoteRationale(koiosLookup, pseudoVote));
+        if (role === "drep") {
+          applyRationaleSignalToVote(vote, lookupCgovDrepVoteRationale(drepLookup, voterId, tx));
+        } else if (role === "constitutional_committee") {
+          applyRationaleSignalToVote(vote, lookupCgovCommitteeVoteRationale(committeeLookup, { tx_hash: tx }, voterId));
+        } else if (role === "stake_pool") {
+          applyRationaleSignalToVote(vote, lookupCgovSpoVoteRationale(spoLookup, { tx_hash: tx, voter: voterId }));
+        }
+        const cached = tx ? voteTxRationaleCache[tx] : null;
+        applyRationaleSignalToVote(vote, cached);
+      }
+    }
+  };
+
+  visit(dreps, "drep");
+  visit(committeeMembers, "constitutional_committee");
+  visit(spos, "stake_pool");
+}
+
 async function hydrateVoteTimesForActors(rows, proposalInfo) {
   if (!BLOCKFROST_API_KEY) return;
   const source = Array.isArray(rows) ? rows : [];
@@ -1866,8 +1920,8 @@ function hasKoiosRationale(row) {
 function addKoiosVoteLookupEntry(lookup, row) {
   if (!lookup || !row || typeof row !== "object") return;
   const role = normalizeVoteRole(row.voter_role);
-  const voterId = String(row.voter_id || "").trim();
-  const voteTxHash = String(row.vote_tx_hash || "").trim().toLowerCase();
+  const voterId = String(row.voter_id || row.voter || row.drep_id || row.pool_id || row.cc_hot_id || "").trim();
+  const voteTxHash = String(row.vote_tx_hash || row.tx_hash || row.txHash || "").trim().toLowerCase();
   const rationale = {
     hasRationale: hasKoiosRationale(row),
     rationaleUrl: String(row.meta_url || row.anchor_url || "").trim(),
@@ -8225,6 +8279,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/accountability") {
     const requestedSnapshot = String(url.searchParams.get("snapshot") || "").trim();
     const requestedView = String(url.searchParams.get("view") || "all").trim().toLowerCase();
+    const focusedProposalId = String(url.searchParams.get("proposalId") || "").trim();
     const view = ["all", "drep", "spo", "committee", "actions", "stats"].includes(requestedView)
       ? requestedView
       : "all";
@@ -8241,6 +8296,15 @@ const server = http.createServer(async (req, res) => {
       const drepsRaw = Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : [];
       const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || []);
       const sposRaw = Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : [];
+      if (focusedProposalId) {
+        await enrichProposalRationaleSignalsForActors({
+          proposalId: focusedProposalId,
+          proposalInfo: sourceSnapshot?.proposalInfo || {},
+          dreps: drepsRaw,
+          committeeMembers: committeeRaw,
+          spos: sposRaw
+        });
+      }
       const hasSpecialDreps = sourceSnapshot?.specialDreps && Object.keys(sourceSnapshot.specialDreps).length > 0;
       const specialDreps = hasSpecialDreps ? sourceSnapshot.specialDreps : (specialDrepsCache.value || {});
       json(res, 200, {
