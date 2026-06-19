@@ -1979,7 +1979,7 @@ async function fetchKoiosVoteRationaleLookup(proposalId) {
   return lookup;
 }
 
-async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
+async function fetchKoiosVoteRationaleSignalsByTx(proposalId, debugStats = null) {
   const out = new Map();
   const pid = String(proposalId || "").trim();
   if (!pid) return out;
@@ -1989,13 +1989,41 @@ async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
     const query =
       `/vote_list?proposal_id=eq.${encodeURIComponent(pid)}` +
       `&order=block_time.desc&limit=${limit}&offset=${offset}`;
-    if (!direct) return koiosGet(query).catch(() => []);
-    return fetchJsonWithTimeout(`https://api.koios.rest/api/v1${query}`, KOIOS_REQUEST_TIMEOUT_MS).catch(() => []);
+    if (!direct) return koiosGet(query).catch((error) => {
+      if (debugStats) debugStats.koiosError = error?.message || String(error || "Koios request failed");
+      return [];
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), KOIOS_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`https://api.koios.rest/api/v1${query}`, {
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        signal: controller.signal
+      });
+      if (debugStats) debugStats.directStatus = response.status;
+      if (!response.ok) {
+        if (debugStats) debugStats.directError = await response.text().catch(() => "");
+        return [];
+      }
+      return await response.json();
+    } catch (error) {
+      if (debugStats) debugStats.directError = error?.message || String(error || "Direct Koios request failed");
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
   }
   async function collect(direct = false) {
     let offset = 0;
     while (offset < maxRows) {
       const rows = await fetchRows(offset, direct);
+      if (debugStats) {
+        const key = direct ? "directRows" : "koiosRows";
+        debugStats[key] = Number(debugStats[key] || 0) + (Array.isArray(rows) ? rows.length : 0);
+      }
       if (!Array.isArray(rows) || rows.length === 0) break;
       for (const row of rows) {
         const tx = String(row?.vote_tx_hash || row?.tx_hash || row?.txHash || "").trim().toLowerCase();
@@ -2018,12 +2046,13 @@ async function fetchKoiosVoteRationaleSignalsByTx(proposalId) {
       offset += rows.length;
     }
   }
-  await collect(false);
+  await collect(true);
   const hasRationaleSignal = Array.from(out.values()).some((signal) =>
     Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
   if (!hasRationaleSignal) {
-    await collect(true);
+    await collect(false);
   }
+  if (debugStats) debugStats.outputRows = out.size;
   return out;
 }
 
@@ -9689,7 +9718,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const byTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId);
+      const includeDebug = String(url.searchParams.get("debug") || "").toLowerCase() === "true";
+      const debug = includeDebug ? {} : null;
+      const byTx = await fetchKoiosVoteRationaleSignalsByTx(proposalId, debug);
       const votes = Array.from(byTx.entries())
         .filter(([, signal]) => signal && (signal.hasRationale || signal.rationaleUrl || signal.rationaleHash))
         .map(([voteTxHash, signal]) => ({
@@ -9698,7 +9729,7 @@ const server = http.createServer(async (req, res) => {
           rationaleUrl: String(signal.rationaleUrl || ""),
           rationaleHash: String(signal.rationaleHash || "")
         }));
-      json(res, 200, { ok: true, proposalId, count: votes.length, votes });
+      json(res, 200, { ok: true, proposalId, count: votes.length, votes, ...(includeDebug ? { debug } : {}) });
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal vote rationales." });
