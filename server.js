@@ -9259,13 +9259,16 @@ const server = http.createServer(async (req, res) => {
     if (!GOV_META_VERIFY_SHADOW && voterRole === "drep" && proposalId && voterId) {
       const fastKey = `${proposalId}|${String(voterId || "").trim().toLowerCase()}`;
       const fast = drepRationaleByProposalVoter.get(fastKey);
-      if (fast && typeof fast === "object" && (fast.rationaleText || fast.rationaleUrl)) {
+      const fastText = fast && typeof fast === "object"
+        ? cleanPlainText(String(fast.rationaleText || "").trim())
+        : "";
+      if (fastText) {
         const payload = {
           ok: true,
           url: String(fast.rationaleUrl || ""),
-          rationaleText: String(fast.rationaleText || ""),
+          rationaleText: fastText,
           rationaleSections: [],
-          found: Boolean(String(fast.rationaleText || "").trim())
+          found: true
         };
         voteRationaleResultCache.set(cacheKey, payload);
         json(res, 200, payload);
@@ -9325,7 +9328,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
       }
-      if (!resolvedUrl && proposalId && voterId) {
+      if ((!resolvedUrl || !rationaleText) && proposalId && voterId) {
         const koiosRole =
           voterRole === "constitutional_committee"
             ? "ConstitutionalCommittee"
