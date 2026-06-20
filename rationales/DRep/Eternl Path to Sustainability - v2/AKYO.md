@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmaq2pdB1uCoaii4tdyR6ccP1JqAJaEn6Fhpn39EDgn12g -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSk44htEHB9Xx2AUEefTfkaJByxqPF3ZTZLvN5SEtQ7Mi -->
 # AKYO
 
 **Proposal:** Eternl Path to Sustainability - v2
@@ -7,4 +7,4 @@
 
 ---
 
-私は本提案に反対します。ガバナンスアクション提出時に失われた100,000ADAのデポジットを返還するという考え方については理解できます。提案本文によれば、この損失はCardanoノードのバグによって発生したものであり、提出者が初期のガバナンス参加者であったことも考慮すべき事情であると考えます。一方で、本提案には当初失われたデポジットに加え、失われたステーキング報酬の補償として追加の3,000ADAが含まれています。私は、失われたデポジットの返還とステーキング報酬の補償は区別して考えるべきであり、Treasuryから機会損失まで補償することには慎重であるべきだと考えます。そのため、本提案には反対します。\n\nI am voting No on this proposal. I understand the rationale for reimbursing the 100,000 ADA deposit that was lost when the governance action was submitted. According to the proposal, this loss resulted from a bug in the Cardano node, and I believe the fact that the submitter was an early participant in Cardano governance is a factor that should be taken into consideration. However, this proposal includes an additional 3,000 ADA as compensation for lost staking rewards on top of the original deposit. I believe reimbursement of the lost deposit should be considered separately from compensation for staking rewards, and I am cautious about extending Treasury funding to cover opportunity costs. For this reason, I am voting No on this proposal.
+私は本提案について棄権します。EternlはCardanoの主要ウォレットの一つであり、エコシステムにおけるその重要性は理解しています。一方で、本提案はProプランによる収益化を前提とした持続可能性への移行を目指すものであり、その成功可能性には不確実性が残ります。また、Treasuryへの返済条件は示されているものの、その実効性は今後のProプラン収入に依存します。Eternlの重要性は認めるものの、現時点では本提案への賛否を明確に判断するには不確実性が残るため、棄権します。\n\nI am abstaining on this proposal. I understand the importance of Eternl as one of the major wallets in the Cardano ecosystem. However, this proposal aims to transition toward sustainability through monetization based on the introduction of a Pro plan, and there remains uncertainty regarding the likelihood of its success. In addition, while conditions for repayment to the Treasury are described, their effectiveness depends on future income from the Pro plan. Although I recognize the importance of Eternl, there is still too much uncertainty for me to make a clear judgment either in favor of or against this proposal at this time, and therefore I am abstaining.

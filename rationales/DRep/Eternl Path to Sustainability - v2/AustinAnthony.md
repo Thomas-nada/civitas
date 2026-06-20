@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTAwCPCbsyde5kzcNMcMKF6N4PndFN8zYcjNHYs4yaREp -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTAdMTJ3XdZ6tNySgsojfB1Em1xcX6mw7XmWeWvKG1jk9 -->
 # AustinAnthony
 
 **Proposal:** Eternl Path to Sustainability - v2
@@ -7,4 +7,4 @@
 
 ---
 
-Major upgrades to the Plutus Contract language and adds Ledger stability. The fork is named in memory of Cardano governance contributor Max van Rossem, RIP Max, TY for all that you did!
+During harsh times we can get eternl wallet on a sustainable path. I have and many consistent users in the Cardano Users have used Eternl for over 5 years. Work hard and make it work Eternl.

@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmc5H4KZk4SZTr2ep91sqBs1d1rJktURu4Jc2x96qYnmUF -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmRQ1bXKJ2JB4wfQXM3sZu9bphQXUXr2v7j3zES8ffuucy -->
 # Latam Cardano
 
 **Proposal:** Eternl Path to Sustainability - v2
@@ -7,9 +7,7 @@
 
 ---
 
-As a representative committed to safeguarding user trust, decentralization, and the long-term scalability of Cardano, a YES vote is the objectively sound decision for the network's architectural development. Mainnet transaction velocity and dApp competitiveness rely directly on robust Layer 2 throughput. Hydra represents a peer-reviewed, structurally secure mechanism to handle web-scale throughput while keeping transaction costs low and accessible.
+Our guiding framework requires us to prioritize user trust, accessibility, and the long-term viability of the blockchain. Eternl serves as an indispensable bridge for power users and developers alike. Allowing a foundational wallet to degrade or halt operations due to an infrastructure funding gap poses a severe systemic risk to user retention and transaction volume. Because this updated version actively addresses the technical and financial criticisms that led to the expiration of prior iterations, voting "Yes" honors our commitment to maintaining a robust network infrastructure while supporting the team's explicit pivot toward a self-sustaining commercial model.
 
-The financial request of ₳5.1M is highly disciplined, well-aligned with the Intersect 2026 Budget Framework, and does not threaten or breach our active Constitutional Net Change Limit (NCL) boundaries. Allowing core scaling progress to stall would negatively affect ecosystem retention and infrastructure maturity during a pivotal market phase.
-
-Latin American Ecosystem Impact Statement:
-This governance action directly empowers the Latin American Cardano community by lowering the economic barriers to entry. For builders and users in regions characterized by volatile local economies, low-fee micro-transactions via localized Hydra heads make real-world web3 adoption, localized dApp development, and remittance pilots financially viable, effectively driving socio-economic inclusion across LatAm.
+Latin American Ecosystem Impact
+Eternl is widely regarded within the Latin American community as the premier wallet for executing advanced on-chain mechanics, managing native assets, and connecting to decentralized applications seamlessly. For a region heavily focused on onboarding and expanding local transactions, ensuring Eternl's stability directly protects the user experience of thousands of LatAm delegators and builders. Supporting this path to sustainability guarantees that our community retains a top-tier, reliable gateway to participate in Cardano's global economy without frictional interruptions.
