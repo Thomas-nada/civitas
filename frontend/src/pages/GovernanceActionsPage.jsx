@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "r
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useNavigate } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
+import { useEffectiveDrepId } from "../hooks/useEffectiveDrepId";
 import { Transaction } from "@meshsdk/core";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
@@ -567,6 +568,13 @@ export default function GovernanceActionsPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   // --- Voting state (wallet state is global via WalletContext) ---
   const wallet = useContext(WalletContext);
+  const effectiveDrepId = useEffectiveDrepId(wallet);
+  const votedProposalIds = useMemo(() => {
+    if (!effectiveDrepId || !Array.isArray(payload?.dreps)) return new Set();
+    const target = effectiveDrepId.toLowerCase();
+    const drep = payload.dreps.find((d) => String(d?.id || "").toLowerCase() === target);
+    return new Set((drep?.votes || []).map((v) => String(v?.proposalId || "")));
+  }, [effectiveDrepId, payload]);
   const [voteChoice, setVoteChoice] = useState("");
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
@@ -1694,6 +1702,9 @@ export default function GovernanceActionsPage() {
                       </td>
                       <td data-label="Status" className="ga-status-cell">
                         {row.status ? <span className={`pill ${statusPillMod(row.status)}`}>{row.status}</span> : null}
+                        {votedProposalIds.has(row.proposalId) ? (
+                          <span className="pill ga-voted-pill" title="Your DRep has voted on this action">✓ Voted</span>
+                        ) : null}
                       </td>
                       <td data-label="DRep">
                         <VoteBarCell

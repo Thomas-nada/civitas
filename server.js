@@ -7303,6 +7303,27 @@ function resolveSeoForPath(pathname) {
     return { title, description, canonicalHref, jsonLd };
   }
 
+  // ── DRep delegate link: /delegate/:drepId ───────────────────────
+  const delegateMatch = canonicalPath.match(/^\/delegate\/(.+)$/);
+  if (delegateMatch) {
+    const aid = decodeURIComponent(delegateMatch[1]);
+    const drep = (snapshot.dreps || []).find((d) => d.id === aid) || null;
+    const name = drep?.name || null;
+    const display = name || `${aid.slice(0, 14)}…`;
+    const title = `Delegate to ${display} | Civitas`;
+    const description = `One-click delegate your Cardano governance voting power to ${display} via Civitas.`;
+    const jsonLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "DRep Dashboard", item: `${base}/dreps` },
+        { "@type": "ListItem", position: 2, name: `Delegate to ${display}`, item: canonicalHref }
+      ]
+    });
+    return { title, description, canonicalHref, jsonLd };
+  }
+
+
   // ── SPO profile: /spos/:actorId ───────────────────────────────────────────
   const spoMatch = canonicalPath.match(/^\/spos\/(.+)$/);
   if (spoMatch) {
@@ -8957,6 +8978,54 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, { currentEpoch, comparedEpoch, periods: epochs, gainers, losers });
     return;
   }
+
+  if (req.method === "GET" && url.pathname === "/api/drep-delegators") {
+    const drepId = String(url.searchParams.get("id") || "").trim();
+    if (!drepId) {
+      json(res, 400, { error: "id parameter required" });
+      return;
+    }
+    if (!BLOCKFROST_API_KEY) {
+      json(res, 503, { error: "Blockfrost not configured." });
+      return;
+    }
+    const CACHE_TTL_MS = 5 * 60 * 1000;
+    const MAX_PAGES = 50; // up to 5,000 delegators per DRep
+    const PAGE_SIZE = 100;
+    global._drepDelegatorsCache = global._drepDelegatorsCache || {};
+    const cache = global._drepDelegatorsCache[drepId];
+    if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
+      json(res, 200, cache.data);
+      return;
+    }
+    try {
+      const safeId = encodeURIComponent(drepId);
+      const delegators = [];
+      let page = 1;
+      let truncated = false;
+      while (page <= MAX_PAGES) {
+        const rows = await blockfrostGet(`/governance/dreps/${safeId}/delegators?count=${PAGE_SIZE}&page=${page}`);
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        for (const row of rows) {
+          const address = String(row?.address || "").trim();
+          if (!address) continue;
+          delegators.push({ address, amountAda: Math.floor(Number(row?.amount || 0) / 1_000_000) });
+        }
+        if (rows.length < PAGE_SIZE) break;
+        if (page === MAX_PAGES) truncated = true;
+        page += 1;
+      }
+      delegators.sort((a, b) => b.amountAda - a.amountAda);
+      const totalAda = delegators.reduce((sum, d) => sum + d.amountAda, 0);
+      const payload = { id: drepId, delegatorCount: delegators.length, totalAda, truncated, delegators };
+      global._drepDelegatorsCache[drepId] = { fetchedAt: Date.now(), data: payload };
+      json(res, 200, payload);
+    } catch (e) {
+      json(res, 502, { error: e?.message || "Failed to fetch DRep delegators." });
+    }
+    return;
+  }
+
 
   if (req.method === "GET" && url.pathname === "/api/ncl") {
     const periodKey = String(url.searchParams.get("period") || "current").trim().toLowerCase();

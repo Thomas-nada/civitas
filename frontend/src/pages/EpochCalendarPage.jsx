@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useSeoMeta } from "../hooks/useSeoMeta";
+import { WalletContext } from "../context/WalletContext";
+import { useEffectiveDrepId } from "../hooks/useEffectiveDrepId";
 
 // Cardano mainnet epoch timing. Shelley epoch 208 began 2020-07-29 21:44:51 UTC.
 // Every epoch is exactly 5 days (432000 s), so boundaries keep the same time-of-day.
@@ -479,14 +481,15 @@ function eventLabel(type, row, referenceEpoch) {
   return `${name} ${pct}`;
 }
 
-function addEpochEvent(map, epoch, type, row, referenceEpoch) {
+function addEpochEvent(map, epoch, type, row, referenceEpoch, voted = false) {
   if (!Number.isFinite(epoch) || epoch <= 0) return;
   if (!map.has(epoch)) map.set(epoch, []);
   map.get(epoch).push({
     proposalId: row.proposalId,
     type,
     label: eventLabel(type, row, referenceEpoch),
-    row
+    row,
+    voted
   });
 }
 
@@ -557,7 +560,7 @@ function eventTypesAtEpoch(row, epoch, referenceEpoch) {
   return types;
 }
 
-function buildActionEvents(payload, currentRows, referenceEpoch, visibleEpochs) {
+function buildActionEvents(payload, currentRows, referenceEpoch, visibleEpochs, votedProposalIds) {
   const map = new Map();
   const currentById = new Map((currentRows || []).map((row) => [row.proposalId, row]));
   for (const epoch of visibleEpochs || []) {
@@ -569,7 +572,8 @@ function buildActionEvents(payload, currentRows, referenceEpoch, visibleEpochs) 
       const types = eventTypesAtEpoch(currentRow, epoch, referenceEpoch);
       if (types.length === 0) continue;
       const row = snapshotById.get(currentRow.proposalId) || currentById.get(currentRow.proposalId) || currentRow;
-      for (const type of types) addEpochEvent(map, epoch, type, row, epoch);
+      const voted = Boolean(votedProposalIds?.has(currentRow.proposalId));
+      for (const type of types) addEpochEvent(map, epoch, type, row, epoch, voted);
     }
   }
   for (const items of map.values()) {
@@ -748,6 +752,7 @@ function EpochDetails({ epoch, events, expandedTypes, onToggleType, onOpenEvent 
                       >
                         <span className="ec-detail-type">{event.type}</span>
                         <span className="ec-detail-copy">{event.label}</span>
+                        {event.voted ? <span className="ec-voted-mark" title="Your DRep has voted on this action">✓ Voted</span> : null}
                       </button>
                     ))}
                   </div>
@@ -774,6 +779,7 @@ function ActionModal({ event, onClose }) {
         <div className="ec-modal-head">
           <div>
             <span className={`ec-modal-kicker ec-modal-kicker-${event.type}`}>{event.type}</span>
+            {event.voted ? <span className="ec-voted-mark" title="Your DRep has voted on this action">✓ Voted</span> : null}
             <h2>{row.actionName || "Governance action"}</h2>
             <p className="muted">{row.governanceType || "Unknown type"} · {status}</p>
           </div>
@@ -852,6 +858,7 @@ function EpochActionsModal({ epoch, events, onClose, onOpenEvent }) {
                 <span className={`ec-detail-dot ec-detail-dot-${event.type}`} />
                 <strong>{event.type}</strong>
                 <span>{event.label}</span>
+                {event.voted ? <span className="ec-voted-mark" title="Your DRep has voted on this action">✓ Voted</span> : null}
               </button>
             ))}
           </div>
@@ -917,12 +924,13 @@ function MonthGrid({ year, month, now, actionEvents, selectedEpoch, onSelectEpoc
                       <button
                         type="button"
                         key={`${event.proposalId}-${event.type}-${index}`}
-                        className={`ec-action-chip ec-action-${event.type}`}
+                        className={`ec-action-chip ec-action-${event.type}${event.voted ? " ec-action-voted" : ""}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           onOpenEvent(event);
                         }}
                       >
+                        {event.voted ? <span className="ec-voted-mark" title="Your DRep has voted on this action">✓</span> : null}
                         {compactName(event.label, compact ? 34 : 54)}
                       </button>
                     ))}
@@ -1111,9 +1119,17 @@ export default function EpochCalendarPage() {
     () => buildGovernanceActionRows(actionsPayload, referenceEpoch),
     [actionsPayload, referenceEpoch]
   );
+  const wallet = useContext(WalletContext);
+  const effectiveDrepId = useEffectiveDrepId(wallet);
+  const votedProposalIds = useMemo(() => {
+    if (!effectiveDrepId || !Array.isArray(actionsPayload?.dreps)) return new Set();
+    const target = effectiveDrepId.toLowerCase();
+    const drep = actionsPayload.dreps.find((d) => String(d?.id || "").toLowerCase() === target);
+    return new Set((drep?.votes || []).map((v) => String(v?.proposalId || "")));
+  }, [effectiveDrepId, actionsPayload]);
   const actionEvents = useMemo(
-    () => buildActionEvents(actionsPayload, actionRows, referenceEpoch, visibleEpochs),
-    [actionsPayload, actionRows, referenceEpoch, visibleEpochs]
+    () => buildActionEvents(actionsPayload, actionRows, referenceEpoch, visibleEpochs, votedProposalIds),
+    [actionsPayload, actionRows, referenceEpoch, visibleEpochs, votedProposalIds]
   );
   const effectiveSelectedEpoch = visibleEpochs.includes(selectedEpoch)
     ? selectedEpoch

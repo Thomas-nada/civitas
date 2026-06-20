@@ -38,6 +38,7 @@ const StatsPage = lazy(() => import("./pages/StatsPage"));
 const BugsPage = lazy(() => import("./pages/BugsPage"));
 const ConstitutionPage = lazy(() => import("./pages/ConstitutionPage"));
 const VoterProfilePage = lazy(() => import("./pages/VoterProfilePage"));
+const DelegatePage = lazy(() => import("./pages/DelegatePage"));
 const ProposalDetailPage = lazy(() => import("./pages/ProposalDetailPage"));
 const EpochCalendarPage = lazy(() => import("./pages/EpochCalendarPage"));
 const CipListPage = lazy(() => import("./pages/CipListPage"));
@@ -438,6 +439,7 @@ export default function App() {
           <Route path="/treasury" element={<TreasuryPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
           <Route path="/dreps/:actorId" element={<VoterProfilePage actorType="drep" />} />
+          <Route path="/delegate/:drepId" element={<DelegatePage />} />
           <Route path="/spos" element={<DashboardPage actorType="spo" />} />
           <Route path="/spos/:actorId" element={<VoterProfilePage actorType="spo" />} />
           <Route path="/committee" element={<DashboardPage actorType="committee" />} />

@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": { target: "http://localhost:8080", changeOrigin: false },
+      "/api": { target: "http://127.0.0.1:8080", changeOrigin: false },
       "/ekklesia-proxy": {
         target: "https://hydra-voting.intersectmbo.org",
         changeOrigin: true,

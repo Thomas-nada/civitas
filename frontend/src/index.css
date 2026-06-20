@@ -1936,6 +1936,32 @@ a {
   opacity: 0.55;
 }
 
+.delegate-share {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.delegate-share-btn {
+  background: transparent;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.18));
+  color: var(--text);
+}
+
+.delegate-share-hint {
+  width: 100%;
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+}
+
+.delegators-table {
+  display: block;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
 button {
   background: var(--mint);
   color: var(--accent-button-text);
@@ -2943,6 +2969,12 @@ tbody tr.active {
   white-space: nowrap;
 }
 
+.ga-status-cell .ga-voted-pill {
+  display: block;
+  margin-top: 0.3rem;
+  width: fit-content;
+}
+
 .ga-expires-cell {
   width: 105px;
   min-width: 90px;
@@ -3135,6 +3167,11 @@ tbody tr.active {
 .pill.low {
   background: rgba(255, 111, 125, 0.17);
   color: var(--rose);
+}
+
+.ga-voted-pill {
+  background: rgba(84, 228, 188, 0.16);
+  color: var(--mint);
 }
 
 /* Distinct status pill variants */
@@ -9062,6 +9099,14 @@ textarea.cs-text-input {
   cursor: pointer;
 }
 .ec-action-chip:hover { background: rgba(255,255,255,0.12); }
+.ec-action-voted { box-shadow: inset 0 0 0 1px var(--mint); }
+.ec-voted-mark {
+  display: inline-block;
+  color: var(--mint);
+  font-weight: 700;
+  margin-right: 0.35rem;
+  white-space: nowrap;
+}
 .ec-action-submitted { border-color: color-mix(in srgb, #8fb8ff 60%, transparent); }
 .ec-action-voting { border-color: color-mix(in srgb, #fff7d6 55%, transparent); }
 .ec-action-expires { border-color: color-mix(in srgb, #ffc766 65%, transparent); }

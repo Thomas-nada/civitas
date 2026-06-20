@@ -19,6 +19,11 @@ const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
 const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
 const DREP_DELEGATION_RISK_HIGH_CUTOFF = 75;
 
+function shortAddress(address) {
+  const s = String(address || "");
+  return s.length > 24 ? `${s.slice(0, 14)}…${s.slice(-8)}` : s;
+}
+
 function round(v) {
   return Math.round(Number(v || 0) * 10) / 10;
 }
@@ -198,6 +203,11 @@ export default function VoterProfilePage({ actorType }) {
   const [delegateNotice, setDelegateNotice] = useState("");
   const [delegating, setDelegating] = useState(false);
   const [highRiskDelegationModalOpen, setHighRiskDelegationModalOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState("");
+  const [delegators, setDelegators] = useState(null);
+  const [delegatorsLoading, setDelegatorsLoading] = useState(false);
+  const [delegatorsError, setDelegatorsError] = useState("");
+  const [delegatorsShowCount, setDelegatorsShowCount] = useState(25);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +255,23 @@ export default function VoterProfilePage({ actorType }) {
       .finally(() => { if (!cancelled) setLiveLoading(false); });
     return () => { cancelled = true; };
   }, [actorType, payload, actorFromSnapshot, decodedId]);
+
+  useEffect(() => {
+    if (actorType !== "drep" || !decodedId) return undefined;
+    let cancelled = false;
+    setDelegatorsLoading(true);
+    setDelegatorsError("");
+    fetch(`${API_BASE}/api/drep-delegators?id=${encodeURIComponent(decodedId)}`)
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return;
+        if (!ok) throw new Error(data?.error || "Failed to load delegators.");
+        setDelegators(data);
+      })
+      .catch((e) => { if (!cancelled) setDelegatorsError(e.message || "Failed to load delegators."); })
+      .finally(() => { if (!cancelled) setDelegatorsLoading(false); });
+    return () => { cancelled = true; };
+  }, [actorType, decodedId]);
 
   // When snapshot has 0 power but live data has non-zero, merge the live power in.
   const actor = useMemo(() => {
@@ -418,6 +445,32 @@ export default function VoterProfilePage({ actorType }) {
     await submitDelegationTransaction();
   }
 
+  function delegateShareUrl() {
+    return `${window.location.origin}/delegate/${encodeURIComponent(actor?.id || decodedId)}`;
+  }
+
+  async function copyDelegateLink() {
+    try {
+      await navigator.clipboard.writeText(delegateShareUrl());
+      setShareCopied("link");
+      setTimeout(() => setShareCopied(""), 2000);
+    } catch {
+      setDelegateNotice("Could not copy link. Copy it from the address bar instead.");
+    }
+  }
+
+  async function copyDelegateText() {
+    const name = actor?.name || decodedId;
+    const text = `I delegate my Cardano governance voting power to ${name} on Civitas: ${delegateShareUrl()}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setShareCopied("text");
+      setTimeout(() => setShareCopied(""), 2000);
+    } catch {
+      setDelegateNotice("Could not copy share text.");
+    }
+  }
+
   async function loadVoteRationale(item) {
     if (!item) return;
     const key = `${actor?.id || ""}-${item.proposalId}`;
@@ -542,6 +595,19 @@ export default function VoterProfilePage({ actorType }) {
               </button>
               {!wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
               {delegateNotice ? <p className="muted">{delegateNotice}</p> : null}
+              {isDrep ? (
+                <div className="delegate-share">
+                  <button type="button" className="delegate-share-btn" onClick={copyDelegateLink}>
+                    {shareCopied === "link" ? "Link Copied!" : "Copy Delegate Link"}
+                  </button>
+                  <button type="button" className="delegate-share-btn" onClick={copyDelegateText}>
+                    {shareCopied === "text" ? "Copied!" : "Copy Share Post"}
+                  </button>
+                  <p className="muted delegate-share-hint">
+                    Drop the link into a social post or reply — anyone who clicks it lands on a one-click delegate page for this DRep.
+                  </p>
+                </div>
+              ) : null}
               {actor.profile?.email ? (
                 <p className="profile-row">
                   <span className="profile-label">Email</span>
@@ -591,6 +657,51 @@ export default function VoterProfilePage({ actorType }) {
                 </>
               ) : null}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {isDrep ? (
+        <section className="stats-section stats-section--wide">
+          <h2 className="stats-section-title">Delegators</h2>
+          <div className="stats-section-body">
+            {delegatorsLoading ? (
+              <p className="muted">Loading delegators…</p>
+            ) : delegatorsError ? (
+              <p className="muted">{delegatorsError}</p>
+            ) : delegators && delegators.delegatorCount > 0 ? (
+              <>
+                <p className="muted">
+                  <strong>{fmt(delegators.delegatorCount)}</strong> current delegator{delegators.delegatorCount === 1 ? "" : "s"} ·{" "}
+                  <strong>{fmt(delegators.totalAda)} ada</strong> delegated
+                  {delegators.truncated ? " (showing top 5,000 by stake)" : ""}
+                </p>
+                <table className="delegators-table">
+                  <thead>
+                    <tr><th>Stake Address</th><th>Delegated</th></tr>
+                  </thead>
+                  <tbody>
+                    {delegators.delegators.slice(0, delegatorsShowCount).map((d) => (
+                      <tr key={d.address}>
+                        <td className="mono">
+                          <a className="ext-link" href={`https://cardanoscan.io/stakeKey/${encodeURIComponent(d.address)}`} target="_blank" rel="noreferrer">
+                            {shortAddress(d.address)}
+                          </a>
+                        </td>
+                        <td>{fmt(d.amountAda)} ada</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {delegators.delegators.length > delegatorsShowCount ? (
+                  <button type="button" className="delegate-share-btn" onClick={() => setDelegatorsShowCount((n) => n + 25)}>
+                    Show more
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <p className="muted">No current delegators found for this DRep.</p>
+            )}
           </div>
         </section>
       ) : null}
