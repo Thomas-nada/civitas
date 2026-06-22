@@ -10647,7 +10647,9 @@ const server = http.createServer(async (req, res) => {
                 for (const cycle of list) {
                   if (cycle.slug === "cc-vote-2026") {
                     cycle.submissionEndDate = "2026-06-21T21:45:00.000Z";
-                    cycle.votingStartDate   = "2026-06-23T21:45:00.000Z";
+                    cycle.feedbackStartDate = "2026-06-21T21:45:00.000Z";
+                    cycle.feedbackEndDate   = "2026-06-28T21:45:00.000Z";
+                    cycle.votingStartDate   = "2026-06-28T21:45:00.000Z";
                     cycle.votingEndDate     = "2026-07-23T21:45:00.000Z";
                     break;
                   }
