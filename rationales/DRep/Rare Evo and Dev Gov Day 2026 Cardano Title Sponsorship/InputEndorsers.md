@@ -1,10 +1,17 @@
-<!-- url: ipfs://bafkreify6n62agt5v3w4gyazyjqoquempmy5kllqijqnh5n5zfmme3ogfu -->
+<!-- url: ipfs://QmWdKs5iXSjHcRbYcLJHarvSm6H1QQrJ3tTNHxBWsyz1CY -->
 # InputEndorsers
 
 **Proposal:** Rare Evo and Dev Gov Day 2026 Cardano Title Sponsorship
-**Vote:** No
+**Vote:** Abstain
 **Voter ID:** `drep1y2hlgh9600zjlt39dh54z7z8d65kahneck8yhh7ugmzc9as0xrzqd`
 
 ---
 
-I do recognize the enormous effort by Rare to help the visibility of Cardano. We have had multiple event proposals this season: Cardano Summit, Token 2049 sponsorships, and this sponsorship. I have voted No on the preceding ones. We have had several proposals and I am actually unable to say why one should gain precedence over the other - when it comes to Treasury funding. They all have a claim to relevance and importance, but as I am being asked to help release Treasury funds - I am unable to say Yes as I still remain to be convinced the Treasury should finance sponsorships and Summits as annual occurrences.
+I'm working on my own rulebook (+ scoring framework) for assessing Commercial (and Hybrid) Treasury Withdrawal requests.
+
+I need more structure.
+
+I will change my votes to Abstain on all such active proposals at this moment.
+Sharing latest rulebook v4 doc (link in tweet below):
+
+https://docs.google.com/document/d/1xp9jkdT23bVy1igj4HeCVKjdHvAcPhjtM1zlMtKzGUo/edit?usp=sharing
