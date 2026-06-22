@@ -1,0 +1,17 @@
+<!-- url: ipfs://Qma5pbwPWtgQQsnvd7hhFLg3eYmJDZKCyVkzufATiXZN4w -->
+# jonahkoch
+
+**Proposal:** 5am.earth Trust Layer Targeting Vision 2030 KPIs
+**Vote:** Yes
+**Voter ID:** `drep1yt8trnz8e5cnylmyygt0pyzrfw92rt9s42kg8t4rhm6t0dstyvmdn`
+
+---
+
+A [PDF version][pdf-link] of this rationale is also made available.
+
+[pdf-link]: https://ipfs.io/ipfs/QmP9RTQe21Ng2dJgr4Hr7WKN8PhY4epVS5CSqnjNpwWgey
+
+I'm voting yes because this is a scale-up of something already operating on Mainnet, not a request to fund a hypothesis. Cardano's most persistent criticism is the gap between infrastructure capability and real-world transaction volume, and 5am.earth is one of the few proposals in front of me this cycle with independently verifiable evidence against that exact gap.  Project Swaminathan is reportedly already ranking top 10-15 in on-chain activity on Cardano dot org leaderboard, registering real farmers at 500 a day with a 100% blockchain success rate through its pilot. That's IRL operating history a third party can check today.
+The architecture is also right. A trust layer that lets AE certification, traceability compliance, and credit scoring all draw from the same verified farmer and farm record, instead of each application rebuilding identity verification from scratch, which is the correct answer to a fragmentation problem that genuinely exists in agricultural data systems, and it avoids concentrating that shared infrastructure in any single commercial actor's hands. The consortium backing it isn't speculative either: Syngenta Foundation India already reaches 2.6 million farmers through its existing AE network, and the Global AE Academy carries IFC, World Bank, and Corteva institutional weight behind the scaling plan. The EUDR compliance angle on the traceability path gives that work-stream a real regulatory use case and deadline rather than a manufactured one.
+The fiscal structure has real gaps I want on the record. Fifty percent of the entire ask 5M  ADA is dispersed on approval, before the Foundation that's supposed to steward this neutrally is even legally registered, into a contract held by two Swiss commercial co-promoters as a stopgap. That's the largest unconditioned front-load I've reviewed this cycle, and it deserves more incremental gating in future tranches of this kind of program. The proposal also doesn't disclose a revenue-share or repayment mechanism back to the treasury, despite projecting 16 to 20 million ADA in annual protocol revenue by 2030.  And the proposal never explicitly confirms the trust-layer codebase itself is open-source, which is a commitment I hold non-negotiable and want clarified in reporting.
+None of those gaps are disqualifying at this funding level, because the structure that does exist is sound: a hard cap with no price-driven top-up, milestone gating on the remaining half of the funds against farmer-count targets that are independently checkable on-chain, a five-entity Oversight Committee with real multi-signature thresholds, and a constitutional compliance disclosure that's more thorough than the norm for this cycle. The 47x scale multiplier across three countries in 18 months is aggressive, and Cambodia and Kenya carry execution risk India's track record doesn't fully cover. But the evidentiary bar at M1 and M2 is specific enough that if delivery stalls, the remaining 50% simply doesn't release. Real-world adoption at this scale, with this much independently verifiable groundwork already laid, is worth the front-load risk.
