@@ -652,7 +652,7 @@ function CommentsSection({ proposalId, walletApi, walletRewardAddress }) {
             background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 9
           }}>
             <p style={{ margin: "0 0 0.3rem", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-              <strong style={{ color: "var(--text)" }}>{c.author?.name || c.proposerId || "Anonymous"}</strong>
+              <strong style={{ color: "var(--text)" }}>{c.author?.name || c.author?._id || "Anonymous"}</strong>
               {" · "}{formatDate(c.createdAt)}
             </p>
             <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
