@@ -304,7 +304,137 @@ function DetailField({ label, value }) {
   );
 }
 
-function CandidateDetail({ candidate, onBack, isAdmin = false }) {
+// ─── Comments ─────────────────────────────────────────────────────────────────
+
+function CommentsSection({ proposalId, walletApi, walletRewardAddress }) {
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitOk, setSubmitOk] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    if (!proposalId) return;
+    setLoading(true);
+    apiFetch(`/comments?proposal=${proposalId}&limit=50`)
+      .then(r => setComments(Array.isArray(r) ? r : (r?.data ?? [])))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [proposalId]);
+
+  async function handleAuth() {
+    if (!walletApi || !walletRewardAddress) return;
+    setAuthLoading(true);
+    setSubmitError("");
+    try {
+      await doWalletAuth(walletApi, walletRewardAddress);
+      setAuthed(true);
+    } catch (e) {
+      setSubmitError(e.message || "Authentication failed.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!commentText.trim()) return;
+    setSubmitting(true);
+    setSubmitError("");
+    setSubmitOk(false);
+    try {
+      await apiFetch("/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposalId, content: commentText.trim() }),
+      });
+      setSubmitOk(true);
+      setCommentText("");
+      const updated = await apiFetch(`/comments?proposal=${proposalId}&limit=50`);
+      setComments(Array.isArray(updated) ? updated : (updated?.data ?? []));
+    } catch (e) {
+      setSubmitError(e.message || "Failed to submit comment.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 16, background: "var(--panel)", padding: "1.75rem", marginBottom: "1.25rem" }}>
+      <p style={{ margin: "0 0 1.25rem", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>Comments</p>
+
+      {/* Compose */}
+      <div style={{
+        border: "1px solid var(--line)", borderRadius: 10, padding: "0.9rem 1rem",
+        background: "var(--bg)", marginBottom: "1rem",
+      }}>
+        <p style={{ margin: "0 0 0.6rem", fontWeight: 600, fontSize: "0.88rem" }}>Leave a comment</p>
+        {!walletApi && (
+          <p className="muted" style={{ fontSize: "0.83rem", margin: 0 }}>
+            Connect your wallet using the button in the top bar to comment.
+          </p>
+        )}
+        {walletApi && !authed && (
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+            <p className="muted" style={{ fontSize: "0.83rem", margin: 0, flex: 1 }}>
+              Sign in with your wallet to leave a comment.
+            </p>
+            <button onClick={handleAuth} disabled={authLoading}
+              className="btn-outline" style={{ fontSize: "0.82rem" }}>
+              {authLoading ? "Signing…" : "Sign in with Wallet"}
+            </button>
+            {submitError && <span style={{ fontSize: "0.8rem", color: "var(--red, #f87171)", width: "100%" }}>{submitError}</span>}
+          </div>
+        )}
+        {walletApi && authed && (
+          <div>
+            <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+              placeholder="Write your comment…" rows={3}
+              style={{
+                width: "100%", padding: "0.55rem 0.7rem", borderRadius: 7,
+                border: "1px solid var(--line)", background: "var(--panel)",
+                color: "var(--text)", fontSize: "0.84rem", resize: "vertical", boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", marginTop: "0.5rem" }}>
+              <button onClick={handleSubmit} disabled={submitting || !commentText.trim()}
+                className="btn-outline" style={{ fontSize: "0.82rem" }}>
+                {submitting ? "Submitting…" : "Submit"}
+              </button>
+              {submitOk && <span style={{ fontSize: "0.8rem", color: "var(--accent, #5eead4)" }}>Comment posted!</span>}
+              {submitError && <span style={{ fontSize: "0.8rem", color: "var(--red, #f87171)" }}>{submitError}</span>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {loading && <p className="muted" style={{ fontSize: "0.83rem" }}>Loading comments…</p>}
+      {!loading && comments.length === 0 && (
+        <p className="muted" style={{ fontSize: "0.83rem" }}>No comments yet. Be the first.</p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {comments.map(c => (
+          <div key={c._id} style={{
+            padding: "0.7rem 0.9rem",
+            background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 9,
+          }}>
+            <p style={{ margin: "0 0 0.3rem", fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              <strong style={{ color: "var(--text)" }}>{c.author?.name || c.proposerId || "Anonymous"}</strong>
+              {" · "}{formatDate(c.createdAt)}
+            </p>
+            <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {c.content || c.text || c.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CandidateDetail({ candidate, onBack, isAdmin = false, walletApi, walletRewardAddress }) {
   const md    = candidate?.metaData || {};
   const track = getTrack(candidate);
   const td    = md[track] || {};
@@ -550,6 +680,8 @@ function CandidateDetail({ candidate, onBack, isAdmin = false }) {
           ))}
         </div>
       )}
+
+      <CommentsSection proposalId={candidate?._id} walletApi={walletApi} walletRewardAddress={walletRewardAddress} />
     </div>
   );
 }
@@ -1371,6 +1503,7 @@ function MyNominationsPanel({ cycle, walletApi, walletRewardAddress, onClose, on
 // ─── Admin Nominations Panel ──────────────────────────────────────────────────
 
 function AdminNominationsPanel({ cycle, onClose, onView, onAdminConfirmed }) {
+  const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
   const [nominations,    setNominations]    = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState("");
@@ -1714,7 +1847,7 @@ export default function CcElectionPage() {
               <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading candidate…</p>
             </div>
           </div>
-        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} />
+        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} walletApi={walletApi} walletRewardAddress={walletRewardAddress} />
       )}
 
       {/* ── List view ───────────────────────────── */}
@@ -1970,7 +2103,7 @@ export function CcAdminPage() {
               </div>
             )}
             <AdminTimelinePanel candidate={display} />
-            <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} />
+            <CandidateDetail candidate={display} onBack={() => { setSelected(null); setDetailFull(null); }} isAdmin={true} walletApi={walletApi} walletRewardAddress={walletRewardAddress} />
           </>
         )}
       </main>
