@@ -1,7 +1,7 @@
 <!-- url: https://coffeepool.jp/voting/rationale_No_NCL.json -->
 # hix_coffeepool
 
-**Proposal:** Withdraw 1,162,746 ada for MLabs Core Tool Maintenance & Enhancement Plutarc
+**Proposal:** Withdraw 540,750 ada for Oura by TxPipe Maintaining Cardano’s Event Pipeline
 **Vote:** No
 **Voter ID:** `drep1ygnh2uf4wkc8ldgfxwz7rzuga3m8jtqew9xh5g3n587mg6g3ge0sj`
 
