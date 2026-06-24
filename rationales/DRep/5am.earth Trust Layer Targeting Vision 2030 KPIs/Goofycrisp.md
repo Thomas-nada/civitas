@@ -1,16 +1,18 @@
-<!-- url: ipfs://bafkreiggeoremek5yg6yal4hplwfkgv3fbec3mfr6xovn3zzvmnluhaaj4 -->
+<!-- url: https://raw.githubusercontent.com/goofycrisp/Public/refs/heads/main/Vote_5am.earth.jsonld -->
 # Goofycrisp
 
 **Proposal:** 5am.earth Trust Layer Targeting Vision 2030 KPIs
-**Vote:** No
+**Vote:** Abstain
 **Voter ID:** `drep1ygxasnzmrevqra9vscpsy4xf4rqthzkp6rr6zzft2lc7nscahj9r9`
 
 ---
 
-I recognize the ambition and potential value of this proposal, but I believe it is structured more like a business venture than a traditional ecosystem grant.
+After further consideration, I am changing my vote from NO to ABSTAIN.
 
-For a Treasury request of this size, especially one tied to future commercial revenue and institutional growth, there should be a clear value-return mechanism for the Cardano Treasury, such as repayment, revenue sharing, equity, or another enforceable structure.
+My original concern remains: for a Treasury request of this size, especially one connected to future commercial revenue and institutional growth, I believe there should ideally be a clearer value-return mechanism for the Cardano Treasury, such as repayment, revenue sharing, equity, or another enforceable structure.
 
-Milestone gates and refund conditions are positive, but they do not replace a direct return to the Treasury. Public funds should not absorb the risk while external entities capture the upside.
+That said, I also recognize the strong engagement this proposal has generated across the community, the team’s visible effort to communicate and respond to feedback, and the broad acknowledgment from many community members regarding the potential benefits of the project.
 
-For this reason, I will vote NO.
+Given how closely divided the vote is, I do not want to dismiss the community’s support or the potential strategic value of the proposal. At the same time, I am not fully comfortable voting YES without a more direct Treasury return structure.
+
+For these reasons, I believe ABSTAIN is the most appropriate position.
