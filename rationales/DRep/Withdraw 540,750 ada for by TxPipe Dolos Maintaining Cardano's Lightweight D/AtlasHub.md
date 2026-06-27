@@ -1,10 +1,11 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmY4QZuYdaYxxTyCQSSZWtQvJXMYHKr4zGytfeiDYU2snV -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmeZffAqhE6V9S38k9u6496hGUCRV5Tc12Rxwq88C34UEa -->
 # AtlasHub
 
 **Proposal:** Withdraw 540,750 ada for by TxPipe Dolos Maintaining Cardano's Lightweight D
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2dnsj0taktxwmzwf4a7sp0mg3rvm3jsetag0h0m83khs3c7d3l6x`
 
 ---
 
-The description of this treasury withdrawal action is only a partial excerpt of the original proposal from the Intersect budget process. It leaves out elementary contents. DReps have to painstakingly piece this information together themselves. And here it becomes completely unacceptable in my view. How much more fragmented is the treasury governace process supposed to become? For me, this simply remains underdefined here.
+I am completely unhappy with the intersect budget process as it fragments descriptions across varying levels of detail and different sources.
+However, this should not be at the expense of the project. Dolos is mature, open-source Cardano infrastructure that reduces resource requirements for chain-data access and improves developer experience. I have changed my vote to “Yes” – future support should be dependent on continued ecosystem adoption and remain conditional on transparent reporting, protocol compatibility, releases, issue resolution.
