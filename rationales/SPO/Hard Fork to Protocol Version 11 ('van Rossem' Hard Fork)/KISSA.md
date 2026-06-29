@@ -1,0 +1,10 @@
+<!-- url: https://coffeepool.jp/voting/rationale_vanRossem_HF.json -->
+# KISSA
+
+**Proposal:** Hard Fork to Protocol Version 11 ('van Rossem' Hard Fork)
+**Vote:** Yes
+**Voter ID:** `pool1lugxr82p89qm35spzwccle405t5dfdznhrasyrtr2cyv2vyfud6`
+
+---
+
+I am voting Yes on this proposal. The van Rossem hard fork (Protocol Version 11) improves Plutus performance and capability (new primitives across CIP-0109/0132/0133/0138/0153, unified built-ins across V1/V2/V3, and native case-expressions), strengthens ledger consistency and node-level security (VRF key hash uniqueness enforced at the ledger level, and the Constitutional Committee voting restriction promoted to a ledger predicate), all as a backward-compatible intra-era upgrade that leaves transaction shape unchanged and introduces no new or deprecated protocol parameters. It is also procedurally well-vetted: recommended by Intersect's Hard Fork Working Group and endorsed by the Technical Steering Committee, with completed security audits, performance reports showing no regressions, and conformance testing across Plutus V1, V2 and V3. The action is consistent with all eight HARDFORK guardrails; the only outstanding condition is HARDFORK-04 (at least 85% of stake by pools upgraded), which the Constitutional Committee and SPOs are expected to verify before ratification. On that basis I am voting Yes.\n\n[Japanese version follows]\n\n本提案に賛成票を投じます。van Rossem ハードフォーク（Protocol Version 11）は、Plutus の性能と機能を向上させ（CIP-0109/0132/0133/0138/0153 の新プリミティブ、V1/V2/V3 でのビルトイン統一、ネイティブな case 式）、台帳の整合性とノードレベルのセキュリティを強化します（VRF 鍵ハッシュの一意性を台帳レベルで強制、Constitutional Committee の投票制限を台帳ルールへ昇格）。これらはすべて後方互換のイントラエラ・アップグレードとして実施され、トランザクション形状は不変で、新規・廃止のプロトコルパラメータもありません。手続面でも十分に検証されており、Intersect の Hard Fork Working Group が推奨し、Technical Steering Committee が承認済みで、セキュリティ監査の完了、リグレッションのない性能レポート、Plutus V1・V2・V3 全体での適合テストが揃っています。本アクションは 8 つの HARDFORK ガードレールすべてに準拠しており、残る条件は HARDFORK-04（アクティブステークの 85% 以上を占めるプールのアップグレード）のみで、これは ratification 前に Constitutional Committee と SPO が検証する見込みです。以上の理由から、私は賛成票を投じます。

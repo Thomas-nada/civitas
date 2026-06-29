@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/WillNorrisDRep/CaradanoDRepWillNorris/main/IntersectGovernanceCoordinationVoteUpdateNo.json -->
+<!-- url: https://raw.githubusercontent.com/WillNorrisDRep/CaradanoDRepWillNorris/main/IntersectGovernanceVoteNo3.json -->
 # Will Norris
 
 **Proposal:** Withdraw 25,400,000 ada for Intersect Governance coordination and technical

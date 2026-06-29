@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/WillNorrisDRep/CaradanoDRepWillNorris/main/MithrilYesVote2.json -->
+<!-- url: https://raw.githubusercontent.com/WillNorrisDRep/CaradanoDRepWillNorris/main/MithrilYesVote3.json -->
 # Will Norris
 
 **Proposal:** Withdraw 3,810,423 ada for Mithril Protocol
