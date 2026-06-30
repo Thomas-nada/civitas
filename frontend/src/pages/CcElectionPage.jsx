@@ -1843,7 +1843,7 @@ export function CcElectionSubmitPage() {
 // ─── Main List Page ───────────────────────────────────────────────────────────
 
 export default function CcElectionPage() {
-  const { walletApi, walletRewardAddress, walletDrepId, preferredSignKey } = useContext(WalletContext) || {};
+  const { walletApi, walletRewardAddress, walletDrepId, preferredSignKey, signDRepData } = useContext(WalletContext) || {};
   const { candidateId: urlCandidateId } = useParams();
   const navigate = useNavigate();
 
@@ -2010,7 +2010,9 @@ export default function CcElectionPage() {
       const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
       const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
       if (!payloadHex) throw new Error("No nonce returned from server.");
-      const signature = await walletApi.signData(payloadHex, signerAddress, false);
+      const signature = (preferredSignKey === "drep" && walletDrepId && signDRepData)
+        ? await signDRepData(payloadHex, signerAddress)
+        : await walletApi.signData(payloadHex, signerAddress, false);
       await fetchSession("PUT", { signerAddress, signature, signType });
       setVoteAuthed(true);
     } catch (e) {
@@ -2067,7 +2069,9 @@ export default function CcElectionPage() {
       // Step 2: sign the merkle root (UTF-8 bytes of the 64-char hex string)
       setSubmitState("signing");
       const signerAddr = (preferredSignKey === "drep" && walletDrepId) ? walletDrepId : walletRewardAddress;
-      const sig = await walletApi.signData(signingPayloadHex, signerAddr, false);
+      const sig = (preferredSignKey === "drep" && walletDrepId && signDRepData)
+        ? await signDRepData(signingPayloadHex, signerAddr)
+        : await walletApi.signData(signingPayloadHex, signerAddr, false);
       const coseSign1Hex = sig?.signature ?? sig;
       const coseKeyHex = sig?.key ?? "";
 
