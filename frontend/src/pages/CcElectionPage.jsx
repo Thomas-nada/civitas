@@ -1870,6 +1870,7 @@ export default function CcElectionPage() {
   const [voteAuthError,      setVoteAuthError]      = useState("");
   const [pendingApprovals,   setPendingApprovals]   = useState(() => new Set());
   const [confirmedApprovals, setConfirmedApprovals] = useState(() => new Set());
+  const [removedApprovals,   setRemovedApprovals]   = useState(() => new Set()); // confirmed votes the user has explicitly deselected
   const [submitState,        setSubmitState]        = useState("idle");
   const [submitError,        setSubmitError]        = useState("");
 
@@ -1979,7 +1980,8 @@ export default function CcElectionPage() {
         const v = votesMap[ballotQuestion.questionId];
         const ids = new Set((v?.selection ?? []).map(oid => optionIdToCandidateId[oid]).filter(Boolean));
         setConfirmedApprovals(ids);
-        setPendingApprovals(ids); // seed staged selections with what's already on-chain
+        setPendingApprovals(new Set());
+        setRemovedApprovals(new Set());
       })
       .catch(() => {});
   }, [voteAuthed, ballot?.id, ballotQuestion, optionIdToCandidateId]);
@@ -2022,28 +2024,44 @@ export default function CcElectionPage() {
     }
   }
 
-  // pendingApprovals is seeded from confirmedApprovals on load and is the user's
-  // working selection. Use it directly so deselecting a confirmed vote is reflected
-  // immediately in the UI without the confirmed set overriding it.
-  const approvedSet = pendingApprovals;
+  // Union of confirmed + pending, minus anything the user has explicitly deselected.
+  // This way confirmed votes are visible immediately, and changes (adds/removes) are
+  // reflected instantly without waiting for re-submission.
+  const approvedSet = useMemo(() => {
+    const s = new Set(confirmedApprovals);
+    for (const id of pendingApprovals) s.add(id);
+    for (const id of removedApprovals) s.delete(id);
+    return s;
+  }, [confirmedApprovals, pendingApprovals, removedApprovals]);
 
   const isDirty = useMemo(() => {
-    if (pendingApprovals.size !== confirmedApprovals.size) return true;
-    for (const id of pendingApprovals) if (!confirmedApprovals.has(id)) return true;
+    if (removedApprovals.size > 0) return true;
+    if (approvedSet.size !== confirmedApprovals.size) return true;
+    for (const id of approvedSet) if (!confirmedApprovals.has(id)) return true;
     return false;
-  }, [pendingApprovals, confirmedApprovals]);
+  }, [approvedSet, confirmedApprovals, removedApprovals]);
 
   function handleToggleApproval(candidateId) {
     if (!voteAuthed) {
-      handleVoteAuth().then(() => setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; }));
+      handleVoteAuth().then(() => {
+        setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+        setRemovedApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+      });
       return;
     }
     setSubmitState("idle"); setSubmitError("");
-    setPendingApprovals(prev => {
-      const s = new Set(prev);
-      if (s.has(candidateId)) s.delete(candidateId); else s.add(candidateId);
-      return s;
-    });
+    const isActive = approvedSet.has(candidateId);
+    if (isActive) {
+      // Deselecting — remove from pending and mark as removed if it was confirmed
+      setPendingApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+      if (confirmedApprovals.has(candidateId)) {
+        setRemovedApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+      }
+    } else {
+      // Selecting — add to pending and un-remove if it was previously removed
+      setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+      setRemovedApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+    }
   }
 
   async function handleSubmitVotes() {
@@ -2082,7 +2100,9 @@ export default function CcElectionPage() {
         body: JSON.stringify({ packageId, witness: { coseSign1Hex, coseKeyHex } }),
       });
 
-      setConfirmedApprovals(new Set(pendingApprovals));
+      setConfirmedApprovals(new Set(approvedSet));
+      setPendingApprovals(new Set());
+      setRemovedApprovals(new Set());
       setSubmitState("done");
     } catch (e) {
       setSubmitError(e.message || "Vote submission failed.");
@@ -2282,7 +2302,7 @@ export default function CcElectionPage() {
               <span style={{ fontSize: "0.78rem", color: "var(--red,#f87171)", maxWidth: 320 }}>{submitError}</span>
             )}
             <button
-              onClick={() => { setPendingApprovals(new Set(confirmedApprovals)); setSubmitState("idle"); setSubmitError(""); }}
+              onClick={() => { setPendingApprovals(new Set(confirmedApprovals)); setRemovedApprovals(new Set()); setSubmitState("idle"); setSubmitError(""); }}
               style={{ padding: "0.4rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 600,
                 cursor: "pointer", border: "1px solid var(--line)", background: "transparent", color: "var(--text-muted)" }}>
               Discard
