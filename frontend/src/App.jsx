@@ -240,6 +240,7 @@ export default function App() {
   const [walletNetworkId, setWalletNetworkId] = useState(null);
   const [walletLovelace, setWalletLovelace] = useState("");
   const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
+  const [walletDrepId, setWalletDrepId] = useState(""); // drep1... bech32, set whenever CIP-95 key is available (regardless of registration)
   const [walletError, setWalletError] = useState("");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   // Login chooser preferences (richer sign-in UI)
@@ -290,6 +291,7 @@ export default function App() {
             credBytes[0] = 0x22;
             credBytes.set(keyHash, 1);
             const dRepIDCip105 = bech32.encode("drep", bech32.toWords(credBytes), 1000);
+            setWalletDrepId(dRepIDCip105);
             // Every CIP-95 wallet exposes a DRep key even if the user never
             // registered as a DRep. Only treat the wallet as a DRep when the
             // credential is actually registered on-chain.
@@ -320,6 +322,7 @@ export default function App() {
       setWalletNetworkId(null);
       setWalletLovelace("");
       setWalletDrep(null);
+      setWalletDrepId("");
       setWalletError(e?.message || "Failed to connect wallet.");
       localStorage.removeItem("civitas.wallet");
     }
@@ -343,6 +346,7 @@ export default function App() {
       setWalletNetworkId(decoded.prefix === "stake_test" ? 0 : 1);
       setWalletLovelace("");
       setWalletDrep(null);
+      setWalletDrepId("");
       if (opts.signKey) setPreferredSignKey(opts.signKey);
       setMultiSigDRepId(opts.multiSigDRepId || "");
       setWalletMenuOpen(false);
@@ -381,6 +385,7 @@ export default function App() {
     walletNetworkId,
     walletLovelace,
     walletDrep,
+    walletDrepId,
     walletError,
     walletMenuOpen,
     setWalletMenuOpen,
@@ -398,7 +403,7 @@ export default function App() {
     actingAsDrep: Boolean(walletApi) && Boolean(walletDrep) && preferredSignKey === "drep",
   }), [
     wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
-    walletLovelace, walletDrep, walletError, walletMenuOpen,
+    walletLovelace, walletDrep, walletDrepId, walletError, walletMenuOpen,
     connectWallet, disconnectWallet,
     preferredSignKey, signerMode, multiSigDRepId, connectCardanoSigner
   ]);

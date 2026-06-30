@@ -1843,7 +1843,7 @@ export function CcElectionSubmitPage() {
 // ─── Main List Page ───────────────────────────────────────────────────────────
 
 export default function CcElectionPage() {
-  const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
+  const { walletApi, walletRewardAddress, walletDrepId, preferredSignKey } = useContext(WalletContext) || {};
   const { candidateId: urlCandidateId } = useParams();
   const navigate = useNavigate();
 
@@ -1989,7 +1989,8 @@ export default function CcElectionPage() {
     setVoteAuthLoading(true);
     setVoteAuthError("");
     try {
-      const signerAddress = String(walletRewardAddress || "").trim();
+      // DRep-only ballot: prefer the drep1... address so the session is recognised as a DRep voter
+      const signerAddress = (preferredSignKey === "drep" && walletDrepId) ? walletDrepId : String(walletRewardAddress || "").trim();
       const signType = getSignerType(signerAddress);
       const fetchSession = async (method, body) => {
         const r = await fetch(`${VOTE_PROXY_BASE}/api/v0/session`, {
@@ -2065,7 +2066,8 @@ export default function CcElectionPage() {
 
       // Step 2: sign the merkle root (UTF-8 bytes of the 64-char hex string)
       setSubmitState("signing");
-      const sig = await walletApi.signData(signingPayloadHex, walletRewardAddress, false);
+      const signerAddr = (preferredSignKey === "drep" && walletDrepId) ? walletDrepId : walletRewardAddress;
+      const sig = await walletApi.signData(signingPayloadHex, signerAddr, false);
       const coseSign1Hex = sig?.signature ?? sig;
       const coseKeyHex = sig?.key ?? "";
 
