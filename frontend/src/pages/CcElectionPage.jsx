@@ -2022,11 +2022,10 @@ export default function CcElectionPage() {
     }
   }
 
-  const approvedSet = useMemo(() => {
-    const s = new Set(confirmedApprovals);
-    for (const id of pendingApprovals) s.add(id);
-    return s;
-  }, [confirmedApprovals, pendingApprovals]);
+  // pendingApprovals is seeded from confirmedApprovals on load and is the user's
+  // working selection. Use it directly so deselecting a confirmed vote is reflected
+  // immediately in the UI without the confirmed set overriding it.
+  const approvedSet = pendingApprovals;
 
   const isDirty = useMemo(() => {
     if (pendingApprovals.size !== confirmedApprovals.size) return true;
