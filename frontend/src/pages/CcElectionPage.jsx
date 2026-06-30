@@ -7,6 +7,26 @@ const VOTE_SLUG = "cc-vote-2026";
 const BASE_PATH = "/cc-election";
 const PAGE_SIZE = 100;
 
+// The CC election ballot itself lives on intersect.ekklesia.vote (same host as
+// budget voting), not on hydra-voting.intersectmbo.org — so v1 ballot/vote
+// calls and their session auth go through ekklesia-vote-proxy, separately
+// from the /ekklesia-proxy session used for nominations/comments above.
+const VOTE_PROXY_BASE = "/ekklesia-vote-proxy";
+const API_V1 = `${VOTE_PROXY_BASE}/api/v1`;
+
+async function apiFetchV1(path, opts = {}) {
+  const res = await fetch(`${API_V1}${path}`, { credentials: "include", ...opts });
+  if (!res.ok) {
+    let msg;
+    try {
+      const j = await res.json();
+      msg = j?.message || j?.error || res.statusText;
+    } catch { msg = res.statusText; }
+    throw new Error(`${res.status} — ${msg}`);
+  }
+  return res.json();
+}
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 function strToHex(str) {
@@ -242,9 +262,84 @@ function AdminTimelinePanel({ candidate }) {
   );
 }
 
+// ─── Voting Rules ─────────────────────────────────────────────────────────────
+
+function VotingRulesPanel({ cycle, ballotQuestion }) {
+  const [open, setOpen] = useState(true);
+  const min = ballotQuestion?.minSelections ?? 1;
+  const max = ballotQuestion?.maxSelections ?? 4;
+  const total = ballotQuestion?.options?.length ?? 0;
+
+  return (
+    <div style={{ border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 30%,transparent)", borderRadius: 12, background: "color-mix(in srgb,var(--accent,#5eead4) 4%,var(--panel))", marginBottom: "1rem", overflow: "hidden" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.85rem 1.1rem", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "var(--text)" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, fontSize: "0.88rem" }}>
+          <span aria-hidden="true">🗳️</span> Voting rules
+        </span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, transition: "transform .15s", transform: open ? "rotate(180deg)" : "none", color: "var(--text-muted)" }}>
+          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{ padding: "0 1.1rem 1.1rem", display: "flex", flexDirection: "column", gap: "0.6rem", fontSize: "0.84rem", lineHeight: 1.65, color: "var(--text-muted)" }}>
+          <p style={{ margin: 0 }}>
+            This is an <strong style={{ color: "var(--text)" }}>approval vote</strong> — your choices are not ranked.
+            Select between <strong style={{ color: "var(--text)" }}>{min}</strong> and{" "}
+            <strong style={{ color: "var(--text)" }}>{max}</strong> of the {total || "listed"} candidates you want to
+            serve on the Constitutional Committee, then submit your ballot once.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+            <li>Only registered DReps may vote, weighted by their delegated voting power.</li>
+            <li>You can change your selections and resubmit at any time before voting closes — each submission replaces your previous ballot.</li>
+            <li>Approving a candidate does not rank or weight them against each other; every approved candidate counts equally.</li>
+            <li>Voting closes <strong style={{ color: "var(--text)" }}>{formatDateTime(cycle?.votingEndDate)}</strong>. Votes cannot be changed after that.</li>
+          </ul>
+          <p style={{ margin: 0 }}>
+            Click <strong style={{ color: "var(--text)" }}>Sign in to vote</strong> on any candidate to authenticate your
+            wallet, then use <strong style={{ color: "var(--text)" }}>Approve</strong> on up to {max} candidates. A bar
+            at the bottom of the page lets you review and submit your staged selections.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Candidate Card ──────────────────────────────────────────────────────────
 
-function CandidateCard({ candidate, onClick }) {
+// CC election ballot is a single approval vote: "select up to N candidates".
+// `voteState.selected` is a Set of candidateIds currently approved (staged or confirmed).
+function VoteButtonRow({ candidateId, voteState }) {
+  if (!voteState) return null;
+  const { authed, authLoading, selected, maxSelections, isConfirmed, onToggle, onAuth } = voteState;
+  if (!authed) {
+    return (
+      <button onClick={e => { e.stopPropagation(); onAuth(); }} disabled={authLoading}
+        style={{ padding: "0.28rem 0.75rem", borderRadius: 6, fontSize: "0.76rem", fontWeight: 600, cursor: "pointer",
+          border: "1px solid var(--accent,#5eead4)", background: "color-mix(in srgb,var(--accent,#5eead4) 12%,transparent)",
+          color: "var(--accent,#5eead4)" }}>
+        {authLoading ? "Signing in…" : "Sign in to vote"}
+      </button>
+    );
+  }
+  const active = selected.has(candidateId);
+  const atLimit = !active && maxSelections && selected.size >= maxSelections;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+      <button onClick={() => !atLimit && onToggle(candidateId)} disabled={atLimit}
+        style={{ padding: "0.25rem 0.8rem", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, cursor: atLimit ? "not-allowed" : "pointer",
+          border: `1px solid ${active ? "var(--accent,#5eead4)" : "var(--line)"}`,
+          background: active ? "color-mix(in srgb,var(--accent,#5eead4) 18%,transparent)" : "transparent",
+          color: active ? "var(--accent,#5eead4)" : "var(--text-muted)", opacity: atLimit ? 0.5 : 1, transition: "all 0.12s" }}>
+        {active ? "✓ Approved" : "Approve"}
+      </button>
+      {active && !isConfirmed && <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>staged</span>}
+      {active && isConfirmed && <span style={{ fontSize: "0.68rem", color: "var(--accent,#5eead4)" }}>submitted</span>}
+    </div>
+  );
+}
+
+function CandidateCard({ candidate, onClick, voteState }) {
   const track   = getTrack(candidate);
   const name    = getCandidateName(candidate);
   const tc      = TRACK_COLORS[track] || { bg: "var(--panel)", border: "var(--line)", text: "var(--text-muted)" };
@@ -275,6 +370,11 @@ function CandidateCard({ candidate, onClick }) {
         <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Submitted {formatDate(candidate.submittedAt)}</span>
         {links.length > 0 && <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.2rem" }}><ExternalLinkIcon /> {links.length} link{links.length !== 1 ? "s" : ""}</span>}
       </div>
+      {voteState && (
+        <div style={{ marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: "1px solid var(--line)" }}>
+          <VoteButtonRow candidateId={candidate._id} voteState={voteState} />
+        </div>
+      )}
     </button>
   );
 }
@@ -434,7 +534,7 @@ function CommentsSection({ proposalId, walletApi, walletRewardAddress }) {
   );
 }
 
-function CandidateDetail({ candidate, onBack, isAdmin = false, walletApi, walletRewardAddress }) {
+function CandidateDetail({ candidate, onBack, isAdmin = false, walletApi, walletRewardAddress, voteState }) {
   const md    = candidate?.metaData || {};
   const track = getTrack(candidate);
   const td    = md[track] || {};
@@ -580,6 +680,19 @@ function CandidateDetail({ candidate, onBack, isAdmin = false, walletApi, wallet
           </div>
         )}
       </div>
+
+      {/* Vote panel */}
+      {voteState && (
+        <div style={{ border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 30%,transparent)", borderRadius: 12, background: "color-mix(in srgb,var(--accent,#5eead4) 5%,var(--panel))", padding: "1rem 1.25rem", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: "0 0 0.2rem", fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--accent,#5eead4)" }}>
+              Your vote · Voting Open{voteState.maxSelections ? ` · ${voteState.selected.size} of ${voteState.maxSelections} selected` : ""}
+            </p>
+            {voteState.authError && <p style={{ margin: "0 0 0.4rem", fontSize: "0.78rem", color: "var(--red,#f87171)" }}>{voteState.authError}</p>}
+            <VoteButtonRow candidateId={candidate?._id} voteState={voteState} />
+          </div>
+        </div>
+      )}
 
       {/* Governance statement */}
       {govFields.length > 0 && (
@@ -1748,6 +1861,18 @@ export default function CcElectionPage() {
   const [sort,              setSort]              = useState("submittedAt");
   const [myNomOpen,         setMyNomOpen]         = useState(false);
 
+  // ── Voting state ───────────────────────────────────────────────────────────
+  // The CC election ballot is a single approval-style question: "select up to
+  // N candidates". `pendingApprovals`/`confirmedApprovals` are Sets of candidateId.
+  const [ballot,             setBallot]             = useState(null);
+  const [voteAuthed,         setVoteAuthed]         = useState(false);
+  const [voteAuthLoading,    setVoteAuthLoading]    = useState(false);
+  const [voteAuthError,      setVoteAuthError]      = useState("");
+  const [pendingApprovals,   setPendingApprovals]   = useState(() => new Set());
+  const [confirmedApprovals, setConfirmedApprovals] = useState(() => new Set());
+  const [submitState,        setSubmitState]        = useState("idle");
+  const [submitError,        setSubmitError]        = useState("");
+
   useEffect(() => {
     const ctrl = new AbortController();
     apiFetch("/votes", { signal: ctrl.signal })
@@ -1805,6 +1930,140 @@ export default function CcElectionPage() {
 
   useEffect(() => { if (!urlCandidateId && selected) { setSelected(null); setDetailFull(null); } }, [urlCandidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Ballot fetch (v1, lives on intersect.ekklesia.vote) ──────────────────────
+  useEffect(() => {
+    if (!cycle) return;
+    const urlId = cycle.votingUrl?.split("/ballots/")[1]?.split(/[/?#]/)[0];
+    if (!urlId) {
+      apiFetchV1("/ballots?status=live&limit=20")
+        .then(data => {
+          const list = Array.isArray(data) ? data : (data?.data ?? []);
+          const m = list.find(b => (b.title || "").toLowerCase().includes("constitutional committee")) || list[0];
+          if (m) setBallot(m);
+        })
+        .catch(() => {});
+      return;
+    }
+    apiFetchV1(`/ballots/${urlId}`)
+      .then(data => setBallot(data?.data ?? data))
+      .catch(() => setBallot({ id: urlId }));
+  }, [cycle]);
+
+  // The ballot has a single multi-choice question; each option corresponds to
+  // one candidate, matched by name. minSelections/maxSelections cap approvals.
+  const ballotQuestion = ballot?.hydra?.ballot?.questions?.[0];
+  const maxSelections  = ballotQuestion?.maxSelections || 0;
+
+  const candidateToOptionId = useMemo(() => {
+    const options = ballotQuestion?.options ?? [];
+    if (!options.length) return {};
+    const byLabel = Object.fromEntries(options.map(o => [String(o.label || "").trim().toLowerCase(), o.value]));
+    const map = {};
+    for (const c of allCandidates) {
+      const id = byLabel[getCandidateName(c).trim().toLowerCase()] ?? byLabel[String(c.title || "").trim().toLowerCase()];
+      if (id != null) map[c._id] = id;
+    }
+    return map;
+  }, [allCandidates, ballotQuestion]);
+
+  const optionIdToCandidateId = useMemo(() =>
+    Object.fromEntries(Object.entries(candidateToOptionId).map(([cid, oid]) => [oid, cid]))
+  , [candidateToOptionId]);
+
+  // Load previously submitted votes once authed + mapping ready
+  useEffect(() => {
+    if (!voteAuthed || !ballot?.id || !ballotQuestion || !Object.keys(optionIdToCandidateId).length) return;
+    apiFetchV1(`/votes/${ballot.id}/mine`)
+      .then(data => {
+        const votesMap = data?.confirmed?.votes ?? data?.data?.confirmed?.votes ?? {};
+        const v = votesMap[ballotQuestion.questionId];
+        const ids = new Set((v?.selection ?? []).map(oid => optionIdToCandidateId[oid]).filter(Boolean));
+        setConfirmedApprovals(ids);
+        setPendingApprovals(ids); // seed staged selections with what's already on-chain
+      })
+      .catch(() => {});
+  }, [voteAuthed, ballot?.id, ballotQuestion, optionIdToCandidateId]);
+
+  async function handleVoteAuth() {
+    if (!walletApi || !walletRewardAddress) return;
+    setVoteAuthLoading(true);
+    setVoteAuthError("");
+    try {
+      const signerAddress = String(walletRewardAddress || "").trim();
+      const signType = getSignerType(signerAddress);
+      const fetchSession = async (method, body) => {
+        const r = await fetch(`${VOTE_PROXY_BASE}/api/v0/session`, {
+          method, credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+          let msg;
+          try { const j = await r.json(); msg = j?.message || j?.error || r.statusText; } catch { msg = r.statusText; }
+          throw new Error(`${r.status} — ${msg}`);
+        }
+        return method === "POST" ? r.json() : null;
+      };
+      const nonceRes = await fetchSession("POST", { signerAddress, signType });
+      const dataHex = nonceRes?.dataHex ?? nonceRes?.data?.dataHex;
+      const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
+      const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
+      if (!payloadHex) throw new Error("No nonce returned from server.");
+      const signature = await walletApi.signData(payloadHex, signerAddress, false);
+      await fetchSession("PUT", { signerAddress, signature, signType });
+      setVoteAuthed(true);
+    } catch (e) {
+      setVoteAuthError(e.message || "Authentication failed.");
+    } finally {
+      setVoteAuthLoading(false);
+    }
+  }
+
+  const approvedSet = useMemo(() => {
+    const s = new Set(confirmedApprovals);
+    for (const id of pendingApprovals) s.add(id);
+    return s;
+  }, [confirmedApprovals, pendingApprovals]);
+
+  const isDirty = useMemo(() => {
+    if (pendingApprovals.size !== confirmedApprovals.size) return true;
+    for (const id of pendingApprovals) if (!confirmedApprovals.has(id)) return true;
+    return false;
+  }, [pendingApprovals, confirmedApprovals]);
+
+  function handleToggleApproval(candidateId) {
+    if (!voteAuthed) {
+      handleVoteAuth().then(() => setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; }));
+      return;
+    }
+    setSubmitState("idle"); setSubmitError("");
+    setPendingApprovals(prev => {
+      const s = new Set(prev);
+      if (s.has(candidateId)) s.delete(candidateId); else s.add(candidateId);
+      return s;
+    });
+  }
+
+  async function handleSubmitVotes() {
+    if (!ballot?.id || !ballotQuestion || !walletApi) return;
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const selection = [...pendingApprovals].map(cId => candidateToOptionId[cId]).filter(v => v != null);
+      const votes = { [ballotQuestion.questionId]: { selection } };
+      await apiFetchV1(`/votes/${ballot.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ votes }),
+      });
+      setConfirmedApprovals(new Set(pendingApprovals));
+      setSubmitState("done");
+    } catch (e) {
+      setSubmitError(e.message || "Vote submission failed.");
+      setSubmitState("error");
+    }
+  }
+
   const applicantTypes = useMemo(() => { const s = new Set(); allCandidates.forEach(c => { const t = getTrack(c); if (t) s.add(t); }); return [...s]; }, [allCandidates]);
 
   const displayed = useMemo(() => {
@@ -1847,7 +2106,12 @@ export default function CcElectionPage() {
               <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Loading candidate…</p>
             </div>
           </div>
-        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} walletApi={walletApi} walletRewardAddress={walletRewardAddress} />
+        ) : <CandidateDetail candidate={displayDetail} onBack={closeCandidate} walletApi={walletApi} walletRewardAddress={walletRewardAddress}
+              voteState={votingOpen && ballot && ballotQuestion && displayDetail?._id ? {
+                authed: voteAuthed, authLoading: voteAuthLoading, authError: voteAuthError,
+                selected: approvedSet, maxSelections, isConfirmed: confirmedApprovals.has(displayDetail._id),
+                onToggle: handleToggleApproval, onAuth: handleVoteAuth,
+              } : undefined} />
       )}
 
       {/* ── List view ───────────────────────────── */}
@@ -1861,6 +2125,18 @@ export default function CcElectionPage() {
                 {submissionOpen && !votingOpen && <span style={{ padding: "0.2rem 0.65rem", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: "color-mix(in srgb,#fbbf24 12%,transparent)", border: "1px solid color-mix(in srgb,#fbbf24 35%,transparent)", color: "#fbbf24", letterSpacing: "0.05em" }}>NOMINATIONS OPEN</span>}
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+                {(votingOpen || new Date() > new Date(cycle?.votingStartDate || 0)) && (
+                  <button onClick={() => navigate(`${BASE_PATH}/results`)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+                      background: "color-mix(in srgb,var(--accent,#5eead4) 10%,transparent)", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 35%,transparent)", color: "var(--accent,#5eead4)" }}>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                      <rect x="1" y="7" width="2.5" height="5" rx="0.5" fill="currentColor" />
+                      <rect x="5.25" y="4" width="2.5" height="8" rx="0.5" fill="currentColor" />
+                      <rect x="9.5" y="1" width="2.5" height="11" rx="0.5" fill="currentColor" />
+                    </svg>
+                    View Results
+                  </button>
+                )}
                 {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Candidacy</button>}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
@@ -1877,13 +2153,15 @@ export default function CcElectionPage() {
           {cycle && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.6rem", marginBottom: "1.25rem" }}>
-                {[["Candidates", candidatesLoading ? "…" : allCandidates.length], ["Matching", candidatesLoading ? "…" : displayed.length], ["Voting Opens", formatDate(cycle.votingStartDate)]].map(([label, value]) => (
+                {[["Candidates", candidatesLoading ? "…" : allCandidates.length], ["Matching", candidatesLoading ? "…" : displayed.length], votingOpen ? ["Voting Closes", formatDate(cycle.votingEndDate)] : ["Voting Opens", formatDate(cycle.votingStartDate)]].map(([label, value]) => (
                   <div key={label} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "0.75rem 0.9rem" }}>
                     <p style={{ margin: "0 0 0.2rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</p>
                     <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>{value}</p>
                   </div>
                 ))}
               </div>
+
+              {votingOpen && ballotQuestion && <VotingRulesPanel cycle={cycle} ballotQuestion={ballotQuestion} />}
 
               <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
                 <input type="search" placeholder="Search candidates…" value={search} onChange={e => setSearch(e.target.value)}
@@ -1933,12 +2211,291 @@ export default function CcElectionPage() {
                     {displayed.length} candidate{displayed.length !== 1 ? "s" : ""}{filterType && ` · ${TRACK_LABELS[filterType] || filterType}`}{search && ` matching "${search}"`}
                   </p>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "0.75rem" }}>
-                    {displayed.map(c => <CandidateCard key={c._id} candidate={c} onClick={() => openCandidate(c)} />)}
+                    {displayed.map(c => <CandidateCard key={c._id} candidate={c} onClick={() => openCandidate(c)}
+                        voteState={votingOpen && ballot && ballotQuestion ? {
+                          authed: voteAuthed, authLoading: voteAuthLoading, authError: voteAuthError,
+                          selected: approvedSet, maxSelections, isConfirmed: confirmedApprovals.has(c._id),
+                          onToggle: handleToggleApproval, onAuth: handleVoteAuth,
+                        } : undefined} />)}
                   </div>
                 </>
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Sticky vote submit bar ───────────────────────────────────────── */}
+      {isDirty && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+          background: "var(--panel)", borderTop: "1px solid var(--line)",
+          padding: "0.75rem 1.25rem",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap",
+          backdropFilter: "blur(12px)",
+        }}>
+          <span style={{ fontSize: "0.83rem", color: "var(--text-muted)" }}>
+            {pendingApprovals.size} of {maxSelections || "?"} candidates selected — unsaved changes
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {submitState === "done" && (
+              <span style={{ fontSize: "0.8rem", color: "var(--accent,#5eead4)" }}>✓ Votes submitted</span>
+            )}
+            {submitError && (
+              <span style={{ fontSize: "0.78rem", color: "var(--red,#f87171)", maxWidth: 320 }}>{submitError}</span>
+            )}
+            <button
+              onClick={() => { setPendingApprovals(new Set(confirmedApprovals)); setSubmitState("idle"); setSubmitError(""); }}
+              style={{ padding: "0.4rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 600,
+                cursor: "pointer", border: "1px solid var(--line)", background: "transparent", color: "var(--text-muted)" }}>
+              Discard
+            </button>
+            <button
+              onClick={handleSubmitVotes}
+              disabled={submitState === "submitting"}
+              style={{ padding: "0.4rem 1rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700,
+                cursor: submitState === "submitting" ? "default" : "pointer",
+                border: "1px solid var(--accent,#5eead4)",
+                background: "color-mix(in srgb,var(--accent,#5eead4) 15%,transparent)",
+                color: "var(--accent,#5eead4)" }}>
+              {submitState === "submitting" ? "Submitting…" : "Submit votes"}
+            </button>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+// ─── Preliminary Results Page (/cc-election/results) ────────────────────────
+
+export function CcElectionResultsPage() {
+  const navigate = useNavigate();
+
+  const [cycle, setCycle] = useState(null);
+  const [cycleLoading, setCycleLoading] = useState(true);
+  const [ballot, setBallot] = useState(null);
+  const [allCandidates, setAllCandidates] = useState([]);
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [sort, setSort] = useState("votingPower_desc");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+
+    apiFetch("/votes")
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        const match = list.find(v => v.slug === VOTE_SLUG);
+        if (!match) throw new Error(`Election "${VOTE_SLUG}" not found.`);
+        return match;
+      })
+      .then(async (c) => {
+        if (cancelled) return;
+        setCycle(c);
+        setCycleLoading(false);
+
+        const urlId = c.votingUrl?.split("/ballots/")[1]?.split(/[/?#]/)[0];
+        let ballotObj = null;
+        if (urlId) {
+          try {
+            const bd = await apiFetchV1(`/ballots/${urlId}`);
+            ballotObj = bd?.data ?? bd;
+          } catch {
+            ballotObj = { id: urlId };
+          }
+        }
+        if (!cancelled) setBallot(ballotObj);
+        const ballotId = ballotObj?.id ?? urlId;
+
+        const [candidatesResult, resultsResult] = await Promise.allSettled([
+          (async () => {
+            let page = 1, all = [];
+            while (true) {
+              const d = await apiFetch(`/proposals?vote=${c._id}&limit=${PAGE_SIZE}&page=${page}`);
+              const rows = Array.isArray(d) ? d : (d?.data ?? []);
+              all = all.concat(rows);
+              if (!d?.meta?.hasNextPage || rows.length < PAGE_SIZE) break;
+              page++;
+            }
+            return all;
+          })(),
+          ballotId ? apiFetchV1(`/results/ballot/${ballotId}`) : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+        if (candidatesResult.status === "fulfilled") setAllCandidates(candidatesResult.value);
+        if (resultsResult.status === "fulfilled" && resultsResult.value) {
+          setResults(resultsResult.value);
+        } else {
+          setError("Results not yet available for this ballot.");
+        }
+      })
+      .catch(e => { if (!cancelled) setError(e.message || "Failed to load."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const ballotQuestion = ballot?.hydra?.ballot?.questions?.[0];
+  const maxSelections = ballotQuestion?.maxSelections ?? 0;
+
+  // results endpoint returns one object per question; CC election has exactly one.
+  const resultRow = useMemo(() => {
+    const arr = results?.data ?? (Array.isArray(results) ? results : []);
+    return arr.find(r => r.proposalId === ballotQuestion?.questionId) ?? arr[0] ?? null;
+  }, [results, ballotQuestion]);
+
+  const candidateByName = useMemo(() =>
+    Object.fromEntries(allCandidates.map(c => [getCandidateName(c).trim().toLowerCase(), c]))
+  , [allCandidates]);
+
+  const rows = useMemo(() => {
+    // The results array includes a pseudo-option ("Abstain", id "abstain") that
+    // isn't a real candidate — exclude anything that doesn't resolve to one.
+    const options = resultRow?.results ?? [];
+    const totalVP = resultRow?.ballotParticipation?.totalVotingPower?.drep ?? 0;
+    return options
+      .map(o => {
+        const candidate = candidateByName[String(o.label || "").trim().toLowerCase()];
+        const votingPower = Number(o.votingPower ?? 0);
+        const count = Number(o.count ?? 0);
+        const pctOfBallot = totalVP > 0 ? (votingPower / totalVP) * 100 : 0;
+        return { id: o.id, label: o.label, candidate, votingPower, count, pctOfBallot };
+      })
+      .filter(r => r.candidate);
+  }, [resultRow, candidateByName]);
+
+  const sorted = useMemo(() => {
+    const r = [...rows];
+    if (sort === "votingPower_desc") return r.sort((a, b) => b.votingPower - a.votingPower);
+    if (sort === "count_desc") return r.sort((a, b) => b.count - a.count);
+    if (sort === "label") return r.sort((a, b) => a.label.localeCompare(b.label));
+    return r;
+  }, [rows, sort]);
+
+  const totalVotingPowerInVote = resultRow?.ballotParticipation?.totalVotingPower?.drep ?? 0;
+  const totalVoters = resultRow?.ballotParticipation?.voterCount?.drep ?? 0;
+  const maxVP = rows.length ? Math.max(...rows.map(r => r.votingPower)) : 0;
+
+  const fmtAdaCompact = vp => {
+    if (!vp) return "₳0";
+    const ada = vp / 1e6;
+    if (ada >= 1e9) return `₳${(ada / 1e9).toFixed(1)}B`;
+    if (ada >= 1e6) return `₳${(ada / 1e6).toFixed(1)}M`;
+    if (ada >= 1e3) return `₳${(ada / 1e3).toFixed(0)}K`;
+    return `₳${Math.round(ada).toLocaleString()}`;
+  };
+
+  // Ranked by voting power, descending — the top `maxSelections` would be elected if the vote closed now.
+  const leadingIds = useMemo(() => {
+    if (!maxSelections) return new Set();
+    return new Set([...rows].sort((a, b) => b.votingPower - a.votingPower).slice(0, maxSelections).map(r => r.id));
+  }, [rows, maxSelections]);
+
+  return (
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
+      <button onClick={() => navigate(BASE_PATH)} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.83rem", padding: "0 0 1.25rem" }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        Back to candidates
+      </button>
+
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 style={{ margin: "0 0 0.4rem", fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.02em" }}>Preliminary Results</h1>
+        <p className="muted" style={{ margin: "0 0 0.5rem", fontSize: "0.9rem" }}>
+          {cycle?.title || "Constitutional Committee Election 2026"} — live DRep approval-vote tallies
+        </p>
+        {cycle && <ElectionTimeline cycle={cycle} />}
+        <p style={{ margin: "0.75rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+          Preliminary — results may change until voting closes on {formatDateTime(cycle?.votingEndDate)}.
+          {maxSelections > 0 && ` The top ${maxSelections} by voting power are highlighted as currently leading.`}
+        </p>
+      </div>
+
+      {(loading || cycleLoading) && <p className="muted" style={{ fontSize: "0.85rem" }}>Loading results…</p>}
+
+      {!loading && !cycleLoading && error && (
+        <div style={{ padding: "1.25rem", borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+          {error}
+        </div>
+      )}
+
+      {!loading && !cycleLoading && !error && rows.length > 0 && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--accent,#5eead4)", borderRadius: 10, padding: "0.85rem 1rem" }}>
+              <p style={{ margin: "0 0 0.25rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Total voting power in vote</p>
+              <p style={{ margin: 0, fontSize: "2rem", fontWeight: 800, color: "var(--accent,#5eead4)", letterSpacing: "-0.02em" }}>{fmtAdaCompact(totalVotingPowerInVote)}</p>
+              <p style={{ margin: "0.2rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>across {totalVoters} DRep{totalVoters !== 1 ? "s" : ""} who have voted</p>
+            </div>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "0.85rem 1rem" }}>
+              <p style={{ margin: "0 0 0.25rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Candidates</p>
+              <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800 }}>{rows.length}</p>
+            </div>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "0.85rem 1rem" }}>
+              <p style={{ margin: "0 0 0.25rem", fontSize: "0.67rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Seats up for election</p>
+              <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color: "var(--accent,#5eead4)" }}>{maxSelections || "—"}</p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+            <select value={sort} onChange={e => setSort(e.target.value)}
+              style={{ padding: "0.38rem 0.55rem", borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)", fontSize: "0.82rem" }}>
+              <option value="votingPower_desc">Sort: Most voting power</option>
+              <option value="count_desc">Sort: Most DReps</option>
+              <option value="label">Sort: Name A–Z</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {sorted.map((row, i) => {
+              const leading = leadingIds.has(row.id);
+              const track = row.candidate ? getTrack(row.candidate) : "";
+              const tc = TRACK_COLORS[track] || {};
+              const barPct = maxVP > 0 ? (row.votingPower / maxVP) * 100 : 0;
+              return (
+                <div key={row.id}
+                  onClick={() => row.candidate && navigate(`${BASE_PATH}/${row.candidate._id}`)}
+                  role={row.candidate ? "button" : undefined} tabIndex={row.candidate ? 0 : undefined}
+                  style={{
+                    border: `1px solid ${leading ? "var(--accent,#5eead4)" : "var(--line)"}`, borderRadius: 10, padding: "0.9rem 1rem",
+                    background: leading ? "color-mix(in srgb,var(--accent,#5eead4) 5%,var(--panel))" : "var(--panel)",
+                    cursor: row.candidate ? "pointer" : "default", transition: "border-color 0.15s",
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", flexShrink: 0, width: "1.4rem" }}>#{i + 1}</span>
+                      {track && <TrackBadge type={track} />}
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: "0.88rem", lineHeight: 1.35 }}>{row.label}</p>
+                    </div>
+                    {leading && (
+                      <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: 20, flexShrink: 0,
+                        background: "color-mix(in srgb,var(--accent,#5eead4) 15%,transparent)", border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 40%,transparent)", color: "var(--accent,#5eead4)" }}>
+                        Leading
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "color-mix(in srgb,var(--text-muted) 12%,transparent)", marginBottom: "0.45rem" }}>
+                    <div style={{ width: `${barPct}%`, background: leading ? "var(--accent,#5eead4)" : tc.text || "var(--text-muted)", flexShrink: 0 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: "1rem", fontSize: "0.74rem", flexWrap: "wrap", alignItems: "baseline" }}>
+                    <span style={{ color: "var(--accent,#5eead4)", fontWeight: 600 }}>{fmtAdaCompact(row.votingPower)} approval power</span>
+                    <span style={{ color: "var(--text-muted)" }}>{row.count} DRep{row.count !== 1 ? "s" : ""}</span>
+                    <span style={{ color: "var(--text-muted)" }}>{row.pctOfBallot.toFixed(1)}% of ballot stake</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {!loading && !cycleLoading && !error && rows.length === 0 && (
+        <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: "3rem 2rem", textAlign: "center" }}>
+          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>No votes have been cast yet.</p>
         </div>
       )}
     </main>

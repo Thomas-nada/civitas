@@ -25,6 +25,7 @@ const BudgetSubmitPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ 
 const BudgetResultsPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ default: m.BudgetResultsPage })));
 const CcElectionPage = lazy(() => import("./pages/CcElectionPage"));
 const CcElectionSubmitPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcElectionSubmitPage })));
+const CcElectionResultsPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcElectionResultsPage })));
 const CcAdminPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcAdminPage })));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
@@ -429,6 +430,7 @@ export default function App() {
           <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
           <Route path="/cc-election/submit" element={<CcElectionSubmitPage />} />
           <Route path="/cc-election/submit/:nominationId" element={<CcElectionSubmitPage />} />
+          <Route path="/cc-election/results" element={<CcElectionResultsPage />} />
           <Route path="/cc-election" element={<CcElectionPage />} />
           <Route path="/cc-election/:candidateId" element={<CcElectionPage />} />
           <Route path="/ccadmin" element={<CcAdminPage />} />
