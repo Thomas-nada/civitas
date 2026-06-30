@@ -2136,7 +2136,7 @@ export default function CcElectionPage() {
   const displayDetail = detailFull ?? selected;
 
   return (
-    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto", paddingBottom: isDirty ? "7rem" : "1.5rem" }}>
 
 {/* ── Detail view ─────────────────────────── */}
       {selected && (
@@ -2264,7 +2264,7 @@ export default function CcElectionPage() {
                   <p style={{ margin: "0 0 0.75rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
                     {displayed.length} candidate{displayed.length !== 1 ? "s" : ""}{filterType && ` · ${TRACK_LABELS[filterType] || filterType}`}{search && ` matching "${search}"`}
                   </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "0.75rem", paddingBottom: isDirty ? "5rem" : 0 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "0.75rem" }}>
                     {displayed.map(c => <CandidateCard key={c._id} candidate={c} onClick={() => openCandidate(c)}
                         voteState={votingOpen && ballot && ballotQuestion ? {
                           authed: voteAuthed, authLoading: voteAuthLoading, authError: voteAuthError,
