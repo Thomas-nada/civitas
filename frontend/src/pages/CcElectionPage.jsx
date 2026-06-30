@@ -1873,6 +1873,7 @@ export default function CcElectionPage() {
   const [removedApprovals,   setRemovedApprovals]   = useState(() => new Set()); // confirmed votes the user has explicitly deselected
   const [submitState,        setSubmitState]        = useState("idle");
   const [submitError,        setSubmitError]        = useState("");
+  const [showSuccessToast,   setShowSuccessToast]   = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -2104,6 +2105,8 @@ export default function CcElectionPage() {
       setPendingApprovals(new Set());
       setRemovedApprovals(new Set());
       setSubmitState("done");
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 4000);
     } catch (e) {
       setSubmitError(e.message || "Vote submission failed.");
       setSubmitState("error");
@@ -2318,6 +2321,25 @@ export default function CcElectionPage() {
               {submitState === "drafting" ? "Preparing…" : submitState === "signing" ? "Waiting for signature…" : submitState === "submitting" ? "Submitting…" : "Submit votes"}
             </button>
           </div>
+        </div>
+      )}
+      {/* ── Success toast ───────────────────────────────────────────────── */}
+      {showSuccessToast && (
+        <div style={{
+          position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)",
+          zIndex: 200, display: "flex", alignItems: "center", gap: "0.6rem",
+          background: "color-mix(in srgb,var(--accent,#5eead4) 15%,var(--panel))",
+          border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 50%,transparent)",
+          borderRadius: 12, padding: "0.75rem 1.25rem",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
+          fontSize: "0.9rem", fontWeight: 600, color: "var(--accent,#5eead4)",
+          pointerEvents: "none",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Votes submitted successfully
         </div>
       )}
     </main>
