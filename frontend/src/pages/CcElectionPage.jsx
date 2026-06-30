@@ -2137,11 +2137,6 @@ export default function CcElectionPage() {
 
   return (
     <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
-      {myNomOpen && cycle && (
-        <MyNominationsPanel cycle={cycle} walletApi={walletApi} walletRewardAddress={walletRewardAddress}
-          onClose={() => setMyNomOpen(false)}
-          onEdit={nom => navigate(`${BASE_PATH}/submit/${nom._id}`)} />
-      )}
 
 {/* ── Detail view ─────────────────────────── */}
       {selected && (
@@ -2186,7 +2181,6 @@ export default function CcElectionPage() {
                     View Results
                   </button>
                 )}
-                {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Candidacy</button>}
                 {walletApi && votingOpen && ballot && ballotQuestion && !voteAuthed && (
                   <button onClick={handleVoteAuth} disabled={voteAuthLoading}
                     className="btn-outline" style={{ fontSize: "0.82rem" }}>
@@ -2270,7 +2264,7 @@ export default function CcElectionPage() {
                   <p style={{ margin: "0 0 0.75rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
                     {displayed.length} candidate{displayed.length !== 1 ? "s" : ""}{filterType && ` · ${TRACK_LABELS[filterType] || filterType}`}{search && ` matching "${search}"`}
                   </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "0.75rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "0.75rem", paddingBottom: isDirty ? "5rem" : 0 }}>
                     {displayed.map(c => <CandidateCard key={c._id} candidate={c} onClick={() => openCandidate(c)}
                         voteState={votingOpen && ballot && ballotQuestion ? {
                           authed: voteAuthed, authLoading: voteAuthLoading, authError: voteAuthError,
