@@ -2046,16 +2046,37 @@ export default function CcElectionPage() {
 
   async function handleSubmitVotes() {
     if (!ballot?.id || !ballotQuestion || !walletApi) return;
-    setSubmitState("submitting");
     setSubmitError("");
     try {
       const selection = [...pendingApprovals].map(cId => candidateToOptionId[cId]).filter(v => v != null);
-      const votes = { [ballotQuestion.questionId]: { selection } };
-      await apiFetchV1(`/votes/${ballot.id}`, {
-        method: "PUT",
+      const votes = [{ questionId: ballotQuestion.questionId, selection }];
+
+      // Step 1: reserve nonce and get signing payload
+      setSubmitState("drafting");
+      const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ votes }),
       });
+      const pkg = draft?.package ?? draft?.data?.package;
+      const packageId = pkg?.id;
+      const signingPayloadHex = draft?.signingPayloadHex ?? draft?.data?.signingPayloadHex;
+      if (!packageId || !signingPayloadHex) throw new Error("Draft response missing packageId or signingPayloadHex.");
+
+      // Step 2: sign the merkle root (UTF-8 bytes of the 64-char hex string)
+      setSubmitState("signing");
+      const sig = await walletApi.signData(signingPayloadHex, walletRewardAddress, false);
+      const coseSign1Hex = sig?.signature ?? sig;
+      const coseKeyHex = sig?.key ?? "";
+
+      // Step 3: submit signature — Hydra auto-submits when threshold met
+      setSubmitState("submitting");
+      await apiFetchV1(`/votes/${ballot.id}/signature`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId, witness: { coseSign1Hex, coseKeyHex } }),
+      });
+
       setConfirmedApprovals(new Set(pendingApprovals));
       setSubmitState("done");
     } catch (e) {
@@ -2138,6 +2159,17 @@ export default function CcElectionPage() {
                   </button>
                 )}
                 {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Candidacy</button>}
+                {walletApi && votingOpen && ballot && ballotQuestion && !voteAuthed && (
+                  <button onClick={handleVoteAuth} disabled={voteAuthLoading}
+                    className="btn-outline" style={{ fontSize: "0.82rem" }}>
+                    {voteAuthLoading ? "Loading…" : "See my votes"}
+                  </button>
+                )}
+                {walletApi && votingOpen && voteAuthed && confirmedApprovals.size > 0 && (
+                  <span style={{ fontSize: "0.82rem", color: "var(--accent,#5eead4)", fontWeight: 600 }}>
+                    ✓ {confirmedApprovals.size} vote{confirmedApprovals.size !== 1 ? "s" : ""} submitted
+                  </span>
+                )}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                     {submissionOpen ? "Submit Nomination" : "Start Draft"}
@@ -2252,13 +2284,13 @@ export default function CcElectionPage() {
             </button>
             <button
               onClick={handleSubmitVotes}
-              disabled={submitState === "submitting"}
+              disabled={["drafting", "signing", "submitting"].includes(submitState)}
               style={{ padding: "0.4rem 1rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700,
-                cursor: submitState === "submitting" ? "default" : "pointer",
+                cursor: ["drafting", "signing", "submitting"].includes(submitState) ? "default" : "pointer",
                 border: "1px solid var(--accent,#5eead4)",
                 background: "color-mix(in srgb,var(--accent,#5eead4) 15%,transparent)",
                 color: "var(--accent,#5eead4)" }}>
-              {submitState === "submitting" ? "Submitting…" : "Submit votes"}
+              {submitState === "drafting" ? "Preparing…" : submitState === "signing" ? "Waiting for signature…" : submitState === "submitting" ? "Submitting…" : "Submit votes"}
             </button>
           </div>
         </div>
