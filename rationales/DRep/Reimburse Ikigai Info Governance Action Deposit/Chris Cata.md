@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmP8SfRLhdtMo1hHbMVdrhki19jr1pjX39mzGRYsEy3KkL -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdV1BCMabmqhmdpX91Cq1rYYpxrxNkHcck8NVyd7aoYab -->
 # Chris Cata
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Let's not over complicate this.  Yes.
+There's not much to have to dig into here. A bug resulted in a lost deposit - this simply makes it right and returns funds to the submitter.
