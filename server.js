@@ -461,6 +461,7 @@ const drepRationaleByProposalVoter = new Map();
 const proposalMetadataCache = new Map(); // proposalId -> { payload, cachedAt }
 const proposalDeltaPollState = new Map();
 const drepProfileRefreshState = new Map();
+let lastTopDrepStatusRefreshAt = 0; // Phase 3c: periodic status/VP refresh for top DReps
 let drepRationaleWarmState = {
   running: false,
   lastStartedAt: null,
@@ -5956,6 +5957,50 @@ async function buildDeltaSnapshot(base) {
       row.hasScript = details.has_script === true;
       row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
     });
+  }
+
+  // --- Phase 3c: Periodic status/VP refresh for top DReps by voting power ---
+  // A DRep who retires (or expires) without casting new votes is never touched by
+  // Phase 3, so their stale "active" status keeps their voting power counted.
+  // Refresh the top-N DReps on a fixed interval so retirements surface quickly.
+  const TOP_DREP_STATUS_REFRESH_MS = Number(process.env.TOP_DREP_STATUS_REFRESH_MS || 60 * 60 * 1000);
+  const TOP_DREP_STATUS_COUNT = Number(process.env.TOP_DREP_STATUS_COUNT || 500);
+  const nowMsPhase3c = Date.now();
+  if (nowMsPhase3c - lastTopDrepStatusRefreshAt >= TOP_DREP_STATUS_REFRESH_MS) {
+    lastTopDrepStatusRefreshAt = nowMsPhase3c;
+    const topDrepIds = Array.from(drepById.values())
+      .filter((row) => !String(row.id || "").startsWith("drep_always"))
+      .sort((a, b) => Number(b.votingPowerAda || 0) - Number(a.votingPowerAda || 0))
+      .slice(0, TOP_DREP_STATUS_COUNT)
+      .map((row) => row.id);
+    let statusChanges = 0;
+    for (let start = 0; start < topDrepIds.length; start += SYNC_BATCH_SIZE) {
+      const batch = topDrepIds.slice(start, start + SYNC_BATCH_SIZE);
+      await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
+        const safeId = encodeURIComponent(drepId);
+        const details = await blockfrostGet(`/governance/dreps/${safeId}`).catch(() => null);
+        if (!details) return;
+        const row = drepById.get(drepId);
+        if (!row) return;
+        row.votingPowerAda = Math.floor(Number(details.amount || 0) / 1_000_000);
+        const active = details.active === true;
+        const retired = details.retired === true;
+        const expired = details.expired === true;
+        row.active = active;
+        row.retired = retired;
+        row.expired = expired;
+        row.activeEpoch = Number(details.active_epoch || 0) || null;
+        row.lastActiveEpoch = Number(details.last_active_epoch || 0) || null;
+        row.hasScript = details.has_script === true;
+        const nextStatus = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
+        if (row.status !== nextStatus) {
+          statusChanges += 1;
+          console.log(`[status-refresh] ${row.name || row.id}: ${row.status} -> ${nextStatus}`);
+        }
+        row.status = nextStatus;
+      });
+    }
+    console.log(`[status-refresh] refreshed top ${topDrepIds.length} dreps, ${statusChanges} status change(s)`);
   }
 
   // --- Phase 4: Reassemble snapshot arrays ---
