@@ -3867,7 +3867,9 @@ function upsertActorVoteByProposal(votes, nextVote, forceActive = false) {
   // nextWinsOnTie: both timestamps unknown AND existing never live-updated
   const nextIsNewer = nextTs > existingTs;
   const nextWinsOnTie = existingTs === 0 && nextTs === 0 && !existing.voteHistory;
-  if (forceActive || nextIsNewer || nextWinsOnTie) {
+  // forceActive must not demote a provably newer existing vote
+  const existingProvablyNewer = existingTs > 0 && nextTs > 0 && existingTs > nextTs;
+  if ((forceActive && !existingProvablyNewer) || nextIsNewer || nextWinsOnTie) {
     nextVote.voteHistory = [...(existing.voteHistory || []), { ...existing, voteHistory: undefined }];
     votes[idx] = nextVote;
   } else {
