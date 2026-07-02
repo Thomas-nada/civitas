@@ -3860,14 +3860,11 @@ function upsertActorVoteByProposal(votes, nextVote) {
   const existing = votes[idx] || {};
   const existingTs = Number(existing.votedAtUnix || 0);
   const nextTs = Number(nextVote.votedAtUnix || 0);
+  // Only replace when we can prove the incoming vote is strictly newer.
+  // When timestamps are equal or unknown (0), keep the existing entry —
+  // votes are fetched newest-first (order=desc) so first-seen = most recent.
   if (nextTs > existingTs) {
     votes[idx] = nextVote;
-    return;
-  }
-  if (nextTs === existingTs) {
-    const existingHash = String(existing.voteTxHash || "").toLowerCase();
-    const nextHash = String(nextVote.voteTxHash || "").toLowerCase();
-    if (nextHash && nextHash !== existingHash) votes[idx] = nextVote;
   }
 }
 
