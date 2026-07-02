@@ -5631,7 +5631,7 @@ async function buildDeltaSnapshot(base) {
         const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
         const cgovHasRationale = Boolean(cgovVote?.hasRationale);
         const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         upsertActorVoteByProposal(drep.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
@@ -5647,7 +5647,7 @@ async function buildDeltaSnapshot(base) {
         const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
         const cgovHasRationale = Boolean(cgovVote?.hasRationale);
         const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
         upsertActorVoteByProposal(member.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0), rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0), voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
@@ -5668,7 +5668,7 @@ async function buildDeltaSnapshot(base) {
         const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
         const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
         const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         upsertActorVoteByProposal(pool.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cachedHasRationale || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
       }
 
@@ -5805,7 +5805,7 @@ async function buildDeltaSnapshot(base) {
 
       for (const vote of drepVotes) {
         const drepId = vote.voter;
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!drepById.has(drepId)) {
           drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
         }
@@ -5819,7 +5819,7 @@ async function buildDeltaSnapshot(base) {
 
       for (const vote of committeeVotes) {
         const memberId = vote.voter;
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!ccById.has(memberId)) {
           ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
         }
@@ -5833,7 +5833,7 @@ async function buildDeltaSnapshot(base) {
 
       for (const vote of spoVotes) {
         const poolId = vote.voter;
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || 0);
+        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!spoById.has(poolId)) {
           spoById.set(poolId, { id: poolId, name: "", homepage: "", status: "registered", delegatedDrepLiteralRaw: "", delegatedDrepLiteral: "", delegationStatus: "Not delegated", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: null, votes: [], _dirty: true });
         }
