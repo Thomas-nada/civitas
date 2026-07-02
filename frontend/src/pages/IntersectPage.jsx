@@ -222,6 +222,37 @@ export default function IntersectPage() {
   const resetOverrides = () => setOverrides({});
   const overrideCount = Object.keys(overrides).length;
 
+  function downloadCSV() {
+    const snap = new Date(data.fetchedAt).toISOString().slice(0, 19).replace("T", " ") + " UTC";
+    const headers = ["Rank","Name","DRep ID","VP (ADA)","Ekklesia Vote","On-chain Vote","Predicted Vote","Mismatch","Has Rationale","Voted At (UTC)"];
+    const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = data.dreps.map(d => [
+      d.rank,
+      escape(d.name || ""),
+      escape(d.id),
+      Math.round(d.vpAda),
+      escape(d.ekkVote || ""),
+      escape(d.onChainVote || ""),
+      escape(predictedVotes[d.id] || ""),
+      d.mismatch ? "YES" : "",
+      d.hasRationale ? "YES" : "",
+      d.votedAtUnix ? new Date(d.votedAtUnix * 1000).toISOString().slice(0, 19).replace("T", " ") : "",
+    ].join(","));
+    const csv = [
+      `# Intersect Treasury Withdrawal — DRep Vote Tracker`,
+      `# Snapshot: ${snap} · Total active stake: ${Math.round(data.totalActiveAda).toLocaleString()} ADA`,
+      headers.join(","),
+      ...rows,
+    ].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `intersect-votes-${new Date(data.fetchedAt).toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Sort header ───────────────────────────────────────────────────────────
   function SortHdr({ col, children }) {
     const active = sortCol === col;
@@ -284,6 +315,10 @@ export default function IntersectPage() {
                 padding: "6px 14px", borderRadius: 6, border: "1px solid var(--line)",
                 background: "var(--panel)", color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
               }}>⟳ Refresh</button>
+              <button onClick={downloadCSV} style={{
+                padding: "6px 14px", borderRadius: 6, border: "1px solid var(--line)",
+                background: "var(--panel)", color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
+              }}>⬇ Download CSV</button>
             </div>
           </div>
 
