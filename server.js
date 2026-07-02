@@ -5721,6 +5721,11 @@ async function buildDeltaSnapshot(base) {
 
       const safeId = encodeURIComponent(proposal.id);
       const watermark = knownVoteTxHashByProposal.get(proposal.id) || new Set();
+      // [revote-debug] log watermark for intersect proposal
+      const REVOTE_PROPOSAL = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
+      if (proposal.id === REVOTE_PROPOSAL) {
+        console.log(`[revote-debug] visiting proposal=${proposal.id} watermark=[${[...watermark].join(",")}]`);
+      }
       const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
       const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
       if (spoKoiosLookup instanceof Map) {
