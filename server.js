@@ -6167,41 +6167,57 @@ async function buildFullSnapshot() {
         }
         const drep = drepAggregate.get(drepId);
         drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, row.blockTime || Number.MAX_SAFE_INTEGER);
-        if (!drep.votesByProposal.has(row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          const cgovRationaleText = cleanPlainText(String(cgovVote?.rationaleText || "").trim());
-          if (cgovHasRationale || cgovRationaleText) {
-            const pvKey = `${row.proposalId}|${String(drepId || "").trim().toLowerCase()}`;
-            drepRationaleByProposalVoter.set(pvKey, {
-              hasRationale: true,
-              rationaleUrl: cgovRationaleUrl,
-              rationaleText: cgovRationaleText
-            });
-          }
-          const voteTxHash = String(vote.tx_hash || "").trim().toLowerCase();
-          if (voteTxHash && (cgovHasRationale || cgovRationaleText)) {
-            voteTxRationaleCache[voteTxHash] = {
-              ...(voteTxRationaleCache[voteTxHash] && typeof voteTxRationaleCache[voteTxHash] === "object"
-                ? voteTxRationaleCache[voteTxHash]
-                : {}),
-              hasRationale: cgovHasRationale || Boolean(cgovRationaleText),
-              rationaleUrl: cgovRationaleUrl || String(voteTxRationaleCache[voteTxHash]?.rationaleUrl || ""),
-              rationaleText: cgovRationaleText || String(voteTxRationaleCache[voteTxHash]?.rationaleText || ""),
-              fetchedAt: Date.now()
-            };
-          }
-          drep.votesByProposal.set(row.proposalId, {
-            proposalId: row.proposalId,
-            vote: titleCase(vote.vote),
-            outcome: titleCase(outcome),
-            voteTxHash: vote.tx_hash,
-            hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale,
-            rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "",
-            voterRole: normalizeVoteRole(vote.voter_role)
+        const voteBlockTime = Number(vote.block_time || 0);
+        const existingEntry = drep.votesByProposal.get(row.proposalId);
+        const existingBlockTime = Number(existingEntry?.votedAtUnix || 0);
+        // Always process rationale data for every vote cast, even if it won't be the active vote
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        const cgovRationaleText = cleanPlainText(String(cgovVote?.rationaleText || "").trim());
+        if (cgovHasRationale || cgovRationaleText) {
+          const pvKey = `${row.proposalId}|${String(drepId || "").trim().toLowerCase()}`;
+          drepRationaleByProposalVoter.set(pvKey, {
+            hasRationale: true,
+            rationaleUrl: cgovRationaleUrl,
+            rationaleText: cgovRationaleText
           });
+        }
+        const voteTxHash = String(vote.tx_hash || "").trim().toLowerCase();
+        if (voteTxHash && (cgovHasRationale || cgovRationaleText)) {
+          voteTxRationaleCache[voteTxHash] = {
+            ...(voteTxRationaleCache[voteTxHash] && typeof voteTxRationaleCache[voteTxHash] === "object"
+              ? voteTxRationaleCache[voteTxHash]
+              : {}),
+            hasRationale: cgovHasRationale || Boolean(cgovRationaleText),
+            rationaleUrl: cgovRationaleUrl || String(voteTxRationaleCache[voteTxHash]?.rationaleUrl || ""),
+            rationaleText: cgovRationaleText || String(voteTxRationaleCache[voteTxHash]?.rationaleText || ""),
+            fetchedAt: Date.now()
+          };
+        }
+        // Store the most recent vote (highest block_time) as the active entry.
+        // Track all casts in voteHistory so the full record is preserved.
+        const voteEntry = {
+          proposalId: row.proposalId,
+          vote: titleCase(vote.vote),
+          outcome: titleCase(outcome),
+          voteTxHash: vote.tx_hash,
+          votedAtUnix: voteBlockTime || null,
+          hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale,
+          rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "",
+          voterRole: normalizeVoteRole(vote.voter_role)
+        };
+        if (!existingEntry || voteBlockTime > existingBlockTime) {
+          // Carry forward the voteHistory from the entry being replaced
+          voteEntry.voteHistory = [
+            ...(existingEntry?.voteHistory || (existingEntry ? [existingEntry] : [])),
+          ];
+          drep.votesByProposal.set(row.proposalId, voteEntry);
+        } else {
+          // This is an earlier vote — append it to the active entry's history
+          if (!existingEntry.voteHistory) existingEntry.voteHistory = [];
+          existingEntry.voteHistory.push(voteEntry);
         }
       }
 
@@ -6222,26 +6238,35 @@ async function buildFullSnapshot() {
         }
         const member = committeeAggregate.get(memberId);
         member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, row.blockTime || Number.MAX_SAFE_INTEGER);
-        if (!member.votesByProposal.has(row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") {
-            member.koiosVoterId = koiosVote.koiosVoterId.trim();
-          }
-          const resolvedHasRationale = resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup);
-          member.votesByProposal.set(row.proposalId, {
-            proposalId: row.proposalId,
-            vote: titleCase(vote.vote),
-            outcome: titleCase(outcome),
-            voteTxHash: vote.tx_hash,
-            hasRationale: resolvedHasRationale || cgovHasRationale,
-            rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "",
-            rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0),
-            rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0),
-            voterRole: normalizeVoteRole(vote.voter_role)
-          });
+        const ccVoteBlockTime = Number(vote.block_time || 0);
+        const ccExisting = member.votesByProposal.get(row.proposalId);
+        const ccExistingBlockTime = Number(ccExisting?.votedAtUnix || 0);
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") {
+          member.koiosVoterId = koiosVote.koiosVoterId.trim();
+        }
+        const resolvedHasRationale = resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup);
+        const ccEntry = {
+          proposalId: row.proposalId,
+          vote: titleCase(vote.vote),
+          outcome: titleCase(outcome),
+          voteTxHash: vote.tx_hash,
+          votedAtUnix: ccVoteBlockTime || null,
+          hasRationale: resolvedHasRationale || cgovHasRationale,
+          rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "",
+          rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0),
+          rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0),
+          voterRole: normalizeVoteRole(vote.voter_role)
+        };
+        if (!ccExisting || ccVoteBlockTime > ccExistingBlockTime) {
+          ccEntry.voteHistory = [...(ccExisting?.voteHistory || (ccExisting ? [ccExisting] : []))];
+          member.votesByProposal.set(row.proposalId, ccEntry);
+        } else {
+          if (!ccExisting.voteHistory) ccExisting.voteHistory = [];
+          ccExisting.voteHistory.push(ccEntry);
         }
       }
 
@@ -6266,31 +6291,40 @@ async function buildFullSnapshot() {
         }
         const pool = spoAggregate.get(poolId);
         pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, row.blockTime || Number.MAX_SAFE_INTEGER);
-        if (!pool.votesByProposal.has(row.proposalId)) {
-          const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-          const txHash = String(vote.tx_hash || "").trim().toLowerCase();
-          const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
-          const cachedHasRationale =
-            cachedTxRationale && typeof cachedTxRationale === "object"
-              ? Boolean(cachedTxRationale.hasRationale)
-              : false;
-          const cachedRationaleUrl =
-            cachedTxRationale && typeof cachedTxRationale === "object"
-              ? String(cachedTxRationale.rationaleUrl || "").trim()
-              : "";
-          const cgovVote = lookupCgovSpoVoteRationale(cgovSpoLookup, vote);
-          const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-          const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-          const resolvedHasRationale = resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup);
-          pool.votesByProposal.set(row.proposalId, {
-            proposalId: row.proposalId,
-            vote: titleCase(vote.vote),
-            outcome: titleCase(outcome),
-            voteTxHash: vote.tx_hash,
-            hasRationale: resolvedHasRationale || cachedHasRationale || cgovHasRationale,
-            rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "",
-            voterRole: normalizeVoteRole(vote.voter_role)
-          });
+        const spoVoteBlockTime = Number(vote.block_time || 0);
+        const spoExisting = pool.votesByProposal.get(row.proposalId);
+        const spoExistingBlockTime = Number(spoExisting?.votedAtUnix || 0);
+        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
+        const txHash = String(vote.tx_hash || "").trim().toLowerCase();
+        const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
+        const cachedHasRationale =
+          cachedTxRationale && typeof cachedTxRationale === "object"
+            ? Boolean(cachedTxRationale.hasRationale)
+            : false;
+        const cachedRationaleUrl =
+          cachedTxRationale && typeof cachedTxRationale === "object"
+            ? String(cachedTxRationale.rationaleUrl || "").trim()
+            : "";
+        const cgovVote = lookupCgovSpoVoteRationale(cgovSpoLookup, vote);
+        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
+        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
+        const resolvedHasRationale = resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup);
+        const spoEntry = {
+          proposalId: row.proposalId,
+          vote: titleCase(vote.vote),
+          outcome: titleCase(outcome),
+          voteTxHash: vote.tx_hash,
+          votedAtUnix: spoVoteBlockTime || null,
+          hasRationale: resolvedHasRationale || cachedHasRationale || cgovHasRationale,
+          rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "",
+          voterRole: normalizeVoteRole(vote.voter_role)
+        };
+        if (!spoExisting || spoVoteBlockTime > spoExistingBlockTime) {
+          spoEntry.voteHistory = [...(spoExisting?.voteHistory || (spoExisting ? [spoExisting] : []))];
+          pool.votesByProposal.set(row.proposalId, spoEntry);
+        } else {
+          if (!spoExisting.voteHistory) spoExisting.voteHistory = [];
+          spoExisting.voteHistory.push(spoEntry);
         }
       }
       syncState.processedProposals += 1;
@@ -6444,6 +6478,7 @@ async function buildFullSnapshot() {
         submittedAt > 0 && votedAt >= submittedAt
           ? (votedAt - submittedAt) / 3600
           : null;
+      const resolvedVotedAt = votedAt || Number(vote.votedAtUnix || 0) || null;
       return {
         proposalId: vote.proposalId,
         vote: vote.vote,
@@ -6453,8 +6488,15 @@ async function buildFullSnapshot() {
         rationaleUrl: vote.rationaleUrl || "",
         voterRole: vote.voterRole || "drep",
         responseHours,
-        votedAtUnix: votedAt || null,
-        votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null
+        votedAtUnix: resolvedVotedAt,
+        votedAt: resolvedVotedAt ? new Date(resolvedVotedAt * 1000).toISOString() : null,
+        voteHistory: Array.isArray(vote.voteHistory) && vote.voteHistory.length > 0
+          ? vote.voteHistory.map(h => ({
+              vote: h.vote,
+              voteTxHash: h.voteTxHash || "",
+              votedAtUnix: Number(voteTxTimeCache[h.voteTxHash] || h.votedAtUnix || 0) || null,
+            }))
+          : undefined
       };
     });
     delete row.votesByProposal;
@@ -6659,8 +6701,15 @@ async function buildFullSnapshot() {
         rationaleSectionCount: Number(vote.rationaleSectionCount || 0),
         voterRole: vote.voterRole || "constitutional_committee",
         responseHours,
-        votedAtUnix: votedAt || null,
-        votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null
+        votedAtUnix: votedAt || Number(vote.votedAtUnix || 0) || null,
+        votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null,
+        voteHistory: Array.isArray(vote.voteHistory) && vote.voteHistory.length > 0
+          ? vote.voteHistory.map(h => ({
+              vote: h.vote,
+              voteTxHash: h.voteTxHash || "",
+              votedAtUnix: Number(voteTxTimeCache[h.voteTxHash] || h.votedAtUnix || 0) || null,
+            }))
+          : undefined
       };
     });
     delete row.votesByProposal;
@@ -6913,8 +6962,15 @@ async function buildFullSnapshot() {
         rationaleUrl: vote.rationaleUrl || "",
         voterRole: vote.voterRole || "stake_pool",
         responseHours,
-        votedAtUnix: votedAt || null,
-        votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null
+        votedAtUnix: votedAt || Number(vote.votedAtUnix || 0) || null,
+        votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null,
+        voteHistory: Array.isArray(vote.voteHistory) && vote.voteHistory.length > 0
+          ? vote.voteHistory.map(h => ({
+              vote: h.vote,
+              voteTxHash: h.voteTxHash || "",
+              votedAtUnix: Number(voteTxTimeCache[h.voteTxHash] || h.votedAtUnix || 0) || null,
+            }))
+          : undefined
       };
     });
     delete row.votesByProposal;
