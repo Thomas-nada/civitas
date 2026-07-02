@@ -5808,9 +5808,20 @@ async function buildDeltaSnapshot(base) {
       const committeeVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "constitutional_committee");
       const spoVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "stake_pool");
 
+      // [revote-debug] log new drep votes for the intersect proposal
+      const REVOTE_DREP = "drep1ygtxcscvznhs2nqap9u8gtxa0dx0l6q5zhsqqlw46enwh8cttd07h";
+      if (drepVotes.some((v) => v.voter === REVOTE_DREP)) {
+        const rv = drepVotes.filter((v) => v.voter === REVOTE_DREP);
+        console.log(`[revote-debug] proposal=${proposal.id} newVotes for target drep:`, JSON.stringify(rv.map((v) => ({ vote: v.vote, tx: v.tx_hash, block_time: v.block_time, cacheTs: voteTxTimeCache[v.tx_hash] }))));
+        const existingDrep = drepById.get(REVOTE_DREP);
+        const existingVote = existingDrep?.votes?.find((v) => String(v?.proposalId || "") === String(proposal.id));
+        console.log(`[revote-debug] existing entry:`, JSON.stringify({ vote: existingVote?.vote, votedAtUnix: existingVote?.votedAtUnix, hasHistory: !!existingVote?.voteHistory }));
+      }
+
       for (const vote of drepVotes) {
         const drepId = vote.voter;
         const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
+        if (drepId === REVOTE_DREP) console.log(`[revote-debug] processing vote: tx=${vote.tx_hash} vote=${vote.vote} votedAt=${votedAt}`);
         if (!drepById.has(drepId)) {
           drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
         }
