@@ -6134,8 +6134,12 @@ async function buildFullSnapshot() {
         voteStats: voteStatsByRole
       };
 
+      const DEBUG_DREP = "drep1ygtxcscvznhs2nqap9u8gtxa0dx0l6q5zhsqqlw46enwh8cttd07h";
       for (const vote of drepVotes) {
         const drepId = vote.voter;
+        if (drepId === DEBUG_DREP) {
+          console.log(`[re-vote debug] proposal=${row.proposalId} vote=${vote.vote} tx=${vote.tx_hash} block_time=${vote.block_time} block_height=${vote.block_height}`);
+        }
         if (!drepAggregate.has(drepId)) {
           drepAggregate.set(drepId, {
             id: drepId,
