@@ -3857,14 +3857,22 @@ function upsertActorVoteByProposal(votes, nextVote) {
     votes.push(nextVote);
     return;
   }
-  const existing = votes[idx] || {};
+  const existing = votes[idx];
   const existingTs = Number(existing.votedAtUnix || 0);
   const nextTs = Number(nextVote.votedAtUnix || 0);
-  // Only replace when we can prove the incoming vote is strictly newer.
-  // When timestamps are equal or unknown (0), keep the existing entry —
-  // votes are fetched newest-first (order=desc) so first-seen = most recent.
-  if (nextTs > existingTs) {
+  // nextIsNewer: strictly proven by timestamp
+  // nextWinsOnTie: both timestamps unknown (0) AND existing was never live-updated —
+  //   votes are fetched newest-first (order=desc) so first-seen new vote is most recent
+  const nextIsNewer = nextTs > existingTs;
+  const nextWinsOnTie = existingTs === 0 && nextTs === 0 && !existing.voteHistory;
+  if (nextIsNewer || nextWinsOnTie) {
+    // Make incoming the active vote; push existing into history
+    nextVote.voteHistory = [...(existing.voteHistory || []), { ...existing, voteHistory: undefined }];
     votes[idx] = nextVote;
+  } else {
+    // Keep existing as active; record incoming in its history
+    if (!existing.voteHistory) existing.voteHistory = [];
+    existing.voteHistory.push({ ...nextVote, voteHistory: undefined });
   }
 }
 
