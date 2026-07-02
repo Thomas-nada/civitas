@@ -5732,24 +5732,21 @@ async function buildDeltaSnapshot(base) {
       const currentOutcome = titleCase(String(proposalInfo[proposal.id]?.outcome || ""));
       const proposalBlockTime = Number(proposalInfo[proposal.id]?.submittedAtUnix || 0);
 
-      // Paginate votes, stopping early once we hit a known tx hash.
+      // Paginate ALL votes, skipping tx hashes we already know.
+      // Do NOT stop at the first known hash: a re-vote can sit BELOW newer
+      // votes from other actors that are already in the watermark, so an
+      // early stop would skip it forever.
       const newVotes = [];
       let page = 1;
-      let hitWatermark = false;
-      while (page <= PROPOSAL_VOTES_MAX_PAGES && !hitWatermark) {
+      while (page <= PROPOSAL_VOTES_MAX_PAGES) {
         const query = `/governance/proposals/${safeId}/votes?count=${PROPOSAL_VOTES_PAGE_SIZE}&page=${page}&order=desc`;
         const chunk = await blockfrostGet(query).catch(() => []);
         if (!Array.isArray(chunk) || chunk.length === 0) break;
         for (const vote of chunk) {
           const txh = String(vote.tx_hash || "").toLowerCase();
-          if (watermark.has(txh)) {
-            // Descending order boundary reached: all following votes are older.
-            hitWatermark = true;
-            break;
-          }
+          if (watermark.has(txh)) continue;
           newVotes.push(vote);
         }
-        if (hitWatermark) break;
         if (chunk.length < PROPOSAL_VOTES_PAGE_SIZE) break;
         page += 1;
       }
