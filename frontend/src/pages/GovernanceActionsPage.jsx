@@ -1652,8 +1652,11 @@ export default function GovernanceActionsPage() {
                   const ccStats = row.voteStats?.constitutional_committee || {};
                   const ccYes = Number(ccStats.yes || 0);
                   const ccNo = Number(ccStats.no || 0);
-                  const spoNotEligible = row.spoRequiredPct === null && row.spoYesAda === 0 && row.spoNoAda === 0;
-                  const ccNotEligible = row.ccRequiredPct === null && ccYes === 0 && ccNo === 0;
+                  // Info actions have no ratification thresholds but ALL bodies can vote —
+                  // never show N/A for them.
+                  const isInfoAction = String(row.governanceType || "").toLowerCase().includes("info");
+                  const spoNotEligible = !isInfoAction && row.spoRequiredPct === null && row.spoYesAda === 0 && row.spoNoAda === 0;
+                  const ccNotEligible = !isInfoAction && row.ccRequiredPct === null && ccYes === 0 && ccNo === 0;
                   const drepVoteEligible = isDrepVoteEligibleAction(row);
                   const batchSelected = Boolean(batchVoteIds[row.proposalId]);
                   const navUrl = `/actions/${encodeURIComponent(row.proposalId)}${snapshotKey ? `?snapshot=${encodeURIComponent(snapshotKey)}` : ""}`;
@@ -1711,7 +1714,7 @@ export default function GovernanceActionsPage() {
                           yesPct={row.drepYesPowerPct}
                           noPct={row.drepNoPowerPct}
                           thresholdPct={row.drepRequiredPct}
-                          notEligible={!row.drepRequiredPct && !row.voteStats?.drep?.total}
+                          notEligible={!isInfoAction && !row.drepRequiredPct && !row.voteStats?.drep?.total}
                         />
                       </td>
                       <td data-label="SPO">
