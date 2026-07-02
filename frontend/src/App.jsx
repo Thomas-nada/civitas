@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Easter window: March 28 – April 7 (covers Holy Week through Easter Monday)
 function isEasterPeriod() {
@@ -241,6 +241,8 @@ export default function App() {
   const [walletNetworkId, setWalletNetworkId] = useState(null);
   const [walletLovelace, setWalletLovelace] = useState("");
   const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
+  const [walletDrepId, setWalletDrepId] = useState(""); // drep1... bech32, set whenever CIP-95 key is available (regardless of registration)
+  const rawCip95Ref = useRef(null); // raw CIP-95 wallet API for DRep signing
   const [walletError, setWalletError] = useState("");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   // Login chooser preferences (richer sign-in UI)
@@ -279,6 +281,7 @@ export default function App() {
           ? await rawWallet.enable({ extensions: [{ cip: 95 }] }).catch(() => null)
           : null;
         if (rawApi?.cip95) {
+          rawCip95Ref.current = rawApi;
           const pubDRepKey = await rawApi.cip95.getPubDRepKey().catch(() => null);
           if (pubDRepKey) {
             // Derive CIP-105 dRepIDCip105: bech32("drep", blake2b-224(pubKey))
@@ -291,6 +294,7 @@ export default function App() {
             credBytes[0] = 0x22;
             credBytes.set(keyHash, 1);
             const dRepIDCip105 = bech32.encode("drep", bech32.toWords(credBytes), 1000);
+            setWalletDrepId(dRepIDCip105);
             // Every CIP-95 wallet exposes a DRep key even if the user never
             // registered as a DRep. Only treat the wallet as a DRep when the
             // credential is actually registered on-chain.
@@ -321,6 +325,7 @@ export default function App() {
       setWalletNetworkId(null);
       setWalletLovelace("");
       setWalletDrep(null);
+      setWalletDrepId("");
       setWalletError(e?.message || "Failed to connect wallet.");
       localStorage.removeItem("civitas.wallet");
     }
@@ -344,6 +349,7 @@ export default function App() {
       setWalletNetworkId(decoded.prefix === "stake_test" ? 0 : 1);
       setWalletLovelace("");
       setWalletDrep(null);
+      setWalletDrepId("");
       if (opts.signKey) setPreferredSignKey(opts.signKey);
       setMultiSigDRepId(opts.multiSigDRepId || "");
       setWalletMenuOpen(false);
@@ -361,6 +367,7 @@ export default function App() {
     setWalletNetworkId(null);
     setWalletLovelace("");
     setWalletDrep(null);
+    rawCip95Ref.current = null;
     setWalletError("");
     setWalletMenuOpen(false);
     setSignerMode("wallet");
@@ -374,6 +381,17 @@ export default function App() {
     if (saved) connectWallet(saved).catch(() => localStorage.removeItem("civitas.wallet"));
   }, [connectWallet]);
 
+  // Signs payload with the DRep key via CIP-95 if available, otherwise falls back to stake key signData.
+  // Returns { signature, key } (CIP-30 DataSignature shape).
+  const signDRepData = useCallback(async (payload, drepId) => {
+    const cip95 = rawCip95Ref.current?.cip95;
+    if (cip95?.signData) {
+      return cip95.signData(drepId, payload);
+    }
+    // Fallback: MeshJS BrowserWallet signData (works for stake key; may work for some wallets with drep addr)
+    return walletApi?.signData(payload, drepId, false);
+  }, [walletApi]);
+
   const walletContextValue = useMemo(() => ({
     wallets,
     walletApi,
@@ -382,11 +400,13 @@ export default function App() {
     walletNetworkId,
     walletLovelace,
     walletDrep,
+    walletDrepId,
     walletError,
     walletMenuOpen,
     setWalletMenuOpen,
     connectWallet,
     disconnectWallet,
+    signDRepData,
     // richer login chooser
     preferredSignKey,
     setPreferredSignKey,
@@ -399,8 +419,8 @@ export default function App() {
     actingAsDrep: Boolean(walletApi) && Boolean(walletDrep) && preferredSignKey === "drep",
   }), [
     wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
-    walletLovelace, walletDrep, walletError, walletMenuOpen,
-    connectWallet, disconnectWallet,
+    walletLovelace, walletDrep, walletDrepId, walletError, walletMenuOpen,
+    connectWallet, disconnectWallet, signDRepData,
     preferredSignKey, signerMode, multiSigDRepId, connectCardanoSigner
   ]);
 

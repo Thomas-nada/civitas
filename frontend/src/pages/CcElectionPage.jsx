@@ -1843,7 +1843,7 @@ export function CcElectionSubmitPage() {
 // ─── Main List Page ───────────────────────────────────────────────────────────
 
 export default function CcElectionPage() {
-  const { walletApi, walletRewardAddress } = useContext(WalletContext) || {};
+  const { walletApi, walletRewardAddress, walletDrepId, preferredSignKey, signDRepData } = useContext(WalletContext) || {};
   const { candidateId: urlCandidateId } = useParams();
   const navigate = useNavigate();
 
@@ -1870,8 +1870,10 @@ export default function CcElectionPage() {
   const [voteAuthError,      setVoteAuthError]      = useState("");
   const [pendingApprovals,   setPendingApprovals]   = useState(() => new Set());
   const [confirmedApprovals, setConfirmedApprovals] = useState(() => new Set());
+  const [removedApprovals,   setRemovedApprovals]   = useState(() => new Set()); // confirmed votes the user has explicitly deselected
   const [submitState,        setSubmitState]        = useState("idle");
   const [submitError,        setSubmitError]        = useState("");
+  const [showSuccessToast,   setShowSuccessToast]   = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -1979,7 +1981,8 @@ export default function CcElectionPage() {
         const v = votesMap[ballotQuestion.questionId];
         const ids = new Set((v?.selection ?? []).map(oid => optionIdToCandidateId[oid]).filter(Boolean));
         setConfirmedApprovals(ids);
-        setPendingApprovals(ids); // seed staged selections with what's already on-chain
+        setPendingApprovals(new Set());
+        setRemovedApprovals(new Set());
       })
       .catch(() => {});
   }, [voteAuthed, ballot?.id, ballotQuestion, optionIdToCandidateId]);
@@ -1989,7 +1992,8 @@ export default function CcElectionPage() {
     setVoteAuthLoading(true);
     setVoteAuthError("");
     try {
-      const signerAddress = String(walletRewardAddress || "").trim();
+      // DRep-only ballot: prefer the drep1... address so the session is recognised as a DRep voter
+      const signerAddress = (preferredSignKey === "drep" && walletDrepId) ? walletDrepId : String(walletRewardAddress || "").trim();
       const signType = getSignerType(signerAddress);
       const fetchSession = async (method, body) => {
         const r = await fetch(`${VOTE_PROXY_BASE}/api/v0/session`, {
@@ -2009,7 +2013,9 @@ export default function CcElectionPage() {
       const nonce = nonceRes?.nonce ?? nonceRes?.data?.nonce;
       const payloadHex = dataHex || (nonce ? strToHex(nonce) : "");
       if (!payloadHex) throw new Error("No nonce returned from server.");
-      const signature = await walletApi.signData(payloadHex, signerAddress, false);
+      const signature = (preferredSignKey === "drep" && walletDrepId && signDRepData)
+        ? await signDRepData(payloadHex, signerAddress)
+        : await walletApi.signData(payloadHex, signerAddress, false);
       await fetchSession("PUT", { signerAddress, signature, signType });
       setVoteAuthed(true);
     } catch (e) {
@@ -2019,45 +2025,88 @@ export default function CcElectionPage() {
     }
   }
 
+  // Union of confirmed + pending, minus anything the user has explicitly deselected.
+  // This way confirmed votes are visible immediately, and changes (adds/removes) are
+  // reflected instantly without waiting for re-submission.
   const approvedSet = useMemo(() => {
     const s = new Set(confirmedApprovals);
     for (const id of pendingApprovals) s.add(id);
+    for (const id of removedApprovals) s.delete(id);
     return s;
-  }, [confirmedApprovals, pendingApprovals]);
+  }, [confirmedApprovals, pendingApprovals, removedApprovals]);
 
   const isDirty = useMemo(() => {
-    if (pendingApprovals.size !== confirmedApprovals.size) return true;
-    for (const id of pendingApprovals) if (!confirmedApprovals.has(id)) return true;
+    if (removedApprovals.size > 0) return true;
+    if (approvedSet.size !== confirmedApprovals.size) return true;
+    for (const id of approvedSet) if (!confirmedApprovals.has(id)) return true;
     return false;
-  }, [pendingApprovals, confirmedApprovals]);
+  }, [approvedSet, confirmedApprovals, removedApprovals]);
 
   function handleToggleApproval(candidateId) {
     if (!voteAuthed) {
-      handleVoteAuth().then(() => setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; }));
+      handleVoteAuth().then(() => {
+        setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+        setRemovedApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+      });
       return;
     }
     setSubmitState("idle"); setSubmitError("");
-    setPendingApprovals(prev => {
-      const s = new Set(prev);
-      if (s.has(candidateId)) s.delete(candidateId); else s.add(candidateId);
-      return s;
-    });
+    const isActive = approvedSet.has(candidateId);
+    if (isActive) {
+      // Deselecting — remove from pending and mark as removed if it was confirmed
+      setPendingApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+      if (confirmedApprovals.has(candidateId)) {
+        setRemovedApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+      }
+    } else {
+      // Selecting — add to pending and un-remove if it was previously removed
+      setPendingApprovals(prev => { const s = new Set(prev); s.add(candidateId); return s; });
+      setRemovedApprovals(prev => { const s = new Set(prev); s.delete(candidateId); return s; });
+    }
   }
 
   async function handleSubmitVotes() {
     if (!ballot?.id || !ballotQuestion || !walletApi) return;
-    setSubmitState("submitting");
     setSubmitError("");
     try {
       const selection = [...pendingApprovals].map(cId => candidateToOptionId[cId]).filter(v => v != null);
-      const votes = { [ballotQuestion.questionId]: { selection } };
-      await apiFetchV1(`/votes/${ballot.id}`, {
-        method: "PUT",
+      const votes = [{ questionId: ballotQuestion.questionId, selection }];
+
+      // Step 1: reserve nonce and get signing payload
+      setSubmitState("drafting");
+      const draft = await apiFetchV1(`/votes/${ballot.id}/draft`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ votes }),
       });
-      setConfirmedApprovals(new Set(pendingApprovals));
+      const pkg = draft?.package ?? draft?.data?.package;
+      const packageId = pkg?.id;
+      const signingPayloadHex = draft?.signingPayloadHex ?? draft?.data?.signingPayloadHex;
+      if (!packageId || !signingPayloadHex) throw new Error("Draft response missing packageId or signingPayloadHex.");
+
+      // Step 2: sign the merkle root (UTF-8 bytes of the 64-char hex string)
+      setSubmitState("signing");
+      const signerAddr = (preferredSignKey === "drep" && walletDrepId) ? walletDrepId : walletRewardAddress;
+      const sig = (preferredSignKey === "drep" && walletDrepId && signDRepData)
+        ? await signDRepData(signingPayloadHex, signerAddr)
+        : await walletApi.signData(signingPayloadHex, signerAddr, false);
+      const coseSign1Hex = sig?.signature ?? sig;
+      const coseKeyHex = sig?.key ?? "";
+
+      // Step 3: submit signature — Hydra auto-submits when threshold met
+      setSubmitState("submitting");
+      await apiFetchV1(`/votes/${ballot.id}/signature`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId, witness: { coseSign1Hex, coseKeyHex } }),
+      });
+
+      setConfirmedApprovals(new Set(approvedSet));
+      setPendingApprovals(new Set());
+      setRemovedApprovals(new Set());
       setSubmitState("done");
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 4000);
     } catch (e) {
       setSubmitError(e.message || "Vote submission failed.");
       setSubmitState("error");
@@ -2087,12 +2136,7 @@ export default function CcElectionPage() {
   const displayDetail = detailFull ?? selected;
 
   return (
-    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto" }}>
-      {myNomOpen && cycle && (
-        <MyNominationsPanel cycle={cycle} walletApi={walletApi} walletRewardAddress={walletRewardAddress}
-          onClose={() => setMyNomOpen(false)}
-          onEdit={nom => navigate(`${BASE_PATH}/submit/${nom._id}`)} />
-      )}
+    <main className="shell" style={{ padding: "1.5rem 1rem", maxWidth: 960, margin: "0 auto", paddingBottom: isDirty ? "7rem" : "1.5rem" }}>
 
 {/* ── Detail view ─────────────────────────── */}
       {selected && (
@@ -2137,7 +2181,17 @@ export default function CcElectionPage() {
                     View Results
                   </button>
                 )}
-                {walletApi && <button onClick={() => setMyNomOpen(true)} className="btn-outline" style={{ fontSize: "0.82rem" }}>My Candidacy</button>}
+                {walletApi && votingOpen && ballot && ballotQuestion && !voteAuthed && (
+                  <button onClick={handleVoteAuth} disabled={voteAuthLoading}
+                    className="btn-outline" style={{ fontSize: "0.82rem" }}>
+                    {voteAuthLoading ? "Loading…" : "See my votes"}
+                  </button>
+                )}
+                {walletApi && votingOpen && voteAuthed && confirmedApprovals.size > 0 && (
+                  <span style={{ fontSize: "0.82rem", color: "var(--accent,#5eead4)", fontWeight: 600 }}>
+                    ✓ {confirmedApprovals.size} vote{confirmedApprovals.size !== 1 ? "s" : ""} submitted
+                  </span>
+                )}
                 {draftingAllowed && (
                   <button onClick={() => navigate(`${BASE_PATH}/submit`)} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "none", background: "var(--accent,#5eead4)", color: "#0a0f1a", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                     {submissionOpen ? "Submit Nomination" : "Start Draft"}
@@ -2245,22 +2299,41 @@ export default function CcElectionPage() {
               <span style={{ fontSize: "0.78rem", color: "var(--red,#f87171)", maxWidth: 320 }}>{submitError}</span>
             )}
             <button
-              onClick={() => { setPendingApprovals(new Set(confirmedApprovals)); setSubmitState("idle"); setSubmitError(""); }}
+              onClick={() => { setPendingApprovals(new Set(confirmedApprovals)); setRemovedApprovals(new Set()); setSubmitState("idle"); setSubmitError(""); }}
               style={{ padding: "0.4rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 600,
                 cursor: "pointer", border: "1px solid var(--line)", background: "transparent", color: "var(--text-muted)" }}>
               Discard
             </button>
             <button
               onClick={handleSubmitVotes}
-              disabled={submitState === "submitting"}
+              disabled={["drafting", "signing", "submitting"].includes(submitState)}
               style={{ padding: "0.4rem 1rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700,
-                cursor: submitState === "submitting" ? "default" : "pointer",
+                cursor: ["drafting", "signing", "submitting"].includes(submitState) ? "default" : "pointer",
                 border: "1px solid var(--accent,#5eead4)",
                 background: "color-mix(in srgb,var(--accent,#5eead4) 15%,transparent)",
                 color: "var(--accent,#5eead4)" }}>
-              {submitState === "submitting" ? "Submitting…" : "Submit votes"}
+              {submitState === "drafting" ? "Preparing…" : submitState === "signing" ? "Waiting for signature…" : submitState === "submitting" ? "Submitting…" : "Submit votes"}
             </button>
           </div>
+        </div>
+      )}
+      {/* ── Success toast ───────────────────────────────────────────────── */}
+      {showSuccessToast && (
+        <div style={{
+          position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)",
+          zIndex: 200, display: "flex", alignItems: "center", gap: "0.6rem",
+          background: "color-mix(in srgb,var(--accent,#5eead4) 15%,var(--panel))",
+          border: "1px solid color-mix(in srgb,var(--accent,#5eead4) 50%,transparent)",
+          borderRadius: 12, padding: "0.75rem 1.25rem",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
+          fontSize: "0.9rem", fontWeight: 600, color: "var(--accent,#5eead4)",
+          pointerEvents: "none",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Votes submitted successfully
         </div>
       )}
     </main>
