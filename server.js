@@ -3850,7 +3850,9 @@ function buildProposalVoteStatsFromActorMaps(proposalId, drepById, ccById, spoBy
   return byRole;
 }
 
-function upsertActorVoteByProposal(votes, nextVote) {
+// forceActive: caller guarantees nextVote is the most-recent cast vote for this proposal
+// (e.g. first entry in a desc-order Blockfrost response). Bypasses timestamp comparison.
+function upsertActorVoteByProposal(votes, nextVote, forceActive = false) {
   if (!Array.isArray(votes) || !nextVote || !nextVote.proposalId) return;
   const idx = votes.findIndex((v) => String(v?.proposalId || "") === String(nextVote.proposalId));
   if (idx < 0) {
@@ -3860,17 +3862,15 @@ function upsertActorVoteByProposal(votes, nextVote) {
   const existing = votes[idx];
   const existingTs = Number(existing.votedAtUnix || 0);
   const nextTs = Number(nextVote.votedAtUnix || 0);
+  // forceActive: caller proved this is newest (desc-order position)
   // nextIsNewer: strictly proven by timestamp
-  // nextWinsOnTie: both timestamps unknown (0) AND existing was never live-updated —
-  //   votes are fetched newest-first (order=desc) so first-seen new vote is most recent
+  // nextWinsOnTie: both timestamps unknown AND existing never live-updated
   const nextIsNewer = nextTs > existingTs;
   const nextWinsOnTie = existingTs === 0 && nextTs === 0 && !existing.voteHistory;
-  if (nextIsNewer || nextWinsOnTie) {
-    // Make incoming the active vote; push existing into history
+  if (forceActive || nextIsNewer || nextWinsOnTie) {
     nextVote.voteHistory = [...(existing.voteHistory || []), { ...existing, voteHistory: undefined }];
     votes[idx] = nextVote;
   } else {
-    // Keep existing as active; record incoming in its history
     if (!existing.voteHistory) existing.voteHistory = [];
     existing.voteHistory.push({ ...nextVote, voteHistory: undefined });
   }
@@ -5721,11 +5721,6 @@ async function buildDeltaSnapshot(base) {
 
       const safeId = encodeURIComponent(proposal.id);
       const watermark = knownVoteTxHashByProposal.get(proposal.id) || new Set();
-      // [revote-debug] log watermark for intersect proposal
-      const REVOTE_PROPOSAL = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
-      if (proposal.id === REVOTE_PROPOSAL) {
-        console.log(`[revote-debug] visiting proposal=${proposal.id} watermark=[${[...watermark].join(",")}]`);
-      }
       const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
       const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
       if (spoKoiosLookup instanceof Map) {
@@ -5813,20 +5808,16 @@ async function buildDeltaSnapshot(base) {
       const committeeVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "constitutional_committee");
       const spoVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "stake_pool");
 
-      // [revote-debug] log new drep votes for the intersect proposal
-      const REVOTE_DREP = "drep1ygtxcscvznhs2nqap9u8gtxa0dx0l6q5zhsqqlw46enwh8cttd07h";
-      if (drepVotes.some((v) => v.voter === REVOTE_DREP)) {
-        const rv = drepVotes.filter((v) => v.voter === REVOTE_DREP);
-        console.log(`[revote-debug] proposal=${proposal.id} newVotes for target drep:`, JSON.stringify(rv.map((v) => ({ vote: v.vote, tx: v.tx_hash, block_time: v.block_time, cacheTs: voteTxTimeCache[v.tx_hash] }))));
-        const existingDrep = drepById.get(REVOTE_DREP);
-        const existingVote = existingDrep?.votes?.find((v) => String(v?.proposalId || "") === String(proposal.id));
-        console.log(`[revote-debug] existing entry:`, JSON.stringify({ vote: existingVote?.vote, votedAtUnix: existingVote?.votedAtUnix, hasHistory: !!existingVote?.voteHistory }));
-      }
+      // Track which voter+proposal combos we've seen first in this desc-order batch.
+      // The first occurrence per voter is the most recently cast vote.
+      const seenDrepProposalFirst = new Set();
 
       for (const vote of drepVotes) {
         const drepId = vote.voter;
+        const voterProposalKey = `${drepId}:${proposal.id}`;
+        const isFirst = !seenDrepProposalFirst.has(voterProposalKey);
+        if (isFirst) seenDrepProposalFirst.add(voterProposalKey);
         const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        if (drepId === REVOTE_DREP) console.log(`[revote-debug] processing vote: tx=${vote.tx_hash} vote=${vote.vote} votedAt=${votedAt}`);
         if (!drepById.has(drepId)) {
           drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
         }
@@ -5835,11 +5826,15 @@ async function buildDeltaSnapshot(base) {
         drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
         newlyActiveDrepIds.add(drepId);
         const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-        upsertActorVoteByProposal(drep.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
+        upsertActorVoteByProposal(drep.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirst);
       }
 
+      const seenCcProposalFirst = new Set();
       for (const vote of committeeVotes) {
         const memberId = vote.voter;
+        const ccKey = `${memberId}:${proposal.id}`;
+        const isFirstCc = !seenCcProposalFirst.has(ccKey);
+        if (isFirstCc) seenCcProposalFirst.add(ccKey);
         const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!ccById.has(memberId)) {
           ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
@@ -5849,11 +5844,15 @@ async function buildDeltaSnapshot(base) {
         member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
         const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
         if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
-        upsertActorVoteByProposal(member.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", rationaleBodyLength: 0, rationaleSectionCount: 0, voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
+        upsertActorVoteByProposal(member.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", rationaleBodyLength: 0, rationaleSectionCount: 0, voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirstCc);
       }
 
+      const seenSpoProposalFirst = new Set();
       for (const vote of spoVotes) {
         const poolId = vote.voter;
+        const spoKey = `${poolId}:${proposal.id}`;
+        const isFirstSpo = !seenSpoProposalFirst.has(spoKey);
+        if (isFirstSpo) seenSpoProposalFirst.add(spoKey);
         const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
         if (!spoById.has(poolId)) {
           spoById.set(poolId, { id: poolId, name: "", homepage: "", status: "registered", delegatedDrepLiteralRaw: "", delegatedDrepLiteral: "", delegationStatus: "Not delegated", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: null, votes: [], _dirty: true });
@@ -5866,7 +5865,7 @@ async function buildDeltaSnapshot(base) {
         const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
         const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
         const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-        upsertActorVoteByProposal(pool.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup) || cachedHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
+        upsertActorVoteByProposal(pool.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup) || cachedHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirstSpo);
       }
 
       if (proposalInfo[proposal.id]) {
