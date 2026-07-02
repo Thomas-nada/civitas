@@ -483,7 +483,7 @@ export default function IntersectPage() {
                       {isEdited && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>edited</span>}
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--text)" }}>
-                      {fmtM(d.vpAda)}
+                      {notCounted ? <span style={{ color: "var(--text-muted)" }}>—</span> : fmtM(d.vpAda)}
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       {d.mismatch && (
