@@ -10373,6 +10373,195 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── /api/intersect — live Intersect treasury withdrawal vote tracker ─────────
+  // Shared Ekklesia DRep-votes fetcher (same logic as /ekklesia-drep-votes, extracted here
+  // so /api/intersect can warm the cache without a self-HTTP call).
+  async function getEkklesiaVotesCached() {
+    const CACHE_KEY = "_drepVotesCache_v3";
+    const CACHE_TTL_MS = 5 * 60 * 1000;
+    if (global[CACHE_KEY] && Date.now() - global[CACHE_KEY].fetchedAt < CACHE_TTL_MS) {
+      return global[CACHE_KEY].data;
+    }
+    const https2 = require("https");
+    const ekkHost = "intersect.ekklesia.vote";
+    function ekkFetch(path) {
+      return new Promise((resolve) => {
+        const r = https2.request(
+          { hostname: ekkHost, path, method: "GET",
+            headers: { Accept: "application/json", "User-Agent": "civitas-proxy/1.0", Host: ekkHost } },
+          (r2) => {
+            const cs = [];
+            r2.on("data", c => cs.push(c));
+            r2.on("end", () => {
+              if (r2.statusCode !== 200) { resolve(null); return; }
+              try { resolve(JSON.parse(Buffer.concat(cs).toString())); } catch { resolve(null); }
+            });
+          }
+        );
+        r.setTimeout(12000, () => { r.destroy(); resolve(null); });
+        r.on("error", () => resolve(null));
+        r.end();
+      });
+    }
+    const voters = [];
+    for (let page = 1; ; page++) {
+      const d = await ekkFetch(`/api/v0/voters?limit=100&page=${page}`);
+      if (!d?.data?.length) break;
+      voters.push(...d.data);
+      if (page >= (d?.pagination?.totalPages ?? 1)) break;
+    }
+    const nameMap = Object.fromEntries(voters.map(v => [v.userId, v.name || ""]));
+    const BATCH = 5;
+    const allDetails = [];
+    for (let i = 0; i < voters.length; i += BATCH) {
+      const batch = voters.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map(v => ekkFetch(`/api/v0/voters/${encodeURIComponent(v.userId)}`)));
+      allDetails.push(...results.filter(Boolean));
+      if (i + BATCH < voters.length) await new Promise(r => setTimeout(r, 300));
+    }
+    const map = {};
+    for (const detail of allDetails) {
+      if (!detail?.votes) continue;
+      const ballot = detail.votes.find(b => (b.proposals?.length ?? 0) >= 60)
+        || detail.votes.find(b => b.status === "live")
+        || [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
+      if (!ballot?.proposals?.length) continue;
+      const name = nameMap[detail.userId] || "";
+      const votingPower = ballot.votingPower ?? 0;
+      for (const prop of ballot.proposals) {
+        if (!map[prop.proposalId]) map[prop.proposalId] = [];
+        map[prop.proposalId].push({ userId: detail.userId, name, vote: prop.vote?.[0] ?? "—", votingPower });
+      }
+    }
+    const payload = { votes: map, allVoters: allDetails.map(d => ({ userId: d.userId, name: nameMap[d.userId] || "" })) };
+    global[CACHE_KEY] = { data: payload, fetchedAt: Date.now() };
+    return payload;
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Uses Civitas in-memory snapshot (same data that powers /api/accountability)
+  // plus the Ekklesia DRep votes cache from /ekklesia-drep-votes.
+  // No external API calls — 100% from what Civitas already fetches.
+  if (req.method === "GET" && url.pathname === "/api/intersect") {
+    const INTERSECT_GOV_ACTION = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
+    const INTERSECT_EKK_PROPOSAL = "6a1512d73ea9a75799cf8f1c";
+
+    try {
+      // 1. Pull from Civitas live snapshot; fall back to seed file if snapshot not yet populated
+      const liveDreps = Array.isArray(snapshot?.dreps) && snapshot.dreps.length > 0;
+      const snap = liveDreps ? snapshot : (() => {
+        try { return JSON.parse(require("fs").readFileSync(SNAPSHOT_SEED_PATH, "utf8")); } catch { return null; }
+      })();
+      if (!snap || !Array.isArray(snap.dreps) || snap.dreps.length === 0) {
+        json(res, 503, { error: "Snapshot not yet available. Please retry in a moment." });
+        return;
+      }
+      const allDreps = snap.dreps;
+      const specialDreps = snap?.specialDreps || {};
+      const alwaysNoConfAda = Number(specialDreps?.alwaysNoConfidence?.votingPowerAda || 0);
+
+      // Active regular DReps (not expired/retired, not drep_always_*)
+      const activeDreps = allDreps.filter(d =>
+        !String(d.id || "").startsWith("drep_always") && isActiveCalendarDrep(d)
+      );
+      const totalActiveAda = activeDreps.reduce((s, d) => s + Number(d.votingPowerAda || 0), 0) + alwaysNoConfAda;
+
+      // 2. Ekklesia votes — use cache or fetch fresh (shared function above)
+      const ekkData = await getEkklesiaVotesCached().catch(() => ({ votes: {}, allVoters: [] }));
+      const ekkVotesRaw = (ekkData.votes[INTERSECT_EKK_PROPOSAL] || []);
+
+      // Only keep Ekklesia voters that appear in the Civitas snapshot as active DReps
+      const activeIds = new Set(activeDreps.map(d => d.id.toLowerCase()));
+      const ekkVotes = ekkVotesRaw.filter(v => activeIds.has(v.userId.toLowerCase()));
+      const ekkById = Object.fromEntries(ekkVotes.map(v => [v.userId.toLowerCase(), v.vote]));
+      const ekkNameById = Object.fromEntries(ekkVotes.map(v => [v.userId.toLowerCase(), v.name || ""]));
+
+      // 3. On-chain votes — read from each DRep's vote data in the snapshot.
+      //    Live synced snapshot uses votesByProposal (Map); seed snapshot uses votes (Array).
+      const onChainById = {};
+      const onChainAtById = {};
+      for (const d of activeDreps) {
+        let entry = null;
+        if (d.votesByProposal instanceof Map) {
+          entry = d.votesByProposal.get(INTERSECT_GOV_ACTION) || null;
+        } else if (Array.isArray(d.votes)) {
+          entry = d.votes.find(v => v.proposalId === INTERSECT_GOV_ACTION) || null;
+        }
+        if (entry?.vote) {
+          onChainById[d.id.toLowerCase()] = entry.vote;
+          onChainAtById[d.id.toLowerCase()] = entry.votedAtUnix || null;
+        }
+      }
+
+      const latestOnChainAt = Object.values(onChainAtById).filter(Boolean).length > 0
+        ? Math.max(...Object.values(onChainAtById).filter(Boolean)) * 1000
+        : null;
+
+      // 4. Build top-500 DRep list sorted by VP
+      const top500 = [...activeDreps]
+        .sort((a, b) => Number(b.votingPowerAda) - Number(a.votingPowerAda))
+        .slice(0, 500);
+
+      const dreps = top500.map((d, i) => {
+        const id = d.id.toLowerCase();
+        const ekkVote = ekkById[id] || "";
+        const onChainVote = onChainById[id] || "";
+        const hybridVote = onChainVote || ekkVote;
+        const vpAda = Number(d.votingPowerAda || 0);
+        return {
+          rank: i + 1,
+          id: d.id,
+          name: d.name || ekkNameById[id] || "",
+          vpAda,
+          ekkVote,
+          onChainVote,
+          hybridVote,
+          mismatch: !!(onChainVote && ekkVote && onChainVote !== ekkVote),
+          inEkklesia: !!ekkVote,
+          votedOnChain: !!onChainVote,
+          votedAtUnix: onChainAtById[id] || null,
+        };
+      });
+
+      // 5. Compute stats
+      function calcStats(list, hybridOnly = false) {
+        let yesAda = 0, noAda = 0, absAda = 0, yesCt = 0, noCt = 0, absCt = 0;
+        for (const d of list) {
+          const v = hybridOnly ? d.hybridVote : d.onChainVote;
+          if (!v) continue;
+          if (v === "Yes")    { yesAda += d.vpAda; yesCt++; }
+          else if (v === "No"){ noAda  += d.vpAda; noCt++;  }
+          else                { absAda += d.vpAda; absCt++; }
+        }
+        const denom = totalActiveAda - absAda;
+        return { yesAda, noAda, absAda, yesCt, noCt, absCt, denom, yesPct: denom > 0 ? yesAda / denom : 0, total: yesCt + noCt + absCt };
+      }
+
+      const onChainStats  = calcStats(dreps, false);
+      const hybridStats   = calcStats(dreps, true);
+
+      const result = {
+        govActionId: INTERSECT_GOV_ACTION,
+        totalActiveAda,
+        alwaysNoConfAda,
+        snapshotAge: snap?.generatedAt || null,
+        fetchedAt: Date.now(),
+        latestOnChainAt,
+        ekklesiaVoterCount: ekkVotes.length,
+        ekklesiaFetchedAt: global["_drepVotesCache_v3"]?.fetchedAt || null,
+        onChainStats,
+        hybridStats,
+        dreps,
+      };
+
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=30" });
+      res.end(JSON.stringify(result));
+    } catch (e) {
+      console.error("[/api/intersect]", e);
+      json(res, 500, { error: e?.message || "Failed to load Intersect data." });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith("/api/")) {
     json(res, 404, { error: "Not Found" });
     return;
@@ -10445,97 +10634,8 @@ const server = http.createServer(async (req, res) => {
       "Access-Control-Allow-Credentials": "true",
       "Cache-Control": "public, max-age=300",
     });
-
-    // Cache key v2 — bump this whenever the payload schema changes to avoid stale-format hits
-    const CACHE_KEY = "_drepVotesCache_v3";
-    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-    if (
-      global[CACHE_KEY] &&
-      Date.now() - global[CACHE_KEY].fetchedAt < CACHE_TTL_MS
-    ) {
-      res.end(JSON.stringify(global[CACHE_KEY].data));
-      return;
-    }
-
-    const https = require("https");
-    const ekkHost = "intersect.ekklesia.vote";
-
-    // Fetch with 8-second timeout so a slow/hung request doesn't block forever
-    function ekkGet(path) {
-      return new Promise((resolve) => {
-        const req2 = https.request(
-          { hostname: ekkHost, path, method: "GET",
-            headers: { Accept: "application/json", "User-Agent": "civitas-proxy/1.0", Host: ekkHost } },
-          (res2) => {
-            const chunks = [];
-            res2.on("data", c => chunks.push(c));
-            res2.on("end", () => {
-              if (res2.statusCode !== 200) { resolve(null); return; }
-              try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
-              catch { resolve(null); }
-            });
-          }
-        );
-        req2.setTimeout(8000, () => { req2.destroy(); resolve(null); });
-        req2.on("error", () => resolve(null));
-        req2.end();
-      });
-    }
-
     try {
-      // Step 1: Collect all voters from paginated list
-      const voters = [];
-      for (let page = 1; ; page++) {
-        const d = await ekkGet(`/api/v0/voters?limit=100&page=${page}`);
-        if (!d?.data?.length) break;
-        voters.push(...d.data);
-        if (page >= (d?.pagination?.totalPages ?? 1)) break;
-      }
-
-      const nameMap = Object.fromEntries(voters.map(v => [v.userId, v.name || ""]));
-
-      // Step 2: Fetch voter details in small batches with delay to avoid 429
-      const BATCH = 5;
-      const DELAY_MS = 300;
-      const allDetails = [];
-      for (let i = 0; i < voters.length; i += BATCH) {
-        const batch = voters.slice(i, i + BATCH);
-        const results = await Promise.all(
-          batch.map(v => ekkGet(`/api/v0/voters/${encodeURIComponent(v.userId)}`))
-        );
-        allDetails.push(...results.filter(Boolean));
-        if (i + BATCH < voters.length) {
-          await new Promise(r => setTimeout(r, DELAY_MS));
-        }
-      }
-
-      // Step 3: Build proposalId → [{userId, name, vote, votingPower}] map
-      const map = {};
-      for (const detail of allDetails) {
-        if (!detail?.votes) continue;
-        const ballotEntry =
-          detail.votes.find(b => (b.proposals?.length ?? 0) >= 60) ||
-          detail.votes.find(b => b.status === "live") ||
-          [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
-        if (!ballotEntry?.proposals?.length) continue;
-        const name = nameMap[detail.userId] || "";
-        const votingPower = ballotEntry.votingPower ?? 0;
-        for (const prop of ballotEntry.proposals) {
-          if (!map[prop.proposalId]) map[prop.proposalId] = [];
-          map[prop.proposalId].push({
-            userId: detail.userId,
-            name,
-            vote: prop.vote?.[0] ?? "—",
-            votingPower,
-          });
-        }
-      }
-
-      // Only include voters whose detail pages were accessible — the raw voter list includes
-      // participants from all past ballots (100+), not just this one (~18 DReps).
-      const allVoters = allDetails.map(d => ({ userId: d.userId, name: nameMap[d.userId] || "" }));
-      const payload = { votes: map, allVoters };
-      global[CACHE_KEY] = { data: payload, fetchedAt: Date.now() };
+      const payload = await getEkklesiaVotesCached();
       res.end(JSON.stringify(payload));
     } catch (e) {
       res.end(JSON.stringify({ votes: {}, allVoters: [] }));
