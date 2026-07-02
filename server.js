@@ -10583,19 +10583,19 @@ const server = http.createServer(async (req, res) => {
       const specialDreps = snap?.specialDreps || {};
       const alwaysNoConfAda = Number(specialDreps?.alwaysNoConfidence?.votingPowerAda || 0);
 
-      // Active regular DReps (not expired/retired, not drep_always_*)
-      const activeDreps = allDreps.filter(d =>
-        !String(d.id || "").startsWith("drep_always") && isActiveCalendarDrep(d)
-      );
+      // Regular DReps (not drep_always_*). Retired/expired stay VISIBLE but are
+      // excluded from tallies and the denominator (counted=false).
+      const regularDreps = allDreps.filter(d => !String(d.id || "").startsWith("drep_always"));
+      const activeDreps = regularDreps.filter(d => isActiveCalendarDrep(d));
       const totalActiveAda = activeDreps.reduce((s, d) => s + Number(d.votingPowerAda || 0), 0) + alwaysNoConfAda;
 
       // 2. Ekklesia votes — use cache or fetch fresh (shared function above)
       const ekkData = await getEkklesiaVotesCached().catch(() => ({ votes: {}, allVoters: [] }));
       const ekkVotesRaw = (ekkData.votes[INTERSECT_EKK_PROPOSAL] || []);
 
-      // Only keep Ekklesia voters that appear in the Civitas snapshot as active DReps
-      const activeIds = new Set(activeDreps.map(d => d.id.toLowerCase()));
-      const ekkVotes = ekkVotesRaw.filter(v => activeIds.has(v.userId.toLowerCase()));
+      // Keep any Ekklesia voter that appears in the Civitas snapshot (active or not)
+      const regularIds = new Set(regularDreps.map(d => d.id.toLowerCase()));
+      const ekkVotes = ekkVotesRaw.filter(v => regularIds.has(v.userId.toLowerCase()));
       const ekkById = Object.fromEntries(ekkVotes.map(v => [v.userId.toLowerCase(), v.vote]));
       const ekkNameById = Object.fromEntries(ekkVotes.map(v => [v.userId.toLowerCase(), v.name || ""]));
 
@@ -10604,7 +10604,7 @@ const server = http.createServer(async (req, res) => {
       const onChainById = {};
       const onChainAtById = {};
       const onChainEntryById = {};
-      for (const d of activeDreps) {
+      for (const d of regularDreps) {
         let entry = null;
         if (d.votesByProposal instanceof Map) {
           entry = d.votesByProposal.get(INTERSECT_GOV_ACTION) || null;
@@ -10622,12 +10622,19 @@ const server = http.createServer(async (req, res) => {
         ? Math.max(...Object.values(onChainAtById).filter(Boolean)) * 1000
         : null;
 
-      // 4. Build top-500 DRep list sorted by VP
+      // 4. Build display list: top-500 active DReps by VP, PLUS any retired/expired
+      //    DRep that voted (Ekklesia or on-chain) — visible but not counted.
       const top500 = [...activeDreps]
         .sort((a, b) => Number(b.votingPowerAda) - Number(a.votingPowerAda))
         .slice(0, 500);
+      const top500Ids = new Set(top500.map(d => d.id.toLowerCase()));
+      const inactiveVoters = regularDreps.filter(d => {
+        const id = d.id.toLowerCase();
+        if (top500Ids.has(id) || isActiveCalendarDrep(d)) return false;
+        return !!(ekkById[id] || onChainById[id]);
+      });
 
-      const dreps = top500.map((d, i) => {
+      const dreps = [...top500, ...inactiveVoters].map((d, i) => {
         const id = d.id.toLowerCase();
         const ekkVote = ekkById[id] || "";
         const onChainVote = onChainById[id] || "";
@@ -10637,6 +10644,7 @@ const server = http.createServer(async (req, res) => {
         const rationaleUrl = String(entry?.rationaleUrl || entry?.anchorUrl || "").trim();
         const hasRationale = !!(entry?.hasRationale || rationaleUrl);
         const voteTxHash = String(entry?.voteTxHash || "").trim();
+        const counted = isActiveCalendarDrep(d);
         return {
           rank: i + 1,
           id: d.id,
@@ -10652,13 +10660,16 @@ const server = http.createServer(async (req, res) => {
           rationaleUrl,
           hasRationale,
           voteTxHash,
+          status: String(d.status || "active"),
+          counted,
         };
       });
 
-      // 5. Compute stats
+      // 5. Compute stats — only counted (active) DReps contribute
       function calcStats(list, hybridOnly = false) {
         let yesAda = 0, noAda = 0, absAda = 0, yesCt = 0, noCt = 0, absCt = 0;
         for (const d of list) {
+          if (!d.counted) continue;
           const v = hybridOnly ? d.hybridVote : d.onChainVote;
           if (!v) continue;
           if (v === "Yes")    { yesAda += d.vpAda; yesCt++; }

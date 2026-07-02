@@ -180,6 +180,7 @@ export default function IntersectPage() {
     if (!data) return null;
     let yesAda = 0, noAda = 0, absAda = 0, yesCt = 0, noCt = 0, absCt = 0;
     for (const d of data.dreps) {
+      if (d.counted === false) continue; // retired/expired: visible but not counted
       const v = predictedVotes[d.id] || "";
       if (v === "Yes")    { yesAda += d.vpAda; yesCt++; }
       else if (v === "No"){ noAda  += d.vpAda; noCt++;  }
@@ -224,12 +225,14 @@ export default function IntersectPage() {
 
   function downloadCSV() {
     const snap = new Date(data.fetchedAt).toISOString().slice(0, 19).replace("T", " ") + " UTC";
-    const headers = ["Rank","Name","DRep ID","VP (ADA)","Ekklesia Vote","On-chain Vote","Predicted Vote","Mismatch","Has Rationale","Voted At (UTC)"];
+    const headers = ["Rank","Name","DRep ID","Status","Counted","VP (ADA)","Ekklesia Vote","On-chain Vote","Predicted Vote","Mismatch","Has Rationale","Voted At (UTC)"];
     const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const rows = data.dreps.map(d => [
       d.rank,
       escape(d.name || ""),
       escape(d.id),
+      escape(d.status || "active"),
+      d.counted === false ? "NO" : "YES",
       Math.round(d.vpAda),
       escape(d.ekkVote || ""),
       escape(d.onChainVote || ""),
@@ -439,14 +442,24 @@ export default function IntersectPage() {
                 const pred = predictedVotes[d.id] || "";
                 const isEdited = overrides[d.id] !== undefined;
                 const rowBg = i % 2 === 0 ? "transparent" : "rgba(255,255,255,.025)";
+                const notCounted = d.counted === false;
                 return (
-                  <tr key={d.id} style={{ background: rowBg, borderBottom: "1px solid rgba(255,255,255,.04)" }}>
+                  <tr key={d.id} style={{ background: rowBg, borderBottom: "1px solid rgba(255,255,255,.04)", opacity: notCounted ? 0.55 : 1 }}>
                     <td style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 12, width: 44 }}>
                       {d.rank}
                     </td>
                     <td style={{ padding: "8px 12px", maxWidth: 220 }}>
                       <div style={{ fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {d.name || <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>Unnamed DRep</span>}
+                        {notCounted && (
+                          <span style={{
+                            marginLeft: 8, fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                            background: "rgba(248,113,113,.12)", color: "#f87171", border: "1px solid rgba(248,113,113,.35)",
+                            verticalAlign: "middle", whiteSpace: "nowrap",
+                          }}>
+                            {d.status === "expired" ? "Expired" : "Retired"} — not counted
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>
                         {d.id}
@@ -465,7 +478,7 @@ export default function IntersectPage() {
                           ...ov,
                           [d.id]: nextVote(pred),
                         }))}
-                        locked={!!d.onChainVote}
+                        locked={!!d.onChainVote || notCounted}
                       />
                       {isEdited && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>edited</span>}
                     </td>
