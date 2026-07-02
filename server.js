@@ -10479,6 +10479,7 @@ const server = http.createServer(async (req, res) => {
       //    Live synced snapshot uses votesByProposal (Map); seed snapshot uses votes (Array).
       const onChainById = {};
       const onChainAtById = {};
+      const onChainEntryById = {};
       for (const d of activeDreps) {
         let entry = null;
         if (d.votesByProposal instanceof Map) {
@@ -10489,6 +10490,7 @@ const server = http.createServer(async (req, res) => {
         if (entry?.vote) {
           onChainById[d.id.toLowerCase()] = entry.vote;
           onChainAtById[d.id.toLowerCase()] = entry.votedAtUnix || null;
+          onChainEntryById[d.id.toLowerCase()] = entry;
         }
       }
 
@@ -10507,6 +10509,10 @@ const server = http.createServer(async (req, res) => {
         const onChainVote = onChainById[id] || "";
         const hybridVote = onChainVote || ekkVote;
         const vpAda = Number(d.votingPowerAda || 0);
+        const entry = onChainEntryById[id] || null;
+        const rationaleUrl = String(entry?.rationaleUrl || entry?.anchorUrl || "").trim();
+        const hasRationale = !!(entry?.hasRationale || rationaleUrl);
+        const voteTxHash = String(entry?.voteTxHash || "").trim();
         return {
           rank: i + 1,
           id: d.id,
@@ -10519,6 +10525,9 @@ const server = http.createServer(async (req, res) => {
           inEkklesia: !!ekkVote,
           votedOnChain: !!onChainVote,
           votedAtUnix: onChainAtById[id] || null,
+          rationaleUrl,
+          hasRationale,
+          voteTxHash,
         };
       });
 

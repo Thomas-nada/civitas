@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useSeoMeta } from "../hooks/useSeoMeta";
+
+const API_BASE = "";
 
 const GOV_ACTION_ID = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
 const THRESHOLD = 0.67;
@@ -105,6 +109,39 @@ export default function IntersectPage() {
   const [sortDir, setSortDir]     = useState("asc");
   const [lastRefresh, setLastRefresh] = useState(null);
   const timerRef = useRef(null);
+
+  // ── Rationale modal ───────────────────────────────────────────────────────
+  const [rationaleModal, setRationaleModal]       = useState({ open: false, key: "", title: "" });
+  const [rationaleText, setRationaleText]         = useState({});
+  const [rationaleLoading, setRationaleLoading]   = useState({});
+  const [rationaleError, setRationaleError]       = useState({});
+
+  async function loadRationale(drep) {
+    const key = drep.id;
+    if (rationaleLoading[key] || rationaleText[key]) return;
+    setRationaleLoading(p => ({ ...p, [key]: true }));
+    setRationaleError(p => ({ ...p, [key]: "" }));
+    try {
+      const params = new URLSearchParams({ proposalId: GOV_ACTION_ID, voterId: drep.id, voterRole: "drep" });
+      if (drep.rationaleUrl) params.set("url", drep.rationaleUrl);
+      if (drep.voteTxHash)   params.set("voteTxHash", drep.voteTxHash);
+      const res  = await fetch(`${API_BASE}/api/vote-rationale?${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setRationaleText(p => ({ ...p, [key]: String(data.rationaleText || "").trim() || "No rationale text available." }));
+    } catch (e) {
+      setRationaleError(p => ({ ...p, [key]: e.message || "Failed to load rationale." }));
+    } finally {
+      setRationaleLoading(p => ({ ...p, [key]: false }));
+    }
+  }
+
+  function openRationale(drep) {
+    setRationaleModal({ open: true, key: drep.id, title: drep.name || drep.id });
+    loadRationale(drep);
+  }
+
+  function closeRationale() { setRationaleModal(m => ({ ...m, open: false })); }
 
   const load = useCallback(async (soft = false) => {
     if (!soft) setLoading(true);
@@ -270,8 +307,7 @@ export default function IntersectPage() {
 
           {/* Threshold bars */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 700 }}>
-            <ThresholdBar yesPct={liveStats.yesPct} label={`Predicted (${overrideCount > 0 ? "edited" : "hybrid"}) — ${pct(liveStats.yesPct)}`} />
-            <ThresholdBar yesPct={hybridStats.yesPct} label={`Hybrid baseline (Ekklesia + on-chain) — ${pct(hybridStats.yesPct)}`} small />
+            <ThresholdBar yesPct={liveStats.yesPct} label={`Predicted${overrideCount > 0 ? " (edited)" : ""} — ${pct(liveStats.yesPct)}`} />
             <ThresholdBar yesPct={onChainStats.yesPct} label={`On-chain only — ${pct(onChainStats.yesPct)}`} small />
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10 }}>
@@ -294,8 +330,8 @@ export default function IntersectPage() {
         {/* ── Panel: two-col summary ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
           {[
-            { title: "On-Chain Votes  (live from Koios)", stats: onChainStats },
-            { title: "Hybrid Prediction  (on-chain overrides Ekklesia)", stats: hybridStats },
+            { title: "On-Chain Votes", stats: onChainStats },
+            { title: "Predicted (Ekklesia + on-chain)", stats: { ...hybridStats, yesPct: liveStats.yesPct, yesAda: liveStats.yesAda, noAda: liveStats.noAda, absAda: liveStats.absAda, yesCt: liveStats.yesCt, noCt: liveStats.noCt, absCt: liveStats.absCt, denom: liveStats.denom } },
           ].map(({ title, stats }) => (
             <div key={title} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 18 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>{title}</div>
@@ -322,7 +358,7 @@ export default function IntersectPage() {
 
         {/* ── Instruction callout ── */}
         <div style={{ background: "rgba(84,228,188,.07)", border: "1px solid rgba(84,228,188,.2)", borderRadius: 8, padding: "10px 16px", marginBottom: 20, fontSize: 13, color: "var(--text-muted)" }}>
-          <strong style={{ color: "var(--mint)" }}>Interactive:</strong> Click any <em>Predicted Vote</em> pill to cycle through Yes → No → Abstain → Not Voted. Stats and threshold bars update live. 🔒 = on-chain (locked). <strong style={{ color: "var(--amber)" }}>⚡ Mismatch</strong> = on-chain differs from Ekklesia.
+          <strong style={{ color: "var(--mint)" }}>Interactive:</strong> Click any <em>Predicted Vote</em> pill to cycle through Yes → No → Abstain → Not Voted. Stats and bars update live. 🔒 = on-chain (locked). <strong style={{ color: "var(--amber)" }}>⚡ Mismatch</strong> = on-chain differs from Ekklesia.
         </div>
 
         {/* ── Filters ── */}
@@ -401,10 +437,20 @@ export default function IntersectPage() {
                     <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--text)" }}>
                       {fmtM(d.vpAda)}
                     </td>
-                    <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                    <td style={{ padding: "8px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       {d.mismatch && (
                         <span title={`On-chain: ${d.onChainVote} · Ekklesia: ${d.ekkVote}`}
                           style={{ fontSize: 11, color: "var(--amber)", whiteSpace: "nowrap" }}>⚡ mismatch</span>
+                      )}
+                      {(d.hasRationale || d.rationaleUrl) && (
+                        <button
+                          type="button"
+                          className="mode-btn"
+                          onClick={() => openRationale(d)}
+                          style={{ marginLeft: d.mismatch ? 6 : 0, fontSize: 11, padding: "2px 8px" }}
+                        >
+                          Rationale
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -422,9 +468,32 @@ export default function IntersectPage() {
         </div>
 
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 14, lineHeight: 1.6 }}>
-          <strong>Methodology:</strong> Threshold = 67% of active DRep VP minus abstain VP. Always-no-confidence ({fmtM(data.alwaysNoConfAda)}) counted on No side. Not-voted DReps count against Yes. Hybrid prediction: on-chain vote used where cast, Ekklesia ballot otherwise. Top 500 DReps by voting power shown. Deregistered DReps excluded via Koios.
+          <strong>Methodology:</strong> Threshold = 67% of active DRep VP minus abstain VP. Always-no-confidence ({fmtM(data.alwaysNoConfAda)}) counted on No side. Not-voted DReps count against Yes. Predicted: on-chain vote used where cast, Ekklesia ballot otherwise. Top 500 DReps by voting power shown. Deregistered DReps excluded.
         </div>
       </div>
+
+      {/* ── Rationale modal ── */}
+      {rationaleModal.open && (
+        <div className="image-modal-backdrop" role="presentation" onClick={closeRationale}>
+          <div className="image-modal rationale-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <button type="button" className="image-modal-close" onClick={closeRationale}>Close</button>
+            <h3 className="rationale-modal-title">{rationaleModal.title}</h3>
+            <div className="rationale-modal-content">
+              {rationaleLoading[rationaleModal.key] ? (
+                <p className="muted">Loading rationale…</p>
+              ) : rationaleError[rationaleModal.key] ? (
+                <p className="muted">Error: {rationaleError[rationaleModal.key]}</p>
+              ) : (
+                <div className="markdown-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {rationaleText[rationaleModal.key] || ""}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
