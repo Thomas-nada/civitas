@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmeJ6b5aLndDr1D3oNR7Njad1jJXyzMGkJd6UzhB1FuJea -->
+<!-- url: ipfs://QmUPsdtL5VWMB722dZVLuj4AXsYZCXJ9bnSdGF2e3Spx5a -->
 # Kostas Panagias
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -9,6 +9,10 @@
 
 A [PDF version][pdf-link] of this rationale is also made available.
 
-[pdf-link]: https://ipfs.io/ipfs/QmawgrARFCkZL7uMZL7qnVEX2Wxw9qgd12o37rdkgpTmfE
+[pdf-link]: https://ipfs.io/ipfs/QmW3LYsBE9DU5MTE5PsLmG4civqesdgp26Z9Gp6vuGXZUT
 
-I am voting YES to finally resolve this outstanding issue and make this governance pioneer whole. The submitter lost their original deposit entirely due to an on-chain node code bug. Approving this request for 103,000 ADA correctly returns the 100,000 ADA deposit along with 3,000 ADA to compensate for missed staking rewards. Returning these funds is simply the right thing to do ethically and practically to safeguard trust in our ecosystem.
+I’m voting YES.
+
+This reimbursement should have happened long ago. The submitter of this Info Action lost their deposit due to a code bug; what should have been a milestone for Cardano governance became a personal loss, and it’s only fair to make them whole. Compensation should include the original deposit plus a reasonable 3k ADA allowance for lost opportunities (missed staking rewards and the Midnight airdrop).
+
+This is the right thing to do ethically, practically, and for trust in our governance.
