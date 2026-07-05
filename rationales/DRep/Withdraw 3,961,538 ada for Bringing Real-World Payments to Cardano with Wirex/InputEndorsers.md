@@ -1,4 +1,4 @@
-<!-- url: https://dreptalk.com/vote-rationale/2b987870605edbbe445eb51acd6c566c47cda0dbb5a338572f4c288ed7f652c6.json -->
+<!-- url: ipfs://QmQEz4SRJvZ8HDdocc9pJFL3BFesFne1qUJLoJZoLPaD9m -->
 # InputEndorsers
 
 **Proposal:** Withdraw 3,961,538 ada for Bringing Real-World Payments to Cardano with Wirex
@@ -7,27 +7,26 @@
 
 ---
 
-I'm using a personal Cardano DRep Commercial Treasury Rule Book v6 that I have created to reflect some of my thinking in order to be able to better assess commercial and commercial/hybrid proposals - in a way that is aligned with my own general thinking. 
-This framework may still evolve. I am being assisted with AI in this process, as I want to create a process that I can relatively neutrally apply to the large number of proposals that are requesting funding.  If they are borderline, I will look even more closely. 
-The document is here: https://docs.google.com/document/d/1fXaNY3L8oGWEGJmMubTKn7FnyhXCzOhiophXzFQFC_c/edit?usp=sharing
+## Wirex Treasury Withdrawal Score: 51 / 100
 
-VOTING NO
-The public-good part is the reusable Cardano payments infrastructure. The private commercial part is Wirex card/banking/fiat-rail expansion. The proposal does not separate them cleanly.
-Wirex says it will release open-source infrastructure. But the proposal still does not define the license, repositories, fork rights, maintenance, data rights, or which parts remain Wirex-controlled. That is a central missing piece.
-Cardano should not pay almost 4 million ADA for a commercial payments expansion unless the open-source deliverables are legally precise and the treasury receives a stronger return. The treasury needs public code, public standards, public audit outputs, fork rights, maintenance, hard KPIs, and either co-funding or commercial upside.
-Wirex can probably deliver. That does not mean Cardano should carry the cost while Wirex keeps the commercial upside.
-| Category                                      |        Score |
-| --------------------------------------------- | -----------: |
-| Public value, additionality, ecosystem gap    |      10 / 13 |
-| Business quality and traction                 |        5 / 6 |
-| Price versus value                            |        4 / 7 |
-| Applicant integrity and past delivery         |        5 / 8 |
-| Public asset, open-source, data rights        |       6 / 12 |
-| Treasury upside, instrument fit, risk sharing |       4 / 15 |
-| Milestones, verification, anti-gaming         |       8 / 13 |
-| Risk management and first-loss protection     |       6 / 12 |
-| Sustainability and exit plan                  |        6 / 9 |
-| Opportunity cost and competitive neutrality   |        2 / 5 |
-| **Base score**                                | **56 / 100** |
-| Conviction adjustment                         |       **-2** |
-| **Final score**                               | **54 / 100** |
+I scored this proposal using my own public rulebook and scoring system, which is available here: [Cardano DRep Commercial Treasury Rule Book v9 – Intelligent Risk Edition](https://docs.google.com/document/d/13EcIlJguBz-MJv91a3YYtb8O96K8uf9B9AOHsDOxeVE/edit?usp=sharing) (https://docs.google.com/document/d/13EcIlJguBz-MJv91a3YYtb8O96K8uf9B9AOHsDOxeVE/edit?usp=sharing). The document is still evolving, but it reflects how I assess commercial and hybrid Treasury proposals.
+
+I use AI assistance in this process because I want a scoring method that I can apply as neutrally and consistently as possible across the large number of proposals requesting funding. AI does not make the decision for me. It helps me structure the review, test the proposal against the same criteria, and spot issues I may otherwise miss. When a proposal is borderline, I look at it even more closely.
+
+I score this proposal low because it asks the Cardano Treasury to fund a commercial payments product without giving Cardano enough enforceable return. Wirex looks capable, and payments are a real gap for Cardano, but the proposal does not clearly lock down the open-source assets, access rights, maintenance duties, revenue share, repayment terms, or clawbacks. In plain terms, the Treasury takes the risk while Wirex keeps most of the upside.
+
+| v9 Category                                                |        Score |
+| ---------------------------------------------------------- | -----------: |
+| Public value, additionality, ecosystem gap, market timing  |       9 / 12 |
+| Team quality, traction, adaptive execution                 |        6 / 7 |
+| Price versus value                                         |        3 / 6 |
+| Applicant integrity and past delivery                      |        5 / 8 |
+| Public asset, open-source, data rights                     |       6 / 12 |
+| Treasury upside, instrument fit, risk sharing              |       3 / 14 |
+| Milestones, verification, anti-gaming                      |       7 / 13 |
+| Risk management, margin of safety, obsolescence resilience |       5 / 12 |
+| Sustainability and exit plan                               |        5 / 8 |
+| Opportunity cost and competitive neutrality                |        4 / 8 |
+| **Base score**                                             | **53 / 100** |
+| **DRep conviction adjustment**                             |       **-2** |
+| **Final score**                                            | **51 / 100** |
