@@ -10566,8 +10566,21 @@ const server = http.createServer(async (req, res) => {
   // plus the Ekklesia DRep votes cache from /ekklesia-drep-votes.
   // No external API calls — 100% from what Civitas already fetches.
   if (req.method === "GET" && url.pathname === "/api/intersect") {
-    const INTERSECT_GOV_ACTION = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
-    const INTERSECT_EKK_PROPOSAL = "6a1512d73ea9a75799cf8f1c";
+    // Tracked proposals — selected via ?proposal=<key>, defaults to "intersect".
+    const INTERSECT_TRACKS = {
+      intersect: {
+        govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf",
+        ekkProposalId: "6a1512d73ea9a75799cf8f1c",
+      },
+      tsc: {
+        govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sxypfkyr",
+        ekkProposalId: "6a1512d73ea9a75799cf8f13",
+      },
+    };
+    const trackKey = String(url.searchParams.get("proposal") || "intersect").toLowerCase();
+    const track = INTERSECT_TRACKS[trackKey] || INTERSECT_TRACKS.intersect;
+    const INTERSECT_GOV_ACTION = track.govActionId;
+    const INTERSECT_EKK_PROPOSAL = track.ekkProposalId;
 
     try {
       // 1. Pull from Civitas live snapshot; fall back to seed file if snapshot not yet populated

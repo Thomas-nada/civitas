@@ -5,7 +5,22 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 
 const API_BASE = "";
 
-const GOV_ACTION_ID = "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf";
+const TRACKS = {
+  intersect: {
+    key: "intersect",
+    label: "Admin & Governance",
+    title: "Intersect Treasury Withdrawal",
+    subtitle: "Treasury Withdrawal · 25,400,000 ADA",
+    govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf",
+  },
+  tsc: {
+    key: "tsc",
+    label: "Technical Steering Committee",
+    title: "Intersect TSC Support",
+    subtitle: "Treasury Withdrawal · 1,193,000 ADA",
+    govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sxypfkyr",
+  },
+};
 const THRESHOLD = 0.67;
 const REFRESH_MS = 2 * 60 * 1000;
 
@@ -99,6 +114,7 @@ function StatCard({ label, value, sub, color, wide }) {
 export default function IntersectPage() {
   useSeoMeta({ title: "Intersect Vote Tracker", description: "Live DRep vote tracker for the Intersect treasury withdrawal — 25,400,000 ADA." });
 
+  const [track, setTrack]         = useState("intersect");
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
@@ -122,7 +138,7 @@ export default function IntersectPage() {
     setRationaleLoading(p => ({ ...p, [key]: true }));
     setRationaleError(p => ({ ...p, [key]: "" }));
     try {
-      const params = new URLSearchParams({ proposalId: GOV_ACTION_ID, voterId: drep.id, voterRole: "drep" });
+      const params = new URLSearchParams({ proposalId: TRACKS[track].govActionId, voterId: drep.id, voterRole: "drep" });
       if (drep.rationaleUrl) params.set("url", drep.rationaleUrl);
       if (drep.voteTxHash)   params.set("voteTxHash", drep.voteTxHash);
       const res  = await fetch(`${API_BASE}/api/vote-rationale?${params}`);
@@ -147,7 +163,7 @@ export default function IntersectPage() {
     if (!soft) setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/intersect");
+      const res = await fetch(`/api/intersect?proposal=${track}`);
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
       const d = await res.json();
       setData(d);
@@ -157,9 +173,16 @@ export default function IntersectPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [track]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Reset what-if overrides and cached rationales when switching proposals
+  useEffect(() => {
+    setOverrides({});
+    setRationaleText({});
+    setRationaleError({});
+  }, [track]);
 
   // Auto-refresh every 2 min
   useEffect(() => {
@@ -242,7 +265,7 @@ export default function IntersectPage() {
       d.votedAtUnix ? new Date(d.votedAtUnix * 1000).toISOString().slice(0, 19).replace("T", " ") : "",
     ].join(","));
     const csv = [
-      `# Intersect Treasury Withdrawal — DRep Vote Tracker`,
+      `# ${TRACKS[track].title} — DRep Vote Tracker`,
       `# Snapshot: ${snap} · Total active stake: ${Math.round(data.totalActiveAda).toLocaleString()} ADA`,
       headers.join(","),
       ...rows,
@@ -251,7 +274,7 @@ export default function IntersectPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `intersect-votes-${new Date(data.fetchedAt).toISOString().slice(0,10)}.csv`;
+    a.download = `${track}-votes-${new Date(data.fetchedAt).toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -297,14 +320,27 @@ export default function IntersectPage() {
         <div style={{ maxWidth: 1300, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             <div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                {Object.values(TRACKS).map(t => (
+                  <button key={t.key} onClick={() => setTrack(t.key)} style={{
+                    padding: "6px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                    border: `1px solid ${track === t.key ? "var(--accent, #4ade80)" : "var(--line)"}`,
+                    background: track === t.key ? "rgba(74,222,128,.12)" : "var(--panel)",
+                    color: track === t.key ? "#4ade80" : "var(--text-muted)",
+                    fontWeight: track === t.key ? 700 : 400,
+                  }}>{t.label}</button>
+                ))}
+              </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-                Treasury Withdrawal · 25,400,000 ADA
+                {TRACKS[track].subtitle}
               </div>
               <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
-                Intersect: Governance coordination &amp; technical stewardship
+                {track === "intersect"
+                  ? <>Intersect: Governance coordination &amp; technical stewardship</>
+                  : <>Intersect Technical Steering Committee Support</>}
               </h1>
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: "monospace" }}>
-                {GOV_ACTION_ID}
+                {TRACKS[track].govActionId}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
