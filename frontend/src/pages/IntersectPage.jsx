@@ -8,7 +8,7 @@ const API_BASE = "";
 const TRACKS = {
   intersect: {
     key: "intersect",
-    label: "Admin & Governance",
+    label: "Intersect Core",
     title: "Intersect Treasury Withdrawal",
     subtitle: "Treasury Withdrawal · 25,400,000 ADA",
     govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sgx6wlxf",
