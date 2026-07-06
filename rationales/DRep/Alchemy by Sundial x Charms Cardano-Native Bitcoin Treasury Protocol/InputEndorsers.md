@@ -1,4 +1,4 @@
-<!-- url: ipfs://Qmcrk6E7fDFpcp3A97REeKnzKAbFDSY9SCE1WswN9Bm3jH -->
+<!-- url: ipfs://QmSYRZLN4fa1SBKKsBu6niTxFyu9vh35r5HT3kNCzjfcuQ -->
 # InputEndorsers
 
 **Proposal:** Alchemy by Sundial x Charms Cardano-Native Bitcoin Treasury Protocol
@@ -7,104 +7,27 @@
 
 ---
 
-## DRep Assessment Rationale
+I scored this proposal using my own public rulebook and scoring system, which is available here: Cardano DRep Commercial Treasury Rule Book v9 – Intelligent Risk Edition (https://docs.google.com/document/d/13EcIlJguBz-MJv91a3YYtb8O96K8uf9B9AOHsDOxeVE/edit?usp=sharing). The document is still evolving, but it reflects how I assess commercial and hybrid Treasury proposals.
 
-I am using a personal **Cardano DRep Commercial Treasury Rule Book v6** that I created to reflect some of my thinking and help me assess commercial and commercial/hybrid proposals more consistently.
+I use AI assistance in this process because I want a scoring method that I can apply as neutrally and consistently as possible across the large number of proposals requesting funding. AI does not make the decision for me. It helps me structure the review, test the proposal against the same criteria, and spot issues I may otherwise miss. When a proposal is borderline, I look at it even more closely.
 
-This framework may still evolve. I am being assisted with AI in this process because I want to create a process that I can apply relatively neutrally across the large number of proposals requesting funding. If a proposal is borderline, I will look at it even more closely.
+**Rationale:** I do not support this proposal in its current form. Alchemy targets a real gap: Cardano needs credible Bitcoin liquidity and reusable BTCfi infrastructure, and the proposal offers useful public pieces such as reserve reporting, SDKs, dashboards, audits, integrations, staged treasury-owned launch liquidity, ADA price protection, and quarterly return of treasury liquidity yield. The market thesis is also credible; Strategy reported large STRC proceeds and daily volume, and Strive has moved into daily SATA preferred dividends, so structured Bitcoin exposure is not fantasy. The team is not vaporware either: Sundial has an active Fund13 Catalyst project with 4 of 6 milestones completed and ₳1,148,250 already distributed, and Charms has public MIT-licensed Bitcoin/Cardano code. But the ask is too large for the current proof. This is a ₳10,000,000 request for a novel structured BTC protocol whose reserve model, Charms dependency, oracle path, accounting, custody/locker design, regulatory treatment, fund administration, and real user demand are not yet independently proven. I give credit for staging, audits, dashboards, rollover language, and treasury-owned liquidity, but the Treasury still takes meaningful first-loss and execution risk while receiving no binding fee share, revenue share, warrants, equity-like rights, hard repayment right, or treasury-controlled exit beyond a later governance vote after a $60M TVL condition. I also weigh Sundial’s own Fund13 statement that it would make no future attempts to draw from Catalyst or the Cardano treasury and community; even if Alchemy is a different structure, that weakens confidence in sizing discipline. Given the opportunity cost, including alternatives like the Orion Fund’s equity-first mandate for Cardano-native institutional DeFi and Bitcoin/Cardano liquidity, I would vote **No / revise and resubmit** unless the ask is reduced, private capital takes more first-loss risk, and Cardano receives enforceable upside plus clearer legal, custody, audit, and exit controls.
 
-The document is here:
-https://docs.google.com/document/d/1fXaNY3L8oGWEGJmMubTKn7FnyhXCzOhiophXzFQFC_c/edit?usp=sharing
+**Classification:** Hybrid public/commercial BTCfi infrastructure, liquidity deployment, and tokenized protocol growth. I used the general investor-hard scorecard, not the marketing appendix.
 
----
-
-## Proposal Classification
-
-This is a **hybrid public/commercial + liquidity deployment + tokenized protocol growth** proposal.
-
-Under the rulebook, liquidity proposals need:
-
-* Treasury-owned assets or LP positions
-* Exit rights
-* Custody controls
-* Public reporting
-
-Hybrid/commercial proposals need public assets plus one or more of the following:
-
-* Co-funding
-* Repayment
-* Revenue share
-* Ecosystem access rights
-* Another real return to the Treasury
-
-Alchemy partly passes this test. It offers Treasury-owned liquidity and public reporting. But it does not yet offer clean exit rights, confirmed custody controls, protocol-fee participation, warrants, equity-like rights, or binding open-source/public-asset terms for all funded outputs.
-
----
-
-## Key Concerns
-
-### Regulatory Risk
-
-The regulatory risk is material.
-
-FIRE and ICE look like structured financial products. ICE is USD-denominated BTC-backed exposure. FIRE is leveraged residual BTC exposure.
-
-The rulebook explicitly warns DReps to seek specialist review for proposals involving securities, lending, custody, stablecoins, market-making, and other high-risk areas. A **$75k legal/compliance budget** looks thin for that risk profile.
-
-### Administrator Risk
-
-The administrator is not locked.
-
-Intersect is only “proposed” and subject to confirmation. If Intersect does not confirm, the proposer nominates another administrator.
-
-For a **₳10M** proposal, the administrator should be confirmed before voting.
-
----
-
-## Possible Improvements
-
-The proposal would be stronger if:
-
-* The administrator is confirmed before disbursement.
-* Treasury liquidity has clear custody rules and exit rights.
-* Pool 2 is paid only after strict milestones, not upfront.
-* All funded SDKs, adapters, dashboards, schemas, reserve proofs, and non-sensitive smart-contract code are open-source under MIT/Apache-2.0 before final payment.
-* An independent legal memo addresses securities, custody, redemption, and marketing risk.
-* TVL KPIs exclude Treasury funds, related-party deposits, subsidized deposits, circular liquidity, market-maker wash activity, and temporary incentive-driven liquidity.
-* The Treasury receives protocol-fee share, warrants, or another economic return beyond profits on its own liquidity position.
-
----
-
-## Plain-English Rationale
-
-Alchemy could be strategically valuable, but the current terms make the Treasury first-loss capital for a novel Bitcoin structured-product protocol.
-
-The upside is real, but the controls are not strong enough for **₳10M**.
-
-Sundial and Charms could revise, tighten custody and exit rights, confirm the administrator, bind the open-source terms, and give the Treasury stronger upside before asking for this much ADA.
-
----
-
-## Scorecard
-
-| Category                                      |        Score |
-| --------------------------------------------- | -----------: |
-| Public value, additionality, ecosystem gap    |      11 / 13 |
-| Business quality and traction                 |        3 / 6 |
-| Price versus value                            |        3 / 7 |
-| Applicant integrity and past delivery         |        5 / 8 |
-| Public asset, open-source, data rights        |       7 / 12 |
-| Treasury upside, instrument fit, risk sharing |      10 / 15 |
-| Milestones, verification, anti-gaming         |       8 / 13 |
-| Risk management, margin of safety             |       6 / 12 |
-| Sustainability and exit plan                  |        5 / 9 |
-| Opportunity cost and competitive neutrality   |        3 / 5 |
-| **Base score**                                | **61 / 100** |
-| DRep conviction adjustment                    |       **-2** |
-| **Final score**                               | **59 / 100** |
-
----
-
-## Vote Stance
-
-**No
+|  # | Category                                                                       |     Max |    Score | Assessment                                                                                                                                                                                                                                                  |
+| -: | ------------------------------------------------------------------------------ | ------: | -------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  1 | Public value, additionality, ecosystem gap, and market timing                  |      12 |      9.0 | Strong category fit. Cardano lacks deep BTCfi infrastructure, and the proposal offers reusable reserve reporting, assets, dashboards, and integrations. Some market claims are promotional and should not carry the vote alone.                             |
+|  2 | Team quality, traction, and adaptive execution                                 |       7 |      4.5 | Sundial and Charms show real activity, public repos, and an active Fund13 delivery record. Still, delivery is not complete, public usage appears early, and Alchemy itself is not yet proven in production.                                                 |
+|  3 | Price versus value                                                             |       6 |      2.5 | The budget is itemized, but ₳10,000,000 is large for an unproven protocol with unfinished prior Catalyst work and no independent demand proof.                                                                                                              |
+|  4 | Applicant integrity and past delivery                                          |       8 |      4.5 | No clear bad-faith issue appears, but the prior “no future attempts” Catalyst statement conflicts with the spirit of this new large treasury request. Fund13 is also still in progress.                                                                     |
+|  5 | Public asset, open-source, verifiability, and data rights                      |      12 |      8.0 | SDKs, dashboards, public reporting, audit work, and open-source Charms components are positive. The proposal still needs a tighter list of what will be open, what stays protected, who controls each component, and what Cardano can independently verify. |
+|  6 | Treasury upside, instrument fit, and risk sharing                              |      14 |      8.0 | Treasury-owned liquidity and yield return are meaningful. They are not enough for this size and risk. There is no binding protocol fee share, revenue share, warrant, equity-like right, hard repayment right, or stronger first-loss protection.           |
+|  7 | Milestones, verification, and anti-gaming design                               |      13 |      8.0 | Staged liquidity and monthly reporting help. The anti-gaming design is still weak for TVL, trading volume, related-party activity, subsidized usage, and dashboard self-reporting.                                                                          |
+|  8 | Risk management, margin of safety, and obsolescence resilience                 |      12 |      7.0 | The proposal names major risks and includes audits, reserve zones, pause rules, and ADA price protection. The custody/locker, oracle, regulatory, bridge/accounting, and market risks remain too high for the current ask.                                  |
+|  9 | Sustainability and exit plan                                                   |       8 |      4.5 | The revenue and maintenance model is not yet strong enough. Treasury principal return depends on a future TVL condition and another governance action, not a clean enforceable exit.                                                                        |
+| 10 | Strategic opportunity cost, competitive neutrality, and ecosystem coordination |       8 |      4.0 | Sundial x Charms is real coordination, but the proposal still subsidizes one private protocol in a competitive BTCfi market. A smaller pilot, neutral liquidity program, RFP, or equity-return vehicle may protect the Treasury better.                     |
+|    | **Base score**                                                                 | **100** | **60.0** | Useful idea, but not investable on current terms.                                                                                                                                                                                                           |
+|    | Ecosystem coordination premium                                                 |      +5 |     +2.0 | Sundial and Charms bring complementary roles. The premium is capped because commitments, funding separation, and neutral access need stronger enforcement.                                                                                                  |
+|    | DRep conviction adjustment                                                     |      ±5 |     -4.0 | The ask is too large; the Treasury takes too much first-loss risk; legal/custody/oracle details remain unresolved; and the prior “no future treasury/community draw” statement lowers confidence.                                                           |
+|    | **Final score**                                                                | **100** | **58.0** | **No / revise and resubmit**                                                                                                                                                                                                                                |
