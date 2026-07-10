@@ -10545,16 +10545,24 @@ const server = http.createServer(async (req, res) => {
     }
     const map = {};
     for (const detail of allDetails) {
-      if (!detail?.votes) continue;
-      const ballot = detail.votes.find(b => (b.proposals?.length ?? 0) >= 60)
-        || detail.votes.find(b => b.status === "live")
-        || [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0))[0];
-      if (!ballot?.proposals?.length) continue;
+      if (!Array.isArray(detail?.votes)) continue;
       const name = nameMap[detail.userId] || "";
-      const votingPower = ballot.votingPower ?? 0;
-      for (const prop of ballot.proposals) {
-        if (!map[prop.proposalId]) map[prop.proposalId] = [];
-        map[prop.proposalId].push({ userId: detail.userId, name, vote: prop.vote?.[0] ?? "—", votingPower });
+      // Aggregate proposals across ALL of a voter's ballots. Selecting a single
+      // ballot by proposal-count heuristic silently dropped votes for anyone who
+      // voted on fewer than 60 budget proposals. proposalIds are unique per ballot,
+      // so a per-proposal lookup naturally resolves to the correct ballot. Dedupe
+      // per (voter, proposalId) in case a proposal appears in multiple ballots.
+      const seenProps = new Set();
+      const sortedBallots = [...detail.votes].sort((a, b) => (b.proposals?.length ?? 0) - (a.proposals?.length ?? 0));
+      for (const ballot of sortedBallots) {
+        if (!Array.isArray(ballot?.proposals)) continue;
+        const votingPower = ballot.votingPower ?? 0;
+        for (const prop of ballot.proposals) {
+          if (!prop?.proposalId || seenProps.has(prop.proposalId)) continue;
+          seenProps.add(prop.proposalId);
+          if (!map[prop.proposalId]) map[prop.proposalId] = [];
+          map[prop.proposalId].push({ userId: detail.userId, name, vote: prop.vote?.[0] ?? "—", votingPower });
+        }
       }
     }
     const payload = { votes: map, allVoters: allDetails.map(d => ({ userId: d.userId, name: nameMap[d.userId] || "" })) };
