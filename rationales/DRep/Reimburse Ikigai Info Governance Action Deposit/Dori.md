@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmWckFfFsziehUwmoxpZJzcB32XHJMXv8sS66y8DSvAVhR -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZL1tgTkyC84tiRLxCZxJ3ZCcKRph8RWkDTRJ9cH7iJZZ -->
 # Dori
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,8 @@
 
 ---
 
-Since this issue stems from an early Cardano governance submission bug, I do think reimbursing the deposit is the right thing to do. However, it’s important to verify that the refund is actually going to the original proposer. I also have doubts about adding an extra 3,000 ADA as compensation. If additional reasons such as the Midnight airdrop are included for further reimbursement, I’ll be voting against this proposal.
+I'm voting Yes on the Reimburse Ikigai Info Governance Action Deposit proposal.
+
+The submitter losing their 100,000 ADA deposit wasn't their fault. It was caused by a bug in the Cardano node code. I believe a clear loss stemming from a protocol flaw is something the community should make right. The amount is small, it's paid out immediately, and there are no additional costs involved.
+
+For these reasons, I'm voting Yes.
