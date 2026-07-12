@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbxYCb2k4VV8TAc877hnfeiGgXjxtzeYJ25hS4626jdCr -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmQtL16ekYdNTHfkj8n8tVoZKt5yGhrh4RxGVKJ88mXQA5 -->
 # RCADA
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,20 +7,12 @@
 
 ---
 
-RCADA votes **YES** on **Reimburse Ikigai Info Governance Action Deposit**.
+I am voting Yes on this governance action. This proposal seeks to reimburse the deposit lost during one of the very first on-chain governance submissions following the Chang hard fork, where a Cardano node bug allowed an unregistered stake key to submit an Info Action but prevented the deposit from being recoverable. The loss was not due to user error or misuse; it resulted directly from a protocol-side issue during the earliest days of governance. The community has long acknowledged that this should be corrected once Treasury mechanisms allowed for it.
 
-RCADA previously supported the principle of reimbursing the deposit lost during one of the very first on-chain governance submissions following the Chang hard fork. The original **Cardanoの生きがい - Ikigai** Info Action was symbolic and community-oriented, thanking those who helped bring Cardano to that point and expressing hope for the future of the ecosystem.
+Now that the tooling and processes are in place, this action provides a straightforward and fair remedy. The requested amount is modest relative to the Treasury, fully constitutional, and immediately auditable. Compensating for the protocol-caused loss reinforces trust in the governance system and honors the individuals who participated at a time when risks were higher and the tooling was still maturing. Addressing such outliers strengthens the legitimacy of governance rather than setting a broad precedent.
 
-The issue was not ordinary user error or misuse. A Cardano node bug permitted an unregistered stake key to submit the Info Action, but the submitter was then unable to recover the required **100,000 ADA** deposit. The submitter participated during the earliest phase of Cardano governance, when tooling and processes were still maturing, and RCADA believes it is fair to correct this unusual outcome.
+Although the additional 3,000 ADA for lost staking rewards and opportunity cost is somewhat subjective, it is reasonable in context and does not materially alter the low-risk nature of the request. The total amount remains small, and the intent is clearly to make the proposer whole rather than to profit.
 
-This Treasury Withdrawal requests **103,000 ADA**: the original **100,000 ADA** deposit plus **3,000 ADA** for estimated lost staking rewards and opportunity cost. RCADA previously considered the additional 3,000 ADA reasonable in context. It is somewhat subjective, but it does not materially change the low-risk nature of the request, and the intent appears to be making the proposer whole rather than creating profit.
+As a general governance best practice, and without questioning the proposer’s integrity, I believe it would be beneficial for the proposer to sign a simple verification transaction from the original affected address. This would provide on-chain confirmation of ownership and serve as a clean procedural pattern if similar edge cases ever occur in the future. However, this is a suggestion for administrative clarity, not a precondition for supporting the action.
 
-This action is modest relative to the Treasury, directly auditable on-chain, and does not involve ongoing delivery risk, administrator custody, project execution, or recurring funding expectations. It is a simple reimbursement to resolve an edge case from the earliest period of on-chain governance.
-
-RCADA also wants to be clear that this vote should not be interpreted as a broad precedent for reimbursing failed governance actions, operational mistakes, or ordinary deposit losses. The support here is based on the unique circumstances: an early governance action, a protocol-side issue, a previously recognised fairness concern, and a narrow one-time remedy.
-
-As a general governance best practice, and without questioning the proposer’s integrity, RCADA continues to believe it would be beneficial for the proposer to sign a simple verification transaction from the original affected address where practical. This would provide clean on-chain confirmation of ownership and could serve as a useful procedural pattern if similar edge cases ever arise in the future. However, this is a suggestion for administrative clarity, not a precondition for supporting this action.
-
-For these reasons, RCADA votes **YES**. Reimbursing this deposit is a fair and proportionate remedy that helps maintain confidence in Cardano governance while keeping the precedent narrow and clearly bounded.
-
-RCADA's full vote assessment can be found here: "https://brolloks.github.io/rcada-drep-votes/."
+Given the unique circumstances, the clear fairness of the remedy, and the need to maintain confidence in the governance process, RCADA votes Yes.
