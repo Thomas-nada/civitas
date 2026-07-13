@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmYy4mMSwD7rNKbctZXCFNtrs7gYqP8NSjvp4vtY2awEEu -->
+<!-- url: ipfs://bafkreig6gwoi3ppdfqrtle4logumtzadoouzkpa2xiwmjscqpm6d7wsc7u -->
 # Big Lazy Cat
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,8 +7,4 @@
 
 ---
 
-A [PDF version][pdf-link] of this rationale is also made available.
-
-[pdf-link]: https://ipfs.io/ipfs/QmZDWME7P1tJb2RwszrGFbGjX3yb8FXGgs71EAUj2hnmBN
-
-We should refund it. Cardanians are good people. We shouldn't let an innocent person bear the cost of a bug.
+I support this proposal. It’s fair to reimburse the lost deposit caused by a bug.
