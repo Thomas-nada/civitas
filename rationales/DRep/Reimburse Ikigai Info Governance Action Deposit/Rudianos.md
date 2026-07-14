@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreia2thjlic7i7qfyhxsju5vzgdmewnzxb4236co2z2hh32s4g6kewy -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZjpNKftw4BUfKJ3KogietrteyTW9iBuaZHM2tyYB9rZw -->
 # Rudianos
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-This action really doesn't require extensive rationale. This is the right thing to do as this was never the treasury's funds and was transferred in error. The funds should be returned. I am in favor of this proposal.
+I have voted in favour in the past. My opinion has not changed and this is the right thing to do. We should return these funds.
