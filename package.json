@@ -9,10 +9,15 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "lint": "npm --prefix frontend run lint",
     "test": "node scripts/smoke-check.mjs",
+    "test:cip179": "node --test test/cip179.test.mjs",
     "test:e2e": "playwright test",
-    "ci": "npm run lint && npm run build && npm run test"
+    "ci": "npm run lint && npm run build && npm run test:cip179 && npm run test"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.2"
+  },
+  "dependencies": {
+    "@evolution-sdk/evolution": "^0.5.9",
+    "cip-179": "^0.2.0"
   }
 }

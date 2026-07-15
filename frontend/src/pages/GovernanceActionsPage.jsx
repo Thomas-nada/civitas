@@ -4,10 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import { useEffectiveDrepId } from "../hooks/useEffectiveDrepId";
 import { Transaction } from "@meshsdk/core";
+import { encodePayload, METADATA_LABEL } from "cip-179";
 import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WalletContext } from "../context/WalletContext";
+import Cip179ResponseEditor from "../components/Cip179ResponseEditor";
+import { buildSurveyResponse } from "../services/surveyTxService";
+import { validateSurveyAnswers } from "../services/surveyAnswerService";
+import { hydrateSurveyPresentation } from "../services/surveyPresentationService";
 
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -585,6 +590,11 @@ export default function GovernanceActionsPage() {
   const [batchVoteModalOpen, setBatchVoteModalOpen] = useState(false);
   const [batchVoteStep, setBatchVoteStep] = useState(0);
   const [batchVoteMdPreview, setBatchVoteMdPreview] = useState(false);
+  const [proposalSurveys, setProposalSurveys] = useState({});
+  const [surveyAnswers, setSurveyAnswers] = useState({});
+  const [skippedSurveys, setSkippedSurveys] = useState({});
+  const [surveysLoading, setSurveysLoading] = useState(false);
+  const [surveyLoadError, setSurveyLoadError] = useState("");
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteNotice, setVoteNotice] = useState("");
   const [voteError, setVoteError] = useState("");
@@ -1192,6 +1202,15 @@ export default function GovernanceActionsPage() {
     [rows, batchVoteIds]
   );
   const batchVoteCount = selectedBatchVoteRows.length;
+  const selectedBatchProposalKey = selectedBatchVoteRows.map((row) => row.proposalId).sort().join("|");
+  const distinctLinkedSurveys = useMemo(() => {
+    const unique = new Map();
+    for (const row of selectedBatchVoteRows) {
+      const linked = proposalSurveys[row.proposalId];
+      if (linked?.available && !unique.has(linked.surveyRef)) unique.set(linked.surveyRef, linked);
+    }
+    return [...unique.values()];
+  }, [selectedBatchVoteRows, proposalSurveys]);
   // Voting is a DRep-only action: require a registered DRep signed in with the
   // DRep key (non-DReps and stake-key sessions cannot select or cast votes).
   const canVote = Boolean(wallet?.actingAsDrep);
@@ -1229,8 +1248,40 @@ export default function GovernanceActionsPage() {
     });
   }, [rows]);
 
+  useEffect(() => {
+    if (!selectedBatchProposalKey) {
+      setProposalSurveys({});
+      setSurveyLoadError("");
+      return;
+    }
+    let cancelled = false;
+    setSurveysLoading(true);
+    setSurveyLoadError("");
+    Promise.all(selectedBatchVoteRows.map(async (row) => {
+      const response = await fetch(`/api/proposal-survey?proposalId=${encodeURIComponent(row.proposalId)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || "Failed to resolve a linked survey.");
+      if (payload.available) {
+        try {
+          payload.survey = await hydrateSurveyPresentation(payload.survey);
+        } catch (presentationError) {
+          payload.presentationError = presentationError?.message || "External survey presentation could not be verified.";
+        }
+      }
+      return [row.proposalId, payload];
+    }))
+      .then((entries) => { if (!cancelled) setProposalSurveys(Object.fromEntries(entries)); })
+      .catch((error) => { if (!cancelled) setSurveyLoadError(error?.message || "Failed to resolve linked surveys."); })
+      .finally(() => { if (!cancelled) setSurveysLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedBatchProposalKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const batchVoteReadyCount = selectedBatchVoteRows.filter((row) => batchVoteDrafts[row.proposalId]?.choice).length;
-  const batchVoteReady = batchVoteCount > 0 && batchVoteReadyCount === batchVoteCount;
+  const linkedSurveysReady = distinctLinkedSurveys.every((linked) => (
+    skippedSurveys[linked.surveyRef] ||
+    validateSurveyAnswers(linked.survey, surveyAnswers[linked.surveyRef] || []).length === 0
+  ));
+  const batchVoteReady = batchVoteCount > 0 && batchVoteReadyCount === batchVoteCount && !surveysLoading && linkedSurveysReady;
 
   // Reset vote UI when selected action changes
   useEffect(() => {
@@ -1406,6 +1457,32 @@ export default function GovernanceActionsPage() {
           { txHash: row.txHash, txIndex: row.certIndex ?? 0 },
           { voteKind: draft.choice, ...(anchor ? { anchor } : {}) }
         );
+      }
+
+      const cip179Responses = [];
+      for (const linked of distinctLinkedSurveys) {
+        if (skippedSurveys[linked.surveyRef]) continue;
+        const survey = linked.survey;
+        const answerTuples = surveyAnswers[linked.surveyRef] || [];
+        const problems = validateSurveyAnswers(survey, answerTuples);
+        if (problems.length) throw new Error(problems.join(" "));
+        if (survey.details?.isTimelocked) setVoteNotice(`Encrypting response for ${survey.details.title}...`);
+        const built = await buildSurveyResponse(
+          wallet.walletApi,
+          survey.surveyTxId,
+          survey.surveyIndex,
+          "DRep",
+          answerTuples,
+          survey.details?.isTimelocked
+            ? { drandRound: survey.details.drandRound, padding: survey.details.padding }
+            : undefined,
+          undefined,
+          survey.details,
+        );
+        cip179Responses.push(built.response);
+      }
+      if (cip179Responses.length) {
+        tx.setMetadata(METADATA_LABEL, encodePayload({ type: "responses", responses: cip179Responses }));
       }
 
       const unsignedTx = await tx.build();
@@ -1835,6 +1912,11 @@ export default function GovernanceActionsPage() {
         const row = selectedBatchVoteRows[stepIdx];
         const draft = batchVoteDrafts[row.proposalId] || {};
         const rationaleMode = draft.rationaleMode ?? "url";
+        const linked = proposalSurveys[row.proposalId];
+        const firstLinkedRow = linked?.surveyRef
+          ? selectedBatchVoteRows.find((item) => proposalSurveys[item.proposalId]?.surveyRef === linked.surveyRef)
+          : null;
+        const showLinkedEditor = linked?.available && firstLinkedRow?.proposalId === row.proposalId;
         return (
           <div className="image-modal-backdrop" role="presentation" onClick={() => setBatchVoteModalOpen(false)}>
             <div className="image-modal vote-confirm-modal vote-confirm-modal--batch" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -1938,6 +2020,47 @@ export default function GovernanceActionsPage() {
                       </div>
                     )}
                   </div>
+
+                  {surveysLoading ? <p className="muted">Checking this action for a CIP-179 survey...</p> : null}
+                  {surveyLoadError ? <p className="vote-notice">Linked survey lookup failed. You can still submit the governance vote.</p> : null}
+                  {linked?.linked && !linked.available ? (
+                    <p className="vote-notice">Linked survey unavailable: {linked.problem}</p>
+                  ) : null}
+                  {linked?.presentationError ? <p className="vote-notice">{linked.presentationError}</p> : null}
+                  {linked?.available && !showLinkedEditor ? (
+                    <p className="muted">This action links the same survey shown with {firstLinkedRow?.actionName}.</p>
+                  ) : null}
+                  {showLinkedEditor ? (
+                    <section className="cip179-linked-survey">
+                      <div className="cip179-linked-survey-head">
+                        <div>
+                          <span className="sq-qtype-label">CIP-179 Survey</span>
+                          <h4>{linked.survey.details.title}</h4>
+                          {linked.survey.details.description ? <p className="muted">{linked.survey.details.description}</p> : null}
+                        </div>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(skippedSurveys[linked.surveyRef])}
+                            onChange={(event) => setSkippedSurveys((previous) => ({ ...previous, [linked.surveyRef]: event.target.checked }))}
+                          />
+                          Skip survey
+                        </label>
+                      </div>
+                      {!skippedSurveys[linked.surveyRef] ? (
+                        <>
+                          <Cip179ResponseEditor
+                            survey={linked.survey}
+                            answers={surveyAnswers[linked.surveyRef] || []}
+                            onChange={(answers) => setSurveyAnswers((previous) => ({ ...previous, [linked.surveyRef]: answers }))}
+                          />
+                          {validateSurveyAnswers(linked.survey, surveyAnswers[linked.surveyRef] || []).map((problem) => (
+                            <p key={problem} className="vote-notice">{problem}</p>
+                          ))}
+                        </>
+                      ) : <p className="muted">Only the governance vote will be submitted for this action.</p>}
+                    </section>
+                  ) : null}
                 </div>
 
                 {wallet.walletNetworkId !== 1 ? (

@@ -1719,7 +1719,7 @@ export default function GuidePage() {
             <ul>
               <li>Connect a Cardano wallet (top-right corner). Connecting is free.</li>
               <li>Your wallet needs a small amount of ADA to cover the transaction fee when you submit — typically under 1 ADA.</li>
-              <li>Your address must be associated with one of the roles the survey accepts (DRep, SPO, CC Member, or Stakeholder).</li>
+              <li>Your wallet must expose a key for an eligible role. Browser wallets can normally prove DRep, Stakeholder, or Keyholder credentials; SPO and CC responses require tooling with those signing keys.</li>
               <li>The survey must still be within its active epoch.</li>
             </ul>
 

@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
+const cip179 = require("./lib/cip179");
 // BLAKE2b-256 — pure JS, RFC 7693, no external deps
 function blake2b256(data) {
   const bytes = Buffer.isBuffer(data)
@@ -392,8 +393,9 @@ const cipContentCache = {};
 // ── Survey / Label-17 index cache ─────────────────────────────────────────
 const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
 const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
-let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set() };
+let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false };
 let label17BuildPromise = null;
+const label17GovLinks = new Map();
 
 let epochBackfillState = {
   running: false,
@@ -7499,7 +7501,7 @@ function resolveSeoForPath(pathname) {
     "/stats":      { title: "Governance Statistics | Civitas", description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients." },
     "/constitution":{ title: "Cardano Constitution | Civitas", description: "Read and search the full Cardano Constitution, ratified on-chain. Navigate by section, verify hash integrity, and compare versions." },
     "/budget":     { title: "Cardano Budget 2026 | Civitas", description: "Track the Cardano 2026 on-chain budget vote — proposal breakdown, DRep participation, and live voting results." },
-    "/surveys":    { title: "Governance Surveys | Civitas", description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power." },
+    "/surveys":    { title: "Governance Surveys | Civitas", description: "CIP-0179 v5 on-chain surveys for Cardano governance participants." },
     "/guide":      { title: "Governance Guide | Civitas", description: "A practical guide to Cardano governance: DRep voting, proposal types, SPO roles, Constitutional Committee duties, and how to participate." },
     "/about":      { title: "About Civitas | Civitas", description: "Learn why Civitas was built — making Cardano governance transparent, accessible, and accountable." },
     "/ncl":        { title: "Net Change Limit | Civitas", description: "Track Cardano's Net Change Limit and current treasury balance." },
@@ -7654,61 +7656,6 @@ async function runStartupInitialization() {
   }
 }
 
-// ── CIP-0179 / Label-17 helpers ───────────────────────────────────────────
-
-const MAX_METADATA_STR_BYTES = 64;
-const LABEL17_TEXT_FIELDS = new Set(["title", "description", "question", "customValue"]);
-
-// Integer ↔ string mappings
-const L17_INT_TO_ROLE      = { 0: "DRep", 1: "SPO", 2: "CC", 3: "Stakeholder", 4: "Owner" };
-const L17_INT_TO_WEIGHTING = { 0: "CredentialBased", 1: "StakeBased", 2: "PledgeBased" };
-
-// v2/v3 question type tags (0=single-choice … 4=custom)
-const L17_INT_TO_METHOD_V2 = {
-  0: "urn:cardano:poll-method:single-choice:v1",
-  1: "urn:cardano:poll-method:multi-select:v1",
-  2: "urn:cardano:poll-method:ranking:v1",
-  3: "urn:cardano:poll-method:numeric-range:v1",
-  4: "urn:cardano:poll-method:custom:v1",
-};
-// v4 question type tags (0=custom, 1=single-choice … 6=rating)
-const L17_INT_TO_METHOD_V4 = {
-  0: "urn:cardano:poll-method:custom:v1",
-  1: "urn:cardano:poll-method:single-choice:v2",
-  2: "urn:cardano:poll-method:multi-select:v2",
-  3: "urn:cardano:poll-method:ranking:v1",
-  4: "urn:cardano:poll-method:numeric-range:v2",
-  5: "urn:cardano:poll-method:points-allocation:v1",
-  6: "urn:cardano:poll-method:rating:v1",
-};
-// Alias kept for any code still referencing L17_INT_TO_METHOD
-const L17_INT_TO_METHOD = L17_INT_TO_METHOD_V2;
-
-// ── v1 (legacy object-based) helpers ────────────────────────────────────────
-
-function shouldJoinLabel17StringArray(value, parentKey = "") {
-  if (!Array.isArray(value) || value.length <= 1) return false;
-  if (!value.every((v) => typeof v === "string")) return false;
-  if (LABEL17_TEXT_FIELDS.has(parentKey)) return true;
-  const enc = new TextEncoder();
-  return value.some((part) => enc.encode(part).length === MAX_METADATA_STR_BYTES);
-}
-
-function label17FromMeta(value, parentKey = "") {
-  if (value === null || value === undefined) return value;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
-  if (Array.isArray(value)) {
-    if (shouldJoinLabel17StringArray(value, parentKey)) return value.join("");
-    return value.map((item) => label17FromMeta(item, parentKey));
-  }
-  if (typeof value === "object") {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = label17FromMeta(v, k);
-    return out;
-  }
-  return value;
-}
-
 // ── CIP helpers ───────────────────────────────────────────────────────────
 
 function parseCipFrontMatter(raw) {
@@ -7810,371 +7757,6 @@ async function fetchCipContent(cipId) {
   };
 }
 
-// Returns "surveyDetails" | "surveyResponse" for v1,
-//         "surveyDefinitionsV3" | "surveyResponsesV3" | "cancellationsV3" for v3,
-//         null for unrecognised.
-function label17KindFromMeta(meta) {
-  // v3: envelope is [tag, payload_array]
-  if (Array.isArray(meta) && meta.length === 2 && typeof meta[0] === "number" && Array.isArray(meta[1])) {
-    if (meta[0] === 0) return "surveyDefinitionsV3";
-    if (meta[0] === 1) return "surveyResponsesV3";
-    if (meta[0] === 2) return "cancellationsV3";
-    return null;
-  }
-  // v1: named object keys
-  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
-  const hasDetails  = "surveyDetails"  in meta;
-  const hasResponse = "surveyResponse" in meta;
-  if ((hasDetails && hasResponse) || (!hasDetails && !hasResponse)) return null;
-  return hasDetails ? "surveyDetails" : "surveyResponse";
-}
-
-// ── v1 survey entry ──────────────────────────────────────────────────────────
-
-function label17SurveyFromEntry(entry, txInfo) {
-  const meta = entry?.json_metadata;
-  if (label17KindFromMeta(meta) !== "surveyDetails") return null;
-  const restored = label17FromMeta(meta);
-  const details = restored?.surveyDetails;
-  if (!details || typeof details !== "object") return null;
-  return {
-    surveyTxId: entry.tx_hash,
-    surveyIndex: 0,
-    details,
-    msg: restored.msg || null,
-    slot: txInfo?.slot ?? null,
-    blockTime: txInfo?.block_time ?? null,
-  };
-}
-
-// ── v3 parsing helpers ───────────────────────────────────────────────────────
-
-// Join chunked text (string or array-of-strings) back to a single string.
-function l17JoinText(v) {
-  if (typeof v === "string") return v;
-  if (Array.isArray(v) && v.every((s) => typeof s === "string")) return v.join("");
-  return String(v ?? "");
-}
-
-// Blockfrost represents CBOR bytes as "0x<hex>" strings in json_metadata.
-// Returns bare hex string (no 0x prefix), or null.
-function l17ExtractBytesHex(v) {
-  let hex = null;
-  if (typeof v === "string") hex = v;
-  else if (v && typeof v === "object" && !Array.isArray(v) && typeof v.bytes === "string") hex = v.bytes;
-  if (!hex) return null;
-  return hex.startsWith("0x") ? hex.slice(2) : hex;
-}
-
-// Parse a v3 question array → normalised question object.
-function l17ParseV3Question(q, index) {
-  if (!Array.isArray(q) || q.length < 2) return null;
-  const [tag, promptRaw, ...rest] = q;
-  const prompt = l17JoinText(promptRaw);
-  const questionId = `q${index}`;
-  const methodType = L17_INT_TO_METHOD[tag];
-  if (!methodType) return null;
-
-  if (tag === 0) { // single-choice
-    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText) };
-  }
-  if (tag === 1) { // multi-select
-    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText), maxSelections: rest[1] ?? 2 };
-  }
-  if (tag === 2) { // ranking
-    return { questionId, question: prompt, methodType, options: (rest[0] ?? []).map(l17JoinText), maxRanked: rest[1] ?? null };
-  }
-  if (tag === 3) { // numeric-range
-    const c = rest[0] ?? [];
-    return {
-      questionId, question: prompt, methodType,
-      numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) }
-    };
-  }
-  if (tag === 4) { // custom
-    return { questionId, question: prompt, methodType };
-  }
-  return null;
-}
-
-// Resolve options_or_count: inline array of labels OR uint count (external-content mode).
-// When a count is given, we generate placeholder labels so the tally machinery still works.
-function l17ResolveOptionsOrCount(v) {
-  if (Array.isArray(v)) return v.map(l17JoinText);
-  if (typeof v === "number" && Number.isInteger(v) && v >= 2) {
-    return Array.from({ length: v }, (_, i) => `Option ${i + 1}`);
-  }
-  return [];
-}
-
-// Parse a v4 question array (new tag numbering) → normalised question object.
-function l17ParseV4Question(q, index) {
-  if (!Array.isArray(q) || q.length < 2) return null;
-  const [tag, promptRaw, ...rest] = q;
-  const prompt = l17JoinText(promptRaw);
-  const questionId = `q${index}`;
-  const methodType = L17_INT_TO_METHOD_V4[tag];
-  if (!methodType) return null;
-
-  // Optional trailing required flag: boolean true or integer 1 (we encode as 1 since Cardano
-  // metadata doesn't support booleans natively).
-  const lastEl = rest[rest.length - 1];
-  const required = lastEl === true || lastEl === 1;
-
-  switch (tag) {
-    case 0: { // custom: [0, prompt, content_anchor, ?required]
-      const caRaw = rest[0];
-      const contentAnchor = Array.isArray(caRaw)
-        ? { uri: l17JoinText(caRaw[0]), hash: l17ExtractBytesHex(caRaw[1]) }
-        : (caRaw ? { uri: l17JoinText(caRaw) } : null);
-      return { questionId, question: prompt, methodType, required, ...(contentAnchor?.uri ? { contentAnchor } : {}) };
-    }
-    case 1: // single-choice: [1, prompt, options_or_count, ?required]
-      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), required };
-    case 2: { // multi-select: [2, prompt, options_or_count, min_selections, max_selections, ?required]
-      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), minSelections: rest[1] ?? 0, maxSelections: rest[2] ?? 2, required };
-    }
-    case 3: { // ranking: [3, prompt, options_or_count, min_ranked, max_ranked, ?required]
-      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), minRanked: rest[1] ?? 0, maxRanked: rest[2] ?? null, required };
-    }
-    case 4: { // numeric-range: [4, prompt, [min, max, ?step], ?required]
-      const c = Array.isArray(rest[0]) ? rest[0] : [];
-      return { questionId, question: prompt, methodType, numericConstraints: { minValue: c[0] ?? 0, maxValue: c[1] ?? 100, ...(c[2] != null ? { step: c[2] } : {}) }, required };
-    }
-    case 5: { // points-allocation: [5, prompt, options_or_count, budget, ?required]
-      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), budget: rest[1] ?? 100, required };
-    }
-    case 6: { // rating: [6, prompt, options_or_count, rating_scale, ?required]
-      const scale = Array.isArray(rest[1]) ? rest[1] : (typeof rest[1] === "number" ? [1, rest[1]] : [1, 5]);
-      return { questionId, question: prompt, methodType, options: l17ResolveOptionsOrCount(rest[0]), ratingScale: scale, required };
-    }
-    default:
-      return null;
-  }
-}
-
-// Parse a v4 answer array → normalised answer object.
-function l17ParseV4Answer(answerArr, questions) {
-  if (!Array.isArray(answerArr) || answerArr.length < 3) return null;
-  const [tag, questionIndex, value] = answerArr;
-  const q = questions[questionIndex];
-  if (!q) return null;
-  switch (tag) {
-    case 0: return { questionId: q.questionId, customValue: Array.isArray(value) ? value.join("") : value }; // custom (text may be chunked)
-    case 1: return { questionId: q.questionId, selection: [value] };                                       // single-choice
-    case 2: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };        // multi-select
-    case 3: return { questionId: q.questionId, selection: Array.isArray(value) ? value : [] };             // ranking
-    case 4: return { questionId: q.questionId, numericValue: value };                                      // numeric-range
-    case 5: return { questionId: q.questionId, pointsAllocation: Array.isArray(value) ? value : [] };     // points-allocation
-    case 6: return { questionId: q.questionId, ratings: Array.isArray(value) ? value : [] };              // rating
-    default: return null;
-  }
-}
-
-// Parse a v3 answer array → normalised answer object using the survey's question list.
-function l17ParseV3Answer(answerArr, questions) {
-  if (!Array.isArray(answerArr) || answerArr.length < 3) return null;
-  const [tag, questionIndex, value] = answerArr;
-  const q = questions[questionIndex];
-  if (!q) return null;
-  if (tag === 0) return { questionId: q.questionId, selection: [value] };
-  if (tag === 1) return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };
-  if (tag === 2) return { questionId: q.questionId, selection: Array.isArray(value) ? value : [value] };
-  if (tag === 3) return { questionId: q.questionId, numericValue: value };
-  if (tag === 4) return { questionId: q.questionId, customValue: value };
-  return null;
-}
-
-// Parse v3 survey definitions from metadata envelope.
-// Returns array of survey objects (a single tx can define multiple surveys).
-function l17SurveysFromV3Meta(meta, txHash, txInfo) {
-  // meta = [0, [definition, ...]]
-  const definitions = meta[1];
-  if (!Array.isArray(definitions) || definitions.length === 0) return [];
-  const surveys = [];
-  for (let surveyIndex = 0; surveyIndex < definitions.length; surveyIndex++) {
-    const def = definitions[surveyIndex];
-
-    // v4: definition is an integer-keyed CBOR map.
-    // Blockfrost represents CBOR maps with integer keys as objects with string-integer keys: {"0":4,"1":[...],...}
-    if (!Array.isArray(def) && def !== null && typeof def === "object") {
-      const specVersion = Number(def["0"]);
-      if (specVersion !== 4) continue;
-
-      const ownerRaw        = def["1"];
-      const ownerKeyHash    = Array.isArray(ownerRaw) && Number(ownerRaw[0]) === 0
-        ? l17ExtractBytesHex(ownerRaw[1]) : null;
-      const titleRaw        = def["2"];
-      const descRaw         = def["3"];
-      const eligibleRoleInts = Array.isArray(def["4"]) ? def["4"] : [];
-      const endEpoch        = def["5"];
-      const submissionMode  = def["6"];
-      const isTimelocked    = Array.isArray(submissionMode) && submissionMode[0] === 1;
-      // v4 sealed: [1, chain_hash_bytes, round, padding]  (indices 2 and 3)
-      const sealedDrandRound = isTimelocked ? (Number(submissionMode[2]) || null) : null;
-      const sealedPadding    = isTimelocked ? (Number(submissionMode[3]) || 256) : null;
-      const questionsRaw    = def["7"];
-      const contentAnchorRaw = def["8"] ?? null;
-
-      const title       = l17JoinText(titleRaw);
-      const description = l17JoinText(descRaw);
-      const eligibleRoles = eligibleRoleInts
-        .map((i) => L17_INT_TO_ROLE[Number(i)])
-        .filter(Boolean);
-
-      const questions = (Array.isArray(questionsRaw) ? questionsRaw : [])
-        .map((q, i) => l17ParseV4Question(q, i))
-        .filter(Boolean);
-
-      // content_anchor: [chunked_text_uri, blake2b_256_hash]
-      const contentAnchor = Array.isArray(contentAnchorRaw)
-        ? { uri: l17JoinText(contentAnchorRaw[0]), hash: l17ExtractBytesHex(contentAnchorRaw[1]) }
-        : null;
-
-      surveys.push({
-        surveyTxId: txHash,
-        surveyIndex,
-        details: { specVersion: 4, title, description, eligibleRoles, endEpoch, questions, isTimelocked, ...(ownerKeyHash ? { ownerKeyHash } : {}), ...(sealedDrandRound != null ? { drandRound: sealedDrandRound, padding: sealedPadding } : {}), ...(contentAnchor ? { contentAnchor } : {}) },
-        msg: null,
-        slot: txInfo?.slot ?? null,
-        blockTime: txInfo?.block_time ?? null,
-      });
-      continue;
-    }
-
-    // v2/v3: definition is a positional array
-    if (!Array.isArray(def) || def.length < 7) continue;
-
-    const specVersion = def[0];
-    let titleRaw, descRaw, questionsRaw, roleWeightingRaw, endEpoch, isTimelocked = false;
-
-    if (specVersion === 2) {
-      // CIP-179 v2: [specVersion, owner, title, description, questions, roleWeighting, endEpoch]
-      if (def.length < 7) continue;
-      titleRaw         = def[2];
-      descRaw          = def[3];
-      questionsRaw     = def[4];
-      roleWeightingRaw = def[5];
-      endEpoch         = def[6];
-    } else if (specVersion === 3) {
-      // draft v3 (timelocked): [specVersion, owner, title, description, roleWeighting, endEpoch, submissionMode, questions]
-      if (def.length < 8) continue;
-      titleRaw         = def[2];
-      descRaw          = def[3];
-      roleWeightingRaw = def[4];
-      endEpoch         = def[5];
-      isTimelocked     = Array.isArray(def[6]) && def[6][0] === 1;
-      questionsRaw     = def[7];
-    } else {
-      continue;
-    }
-
-    const title       = l17JoinText(titleRaw);
-    const description = l17JoinText(descRaw);
-
-    // Blockfrost encodes CBOR integer map keys as string integers: {"0":0,"1":1}
-    const roleWeighting = {};
-    if (roleWeightingRaw && typeof roleWeightingRaw === "object" && !Array.isArray(roleWeightingRaw)) {
-      for (const [k, v] of Object.entries(roleWeightingRaw)) {
-        const role      = L17_INT_TO_ROLE[parseInt(k, 10)];
-        const weighting = L17_INT_TO_WEIGHTING[Number(v)];
-        if (role && weighting) roleWeighting[role] = weighting;
-      }
-    }
-
-    const questions = (Array.isArray(questionsRaw) ? questionsRaw : [])
-      .map((q, i) => l17ParseV3Question(q, i))
-      .filter(Boolean);
-
-    surveys.push({
-      surveyTxId: txHash,
-      surveyIndex,
-      details: { specVersion, title, description, roleWeighting, endEpoch, questions, isTimelocked },
-      msg: null,
-      slot: txInfo?.slot ?? null,
-      blockTime: txInfo?.block_time ?? null,
-    });
-  }
-  return surveys;
-}
-
-// Parse v3 survey responses from metadata envelope.
-// Returns array of raw response objects (answers not yet normalised to questionIds).
-function l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAddress, responseStakeAda) {
-  // meta = [1, [response, ...]]
-  const responses = meta[1];
-  if (!Array.isArray(responses) || responses.length === 0) return [];
-  const out = [];
-  for (let responseIndex = 0; responseIndex < responses.length; responseIndex++) {
-    const resp = responses[responseIndex];
-
-    let surveyRefRaw, roleInt, answersRaw, specVersion, responseAnchorRaw = null;
-
-    if (!Array.isArray(resp) && resp !== null && typeof resp === "object") {
-      // v4: response is an integer-keyed CBOR map → Blockfrost gives {"0":4,"1":[...],...}
-      specVersion  = Number(resp["0"]);
-      if (specVersion !== 4) continue;
-      surveyRefRaw = resp["1"];
-      roleInt      = resp["2"];
-      answersRaw   = resp["4"];
-      responseAnchorRaw = resp["5"] ?? null; // optional voter rationale content_anchor
-    } else if (Array.isArray(resp)) {
-      if (Array.isArray(resp[0])) {
-        // v2: [survey_ref, role, credential, answers]  (no specVersion prefix)
-        if (resp.length < 4) continue;
-        surveyRefRaw = resp[0];
-        roleInt      = resp[1];
-        answersRaw   = resp[3];
-        specVersion  = 2;
-      } else {
-        // draft v3: [specVersion, survey_ref, role, credential, answers]
-        if (resp.length < 5) continue;
-        specVersion  = resp[0];
-        surveyRefRaw = resp[1];
-        roleInt      = resp[2];
-        answersRaw   = resp[4];
-      }
-    } else {
-      continue;
-    }
-
-    let surveyTxId = null;
-    let surveyIndex = 0;
-    if (Array.isArray(surveyRefRaw) && surveyRefRaw.length === 2) {
-      surveyTxId  = l17ExtractBytesHex(surveyRefRaw[0]);
-      surveyIndex = Number(surveyRefRaw[1] ?? 0);
-    }
-    if (!surveyTxId) continue;
-
-    const responderRole = L17_INT_TO_ROLE[Number(roleInt)];
-    if (!responderRole) continue;
-
-    // Optional voter rationale (response key 5) = content_anchor [uri, hash].
-    const rationale = Array.isArray(responseAnchorRaw)
-      ? { uri: l17JoinText(responseAnchorRaw[0]), hash: l17ExtractBytesHex(responseAnchorRaw[1]) }
-      : null;
-
-    out.push({
-      txId: txHash,
-      inputAddress,
-      slot: txInfo?.slot ?? null,
-      txIndexInBlock: txInfo?.index ?? 0,
-      blockTime: txInfo?.block_time ?? null,
-      responderRole,
-      surveyTxId,
-      surveyIndex,
-      rawAnswersV3: Array.isArray(answersRaw) ? answersRaw : [],
-      answers: [], // populated in post-processing pass
-      specVersion,
-      rewardAddress,
-      responseStakeAda: Number.isFinite(responseStakeAda) ? responseStakeAda : 0,
-      responseCredential: rewardAddress ?? inputAddress ?? txHash,
-      ...(rationale?.uri ? { rationale } : {}),
-    });
-  }
-  return out;
-}
-
 function label17ResolveResponseWeight(response, weighting) {
   if (weighting === "StakeBased") {
     const stakeAda = Number(response?.responseStakeAda || 0);
@@ -8206,259 +7788,61 @@ function label17WeightedMedian(pairs) {
   return Number(sorted[sorted.length - 1]?.value || 0);
 }
 
-async function fetchSurveyByTxHash(txHash) {
+async function fetchSurveyByRef(txHash, surveyIndex = 0) {
   const safeHash = String(txHash || "").trim().toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(safeHash)) return null;
+  const safeIndex = Number(surveyIndex);
+  if (!/^[0-9a-f]{64}$/.test(safeHash) || !Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex > 65535) return null;
+  return cip179.decodeDefinitionTransaction({ get: blockfrostGet, txHash: safeHash, surveyIndex: safeIndex });
+}
 
-  const [rows, txInfo] = await Promise.all([
-    blockfrostGet(`/txs/${safeHash}/metadata`).catch(() => []),
-    blockfrostGet(`/txs/${safeHash}`).catch(() => null),
-  ]);
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-
-  const entry = rows.find((row) => String(row?.label || "") === "17");
-  if (!entry) return null;
-
-  const meta = entry?.json_metadata;
-  if (label17KindFromMeta(meta) !== "surveyDefinitionsV3") return null;
-
-  const surveyObjects = l17SurveysFromV3Meta(meta, safeHash, txInfo);
-  return surveyObjects[0] ?? null;
+async function linkedActionsForCip179() {
+  const linksBySurvey = new Map(
+    [...label17GovLinks].map(([surveyRef, actionIds]) => [surveyRef, new Set(actionIds)])
+  );
+  for (const [actionId, info] of Object.entries(snapshot?.proposalInfo || {})) {
+    const link = await cip179.parseGovernanceLink(info?.metadataJson);
+    if (!link.surveyRef) continue;
+    const surveyRef = `${link.surveyRef.txId}:${link.surveyRef.index}`;
+    if (!linksBySurvey.has(surveyRef)) linksBySurvey.set(surveyRef, new Set());
+    linksBySurvey.get(surveyRef).add({
+      actionId,
+      expirationEpoch: Number(info?.expirationEpoch),
+    });
+  }
+  return linksBySurvey;
 }
 
 async function buildLabel17Index() {
   const now = Date.now();
-  if (label17Cache.fetchedAt > 0 && now - label17Cache.fetchedAt < LABEL17_TTL_MS) {
-    return label17Cache;
-  }
+  if (label17Cache.fetchedAt > 0 && now - label17Cache.fetchedAt < LABEL17_TTL_MS) return label17Cache;
   const hasWarmCache = label17Cache.fetchedAt > 0;
   if (!label17BuildPromise) {
-    label17BuildPromise = _runLabel17Build()
-      .catch((e) => console.warn("[label17] index build failed:", e?.message))
+    label17BuildPromise = linkedActionsForCip179()
+      .then((linkedActionsBySurvey) => cip179.buildIndex({
+        get: blockfrostGet,
+        maxPages: LABEL17_MAX_PAGES,
+        linkedActionsBySurvey,
+      }))
+      .then((index) => {
+        label17Cache = { ...index, fetchedAt: Date.now() };
+        return label17Cache;
+      })
+      .catch((error) => {
+        console.warn("[cip179] v5 index build failed:", error?.message || error);
+        return label17Cache;
+      })
       .finally(() => { label17BuildPromise = null; });
   }
-  if (!hasWarmCache) {
-    await label17BuildPromise;
-  }
+  if (!hasWarmCache) await label17BuildPromise;
   return label17Cache;
 }
-
-async function _runLabel17Build() {
-  const now = Date.now();
-
-  const relevantEntries = [];
-  for (const metaLabel of ["17"]) {
-    let page = 1;
-    while (page <= LABEL17_MAX_PAGES) {
-      const entries = await blockfrostGet(`/metadata/txs/labels/${metaLabel}?page=${page}&count=100&order=desc`).catch(() => []);
-      if (!Array.isArray(entries) || entries.length === 0) break;
-      relevantEntries.push(...entries.filter((entry) => label17KindFromMeta(entry?.json_metadata)));
-      if (entries.length < 100) break;
-      page++;
-    }
-  }
-
-  const surveys = [];
-  const responsesBySurvey = {};
-  const txInfoCache = {};
-  const utxoCache = {};
-  const addressInfoCache = {};
-  const accountCache = {};
-  // "txHash:index" → Set of payment key hashes that submitted a cancellation for
-  // that ref. A cancellation is only honoured if the survey owner's key hash is
-  // in the set (the cancellation tx must be signed by the owner, per CIP-0179).
-  const cancelClaims = new Map();
-
-  // Fetch tx info in parallel batches of 10
-  const txHashes = [...new Set(relevantEntries.map((e) => e.tx_hash).filter(Boolean))];
-  const BATCH = 10;
-  for (let i = 0; i < txHashes.length; i += BATCH) {
-    const batch = txHashes.slice(i, i + BATCH);
-    const results = await Promise.all(
-      batch.map((h) => blockfrostGet(`/txs/${h}`).catch(() => null))
-    );
-    batch.forEach((h, idx) => { txInfoCache[h] = results[idx]; });
-  }
-
-  // Raw v3 responses (need a second pass to normalise answers against survey questions)
-  const rawV3Responses = [];
-
-  for (const entry of relevantEntries) {
-    const meta = entry?.json_metadata;
-    const kind = label17KindFromMeta(meta);
-    if (!kind) continue;
-    const txHash = entry.tx_hash;
-    if (!txHash) continue;
-
-    const txInfo = txInfoCache[txHash];
-
-    // ── v3 survey definitions ─────────────────────────────────────────────────
-    if (kind === "surveyDefinitionsV3") {
-      try {
-        const surveyObjects = l17SurveysFromV3Meta(meta, txHash, txInfo);
-        surveys.push(...surveyObjects);
-      } catch { /* skip malformed */ }
-      continue;
-    }
-
-    // ── v3 survey responses ───────────────────────────────────────────────────
-    if (kind === "surveyResponsesV3") {
-      const inputAddress = await resolveInputAddress(txHash, utxoCache);
-      const { rewardAddress, responseStakeAda } = await resolveStakeInfo(inputAddress, addressInfoCache, accountCache);
-      try {
-        const raws = l17RawResponsesFromV3Meta(meta, txHash, txInfo, inputAddress, rewardAddress, responseStakeAda);
-        rawV3Responses.push(...raws);
-      } catch { /* skip malformed */ }
-      continue;
-    }
-
-    // ── cancellations ──────────────────────────────────────────────────────────
-    if (kind === "cancellationsV3") {
-      try {
-        const items = meta[1];
-        if (!Array.isArray(items)) continue;
-        // Who signed this cancellation? Use the tx input's payment key hash.
-        const cancelInputAddr = await resolveInputAddress(txHash, utxoCache);
-        const cancellerKeyHash = paymentKeyHashFromAddress(cancelInputAddr);
-        for (const item of items) {
-          // item is a survey_ref [tx_id_bytes, index] or a map with key "1" holding the ref
-          let surveyRef = Array.isArray(item) ? item
-            : (item !== null && typeof item === "object" ? item["1"] : null);
-          if (!Array.isArray(surveyRef) || surveyRef.length < 2) continue;
-          const cancelTxId = l17ExtractBytesHex(surveyRef[0]);
-          const cancelIdx  = Number(surveyRef[1] ?? 0);
-          if (!cancelTxId || !cancellerKeyHash) continue;
-          const key = `${cancelTxId}:${cancelIdx}`;
-          if (!cancelClaims.has(key)) cancelClaims.set(key, new Set());
-          cancelClaims.get(key).add(cancellerKeyHash);
-        }
-      } catch { /* skip malformed */ }
-      continue;
-    }
-
-    // v1 surveys (legacy object-based format) are no longer indexed.
-  }
-
-  // Resolve which cancellation claims are valid: only those signed by the
-  // survey's own owner key hash count (CIP-0179 requires proof of ownership).
-  const ownerByRef = {};
-  for (const s of surveys) {
-    ownerByRef[`${s.surveyTxId}:${s.surveyIndex}`] = s.details?.ownerKeyHash || null;
-  }
-  const cancelledRefs = new Set();
-  for (const [ref, cancellers] of cancelClaims) {
-    const owner = ownerByRef[ref];
-    if (owner && cancellers.has(owner)) cancelledRefs.add(ref);
-  }
-
-  // Post-process: normalise answer tuples; enforce required-question validation.
-  const surveyByTxId = Object.fromEntries(surveys.map((s) => [s.surveyTxId, s]));
-  for (const rawResp of rawV3Responses) {
-    const survey = surveyByTxId[rawResp.surveyTxId];
-    // Skip responses to cancelled surveys
-    if (cancelledRefs.has(`${rawResp.surveyTxId}:${rawResp.surveyIndex}`)) continue;
-    const questions = survey?.details?.questions ?? [];
-
-    // Detect sealed ciphertext: v4 sealed responses store chunked bytes in key 4.
-    // Blockfrost returns CBOR bytes as "0x<hex>" strings (or {bytes} objects) — use the
-    // shared l17ExtractBytesHex helper. These can't be parsed as answer tuples, so pass
-    // them through as sealedHexChunks for client-side tlock decryption after reveal.
-    const isTimelocked = survey?.details?.isTimelocked ?? false;
-    const sealedChunks = (isTimelocked && rawResp.specVersion === 4 && rawResp.rawAnswersV3.length > 0)
-      ? rawResp.rawAnswersV3.map((item) => l17ExtractBytesHex(item))
-      : null;
-    const isSealedBytes = Array.isArray(sealedChunks) && sealedChunks.every((h) => typeof h === "string" && h.length > 0);
-
-    if (isSealedBytes) {
-      const finalResp = {
-        ...rawResp,
-        answers: [],
-        sealedHexChunks: sealedChunks,
-      };
-      delete finalResp.rawAnswersV3;
-      if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
-      responsesBySurvey[rawResp.surveyTxId].push(finalResp);
-      continue;
-    }
-
-    const parseAnswer = rawResp.specVersion === 4 ? l17ParseV4Answer : l17ParseV3Answer;
-    const normAnswers = rawResp.rawAnswersV3
-      .map((a) => parseAnswer(a, questions))
-      .filter(Boolean);
-
-    // Reject the entire response if any required question has no answer.
-    // Skip this check for sealed surveys — the answers are encrypted and can't be validated server-side.
-    const isSealedSurvey = survey?.details?.isTimelocked ?? false;
-    if (!isSealedSurvey) {
-      const requiredIds = questions.filter((q) => q.required).map((q) => q.questionId);
-      if (requiredIds.length > 0) {
-        const answeredIds = new Set(normAnswers.map((a) => a.questionId));
-        if (requiredIds.some((id) => !answeredIds.has(id))) continue;
-      }
-    }
-
-    const finalResp = { ...rawResp, answers: normAnswers };
-    delete finalResp.rawAnswersV3;
-    if (!responsesBySurvey[rawResp.surveyTxId]) responsesBySurvey[rawResp.surveyTxId] = [];
-    responsesBySurvey[rawResp.surveyTxId].push(finalResp);
-  }
-
-  // Tag cancelled surveys rather than dropping them, so the UI can offer a
-  // "Cancelled" filter. They are excluded from the default list client-side.
-  for (const s of surveys) {
-    if (cancelledRefs.has(`${s.surveyTxId}:${s.surveyIndex}`)) s.cancelled = true;
-  }
-
-  // Sort surveys newest-first
-  surveys.sort((a, b) => (b.slot ?? 0) - (a.slot ?? 0));
-  // Sort responses by slot/txIndex ascending (for latest-wins dedup)
-  for (const list of Object.values(responsesBySurvey)) {
-    list.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.txIndexInBlock ?? 0) - (b.txIndexInBlock ?? 0));
-  }
-
-  label17Cache = { fetchedAt: now, surveys, responsesBySurvey, cancelledRefs };
-  return label17Cache;
-}
-
-// Helper: fetch + cache tx input address
-async function resolveInputAddress(txHash, utxoCache) {
-  if (!utxoCache[txHash]) {
-    utxoCache[txHash] = await blockfrostGet(`/txs/${txHash}/utxos`).catch(() => null);
-  }
-  return utxoCache[txHash]?.inputs?.[0]?.address ?? null;
-}
-
-// Helper: resolve stake address + ADA amount from an input address
-async function resolveStakeInfo(inputAddress, addressInfoCache, accountCache) {
-  let rewardAddress = null;
-  if (typeof inputAddress === "string" && inputAddress.startsWith("stake")) {
-    rewardAddress = inputAddress;
-  } else if (typeof inputAddress === "string" && inputAddress) {
-    if (!addressInfoCache[inputAddress]) {
-      addressInfoCache[inputAddress] = await blockfrostGet(`/addresses/${inputAddress}`).catch(() => null);
-    }
-    rewardAddress = addressInfoCache[inputAddress]?.stake_address ?? null;
-  }
-  let responseStakeAda = 0;
-  if (typeof rewardAddress === "string" && rewardAddress) {
-    if (!accountCache[rewardAddress]) {
-      accountCache[rewardAddress] = await blockfrostGet(`/accounts/${rewardAddress}`).catch(() => null);
-    }
-    responseStakeAda = Number(accountCache[rewardAddress]?.controlled_amount || 0) / 1_000_000;
-  }
-  return { rewardAddress, responseStakeAda };
-}
-
 // Method type sets used by the tally function
 const CHOICE_METHODS = new Set([
-  "urn:cardano:poll-method:single-choice:v1",
   "urn:cardano:poll-method:single-choice:v2",
-  "urn:cardano:poll-method:multi-select:v1",
   "urn:cardano:poll-method:multi-select:v2",
   "urn:cardano:poll-method:ranking:v1",
 ]);
 const NUMERIC_METHODS = new Set([
-  "urn:cardano:poll-method:numeric-range:v1",
   "urn:cardano:poll-method:numeric-range:v2",
 ]);
 const POINTS_METHODS = new Set(["urn:cardano:poll-method:points-allocation:v1"]);
@@ -8478,10 +7862,7 @@ function label17TallySurvey(details, responses) {
   }
   const deduped = Object.values(latestByKey);
 
-  // v4 surveys use eligibleRoles[] with no weighting; v2/v3 use roleWeighting{}.
-  const roleEntries = details.eligibleRoles
-    ? details.eligibleRoles.map((role) => [role, "CredentialBased"])
-    : Object.entries(details.roleWeighting ?? {});
+  const roleEntries = (details.eligibleRoles ?? []).map((role) => [role, "CredentialBased"]);
   const roleTallies = roleEntries.map(([role, weighting]) => {
     const roleResps = deduped.filter((r) => r.responderRole === role);
     const roleWeightTotal = roleResps.reduce((sum, response) => sum + label17ResolveResponseWeight(response, weighting), 0);
@@ -8611,7 +7992,7 @@ function label17TallySurvey(details, responses) {
   });
 
   return {
-    totalResponses: responses.length,
+    totalResponses: deduped.length,
     uniqueCredentials: deduped.length,
     totalWeight: roleTallies.reduce((sum, row) => sum + Number(row.totalWeight || 0), 0),
     roleTallies,
@@ -10349,7 +9730,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── Surveys: force-refresh the label-17 index ────────────────────────────
   if (req.method === "POST" && url.pathname === "/api/surveys/refresh") {
-    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set() };
+    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false };
     label17BuildPromise = null;
     buildLabel17Index().catch(() => {});
     json(res, 200, { ok: true });
@@ -10364,6 +9745,7 @@ const server = http.createServer(async (req, res) => {
         cachedAt: index.fetchedAt,
         count: index.surveys.length,
         surveys: index.surveys,
+        incomplete: index.incomplete,
       });
     } catch (e) {
       json(res, 500, { error: e?.message || "Failed to load surveys." });
@@ -10371,29 +9753,84 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Surveys: detail + responses + tally for a single survey ──────────────
+  // ── Surveys: detail + responses + tally for an explicit v5 survey ref ────
   {
-    const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})$/);
+    const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})(?:\/(\d+))?$/);
     if (req.method === "GET" && m) {
       try {
         const txHash = m[1].toLowerCase();
+        const surveyIndex = Number(m[2] || 0);
+        const surveyRef = `${txHash}:${surveyIndex}`;
         const index = await buildLabel17Index();
-        const survey = index.surveys.find((s) => s.surveyTxId === txHash)
-          || await fetchSurveyByTxHash(txHash);
+        const survey = index.surveys.find((s) => s.surveyTxId === txHash && s.surveyIndex === surveyIndex)
+          || await fetchSurveyByRef(txHash, surveyIndex);
         if (!survey) { json(res, 404, { error: "Survey not found." }); return; }
         // A survey dropped from the active list (because the owner cancelled it)
         // can still be reached by direct link — flag it so the page can say so.
         const cancelled = index.cancelledRefs instanceof Set
-          && index.cancelledRefs.has(`${survey.surveyTxId}:${survey.surveyIndex ?? 0}`);
+          && index.cancelledRefs.has(surveyRef);
         if (cancelled) survey.cancelled = true;
-        const responses = index.responsesBySurvey[txHash] || [];
+        const responses = index.responsesBySurvey[surveyRef] || [];
         const tally = label17TallySurvey(survey.details, responses);
-        json(res, 200, { survey, responses, tally, cachedAt: index.fetchedAt });
+        json(res, 200, {
+          survey,
+          responses,
+          tally,
+          cachedAt: index.fetchedAt,
+          incomplete: index.incomplete,
+          membershipAudited: false,
+        });
       } catch (e) {
         json(res, 500, { error: e?.message || "Failed to load survey." });
       }
       return;
     }
+  }
+
+  // ── CIP-179 survey linked by a governance action anchor ──────────────────
+  if (req.method === "GET" && url.pathname === "/api/proposal-survey") {
+    const proposalId = String(url.searchParams.get("proposalId") || "").trim();
+    if (!proposalId) { json(res, 400, { error: "proposalId is required." }); return; }
+    try {
+      const [rawMetadata, rawDetail] = await Promise.all([
+        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
+        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
+      ]);
+      const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
+      const parsed = metadata?.json_metadata || null;
+      const link = await cip179.parseGovernanceLink(parsed);
+      if (!link.surveyRef) {
+        json(res, 200, { linked: false, problems: link.problems });
+        return;
+      }
+      const { txId, index: surveyIndex } = link.surveyRef;
+      const surveyRef = `${txId}:${surveyIndex}`;
+      const index = await buildLabel17Index();
+      const survey = index.surveys.find((item) => item.surveyTxId === txId && item.surveyIndex === surveyIndex)
+        || await fetchSurveyByRef(txId, surveyIndex);
+      if (!survey) {
+        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked v5 survey is unavailable or has invalid owner proof." });
+        return;
+      }
+      const expirationEpoch = Number(rawDetail?.expiration ?? NaN);
+      if (!Number.isFinite(expirationEpoch) || expirationEpoch !== Number(survey.details?.endEpoch)) {
+        json(res, 200, { linked: true, available: false, surveyRef, problem: "The survey end epoch does not match the governance action expiry epoch." });
+        return;
+      }
+      if (index.cancelledRefs.has(surveyRef)) {
+        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey has been cancelled." });
+        return;
+      }
+      if (!label17GovLinks.has(surveyRef)) label17GovLinks.set(surveyRef, new Set());
+      const links = label17GovLinks.get(surveyRef);
+      const wasKnown = links.has(proposalId);
+      links.add(proposalId);
+      if (!wasKnown) label17Cache.fetchedAt = 0;
+      json(res, 200, { linked: true, available: true, surveyRef, survey, proposalId, expirationEpoch });
+    } catch (error) {
+      json(res, 500, { error: error?.message || "Failed to resolve the proposal survey." });
+    }
+    return;
   }
 
   // ── Live DRep lookup (for DReps not yet in the snapshot) ────────────────────

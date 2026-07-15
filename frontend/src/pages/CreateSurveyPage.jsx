@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { roundAt, defaultChainInfo } from "tlock-js";
+import { roundForUnixTime } from "cip-179/tlock";
 import { WalletContext } from "../context/WalletContext";
 import {
   buildAndSubmitSurveyCreation,
@@ -22,7 +22,7 @@ const METHOD_LABELS = {
   [Q_RATING]:            "Rating",
 };
 
-const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder"];
+const ALL_ROLES = ["DRep", "SPO", "CC", "Stakeholder", "Keyholder"];
 
 function newQuestion() {
   return {
@@ -36,11 +36,12 @@ function newQuestion() {
     maxSelections: 2,
     minRanked: 1,
     maxRanked: 2,
-    minValue: 0,
-    maxValue: 100,
+    minValue: "0",
+    maxValue: "100",
     step: null,
     budget: 100,
-    ratingScale: [1, 5],
+    ratingScale: ["1", "5"],
+    requireAll: false,
   };
 }
 
@@ -226,13 +227,13 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
           ) : null}
 
           {isRating ? (
-            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
               <label>
                 Rating min
                 <input
                   type="number"
                   value={q.ratingScale[0]}
-                  onChange={(e) => setField("ratingScale", [Number(e.target.value), q.ratingScale[1]])}
+                  onChange={(e) => setField("ratingScale", [e.target.value, q.ratingScale[1]])}
                   style={{ width: "80px" }}
                 />
               </label>
@@ -241,9 +242,13 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
                 <input
                   type="number"
                   value={q.ratingScale[1]}
-                  onChange={(e) => setField("ratingScale", [q.ratingScale[0], Number(e.target.value)])}
+                  onChange={(e) => setField("ratingScale", [q.ratingScale[0], e.target.value])}
                   style={{ width: "80px" }}
                 />
+              </label>
+              <label className="required-checkbox-label" style={{ flexDirection: "row", alignItems: "center", gap: "0.5rem" }}>
+                <input type="checkbox" checked={q.requireAll} onChange={(e) => setField("requireAll", e.target.checked)} />
+                Require a rating for every option
               </label>
             </div>
           ) : null}
@@ -255,18 +260,18 @@ function QuestionEditor({ q, index, total, onChange, onRemove, onMoveUp, onMoveD
           <label>
             Min value
             <input type="number" value={q.minValue}
-              onChange={(e) => setField("minValue", Number(e.target.value))} />
+              onChange={(e) => setField("minValue", e.target.value)} />
           </label>
           <label>
             Max value
             <input type="number" value={q.maxValue}
-              onChange={(e) => setField("maxValue", Number(e.target.value))} />
+              onChange={(e) => setField("maxValue", e.target.value)} />
           </label>
           <label>
             Step <span className="muted">(optional)</span>
             <input type="number" min={1} value={q.step ?? ""}
               placeholder="any"
-              onChange={(e) => setField("step", e.target.value === "" ? null : Number(e.target.value))} />
+              onChange={(e) => setField("step", e.target.value === "" ? null : e.target.value)} />
           </label>
         </div>
       ) : null}
@@ -296,7 +301,7 @@ function SealedConfigPanel({ revealDateTime, onChange }) {
     if (!revealDateTime) return { round: null, isPast: false };
     try {
       const ms = revealMsUtc(revealDateTime);
-      const r = roundAt(ms, defaultChainInfo);
+      const r = roundForUnixTime(Math.ceil(ms / 1000));
       return { round: r, isPast: ms < Date.now() };
     } catch {
       return { round: null, isPast: false };
@@ -358,8 +363,8 @@ function validate(form, currentEpoch) {
     errors.push("Reveal date must be in the future.");
   }
   if (form.questions.length === 0) errors.push("Add at least one question.");
-  if (form.contentAnchor.trim() && !/^https?:\/\/.+/.test(form.contentAnchor.trim())) {
-    errors.push("Survey content anchor must be a valid http(s) URL.");
+  if (form.contentAnchor.trim() && !/^(?:https:\/\/|ipfs:\/\/).+/.test(form.contentAnchor.trim())) {
+    errors.push("Survey content anchor must be a valid HTTPS or IPFS URI.");
   }
   for (const [i, q] of form.questions.entries()) {
     const n = i + 1;
@@ -370,8 +375,13 @@ function validate(form, currentEpoch) {
       if (q.options.some((o) => !o.trim())) errors.push(`Question ${n}: All options must have text.`);
       if (q.options.length < 2) errors.push(`Question ${n}: At least 2 options required.`);
     }
-    if (q.tag === Q_NUMERIC_RANGE && q.minValue >= q.maxValue) {
-      errors.push(`Question ${n}: Min value must be less than max value.`);
+    if (q.tag === Q_NUMERIC_RANGE) {
+      try {
+        if (BigInt(q.minValue) >= BigInt(q.maxValue)) errors.push(`Question ${n}: Min value must be less than max value.`);
+        if (q.step != null && BigInt(q.step) < 1n) errors.push(`Question ${n}: Step must be positive.`);
+      } catch {
+        errors.push(`Question ${n}: Numeric constraints must be integers.`);
+      }
     }
     if (q.tag === Q_MULTI_SELECT) {
       if (q.minSelections > q.maxSelections) errors.push(`Question ${n}: Min selections cannot exceed max selections.`);
@@ -384,8 +394,12 @@ function validate(form, currentEpoch) {
     if (q.tag === Q_POINTS_ALLOCATION && q.budget < 1) {
       errors.push(`Question ${n}: Budget must be at least 1.`);
     }
-    if (q.tag === Q_RATING && q.ratingScale[0] >= q.ratingScale[1]) {
-      errors.push(`Question ${n}: Rating min must be less than rating max.`);
+    if (q.tag === Q_RATING) {
+      try {
+        if (BigInt(q.ratingScale[0]) >= BigInt(q.ratingScale[1])) errors.push(`Question ${n}: Rating min must be less than rating max.`);
+      } catch {
+        errors.push(`Question ${n}: Rating bounds must be integers.`);
+      }
     }
   }
   return errors;
@@ -401,7 +415,7 @@ function buildSurveyForm(form, contentAnchorHash) {
     eligibleRoles: form.eligibleRoles,
     isTimelocked: form.isTimelocked,
     drandRound: form.isTimelocked && form.revealDateTime
-      ? roundAt(revealMsUtc(form.revealDateTime), defaultChainInfo)
+      ? roundForUnixTime(Math.ceil(revealMsUtc(form.revealDateTime) / 1000))
       : undefined,
     padding: form.isTimelocked ? 256 : undefined,
     questions: form.questions.map((q) => {
@@ -430,13 +444,14 @@ function buildSurveyForm(form, contentAnchorHash) {
       } else if (q.tag === Q_RATING) {
         base.options = q.options.filter((o) => o.trim());
         base.ratingScale = q.ratingScale;
+        base.requireAll = q.requireAll;
       }
       return base;
     }),
   };
 }
 
-// Preview of the v4 on-chain payload (JSON-friendly approximation of the CBOR map)
+// JSON-friendly preview of the v5 native metadatum shape.
 function buildPreviewPayload(form) {
   const eligibleRoleInts = form.eligibleRoles.map((r) => ROLE_TO_INT[r]).filter((n) => n !== undefined);
   const questions = form.questions.map((q) => {
@@ -452,13 +467,13 @@ function buildPreviewPayload(form) {
         ? [4, prompt, [q.minValue, q.maxValue, q.step], ...req]
         : [4, prompt, [q.minValue, q.maxValue], ...req];
       case Q_POINTS_ALLOCATION: return [5, prompt, opts, q.budget, ...req];
-      case Q_RATING:            return [6, prompt, opts, q.ratingScale, ...req];
+      case Q_RATING:            return [6, prompt, opts, q.ratingScale, q.requireAll ? 1 : 0, ...req];
       default:                  return null;
     }
   }).filter(Boolean);
 
   const definition = {
-    0: 4,
+    0: 5,
     1: [0, "<owner_vkeyhash>"],
     2: form.title,
     3: form.description,
@@ -467,7 +482,7 @@ function buildPreviewPayload(form) {
     6: form.isTimelocked
       ? [1, "<52db9b…e971>",
           form.revealDateTime
-            ? roundAt(revealMsUtc(form.revealDateTime), defaultChainInfo)
+            ? roundForUnixTime(Math.ceil(revealMsUtc(form.revealDateTime) / 1000))
             : 0,
           256]
       : [0],
@@ -560,19 +575,21 @@ export default function CreateSurveyPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      // best-effort content hashes for the reference doc + any custom-question anchors (non-blocking)
       const caUrl = form.contentAnchor.trim();
       const caHash = caUrl ? await hashAnchorContent(caUrl) : null;
+      if (caUrl && !caHash) throw new Error("The external survey presentation could not be fetched and hashed.");
       const questionsWithHashes = await Promise.all(form.questions.map(async (q) => {
         if (q.tag === Q_CUSTOM && q.contentAnchor?.trim()) {
-          return { ...q, _contentAnchorHash: await hashAnchorContent(q.contentAnchor.trim()) };
+          const hash = await hashAnchorContent(q.contentAnchor.trim());
+          if (!hash) throw new Error("A custom question schema could not be fetched and hashed.");
+          return { ...q, _contentAnchorHash: hash };
         }
         return q;
       }));
       const formWithHashes = { ...form, questions: questionsWithHashes };
       const result = await buildAndSubmitSurveyCreation(walletApi, buildSurveyForm(formWithHashes, caHash));
       fetch("/api/surveys/refresh", { method: "POST" }).catch(() => {});
-      navigate(`/surveys/${result.surveyTxId}`);
+      navigate(`/surveys/${result.surveyTxId}/${result.surveyIndex}`);
     } catch (err) {
       setErrors([err?.message || "Transaction failed. Please try again."]);
     } finally {
@@ -589,7 +606,7 @@ export default function CreateSurveyPage() {
         <div>
           <Link className="muted back-link" to="/surveys">← All Surveys</Link>
           <h1>Create Survey</h1>
-          <p className="muted">Build an on-chain poll recorded as Cardano metadata (label 17, CIP-0179 v4).</p>
+          <p className="muted">Build a CIP-179 v5 on-chain poll recorded under Cardano metadata label 17.</p>
         </div>
       </div>
 
@@ -718,7 +735,7 @@ export default function CreateSurveyPage() {
                     Sealed
                   </div>
                   <p className="cs-mode-card-desc">
-                    Marked as timelocked on-chain. Responses require a compatible sealed-voting tool.
+                    Answers are encoded as canonical CBOR and timelock-encrypted on your device until the reveal round.
                   </p>
                 </button>
               </div>
@@ -778,7 +795,7 @@ export default function CreateSurveyPage() {
                   <span className="cs-preview-dot" style={{ background: "#f59e0b" }} />
                   <span className="cs-preview-dot" style={{ background: "#22c55e" }} />
                 </div>
-                <span className="cs-preview-lbl">CIP-0179 v4 · live preview</span>
+                <span className="cs-preview-lbl">CIP-0179 v5 · live preview</span>
               </div>
               <div className="cs-preview-body">
                 <pre>{previewJson}</pre>
