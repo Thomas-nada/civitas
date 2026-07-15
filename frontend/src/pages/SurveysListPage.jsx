@@ -4,11 +4,6 @@ import { Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
 
-function fmtDate(ts) {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
 // Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
 const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
 const EPOCH_DURATION_SECONDS = 432000;
@@ -86,7 +81,7 @@ function HowItWorks({ isConnected, onConnect }) {
 export default function SurveysListPage() {
   useSeoMeta({
     title: "Governance Surveys",
-    description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power.",
+    description: "CIP-0179 v5 on-chain surveys for Cardano governance participants.",
   });
   const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
@@ -116,9 +111,7 @@ export default function SurveysListPage() {
 
   const filtered = surveys.filter((s) => {
     if (roleFilter !== "All") {
-      const roles = Array.isArray(s.details?.eligibleRoles)
-        ? s.details.eligibleRoles
-        : Object.keys(s.details?.roleWeighting ?? {});
+      const roles = Array.isArray(s.details?.eligibleRoles) ? s.details.eligibleRoles : [];
       if (!roles.includes(roleFilter)) return false;
     }
     const isCancelled = Boolean(s.cancelled);
@@ -252,16 +245,14 @@ export default function SurveysListPage() {
                   currentEpoch != null && s.details?.endEpoch != null
                     ? currentEpoch <= s.details.endEpoch
                     : true;
-                const roles = Array.isArray(s.details?.eligibleRoles)
-                  ? s.details.eligibleRoles
-                  : Object.keys(s.details?.roleWeighting ?? {});
+                const roles = Array.isArray(s.details?.eligibleRoles) ? s.details.eligibleRoles : [];
                 const questionCount = s.details?.questions?.length ?? 0;
 
                 return (
                   <Link
-                    key={s.surveyTxId}
+                    key={`${s.surveyTxId}:${s.surveyIndex ?? 0}`}
                     className="sv-table-row"
-                    to={`/surveys/${s.surveyTxId}`}
+                    to={`/surveys/${s.surveyTxId}/${s.surveyIndex ?? 0}`}
                   >
                     <div>
                       <StatusPill isActive={isActive} isCancelled={Boolean(s.cancelled)} />
