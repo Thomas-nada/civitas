@@ -116,6 +116,12 @@ const PORT = Number(process.env.PORT || 8080);
 const CANONICAL_URL = (process.env.CANONICAL_URL || "").replace(/\/+$/, ""); // e.g. https://civitas.gov
 const BLOCKFROST_BASE_URL = process.env.BLOCKFROST_BASE_URL || "https://cardano-mainnet.blockfrost.io/api/v0";
 const BLOCKFROST_API_KEY = process.env.BLOCKFROST_API_KEY || "";
+// Surveys (CIP-0179) can be browsed on preview independently of the app's main
+// (mainnet) Blockfrost config, which the rest of Civitas keeps using untouched.
+// A dedicated preview key powers the surveys Preview toggle; if unset, preview
+// simply shows an empty list.
+const SURVEYS_BLOCKFROST_PREVIEW_URL = process.env.SURVEYS_BLOCKFROST_PREVIEW_URL || "https://cardano-preview.blockfrost.io/api/v0";
+const SURVEYS_BLOCKFROST_PREVIEW_KEY = process.env.SURVEYS_BLOCKFROST_PREVIEW_KEY || "";
 const BLOCKFROST_IPFS_KEY = process.env.BLOCKFROST_IPFS_KEY || "";
 const BLOCKFROST_MAX_RETRIES = Number(process.env.BLOCKFROST_MAX_RETRIES || 3);
 const BLOCKFROST_REQUEST_TIMEOUT_MS = Number(process.env.BLOCKFROST_REQUEST_TIMEOUT_MS || 10000);
@@ -393,8 +399,14 @@ const cipContentCache = {};
 // ── Survey / Label-17 index cache ─────────────────────────────────────────
 const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
 const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
-let label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false };
-let label17BuildPromise = null;
+// Per-network survey caches so mainnet and preview never clobber each other.
+const emptyLabel17Cache = () => ({ fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false });
+const label17CacheByNetwork = new Map();      // network -> cache object
+const label17BuildPromiseByNetwork = new Map(); // network -> in-flight build
+function label17CacheFor(network) {
+  if (!label17CacheByNetwork.has(network)) label17CacheByNetwork.set(network, emptyLabel17Cache());
+  return label17CacheByNetwork.get(network);
+}
 const label17GovLinks = new Map();
 
 let epochBackfillState = {
@@ -4105,7 +4117,12 @@ async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "appl
   return { status: response.status, ok: response.ok, body: parsed };
 }
 
-async function blockfrostGet(endpointWithQuery) {
+// `opts.baseUrl` / `opts.key` override the app-wide (mainnet) endpoint — used by
+// the surveys read path so it can target preview without disturbing the rest of
+// the app. Defaults preserve every existing caller's behaviour.
+async function blockfrostGet(endpointWithQuery, opts = {}) {
+  const baseUrl = opts.baseUrl || BLOCKFROST_BASE_URL;
+  const projectId = opts.key || BLOCKFROST_API_KEY;
   for (let attempt = 0; attempt <= BLOCKFROST_MAX_RETRIES; attempt += 1) {
     const elapsed = Date.now() - lastRequestAt;
     if (elapsed < BLOCKFROST_REQUEST_DELAY_MS) {
@@ -4118,8 +4135,8 @@ async function blockfrostGet(endpointWithQuery) {
     let response;
     const started = Date.now();
     try {
-      response = await fetch(`${BLOCKFROST_BASE_URL}${endpointWithQuery}`, {
-        headers: { project_id: BLOCKFROST_API_KEY },
+      response = await fetch(`${baseUrl}${endpointWithQuery}`, {
+        headers: { project_id: projectId },
         signal: controller.signal
       });
       recordOpsProviderRequest("blockfrost", endpointWithQuery, response.ok, response.status, Date.now() - started);
@@ -7788,11 +7805,50 @@ function label17WeightedMedian(pairs) {
   return Number(sorted[sorted.length - 1]?.value || 0);
 }
 
-async function fetchSurveyByRef(txHash, surveyIndex = 0) {
+// ── Survey network selection ────────────────────────────────────────────────
+// Surveys are browsable on either network; the rest of the app is unaffected.
+const SURVEY_NETWORKS = new Set(["mainnet", "preview"]);
+function normalizeSurveyNetwork(value) {
+  const v = String(value || "").trim().toLowerCase();
+  return SURVEY_NETWORKS.has(v) ? v : "mainnet";
+}
+function surveyBlockfrostConfig(network) {
+  return network === "preview"
+    ? { baseUrl: SURVEYS_BLOCKFROST_PREVIEW_URL, key: SURVEYS_BLOCKFROST_PREVIEW_KEY }
+    : { baseUrl: BLOCKFROST_BASE_URL, key: BLOCKFROST_API_KEY };
+}
+function surveyNetworkHasKey(network) {
+  return Boolean(surveyBlockfrostConfig(network).key);
+}
+// A Blockfrost getter bound to a survey network (mainnet reuses the app key).
+function surveyBlockfrostGet(network) {
+  const cfg = surveyBlockfrostConfig(network);
+  return (endpointWithQuery) => blockfrostGet(endpointWithQuery, cfg);
+}
+
+// Latest epoch for a survey network, briefly cached — the frontend needs it to
+// mark surveys active/ended and it differs per network.
+const surveyEpochCache = new Map(); // network -> { epoch, at }
+const SURVEY_EPOCH_TTL_MS = 60_000;
+async function currentEpochForNetwork(network) {
+  const cached = surveyEpochCache.get(network);
+  if (cached && Date.now() - cached.at < SURVEY_EPOCH_TTL_MS) return cached.epoch;
+  if (!surveyNetworkHasKey(network)) return null;
+  try {
+    const latest = await surveyBlockfrostGet(network)("/epochs/latest");
+    const epoch = Number.isFinite(Number(latest?.epoch)) ? Number(latest.epoch) : null;
+    surveyEpochCache.set(network, { epoch, at: Date.now() });
+    return epoch;
+  } catch {
+    return cached ? cached.epoch : null;
+  }
+}
+
+async function fetchSurveyByRef(txHash, surveyIndex = 0, network = "mainnet") {
   const safeHash = String(txHash || "").trim().toLowerCase();
   const safeIndex = Number(surveyIndex);
   if (!/^[0-9a-f]{64}$/.test(safeHash) || !Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex > 65535) return null;
-  return cip179.decodeDefinitionTransaction({ get: blockfrostGet, txHash: safeHash, surveyIndex: safeIndex });
+  return cip179.decodeDefinitionTransaction({ get: surveyBlockfrostGet(network), txHash: safeHash, surveyIndex: safeIndex });
 }
 
 async function linkedActionsForCip179() {
@@ -7812,29 +7868,43 @@ async function linkedActionsForCip179() {
   return linksBySurvey;
 }
 
-async function buildLabel17Index() {
+async function buildLabel17Index(network = "mainnet") {
+  const net = normalizeSurveyNetwork(network);
+  const cache = label17CacheFor(net);
   const now = Date.now();
-  if (label17Cache.fetchedAt > 0 && now - label17Cache.fetchedAt < LABEL17_TTL_MS) return label17Cache;
-  const hasWarmCache = label17Cache.fetchedAt > 0;
-  if (!label17BuildPromise) {
-    label17BuildPromise = linkedActionsForCip179()
+  if (cache.fetchedAt > 0 && now - cache.fetchedAt < LABEL17_TTL_MS) return cache;
+  // No key for this network ⇒ nothing to scan; serve an (empty) resolved cache
+  // rather than hammering Blockfrost with unauthenticated calls.
+  if (!surveyNetworkHasKey(net)) {
+    const empty = { ...emptyLabel17Cache(), fetchedAt: Date.now() };
+    label17CacheByNetwork.set(net, empty);
+    return empty;
+  }
+  const hasWarmCache = cache.fetchedAt > 0;
+  if (!label17BuildPromiseByNetwork.has(net)) {
+    // Governance-action linkage is derived from the mainnet snapshot, so it only
+    // applies to mainnet surveys; preview gets no linkage.
+    const linkedActions = net === "mainnet" ? linkedActionsForCip179() : Promise.resolve(new Map());
+    const promise = linkedActions
       .then((linkedActionsBySurvey) => cip179.buildIndex({
-        get: blockfrostGet,
+        get: surveyBlockfrostGet(net),
         maxPages: LABEL17_MAX_PAGES,
         linkedActionsBySurvey,
       }))
       .then((index) => {
-        label17Cache = { ...index, fetchedAt: Date.now() };
-        return label17Cache;
+        const next = { ...index, fetchedAt: Date.now() };
+        label17CacheByNetwork.set(net, next);
+        return next;
       })
       .catch((error) => {
-        console.warn("[cip179] v5 index build failed:", error?.message || error);
-        return label17Cache;
+        console.warn(`[cip179] v5 index build failed (${net}):`, error?.message || error);
+        return label17CacheFor(net);
       })
-      .finally(() => { label17BuildPromise = null; });
+      .finally(() => { label17BuildPromiseByNetwork.delete(net); });
+    label17BuildPromiseByNetwork.set(net, promise);
   }
-  if (!hasWarmCache) await label17BuildPromise;
-  return label17Cache;
+  if (!hasWarmCache) return label17BuildPromiseByNetwork.get(net);
+  return cache;
 }
 // Method type sets used by the tally function
 const CHOICE_METHODS = new Set([
@@ -9730,18 +9800,27 @@ const server = http.createServer(async (req, res) => {
 
   // ── Surveys: force-refresh the label-17 index ────────────────────────────
   if (req.method === "POST" && url.pathname === "/api/surveys/refresh") {
-    label17Cache = { fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false };
-    label17BuildPromise = null;
-    buildLabel17Index().catch(() => {});
-    json(res, 200, { ok: true });
+    const net = normalizeSurveyNetwork(url.searchParams.get("network"));
+    label17CacheByNetwork.set(net, emptyLabel17Cache());
+    label17BuildPromiseByNetwork.delete(net);
+    buildLabel17Index(net).catch(() => {});
+    json(res, 200, { ok: true, network: net });
     return;
   }
 
   // ── Surveys: list all CIP-0179 label-17 surveys ──────────────────────────
   if (req.method === "GET" && url.pathname === "/api/surveys") {
+    const net = normalizeSurveyNetwork(url.searchParams.get("network"));
     try {
-      const index = await buildLabel17Index();
+      const [index, currentEpoch] = await Promise.all([
+        buildLabel17Index(net),
+        currentEpochForNetwork(net),
+      ]);
       json(res, 200, {
+        network: net,
+        currentEpoch,
+        // Signal preview asked for but unconfigured, so the UI can hint at it.
+        networkConfigured: surveyNetworkHasKey(net),
         cachedAt: index.fetchedAt,
         count: index.surveys.length,
         surveys: index.surveys,
@@ -9757,13 +9836,17 @@ const server = http.createServer(async (req, res) => {
   {
     const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})(?:\/(\d+))?$/);
     if (req.method === "GET" && m) {
+      const net = normalizeSurveyNetwork(url.searchParams.get("network"));
       try {
         const txHash = m[1].toLowerCase();
         const surveyIndex = Number(m[2] || 0);
         const surveyRef = `${txHash}:${surveyIndex}`;
-        const index = await buildLabel17Index();
+        const [index, currentEpoch] = await Promise.all([
+          buildLabel17Index(net),
+          currentEpochForNetwork(net),
+        ]);
         const survey = index.surveys.find((s) => s.surveyTxId === txHash && s.surveyIndex === surveyIndex)
-          || await fetchSurveyByRef(txHash, surveyIndex);
+          || await fetchSurveyByRef(txHash, surveyIndex, net);
         if (!survey) { json(res, 404, { error: "Survey not found." }); return; }
         // A survey dropped from the active list (because the owner cancelled it)
         // can still be reached by direct link — flag it so the page can say so.
@@ -9773,6 +9856,8 @@ const server = http.createServer(async (req, res) => {
         const responses = index.responsesBySurvey[surveyRef] || [];
         const tally = label17TallySurvey(survey.details, responses);
         json(res, 200, {
+          network: net,
+          currentEpoch,
           survey,
           responses,
           tally,
@@ -9825,7 +9910,9 @@ const server = http.createServer(async (req, res) => {
       const links = label17GovLinks.get(surveyRef);
       const wasKnown = links.has(proposalId);
       links.add(proposalId);
-      if (!wasKnown) label17Cache.fetchedAt = 0;
+      // A newly discovered gov link changes mainnet survey linkage — force a
+      // rebuild of the mainnet index on next request.
+      if (!wasKnown) label17CacheFor("mainnet").fetchedAt = 0;
       json(res, 200, { linked: true, available: true, surveyRef, survey, proposalId, expirationEpoch });
     } catch (error) {
       json(res, 500, { error: error?.message || "Failed to resolve the proposal survey." });

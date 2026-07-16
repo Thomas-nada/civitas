@@ -9,21 +9,11 @@ import { hexToBytes } from "cip-179/domain";
 import { decryptWithBeacon, fetchBeacon, unixTimeForRound } from "cip-179/tlock";
 import { buildAndSubmitSurveyResponse, buildAndSubmitSurveyCancellation, definitionFromDetails, getConnectedPaymentKeyHash, hashAnchorContent, metadatumCodec } from "../services/surveyTxService";
 import { hydrateSurveyPresentation } from "../services/surveyPresentationService";
+import { getSurveyNetwork, epochEndDate, explorerTxUrl } from "../services/surveyNetwork";
 
 function fmtDate(ts) {
   if (!ts) return "—";
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
-// A survey accepts responses through `endEpoch`, so it ends when that epoch
-// completes — i.e. the start of the following epoch.
-const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-function epochEndDate(endEpoch) {
-  if (endEpoch == null) return "—";
-  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
-  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 function fmtAda(value, opts = {}) {
@@ -953,12 +943,15 @@ export default function SurveyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("results");
+  // Surveys can live on preview or mainnet; follow the choice persisted on the
+  // list page (the rest of Civitas is always mainnet).
+  const [network] = useState(getSurveyNetwork());
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/surveys/${txHash}/${resolvedSurveyIndex}`);
+      const res = await fetch(`/api/surveys/${txHash}/${resolvedSurveyIndex}?network=${encodeURIComponent(network)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load survey.");
       try {
@@ -972,7 +965,7 @@ export default function SurveyDetailPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [txHash, resolvedSurveyIndex]);
+  }, [txHash, resolvedSurveyIndex, network]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -986,7 +979,12 @@ export default function SurveyDetailPage() {
   });
   const questions = details.questions ?? [];
   const roles = getSurveyRoles(details);
-  const currentEpoch = useCurrentEpoch();
+  // The network's current epoch comes back with the survey payload; fall back to
+  // the app's mainnet epoch hook only while browsing mainnet before it loads.
+  const mainnetEpoch = useCurrentEpoch();
+  const currentEpoch = data?.currentEpoch != null
+    ? data.currentEpoch
+    : (network === "mainnet" ? mainnetEpoch : null);
   const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
 
   // ── Sealed response decryption ──────────────────────────────────────────────
@@ -1134,7 +1132,7 @@ export default function SurveyDetailPage() {
           <span className="muted">Ends epoch</span>
           <strong>{details.endEpoch ?? "—"}</strong>
           {details.endEpoch != null ? (
-            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(details.endEpoch)}</span>
+            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(network, details.endEpoch)}</span>
           ) : null}
         </div>
         <div className="survey-meta-item">
@@ -1171,7 +1169,7 @@ export default function SurveyDetailPage() {
         <div className="survey-meta-item">
           <span className="muted">Survey TX</span>
           <a className="ext-link mono survey-tx-link"
-            href={`https://cardanoscan.io/transaction/${txHash}`}
+            href={explorerTxUrl(network, txHash)}
             target="_blank" rel="noreferrer">
             {txHash?.slice(0, 12)}…{txHash?.slice(-8)}
           </a>
@@ -1292,7 +1290,7 @@ export default function SurveyDetailPage() {
                     <td>{fmtDate(r.blockTime)}</td>
                     <td>
                       <a className="ext-link mono" style={{ fontSize: "0.78rem" }}
-                        href={`https://cardanoscan.io/transaction/${r.txId}`}
+                        href={explorerTxUrl(network, r.txId)}
                         target="_blank" rel="noreferrer">
                         {r.txId?.slice(0, 10)}…
                       </a>

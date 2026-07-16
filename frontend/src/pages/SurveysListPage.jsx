@@ -3,18 +3,13 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
-
-// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
-const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-
-// A survey accepts responses through `endEpoch`, so it ends when that epoch
-// completes — i.e. the start of the following epoch.
-function epochEndDate(endEpoch) {
-  if (endEpoch == null) return "—";
-  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
-  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
+import {
+  SURVEY_NETWORKS,
+  SURVEY_NETWORK_LABELS,
+  getSurveyNetwork,
+  setSurveyNetwork,
+  epochEndDate,
+} from "../services/surveyNetwork";
 
 const ROLE_COLORS = {
   DRep: "var(--mint)",
@@ -83,25 +78,46 @@ export default function SurveysListPage() {
   const [error, setError] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  // Surveys can be browsed on preview or mainnet independently of the rest of
+  // the app (see services/surveyNetwork). Default mainnet; persisted per-browser.
+  const [network, setNetwork] = useState(getSurveyNetwork());
+  const [payloadEpoch, setPayloadEpoch] = useState(null);
+  const [networkConfigured, setNetworkConfigured] = useState(true);
+
+  const changeNetwork = (net) => {
+    if (net === network) return;
+    setSurveyNetwork(net);
+    setNetwork(net);
+  };
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch("/api/surveys");
+        setSurveys([]);
+        setPayloadEpoch(null);
+        const res = await fetch(`/api/surveys?network=${encodeURIComponent(network)}`);
         const data = await res.json();
+        if (!alive) return;
         if (!res.ok) throw new Error(data.error || "Failed to load surveys.");
         setSurveys(data.surveys || []);
+        setPayloadEpoch(Number.isFinite(Number(data.currentEpoch)) ? Number(data.currentEpoch) : null);
+        setNetworkConfigured(data.networkConfigured !== false);
       } catch (e) {
-        setError(e.message);
+        if (alive) setError(e.message);
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-  }, []);
+    return () => { alive = false; };
+  }, [network]);
 
-  const currentEpoch = useCurrentEpoch();
+  // Prefer the network's epoch from the payload; fall back to the app's
+  // mainnet epoch hook only while browsing mainnet and the payload hasn't loaded.
+  const mainnetEpoch = useCurrentEpoch();
+  const currentEpoch = payloadEpoch != null ? payloadEpoch : (network === "mainnet" ? mainnetEpoch : null);
 
   const filtered = surveys.filter((s) => {
     if (roleFilter !== "All") {
@@ -195,7 +211,32 @@ export default function SurveysListPage() {
             </button>
           ))}
         </div>
+        {/* Network switch — surveys only; the rest of Civitas stays mainnet. */}
+        <div
+          className="sv-filter-chips"
+          style={{ marginLeft: "auto" }}
+          role="group"
+          aria-label="Survey network"
+          title="Browse surveys on mainnet or the preview test network"
+        >
+          {SURVEY_NETWORKS.map((net) => (
+            <button
+              key={net}
+              type="button"
+              className={`sv-filter-chip${network === net ? " active" : ""}`}
+              onClick={() => changeNetwork(net)}
+            >
+              {SURVEY_NETWORK_LABELS[net]}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {network === "preview" && !networkConfigured && !loading ? (
+        <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}>
+          Preview surveys aren’t available on this deployment — no preview data source is configured.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="muted" style={{ marginTop: "0.75rem" }}>Error: {error}</p>
@@ -280,7 +321,7 @@ export default function SurveysListPage() {
                     </div>
                     <div className="sv-ends-cell">
                       <div className="sv-ends-epoch">Epoch {s.details?.endEpoch ?? "?"}</div>
-                      <div className="sv-ends-sub">~{epochEndDate(s.details?.endEpoch)}</div>
+                      <div className="sv-ends-sub">~{epochEndDate(network, s.details?.endEpoch)}</div>
                     </div>
                   </Link>
                 );
