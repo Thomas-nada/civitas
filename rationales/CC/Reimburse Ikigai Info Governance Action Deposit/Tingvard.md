@@ -1,4 +1,4 @@
-<!-- url: https://ipfs.blockfrost.dev/ipfs/QmTuugZhkXeMydbjHNyduzXtBxti73WyLtKEDdNYC24AUk -->
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmT9HS4TjouADQ4PXAX5rby7biL57Re8UkbE913Z9WmfbY -->
 # Tingvard
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,32 +7,4 @@
 
 ---
 
-This governance action requests ₳103,000 from the Cardano Treasury to reimburse the submitter of the earlier “Cardanoの生きがい - Ikigai -” Info Action.
-
-The requested amount consists of the original ₳100,000 governance action deposit and an additional ₳3,000 intended to compensate for forgone staking rewards.
-
-This action is properly framed as a Treasury Withdrawal governance action and must therefore be assessed under Article II, Section 6 and Article II, Section 7 of the Constitution, together with the applicable treasury guardrails in Appendix I.
-
-The proposal satisfies Article II, Section 6. It provides a title, abstract, motivation, rationale, and constitutionality discussion in a standardized and legible format.
-
-The proposal also satisfies Article II, Section 7, §1. It identifies the purpose of the withdrawal as reimbursement of a lost governance action deposit, states that delivery occurs immediately upon enactment, states that there are no associated costs or expenses beyond the requested reimbursement, and states that there are no refund conditions due to the immediate and unconditional nature of the transfer.
-
-The proposal satisfies Article II, Section 7, §2 by stating that the recipient has not previously received funds from the Cardano Treasury.
-
-The requested amount is ₳103,000 and does not exceed the current Net Change Limit. Tingvard therefore finds Article II, Section 7, §3 and the relevant treasury guardrails satisfied.
-
-The remaining treasury requirements must be assessed in light of what this action actually does.
-
-This is not a proposal for an ongoing program of work, a service contract, a development roadmap, or a staged delivery process. It is a direct reimbursement action. The constitutional “delivery” is the payment itself: a one-time transfer of the specified amount to the intended recipient.
-
-Because the withdrawal is completed directly on-chain upon enactment, there is no period during which funds are held by an administrator before further disbursement, no ongoing use of funds to monitor, and no future deliverables requiring continuing administrative assessment.
-
-For that reason, Tingvard finds that Article II, Section 7, §4 is satisfied in substance without requiring a separate allocation for periodic independent audits or oversight metrics. The relevant use of the funds is the direct on-chain reimbursement itself, which is publicly verifiable by any ada holder. Adding a separate audit or oversight process would not provide meaningful additional constitutional assurance in this specific case.
-
-Tingvard also finds Article II, Section 7, §5 satisfied. Although the proposal names DReps as administrator, Tingvard does not rely on DReps as an administrative body for this purpose. DReps vote on whether the action should be approved; they do not administer the funds after enactment.
-
-In this specific action, the administrator function is effectively performed by the protocol execution itself. The action authorizes a direct and unconditional transfer from the Treasury to the specified recipient. The monitoring of fund use and the assurance of delivery both begin and end with the same public on-chain transaction. The transaction either occurs as authorized or it does not, and the result is verifiable on-chain.
-
-Article II, Section 7, §6 is not engaged in the ordinary sense because there is no administrator-held custody period. The funds are not held by an administrator prior to later disbursement to a Treasury Withdrawal recipient. They are transferred directly to the recipient through the governance action.
-
-Tingvard therefore finds that the proposal satisfies the relevant constitutional requirements.
+This governance action is properly framed as a budget Info action under Article III, § 4 and Article IV, § 1. It requests a budget allocation of 103,000 ada to reimburse the submitter of the September 2024 “Ikigai” Info action, who irrevocably lost their 100,000 ada governance deposit due to a software defect that allowed a governance action to be submitted using an unregistered stake key. The proposal includes an abstract, motivation, rationale, and valid anchor hash as required under Article III, § 5. The governance action satisfies the structural requirements of Article IV, § 2 through § 5. For purposes of administration, the DReps are designated as the temporary “administrator” responsible for executing the distribution, thereby meeting the administrator designation requirement under Article IV, § 2, despite the absence of ongoing or complex fund management. Because the entire amount is disbursed directly to the intended recipient, the administrative burden is minimal yet sufficiently aligned with the constitutional requirement. The requested amount is well within the Net-Change Limit as defined under Article IV, § 3. The proposal also satisfies Article IV, § 4, since the distribution can be immutably verified on-chain and requires no ongoing auditing beyond the public record of the disbursement itself. The Constitution does not require independent audit processes for immediate one-time distributions when full auditability is inherently guaranteed through the ledger. The purpose of this reimbursement — correcting a loss originating from a defect in Cardano’s governance infrastructure — aligns with the constitutional Tenets of fairness, transparency, and long-term sustainability. By providing redress for harms caused by systemic shortcomings rather than user misbehavior or speculation, the action reinforces trust in the governance system during its early lifespan and strengthens the incentives for constructive community participation.
