@@ -948,7 +948,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
 export default function SurveyDetailPage() {
   const { txHash, surveyIndex } = useParams();
   const resolvedSurveyIndex = surveyIndex ?? "0";
-  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
+  const { walletApi } = useContext(WalletContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1362,10 +1362,8 @@ export default function SurveyDetailPage() {
           <p className="muted" style={{ maxWidth: "440px", margin: "0 auto 1.25rem" }}>
             Responding records your answers on-chain as a small transaction (under ~1 ADA).
             Your wallet must be eligible for one of this survey's roles: {roles.join(", ") || "—"}.
+            Use the Connect Wallet button in the top bar to get started.
           </p>
-          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-            Connect Wallet
-          </button>
           <div style={{ marginTop: "1rem" }}>
             <Link to="/guide?section=tool-survey-respond" className="inline-link" style={{ fontSize: "0.8rem" }}>
               How responding works →

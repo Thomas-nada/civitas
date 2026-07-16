@@ -7642,15 +7642,6 @@ html[data-easter="true"] .topbar::after {
   font-size: 0.82rem;
   line-height: 1.45;
 }
-.sv-howto-cta {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  flex-wrap: wrap;
-  margin-top: 1.3rem;
-  padding-top: 1.2rem;
-  border-top: 1px solid var(--line);
-}
 @media (max-width: 720px) {
   .sv-howto-steps { grid-template-columns: 1fr; }
 }

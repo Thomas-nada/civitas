@@ -42,7 +42,7 @@ function StatusPill({ isActive, isCancelled }) {
   );
 }
 
-function HowItWorks({ isConnected, onConnect }) {
+function HowItWorks() {
   const steps = [
     { n: "1", title: "Browse", body: "Open any survey to read its questions and see live results — no wallet needed." },
     { n: "2", title: "Connect a wallet", body: "Connect a Cardano wallet (top-right) to take part. Connecting is free." },
@@ -68,12 +68,6 @@ function HowItWorks({ isConnected, onConnect }) {
           </div>
         ))}
       </div>
-      {!isConnected ? (
-        <div className="sv-howto-cta">
-          <button type="button" className="btn-primary" onClick={onConnect}>Connect Wallet</button>
-          <span className="muted" style={{ fontSize: "0.8rem" }}>to create a survey or respond to one</span>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -83,7 +77,7 @@ export default function SurveysListPage() {
     title: "Governance Surveys",
     description: "CIP-0179 v5 on-chain surveys for Cardano governance participants.",
   });
-  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
+  const { walletApi } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -159,13 +153,13 @@ export default function SurveysListPage() {
         {walletApi ? (
           <Link to="/surveys/create" className="btn-primary">+ Create Survey</Link>
         ) : (
-          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-            Connect wallet to create
-          </button>
+          <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+            Connect your wallet in the top bar to create a survey.
+          </p>
         )}
       </div>
 
-      <HowItWorks isConnected={Boolean(walletApi)} onConnect={() => setWalletMenuOpen(true)} />
+      <HowItWorks />
 
       {/* Filter chips */}
       <div className="sv-table-filters">
@@ -230,9 +224,9 @@ export default function SurveysListPage() {
                     {walletApi ? (
                       <Link to="/surveys/create" className="btn-primary">+ Create the first survey</Link>
                     ) : (
-                      <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-                        Connect wallet to create
-                      </button>
+                      <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                        Connect your wallet in the top bar to create one.
+                      </p>
                     )}
                   </>
                 ) : (
