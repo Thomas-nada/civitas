@@ -3,23 +3,13 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
-
-function fmtDate(ts) {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
-const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-
-// A survey accepts responses through `endEpoch`, so it ends when that epoch
-// completes — i.e. the start of the following epoch.
-function epochEndDate(endEpoch) {
-  if (endEpoch == null) return "—";
-  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
-  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
+import {
+  SURVEY_NETWORKS,
+  SURVEY_NETWORK_LABELS,
+  getSurveyNetwork,
+  setSurveyNetwork,
+  epochEndDate,
+} from "../services/surveyNetwork";
 
 const ROLE_COLORS = {
   DRep: "var(--mint)",
@@ -47,7 +37,7 @@ function StatusPill({ isActive, isCancelled }) {
   );
 }
 
-function HowItWorks({ isConnected, onConnect }) {
+function HowItWorks() {
   const steps = [
     { n: "1", title: "Browse", body: "Open any survey to read its questions and see live results — no wallet needed." },
     { n: "2", title: "Connect a wallet", body: "Connect a Cardano wallet (top-right) to take part. Connecting is free." },
@@ -73,12 +63,6 @@ function HowItWorks({ isConnected, onConnect }) {
           </div>
         ))}
       </div>
-      {!isConnected ? (
-        <div className="sv-howto-cta">
-          <button type="button" className="btn-primary" onClick={onConnect}>Connect Wallet</button>
-          <span className="muted" style={{ fontSize: "0.8rem" }}>to create a survey or respond to one</span>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -86,39 +70,58 @@ function HowItWorks({ isConnected, onConnect }) {
 export default function SurveysListPage() {
   useSeoMeta({
     title: "Governance Surveys",
-    description: "CIP-0179 on-chain surveys for Cardano DReps, SPOs, and ada holders. Weighted by stake and voting power.",
+    description: "CIP-0179 v5 on-chain surveys for Cardano governance participants.",
   });
-  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
+  const { walletApi } = useContext(WalletContext);
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  // Surveys can be browsed on preview or mainnet independently of the rest of
+  // the app (see services/surveyNetwork). Default mainnet; persisted per-browser.
+  const [network, setNetwork] = useState(getSurveyNetwork());
+  const [payloadEpoch, setPayloadEpoch] = useState(null);
+  const [networkConfigured, setNetworkConfigured] = useState(true);
+
+  const changeNetwork = (net) => {
+    if (net === network) return;
+    setSurveyNetwork(net);
+    setNetwork(net);
+  };
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch("/api/surveys");
+        setSurveys([]);
+        setPayloadEpoch(null);
+        const res = await fetch(`/api/surveys?network=${encodeURIComponent(network)}`);
         const data = await res.json();
+        if (!alive) return;
         if (!res.ok) throw new Error(data.error || "Failed to load surveys.");
         setSurveys(data.surveys || []);
+        setPayloadEpoch(Number.isFinite(Number(data.currentEpoch)) ? Number(data.currentEpoch) : null);
+        setNetworkConfigured(data.networkConfigured !== false);
       } catch (e) {
-        setError(e.message);
+        if (alive) setError(e.message);
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-  }, []);
+    return () => { alive = false; };
+  }, [network]);
 
-  const currentEpoch = useCurrentEpoch();
+  // Prefer the network's epoch from the payload; fall back to the app's
+  // mainnet epoch hook only while browsing mainnet and the payload hasn't loaded.
+  const mainnetEpoch = useCurrentEpoch();
+  const currentEpoch = payloadEpoch != null ? payloadEpoch : (network === "mainnet" ? mainnetEpoch : null);
 
   const filtered = surveys.filter((s) => {
     if (roleFilter !== "All") {
-      const roles = Array.isArray(s.details?.eligibleRoles)
-        ? s.details.eligibleRoles
-        : Object.keys(s.details?.roleWeighting ?? {});
+      const roles = Array.isArray(s.details?.eligibleRoles) ? s.details.eligibleRoles : [];
       if (!roles.includes(roleFilter)) return false;
     }
     const isCancelled = Boolean(s.cancelled);
@@ -166,13 +169,13 @@ export default function SurveysListPage() {
         {walletApi ? (
           <Link to="/surveys/create" className="btn-primary">+ Create Survey</Link>
         ) : (
-          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-            Connect wallet to create
-          </button>
+          <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+            Connect your wallet in the top bar to create a survey.
+          </p>
         )}
       </div>
 
-      <HowItWorks isConnected={Boolean(walletApi)} onConnect={() => setWalletMenuOpen(true)} />
+      <HowItWorks />
 
       {/* Filter chips */}
       <div className="sv-table-filters">
@@ -208,7 +211,32 @@ export default function SurveysListPage() {
             </button>
           ))}
         </div>
+        {/* Network switch — surveys only; the rest of Civitas stays mainnet. */}
+        <div
+          className="sv-filter-chips"
+          style={{ marginLeft: "auto" }}
+          role="group"
+          aria-label="Survey network"
+          title="Browse surveys on mainnet or the preview test network"
+        >
+          {SURVEY_NETWORKS.map((net) => (
+            <button
+              key={net}
+              type="button"
+              className={`sv-filter-chip${network === net ? " active" : ""}`}
+              onClick={() => changeNetwork(net)}
+            >
+              {SURVEY_NETWORK_LABELS[net]}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {network === "preview" && !networkConfigured && !loading ? (
+        <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}>
+          Preview surveys aren’t available on this deployment — no preview data source is configured.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="muted" style={{ marginTop: "0.75rem" }}>Error: {error}</p>
@@ -237,9 +265,9 @@ export default function SurveysListPage() {
                     {walletApi ? (
                       <Link to="/surveys/create" className="btn-primary">+ Create the first survey</Link>
                     ) : (
-                      <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-                        Connect wallet to create
-                      </button>
+                      <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                        Connect your wallet in the top bar to create one.
+                      </p>
                     )}
                   </>
                 ) : (
@@ -252,16 +280,14 @@ export default function SurveysListPage() {
                   currentEpoch != null && s.details?.endEpoch != null
                     ? currentEpoch <= s.details.endEpoch
                     : true;
-                const roles = Array.isArray(s.details?.eligibleRoles)
-                  ? s.details.eligibleRoles
-                  : Object.keys(s.details?.roleWeighting ?? {});
+                const roles = Array.isArray(s.details?.eligibleRoles) ? s.details.eligibleRoles : [];
                 const questionCount = s.details?.questions?.length ?? 0;
 
                 return (
                   <Link
-                    key={s.surveyTxId}
+                    key={`${s.surveyTxId}:${s.surveyIndex ?? 0}`}
                     className="sv-table-row"
-                    to={`/surveys/${s.surveyTxId}`}
+                    to={`/surveys/${s.surveyTxId}/${s.surveyIndex ?? 0}`}
                   >
                     <div>
                       <StatusPill isActive={isActive} isCancelled={Boolean(s.cancelled)} />
@@ -295,7 +321,7 @@ export default function SurveysListPage() {
                     </div>
                     <div className="sv-ends-cell">
                       <div className="sv-ends-epoch">Epoch {s.details?.endEpoch ?? "?"}</div>
-                      <div className="sv-ends-sub">~{epochEndDate(s.details?.endEpoch)}</div>
+                      <div className="sv-ends-sub">~{epochEndDate(network, s.details?.endEpoch)}</div>
                     </div>
                   </Link>
                 );

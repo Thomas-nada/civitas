@@ -458,6 +458,7 @@ export default function App() {
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />
+          <Route path="/surveys/:txHash/:surveyIndex" element={<SurveyDetailPage />} />
           <Route path="/ncl" element={<Navigate to="/treasury" replace />} />
           <Route path="/treasury" element={<TreasuryPage />} />
           <Route path="/intersect" element={<IntersectPage />} />

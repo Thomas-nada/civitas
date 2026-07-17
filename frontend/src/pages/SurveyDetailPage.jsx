@@ -4,40 +4,16 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { WalletContext } from "../context/WalletContext";
-import { buildAndSubmitSurveyResponse, buildAndSubmitSurveyCancellation, getConnectedPaymentKeyHash, hashAnchorContent } from "../services/surveyTxService";
-import { timelockDecrypt, mainnetClient, roundTime, defaultChainInfo } from "tlock-js";
+import { decodeAnswerItem, Role, validateResponse } from "cip-179";
+import { hexToBytes } from "cip-179/domain";
+import { decryptWithBeacon, fetchBeacon, unixTimeForRound } from "cip-179/tlock";
+import { buildAndSubmitSurveyResponse, buildAndSubmitSurveyCancellation, definitionFromDetails, getConnectedPaymentKeyHash, hashAnchorContent, metadatumCodec } from "../services/surveyTxService";
+import { hydrateSurveyPresentation } from "../services/surveyPresentationService";
+import { getSurveyNetwork, epochEndDate, explorerTxUrl } from "../services/surveyNetwork";
 
 function fmtDate(ts) {
   if (!ts) return "—";
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Cardano mainnet epoch timing (Shelley epoch 208 boundary, 5-day epochs).
-// A survey accepts responses through `endEpoch`, so it ends when that epoch
-// completes — i.e. the start of the following epoch.
-const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
-const EPOCH_DURATION_SECONDS = 432000;
-function epochEndDate(endEpoch) {
-  if (endEpoch == null) return "—";
-  const unix = SHELLEY_EPOCH_208_START_UNIX + (endEpoch + 1 - 208) * EPOCH_DURATION_SECONDS;
-  return new Date(unix * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Split a string into ≤64-byte UTF-8 chunks (Cardano metadata string limit).
-// Returns the original string if it already fits, else an array of chunks.
-function chunkUtf64(str) {
-  const encoded = new TextEncoder().encode(str);
-  if (encoded.length <= 64) return str;
-  const decoder = new TextDecoder();
-  const chunks = [];
-  let offset = 0;
-  while (offset < encoded.length) {
-    let end = Math.min(offset + 64, encoded.length);
-    while (end > offset && (encoded[end] & 0xc0) === 0x80) end--;
-    chunks.push(decoder.decode(encoded.slice(offset, end)));
-    offset = end;
-  }
-  return chunks;
 }
 
 function fmtAda(value, opts = {}) {
@@ -54,7 +30,7 @@ function shortAddr(addr) {
   return `${addr.slice(0, 10)}…${addr.slice(-8)}`;
 }
 
-// ── Method type helpers (handle all CIP-0179 versions) ────────────────────────
+// ── CIP-179 v5 method helpers ─────────────────────────────────────────────────
 
 function isSingleChoice(m)  { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:single-choice:"); }
 function isMultiSelect(m)   { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:multi-select:"); }
@@ -65,9 +41,8 @@ function isRating(m)        { return typeof m === "string" && m.startsWith("urn:
 function isCustom(m)        { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:custom:"); }
 function isChoiceOrRank(m)  { return isSingleChoice(m) || isMultiSelect(m) || isRanking(m); }
 
-// Returns the v4 answer tag for a question's methodType.
-// v4 tags: 0=custom 1=single-choice 2=multi-select 3=ranking 4=numeric 5=points-alloc 6=rating
-function getV4AnswerTag(methodType) {
+// Returns the stable v5 answer tag for a question's methodType.
+function getAnswerTag(methodType) {
   if (isCustom(methodType))       return 0;
   if (isSingleChoice(methodType)) return 1;
   if (isMultiSelect(methodType))  return 2;
@@ -79,12 +54,9 @@ function getV4AnswerTag(methodType) {
 }
 
 const METHOD_LABELS = {
-  "urn:cardano:poll-method:single-choice:v1":     "Single choice",
   "urn:cardano:poll-method:single-choice:v2":     "Single choice",
-  "urn:cardano:poll-method:multi-select:v1":      "Multi-select",
   "urn:cardano:poll-method:multi-select:v2":      "Multi-select",
   "urn:cardano:poll-method:ranking:v1":           "Ranking",
-  "urn:cardano:poll-method:numeric-range:v1":     "Numeric range",
   "urn:cardano:poll-method:numeric-range:v2":     "Numeric range",
   "urn:cardano:poll-method:points-allocation:v1": "Points allocation",
   "urn:cardano:poll-method:rating:v1":            "Rating",
@@ -100,28 +72,62 @@ const ROLE_COLORS = {
   SPO:         "var(--amber)",
   CC:          "#a78bfa",
   Stakeholder: "rgba(200,200,210,0.6)",
-  Owner:       "rgba(200,200,210,0.4)",
+  Keyholder:   "rgba(200,200,210,0.4)",
 };
 
-// Derive eligible roles from survey details — supports both v4 (eligibleRoles[])
-// and legacy v2/v3 (roleWeighting{}) shapes returned by the API.
 function getSurveyRoles(details) {
-  if (Array.isArray(details?.eligibleRoles)) return details.eligibleRoles;
-  return Object.keys(details?.roleWeighting ?? {});
+  return Array.isArray(details?.eligibleRoles) ? details.eligibleRoles : [];
 }
 
 // ── Sealed response decryption ────────────────────────────────────────────────
 
-async function decryptSealedResponses(responses) {
-  const client = mainnetClient();
-  const decoder = new TextDecoder();
-  const results = [];
+function normaliseRevealedAnswer(answer) {
+  const questionId = `q${answer.questionIndex}`;
+  switch (answer.type) {
+    case "custom": return { questionId, customValue: answer.value };
+    case "singleChoice": return { questionId, selection: [answer.optionIndex] };
+    case "multiSelect": return { questionId, selection: answer.optionIndices };
+    case "ranking": return { questionId, selection: answer.ranking };
+    case "numeric": return { questionId, numericValue: answer.value.toString() };
+    case "pointsAllocation": return { questionId, pointsAllocation: answer.allocations.map((a) => [a.optionIndex, a.points]) };
+    case "rating": return { questionId, ratings: answer.ratings.map((r) => [r.optionIndex, r.rating.toString()]) };
+    default: return null;
+  }
+}
 
-  for (const resp of responses) {
-    if (!resp.sealedHexChunks?.length) {
-      results.push(resp);
-      continue;
-    }
+const ROLE_VALUES = {
+  DRep: Role.DRep,
+  SPO: Role.SPO,
+  CC: Role.CC,
+  Stakeholder: Role.Stakeholder,
+  Keyholder: Role.Keyholder,
+};
+
+function responseCredential(value) {
+  const [type, hash] = String(value || "").split(":");
+  if (!/^[0-9a-f]{56}$/i.test(hash || "")) throw new Error("invalid response credential");
+  return type === "script"
+    ? { type: "script", scriptHash: hexToBytes(hash) }
+    : type === "key"
+      ? { type: "key", keyHash: hexToBytes(hash) }
+      : (() => { throw new Error("invalid response credential type"); })();
+}
+
+async function decryptSealedResponses(responses, round, survey) {
+  const beacon = await fetchBeacon(round);
+  const definition = {
+    ...definitionFromDetails(survey.details),
+    submissionMode: { type: "public" },
+  };
+  const validByCredential = new Map();
+
+  const ordered = [...responses].sort((a, b) =>
+    Number(a.slot || 0) - Number(b.slot || 0)
+    || Number(a.txIndexInBlock || 0) - Number(b.txIndexInBlock || 0)
+    || Number(a.responseIndex || 0) - Number(b.responseIndex || 0)
+  );
+  for (const resp of ordered) {
+    if (!resp.sealedHexChunks?.length) continue;
     try {
       // Reassemble hex chunks → Uint8Array
       const totalBytes = resp.sealedHexChunks.reduce((s, h) => s + h.length / 2, 0);
@@ -132,37 +138,33 @@ async function decryptSealedResponses(responses) {
           allBytes[offset++] = parseInt(hex.slice(i, i + 2), 16);
         }
       }
-      const armoredCiphertext = decoder.decode(allBytes);
-      const decryptedBuf = await timelockDecrypt(armoredCiphertext, client);
-      const jsonStr = decoder.decode(decryptedBuf).replace(/\0+$/, "").trim();
-      const v4Tuples = JSON.parse(jsonStr);
-      const answers = v4Tuples
-        .filter(Array.isArray)
-        .map(([tag, qi, value]) => {
-          switch (tag) {
-            case 0: return { questionId: `q${qi}`, customValue: Array.isArray(value) ? value.join("") : value };
-            case 1: return { questionId: `q${qi}`, selection: [value] };
-            case 2: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [value] };
-            case 3: return { questionId: `q${qi}`, selection: Array.isArray(value) ? value : [] };
-            case 4: return { questionId: `q${qi}`, numericValue: value };
-            case 5: return { questionId: `q${qi}`, pointsAllocation: Array.isArray(value) ? value : [] };
-            case 6: return { questionId: `q${qi}`, ratings: Array.isArray(value) ? value : [] };
-            default: return null;
-          }
-        })
-        .filter(Boolean);
-      results.push({ ...resp, answers, sealedHexChunks: undefined });
+      const plaintext = await decryptWithBeacon(allBytes, beacon);
+      const metadatum = metadatumCodec.cborToMetadatum(plaintext);
+      if (!Array.isArray(metadatum)) throw new Error("decrypted answers are not a list");
+      const decodedAnswers = metadatum.map((item, index) => decodeAnswerItem(item, `answer[${index}]`));
+      const candidate = {
+        specVersion: 5,
+        surveyRef: { txId: hexToBytes(survey.surveyTxId), index: survey.surveyIndex },
+        role: ROLE_VALUES[resp.responderRole],
+        credential: responseCredential(resp.responseCredential),
+        answers: { type: "public", answers: decodedAnswers },
+      };
+      if (validateResponse(definition, candidate).length) continue;
+      const answers = decodedAnswers.map(normaliseRevealedAnswer).filter(Boolean);
+      validByCredential.set(
+        `${resp.responderRole}|${resp.responseCredential}`,
+        { ...resp, answers, sealedHexChunks: undefined },
+      );
     } catch (e) {
       console.warn("tlock decrypt failed for", resp.txId, e.message);
-      results.push(resp);
     }
   }
-  return results;
+  return [...validByCredential.values()];
 }
 
-function buildClientTally(questions, responses) {
+function buildQuestionTallies(questions, responses) {
   const totalResponses = responses.length;
-  const questionTallies = questions.map((q) => {
+  return questions.map((q) => {
     const allAnswers = responses.flatMap((r) =>
       (r.answers || []).filter((a) => a.questionId === q.questionId)
     );
@@ -238,7 +240,25 @@ function buildClientTally(questions, responses) {
     }
     return { ...base, customTexts: allAnswers.map((a) => a.customValue).filter((v) => v != null) };
   });
-  return { totalResponses, totalWeight: 0, questionTallies };
+}
+
+function buildClientTally(questions, responses, roles) {
+  const roleTallies = roles.map((role) => {
+    const roleResponses = responses.filter((response) => response.responderRole === role);
+    return {
+      role,
+      weighting: "CredentialBased",
+      responses: roleResponses.length,
+      totalWeight: 0,
+      questionTallies: buildQuestionTallies(questions, roleResponses),
+    };
+  });
+  return {
+    totalResponses: responses.length,
+    totalWeight: 0,
+    roleTallies,
+    questionTallies: roleTallies.find((row) => row.responses > 0)?.questionTallies ?? [],
+  };
 }
 
 // ── Pending poller ───────────────────────────────────────────────────────────
@@ -453,6 +473,7 @@ function PointsAllocInput({ question, value, onChange }) {
 
 function RatingInput({ question, value, onChange }) {
   const [minR, maxR] = question.ratingScale ?? [1, 5];
+  const ratingLabels = question.ratingLabels ?? [];
   const options = question.options ?? [];
   const ratingsMap = useMemo(() => {
     const m = {};
@@ -461,10 +482,14 @@ function RatingInput({ question, value, onChange }) {
   }, [value]);
 
   function setScore(idx, score) {
-    const next = { ...ratingsMap, [idx]: Number(score) };
-    const tuples = Object.entries(next).map(([k, v]) => [Number(k), Number(v)]);
+    const next = { ...ratingsMap, [idx]: score };
+    const tuples = Object.entries(next).map(([k, v]) => [Number(k), v]);
     onChange({ ratings: tuples });
   }
+
+  const safeRange = Number.isSafeInteger(Number(minR))
+    && Number.isSafeInteger(Number(maxR))
+    && Number(maxR) - Number(minR) <= 1000;
 
   return (
     <div className="question-input-rating">
@@ -474,7 +499,7 @@ function RatingInput({ question, value, onChange }) {
           <div key={idx} className="rating-row">
             <span className="rating-label">{opt}</span>
             <input
-              type="range"
+              type={safeRange ? "range" : "number"}
               min={minR}
               max={maxR}
               step={1}
@@ -482,16 +507,21 @@ function RatingInput({ question, value, onChange }) {
               onChange={(e) => setScore(idx, e.target.value)}
               className="survey-range-input rating-range"
             />
-            <strong className="rating-value">{score}</strong>
+            <strong className="rating-value">{ratingLabels[score] || score}</strong>
           </div>
         );
       })}
-      <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>Scale: {minR}–{maxR}</p>
+      <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>
+        Scale: {ratingLabels.length ? ratingLabels.join(" – ") : `${minR}–${maxR}`}
+      </p>
     </div>
   );
 }
 
 function CustomInput({ question, value, onChange }) {
+  if (question.customTextSupported === false) {
+    return <p className="vote-notice">{question.customSchemaError || "This custom answer schema is not supported by Civitas."}</p>;
+  }
   return (
     <div className="question-input-custom">
       {question.contentAnchor?.uri ? (
@@ -610,7 +640,7 @@ function QuestionInput({ question, value, onChange }) {
           max={nc.maxValue}
           step={nc.step ?? 1}
           value={numVal}
-          onChange={(e) => onChange({ numericValue: Number(e.target.value) })}
+          onChange={(e) => onChange({ numericValue: e.target.value })}
         />
         <div className="numeric-range-scale">
           <span>{nc.minValue}</span>
@@ -633,14 +663,19 @@ function QuestionInput({ question, value, onChange }) {
 }
 
 function ResponseForm({ survey, isActive, onSubmitted }) {
-  const { walletApi, walletDrep } = useContext(WalletContext);
+  const { walletApi, walletDrep, walletRewardAddress } = useContext(WalletContext);
   const isSealed = Boolean(survey.details?.isTimelocked);
   const roles = getSurveyRoles(survey.details);
+  const claimableRoles = useMemo(() => roles.filter((role) => (
+    role === "Keyholder" ||
+    (role === "DRep" && walletDrep) ||
+    (role === "Stakeholder" && walletRewardAddress)
+  )), [roles, walletDrep, walletRewardAddress]);
 
   const defaultRole = useMemo(() => {
-    if (walletDrep && roles.includes("DRep")) return "DRep";
-    return roles[0] ?? "DRep";
-  }, [walletDrep, roles]);
+    if (walletDrep && claimableRoles.includes("DRep")) return "DRep";
+    return claimableRoles[0] ?? "";
+  }, [walletDrep, claimableRoles]);
 
   const [responderRole, setResponderRole] = useState(defaultRole);
   const [answers, setAnswers] = useState({});
@@ -652,9 +687,11 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
   const questions = survey.details?.questions ?? [];
   const answeredCount = questions.filter((q) => {
     const answer = answers[q.questionId];
+    const hasSelection = Array.isArray(answer?.selection)
+      && (answer.selection.length > 0 || isMultiSelect(q.methodType));
     const hasCustom = answer?.customValue != null
       && !(typeof answer.customValue === "string" && answer.customValue.trim() === "");
-    return answer?.selection?.length > 0
+    return hasSelection
       || answer?.numericValue != null
       || hasCustom
       || answer?.pointsAllocation?.length > 0
@@ -673,18 +710,21 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
     e.preventDefault();
     setSubmitError("");
 
-    // Build v4 answer tuples: [tag, questionIndex, value]
-    const v4Answers = questions.flatMap((q, questionIndex) => {
+    const answerTuples = questions.flatMap((q, questionIndex) => {
       const answer = answers[q.questionId];
       if (!answer) return [];
-      const tag = getV4AnswerTag(q.methodType);
+      const tag = getAnswerTag(q.methodType);
       if (tag === null) return [];
 
       if (isSingleChoice(q.methodType)) {
         if (!answer.selection?.length) return [];
         return [[tag, questionIndex, answer.selection[0]]];
       }
-      if (isMultiSelect(q.methodType) || isRanking(q.methodType)) {
+      if (isMultiSelect(q.methodType)) {
+        if (!Array.isArray(answer.selection)) return [];
+        return [[tag, questionIndex, answer.selection]];
+      }
+      if (isRanking(q.methodType)) {
         if (!answer.selection?.length) return [];
         return [[tag, questionIndex, answer.selection]];
       }
@@ -703,14 +743,12 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
       if (isCustom(q.methodType)) {
         const text = typeof answer.customValue === "string" ? answer.customValue.trim() : answer.customValue;
         if (text == null || text === "") return [];
-        // chunk long text into ≤64-byte pieces (Cardano metadata string limit)
-        const value = typeof text === "string" ? chunkUtf64(text) : text;
-        return [[tag, questionIndex, value]];
+        return [[tag, questionIndex, text]];
       }
       return [];
     });
 
-    if (v4Answers.length === 0) {
+    if (answerTuples.length === 0) {
       setSubmitError("Please answer at least one question.");
       return;
     }
@@ -722,7 +760,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
         : undefined;
       const url = rationaleUrl.trim();
       const rationale = url ? { url, hash: await hashAnchorContent(url) } : undefined;
-      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, v4Answers, sealOpts, rationale);
+      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, answerTuples, sealOpts, rationale, survey.details);
       setSubmitted(true);
       onSubmitted?.(result.txId);
     } catch (err) {
@@ -761,7 +799,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
       <div style={{ marginTop: "16px" }}>
         <div className="sq-meta-cell-label" style={{ marginBottom: "8px" }}>Responding as</div>
         <div className="sq-role-select-row">
-          {roles.map((r) => (
+          {claimableRoles.map((r) => (
             <button
               key={r}
               type="button"
@@ -777,6 +815,11 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
             </button>
           ))}
         </div>
+        {!claimableRoles.length ? (
+          <p className="muted" style={{ marginTop: "8px" }}>
+            This wallet cannot prove any of the survey's eligible roles.
+          </p>
+        ) : null}
       </div>
 
       {/* Question cards */}
@@ -881,7 +924,7 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
               </div>
             ) : null}
           </div>
-          <button type="submit" className="btn-primary" disabled={submitting} style={{ whiteSpace: "nowrap" }}>
+          <button type="submit" className="btn-primary" disabled={submitting || !responderRole} style={{ whiteSpace: "nowrap" }}>
             {submitting ? "Submitting…" : isSealed ? "Seal & Submit →" : "Submit Response"}
           </button>
         </div>
@@ -893,47 +936,61 @@ function ResponseForm({ survey, isActive, onSubmitted }) {
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function SurveyDetailPage() {
-  const { txHash } = useParams();
-  const { walletApi, setWalletMenuOpen } = useContext(WalletContext);
+  const { txHash, surveyIndex } = useParams();
+  const resolvedSurveyIndex = surveyIndex ?? "0";
+  const { walletApi } = useContext(WalletContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("results");
+  // Surveys can live on preview or mainnet; follow the choice persisted on the
+  // list page (the rest of Civitas is always mainnet).
+  const [network] = useState(getSurveyNetwork());
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/surveys/${txHash}`);
+      const res = await fetch(`/api/surveys/${txHash}/${resolvedSurveyIndex}?network=${encodeURIComponent(network)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load survey.");
+      try {
+        json.survey = await hydrateSurveyPresentation(json.survey);
+      } catch (presentationError) {
+        json.presentationError = presentationError?.message || "External survey presentation could not be verified.";
+      }
       setData(json);
     } catch (e) {
       if (!silent) setError(e.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [txHash]);
+  }, [txHash, resolvedSurveyIndex, network]);
 
   useEffect(() => { load(); }, [load]);
 
   const survey = data?.survey;
-  const responses = data?.responses ?? [];
+  const responses = useMemo(() => data?.responses ?? [], [data?.responses]);
   const tally = data?.tally ?? {};
   const details = survey?.details ?? {};
   useSeoMeta({
     title: details.title ? `${details.title} — Survey` : "Governance Survey",
-    description: details.description || "On-chain Cardano governance survey weighted by stake and voting power."
+    description: details.description || "A CIP-179 v5 on-chain Cardano governance survey."
   });
   const questions = details.questions ?? [];
   const roles = getSurveyRoles(details);
-  const currentEpoch = useCurrentEpoch();
+  // The network's current epoch comes back with the survey payload; fall back to
+  // the app's mainnet epoch hook only while browsing mainnet before it loads.
+  const mainnetEpoch = useCurrentEpoch();
+  const currentEpoch = data?.currentEpoch != null
+    ? data.currentEpoch
+    : (network === "mainnet" ? mainnetEpoch : null);
   const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
 
   // ── Sealed response decryption ──────────────────────────────────────────────
   const isSealed = Boolean(details?.isTimelocked);
   const drandRound = details?.drandRound ?? null;
-  const revealTimeMs = isSealed && drandRound != null ? roundTime(defaultChainInfo, drandRound) : null;
+  const revealTimeMs = isSealed && drandRound != null ? unixTimeForRound(drandRound) * 1000 : null;
   const isPastReveal = revealTimeMs != null && Date.now() > revealTimeMs;
   const hasSealedChunks = responses.some((r) => r.sealedHexChunks?.length > 0);
 
@@ -943,13 +1000,13 @@ export default function SurveyDetailPage() {
   useEffect(() => {
     if (!isPastReveal || !hasSealedChunks || decryptState !== "idle") return;
     setDecryptState("decrypting");
-    decryptSealedResponses(responses)
+    decryptSealedResponses(responses, drandRound, survey)
       .then((dec) => { setDecryptedResponses(dec); setDecryptState("done"); })
       .catch((e) => { console.error("Sealed decrypt error:", e); setDecryptState("error"); });
-  }, [isPastReveal, hasSealedChunks, decryptState, responses]);
+  }, [isPastReveal, hasSealedChunks, decryptState, responses, drandRound, survey]);
 
   const effectiveResponses = decryptedResponses ?? responses;
-  const effectiveTally = decryptedResponses ? buildClientTally(questions, decryptedResponses) : tally;
+  const effectiveTally = decryptedResponses ? buildClientTally(questions, decryptedResponses, roles) : tally;
 
   // ── Owner-only cancellation ─────────────────────────────────────────────────
   const ownerKeyHash = details?.ownerKeyHash ?? null;
@@ -990,7 +1047,7 @@ export default function SurveyDetailPage() {
   const tallyWeight = visibleTally?.totalWeight ?? effectiveTally.totalWeight ?? 0;
   const showStakeWeight = roleTallies.some((row) => row.weighting === "StakeBased" && Number(row.totalWeight || 0) > 0)
     || effectiveResponses.some((response) => Number(response.responseStakeAda || 0) > 0);
-  // v4 surveys count 1 vote per credential (CredentialBased weighting), so the tally
+  // CIP-179 roles express eligibility, not weighting; Civitas displays one count per credential.
   // "weight" is a vote count — not ADA. The stake shown per response is informational.
   // Surface the aggregate as "Stake represented" (sum of responders' live stake).
   const isStakeWeighted = roleTallies.some((row) => row.weighting === "StakeBased");
@@ -1041,6 +1098,9 @@ export default function SurveyDetailPage() {
               Reference document ↗
             </a>
           ) : null}
+          {data?.presentationError ? (
+            <p className="vote-notice">{data.presentationError} On-chain constraints are still shown with placeholder labels.</p>
+          ) : null}
           {isOwner && !isCancelled && cancelState !== "done" ? (
             <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <button
@@ -1072,7 +1132,7 @@ export default function SurveyDetailPage() {
           <span className="muted">Ends epoch</span>
           <strong>{details.endEpoch ?? "—"}</strong>
           {details.endEpoch != null ? (
-            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(details.endEpoch)}</span>
+            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(network, details.endEpoch)}</span>
           ) : null}
         </div>
         <div className="survey-meta-item">
@@ -1109,7 +1169,7 @@ export default function SurveyDetailPage() {
         <div className="survey-meta-item">
           <span className="muted">Survey TX</span>
           <a className="ext-link mono survey-tx-link"
-            href={`https://cardanoscan.io/transaction/${txHash}`}
+            href={explorerTxUrl(network, txHash)}
             target="_blank" rel="noreferrer">
             {txHash?.slice(0, 12)}…{txHash?.slice(-8)}
           </a>
@@ -1135,7 +1195,12 @@ export default function SurveyDetailPage() {
               {isSealed
                 ? "Sealed survey: answers stay encrypted until the reveal date, then everyone can see the tally below. "
                 : "Each bar shows how responders answered. "}
-              Every wallet counts as one vote. Open the <strong>Responses</strong> tab to see each individual response on-chain.
+              Each counted role credential contributes one response. Open the <strong>Responses</strong> tab to see each individual response on-chain.
+            </p>
+          ) : null}
+          {data?.membershipAudited === false ? (
+            <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 1rem" }}>
+              Results validate CIP-179 structure and transaction proof. Historical role membership is not audited by Civitas.
             </p>
           ) : null}
           {isSealed && !isPastReveal && revealTimeMs != null ? (
@@ -1225,7 +1290,7 @@ export default function SurveyDetailPage() {
                     <td>{fmtDate(r.blockTime)}</td>
                     <td>
                       <a className="ext-link mono" style={{ fontSize: "0.78rem" }}
-                        href={`https://cardanoscan.io/transaction/${r.txId}`}
+                        href={explorerTxUrl(network, r.txId)}
                         target="_blank" rel="noreferrer">
                         {r.txId?.slice(0, 10)}…
                       </a>
@@ -1295,10 +1360,8 @@ export default function SurveyDetailPage() {
           <p className="muted" style={{ maxWidth: "440px", margin: "0 auto 1.25rem" }}>
             Responding records your answers on-chain as a small transaction (under ~1 ADA).
             Your wallet must be eligible for one of this survey's roles: {roles.join(", ") || "—"}.
+            Use the Connect Wallet button in the top bar to get started.
           </p>
-          <button type="button" className="btn-primary" onClick={() => setWalletMenuOpen(true)}>
-            Connect Wallet
-          </button>
           <div style={{ marginTop: "1rem" }}>
             <Link to="/guide?section=tool-survey-respond" className="inline-link" style={{ fontSize: "0.8rem" }}>
               How responding works →

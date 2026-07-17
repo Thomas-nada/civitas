@@ -5,7 +5,10 @@ services:
     plan: free
     autoDeploy: true
     rootDir: .
-    buildCommand: npm install --prefix frontend && npm run build
+    # Root prod deps (cip-179, @evolution-sdk/evolution) are required by
+    # lib/cip179.js at runtime for the surveys index; --omit=dev skips the
+    # playwright devDependency (heavy browser download, e2e-only).
+    buildCommand: npm install --omit=dev && npm install --prefix frontend && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_VERSION

@@ -1,0 +1,18 @@
+<!-- url: https://raw.githubusercontent.com/Dracula-DAO/cardano-drep/refs/heads/main/2026/2026-07-12_Reforming_Treasury_Governance.jsonld -->
+# DraculaDAO
+
+**Proposal:** Reforming Treasury Governance
+**Vote:** Yes
+**Voter ID:** `drep1ygs99wsy49h9vydggncfeck2xwmngyeltp66pvgzl6jz63s6qmu3p`
+
+---
+
+Vote: YES
+
+This is a non-binding Info Action titled "Reforming Treasury Governance" (gov_action1t5ap7etluvct2x69nj5mfqhurgakuvekyflcsrv2qkrhrs378n3qq3z2c22), submitted on June 9, 2026 with voting closing July 13, 2026. It requests no funds and changes no protocol parameter. It diagnoses treasury governance as being in a poor state — a persistent funding impasse, and a treasury process that is pivotal to Cardano's stability and growth yet only indirectly addressed and barely supported by the existing governance system — and it calls on the community to collaborate on reforming that process, outlining guardrails for strategic direction that would require further refinement and eventual amendments to the current process and the Constitution.
+
+Dracula DAO votes YES. The diagnosis is correct and overdue. The 2026 cycle made the dysfunction concrete: 69 proposals requesting roughly 331.6M ADA against a Net Change Limit debated between 350M and 500M, an IOG research roadmap that drew opposition from a large majority of DReps, and a Cardano Summit that won a majority but died for lack of a stake-weighted supermajority. That is not a healthy allocation process; it is a series of unstructured, high-stakes standoffs. Treasury governance today decides who gets paid before it has decided what should be built, and it does so with almost no machinery for reconciling competing claims. An Info Action that names this problem and opens a structured reform track carries essentially zero risk — no ADA leaves the treasury, no parameter moves, no ADA is burned — and real option value in shaping what comes next. Supporting the direction costs nothing and forfeits nothing.
+
+The honest limitation is that this is a signal, not a solution. An Info Action "sketches basic ideas"; it commits no one to anything, and its guardrails are stated at a level of generality that could later be filled in well or badly. A YES here is a vote for the conversation, not a blank endorsement of whatever emerges from it. Dracula DAO will judge every concrete instrument that follows — constitutional amendments, revised budget frameworks, new NCL structures — on its specific merits, and will oppose any "reform" that concentrates discretionary spending authority, weakens on-chain DRep ratification, or substitutes a standing executive's judgment for verifiable delivery.
+
+Dracula DAO enters this reform process with a specific position already on record. Treasury funds should be allocated as grants paid on completion of well-defined features — not as pre-funded team operating budgets. The DREP's proper role is to vote on what to build, while who gets paid and how much is pushed to competitive, sprint-based bidding: work broken into short stories that teams bid on, funded per sprint through a smart contract that pays out only on signed-off delivery and returns undelivered funds to the treasury. That model directly answers the two failures this action identifies — it breaks the funding impasse by separating feature prioritization from team financing, and it gives treasury governance the direct, accountable support the current system lacks. Milestone-gating with independent sign-off is a partial approximation of this, better than a lump sum but short of true competitive per-sprint bidding. We vote YES to reform treasury governance, and we will press for reform of this shape.
