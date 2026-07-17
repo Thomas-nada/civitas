@@ -119,19 +119,27 @@ export default function IntersectPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   // Predicted-vote overrides persist per-track in this browser (localStorage).
-  // Shape: { [trackKey]: { [drepId]: "Yes"|"No"|"Abstain"|"" } }
+  // Shape: { [trackKey]: { [drepId]: { v: "Yes"|"No"|"Abstain"|"", t: <ms set> } } }
+  // A real on-chain vote cast AFTER an override (t) auto-clears that override.
   const [allOverrides, setAllOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem("civitas_pred_intersect") || "{}") || {}; }
     catch { return {}; }
   });
-  const overrides = allOverrides[track] || {};
-  const setOverrides = useCallback((updater) => {
+  const overridesRaw = allOverrides[track] || {};
+  // Plain { id: vote } view (tolerates legacy string-only entries).
+  const overrides = useMemo(() => {
+    const o = {};
+    for (const [id, val] of Object.entries(overridesRaw)) o[id] = (val && typeof val === "object") ? val.v : val;
+    return o;
+  }, [overridesRaw]);
+  const cycleOverride = useCallback((id, current) => {
     setAllOverrides(prev => {
-      const cur = prev[track] || {};
-      const next = typeof updater === "function" ? updater(cur) : updater;
-      return { ...prev, [track]: next };
+      const cur = { ...(prev[track] || {}) };
+      cur[id] = { v: nextVote(current), t: Date.now() };
+      return { ...prev, [track]: cur };
     });
   }, [track]);
+  const resetOverrides = () => setAllOverrides(prev => ({ ...prev, [track]: {} }));
   useEffect(() => {
     try { localStorage.setItem("civitas_pred_intersect", JSON.stringify(allOverrides)); } catch { /* ignore */ }
   }, [allOverrides]);
@@ -201,6 +209,26 @@ export default function IntersectPage() {
     setRationaleError({});
   }, [track]);
 
+  // Auto-clear any override once the DRep casts a real on-chain vote that is
+  // newer than when the override was made — the real vote then takes over.
+  useEffect(() => {
+    if (!data) return;
+    const votedAt = {};
+    for (const d of data.dreps) if (d.votedAtUnix) votedAt[d.id] = d.votedAtUnix * 1000;
+    setAllOverrides(prev => {
+      const cur = prev[track];
+      if (!cur || Object.keys(cur).length === 0) return prev;
+      let changed = false;
+      const next = {};
+      for (const [id, val] of Object.entries(cur)) {
+        const t = (val && typeof val === "object") ? Number(val.t || 0) : 0;
+        if (t && votedAt[id] && votedAt[id] > t) { changed = true; continue; } // real vote is newer → drop
+        next[id] = val;
+      }
+      return changed ? { ...prev, [track]: next } : prev;
+    });
+  }, [data, track]);
+
   // Auto-refresh every 2 min
   useEffect(() => {
     timerRef.current = setInterval(() => load(true), REFRESH_MS);
@@ -260,7 +288,6 @@ export default function IntersectPage() {
     });
   }, [data, search, filterVote, predictedVotes, sortCol, sortDir]);
 
-  const resetOverrides = () => setOverrides({});
   const overrideCount = Object.keys(overrides).length;
 
   function downloadCSV() {
@@ -527,10 +554,7 @@ export default function IntersectPage() {
                     <td style={{ padding: "8px 12px", textAlign: "center" }}>
                       <VotePill
                         vote={pred}
-                        onClick={() => setOverrides(ov => ({
-                          ...ov,
-                          [d.id]: nextVote(pred),
-                        }))}
+                        onClick={() => cycleOverride(d.id, pred)}
                         locked={notCounted}
                       />
                       {isEdited && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>edited</span>}

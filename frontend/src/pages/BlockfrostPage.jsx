@@ -102,10 +102,20 @@ export default function BlockfrostPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   // Predicted-vote overrides persist in this browser (localStorage).
-  const [overrides, setOverrides] = useState(() => {
+  // Shape: { [drepId]: { v: "Yes"|"No"|"Abstain"|"", t: <ms set> } }
+  // A real on-chain vote cast AFTER an override (t) auto-clears that override.
+  const [overridesRaw, setOverridesRaw] = useState(() => {
     try { return JSON.parse(localStorage.getItem("civitas_pred_blockfrost") || "{}") || {}; }
     catch { return {}; }
   });
+  const overrides = useMemo(() => {
+    const o = {};
+    for (const [id, val] of Object.entries(overridesRaw)) o[id] = (val && typeof val === "object") ? val.v : val;
+    return o;
+  }, [overridesRaw]);
+  const cycleOverride = (id, current) =>
+    setOverridesRaw(prev => ({ ...prev, [id]: { v: nextVote(current), t: Date.now() } }));
+  const resetOverrides = () => setOverridesRaw({});
   const [search, setSearch]       = useState("");
   const [filterVote, setFilterVote] = useState("All");
   const [sortCol, setSortCol]     = useState("rank");
@@ -166,8 +176,27 @@ export default function BlockfrostPage() {
 
   // Persist predicted-vote overrides in this browser
   useEffect(() => {
-    try { localStorage.setItem("civitas_pred_blockfrost", JSON.stringify(overrides)); } catch { /* ignore */ }
-  }, [overrides]);
+    try { localStorage.setItem("civitas_pred_blockfrost", JSON.stringify(overridesRaw)); } catch { /* ignore */ }
+  }, [overridesRaw]);
+
+  // Auto-clear any override once the DRep casts a real on-chain vote that is
+  // newer than when the override was made — the real vote then takes over.
+  useEffect(() => {
+    if (!data) return;
+    const votedAt = {};
+    for (const d of data.dreps) if (d.votedAtUnix) votedAt[d.id] = d.votedAtUnix * 1000;
+    setOverridesRaw(prev => {
+      if (!prev || Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = {};
+      for (const [id, val] of Object.entries(prev)) {
+        const t = (val && typeof val === "object") ? Number(val.t || 0) : 0;
+        if (t && votedAt[id] && votedAt[id] > t) { changed = true; continue; }
+        next[id] = val;
+      }
+      return changed ? next : prev;
+    });
+  }, [data]);
 
   // Auto-refresh every 2 min
   useEffect(() => {
@@ -226,7 +255,6 @@ export default function BlockfrostPage() {
     });
   }, [data, search, filterVote, predictedVotes, sortCol, sortDir]);
 
-  const resetOverrides = () => setOverrides({});
   const overrideCount = Object.keys(overrides).length;
 
   function downloadCSV() {
@@ -474,10 +502,7 @@ export default function BlockfrostPage() {
                     <td style={{ padding: "8px 12px", textAlign: "center" }}>
                       <VotePill
                         vote={pred}
-                        onClick={() => setOverrides(ov => ({
-                          ...ov,
-                          [d.id]: nextVote(pred),
-                        }))}
+                        onClick={() => cycleOverride(d.id, pred)}
                         locked={notCounted}
                       />
                       {isEdited && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>edited</span>}
