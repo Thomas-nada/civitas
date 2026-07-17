@@ -1,0 +1,18 @@
+<!-- url: https://raw.githubusercontent.com/Dracula-DAO/cardano-drep/refs/heads/main/2026/2026-07-12_Eternl_Sustainability_V2.jsonld -->
+# DraculaDAO
+
+**Proposal:** Eternl Path to Sustainability - v2
+**Vote:** No
+**Voter ID:** `drep1ygs99wsy49h9vydggncfeck2xwmngyeltp66pvgzl6jz63s6qmu3p`
+
+---
+
+Vote: NO
+
+This is Eternl: Path to Sustainability - v2 (gov_action1lwudrf9g66mzlrxhq62y5pvzhzzv9wgps7u04kne202udge7kknsqlgmhse), a Treasury Withdrawal submitted June 16, 2026 with voting closing July 18, 2026. It requests 10,000,000 ADA over a 12-month horizon to sustain Eternl, a widely used non-custodial Cardano wallet, disbursed as 5,000,000 ADA on approval and a further 2,000,000 ADA and 3,000,000 ADA gated on observable evidence at milestones M1 and M2. It is administered by Intersect via the standardized Treasury Reserve / Project-Specific Smart Contract framework built by Sundae Labs, with a five-entity independent Oversight Committee verifying administrative actions. This v2 revises the expired 2026-2027 version by adding the clarification on audit-fund spending and oversight metrics that Constitutional Committee members requested in their vote rationales. No ADA burning is involved.
+
+Eternl remains foundational user-facing infrastructure with a demonstrated delivery record under prior treasury disbursements, and this proposal answers the specific accountability gap that sank the prior version: the audit-spending and oversight-metric clarifications the CC asked for are now present, the disbursement runs through a standardized smart contract with milestone gating, and an independent five-member Oversight Committee sits over administration. On project merit, and on governance structure, this is a materially better-formed proposal than most treasury requests, and Dracula DAO recognizes the responsiveness.
+
+Dracula DAO votes NO on grounds of treasury timing, consistent with our vote on the prior version dated June 14, 2026. That vote was explicit that our objection was timing, not merit, and that we would support a substantively similar proposal once market conditions improved. One month later the condition that drove that NO has not changed: ADA trades near multi-year lows, and approving a 10,000,000 ADA withdrawal at a cyclical price trough destroys treasury purchasing power — the same twelve months of Eternl operations funded after a price recovery would cost the treasury materially fewer tokens in real terms. Preserving the treasury's token base through a bear market is itself the ultra-long-term action; the treasury exists to be deployed across decades, not drawn down at its weakest point. The audit clarification, welcome as it is, does not touch this objection.
+
+A secondary concern reinforces the NO. Half the request — 5,000,000 ADA — is front-loaded on approval, before any milestone delivery. Milestone-gating with independent sign-off on the remaining 5,000,000 ADA is a real improvement over a lump sum, but a 50% up-front tranche is far from Dracula DAO's standard that treasury funds follow delivered, verifiable work rather than pre-fund a single team's operating runway; there is no competitive bidding, and the up-front tranche is not delivery-gated. We would prefer a structure weighted toward completion-gated payments with a smaller or eliminated front-load. Dracula DAO reaffirms its standing commitment: we expect to vote YES on a substantively similar Eternl proposal once ADA prices recover, and we encourage resubmission at that point, ideally with more of the total gated on observable delivery. This is a position on treasury timing discipline, not on Eternl's work.
