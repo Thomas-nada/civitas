@@ -432,7 +432,7 @@ export default function IntersectPage() {
 
         {/* ── Instruction callout ── */}
         <div style={{ background: "rgba(84,228,188,.07)", border: "1px solid rgba(84,228,188,.2)", borderRadius: 8, padding: "10px 16px", marginBottom: 20, fontSize: 13, color: "var(--text-muted)" }}>
-          <strong style={{ color: "var(--mint)" }}>Interactive:</strong> Click any <em>Predicted Vote</em> pill to cycle through Yes → No → Abstain → Not Voted. Stats and bars update live. 🔒 = on-chain (locked). <strong style={{ color: "var(--amber)" }}>⚡ Mismatch</strong> = on-chain differs from Ekklesia.
+          <strong style={{ color: "var(--mint)" }}>Interactive:</strong> Click any <em>Predicted Vote</em> pill to cycle through Yes → No → Abstain → Not Voted — including DReps who already voted on-chain, to model an expected change. Stats and bars update live. 🔒 in the Ekklesia / On-chain columns marks the actual recorded vote. <strong style={{ color: "var(--amber)" }}>⚡ Mismatch</strong> = on-chain differs from Ekklesia.
         </div>
 
         {/* ── Filters ── */}
@@ -514,7 +514,7 @@ export default function IntersectPage() {
                           ...ov,
                           [d.id]: nextVote(pred),
                         }))}
-                        locked={!!d.onChainVote || notCounted}
+                        locked={notCounted}
                       />
                       {isEdited && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>edited</span>}
                     </td>
