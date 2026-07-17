@@ -101,7 +101,11 @@ export default function BlockfrostPage() {
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
-  const [overrides, setOverrides] = useState({});   // drep.id → "Yes"|"No"|"Abstain"|""
+  // Predicted-vote overrides persist in this browser (localStorage).
+  const [overrides, setOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("civitas_pred_blockfrost") || "{}") || {}; }
+    catch { return {}; }
+  });
   const [search, setSearch]       = useState("");
   const [filterVote, setFilterVote] = useState("All");
   const [sortCol, setSortCol]     = useState("rank");
@@ -159,6 +163,11 @@ export default function BlockfrostPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Persist predicted-vote overrides in this browser
+  useEffect(() => {
+    try { localStorage.setItem("civitas_pred_blockfrost", JSON.stringify(overrides)); } catch { /* ignore */ }
+  }, [overrides]);
 
   // Auto-refresh every 2 min
   useEffect(() => {

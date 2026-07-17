@@ -118,7 +118,23 @@ export default function IntersectPage() {
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
-  const [overrides, setOverrides] = useState({});   // drep.id → "Yes"|"No"|"Abstain"|""
+  // Predicted-vote overrides persist per-track in this browser (localStorage).
+  // Shape: { [trackKey]: { [drepId]: "Yes"|"No"|"Abstain"|"" } }
+  const [allOverrides, setAllOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("civitas_pred_intersect") || "{}") || {}; }
+    catch { return {}; }
+  });
+  const overrides = allOverrides[track] || {};
+  const setOverrides = useCallback((updater) => {
+    setAllOverrides(prev => {
+      const cur = prev[track] || {};
+      const next = typeof updater === "function" ? updater(cur) : updater;
+      return { ...prev, [track]: next };
+    });
+  }, [track]);
+  useEffect(() => {
+    try { localStorage.setItem("civitas_pred_intersect", JSON.stringify(allOverrides)); } catch { /* ignore */ }
+  }, [allOverrides]);
   const [search, setSearch]       = useState("");
   const [filterVote, setFilterVote] = useState("All");
   const [sortCol, setSortCol]     = useState("rank");
@@ -177,9 +193,10 @@ export default function IntersectPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset what-if overrides and cached rationales when switching proposals
+  // Clear cached rationales when switching proposals. Predicted-vote overrides
+  // are kept per-track (persisted in localStorage) so edits survive switching
+  // proposals and browser reloads.
   useEffect(() => {
-    setOverrides({});
     setRationaleText({});
     setRationaleError({});
   }, [track]);
