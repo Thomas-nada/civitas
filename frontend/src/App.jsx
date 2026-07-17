@@ -45,6 +45,7 @@ const EpochCalendarPage = lazy(() => import("./pages/EpochCalendarPage"));
 const CipListPage = lazy(() => import("./pages/CipListPage"));
 const CipDetailPage = lazy(() => import("./pages/CipDetailPage"));
 const IntersectPage = lazy(() => import("./pages/IntersectPage"));
+const BlockfrostPage = lazy(() => import("./pages/BlockfrostPage"));
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -462,6 +463,7 @@ export default function App() {
           <Route path="/ncl" element={<Navigate to="/treasury" replace />} />
           <Route path="/treasury" element={<TreasuryPage />} />
           <Route path="/intersect" element={<IntersectPage />} />
+          <Route path="/blockfrost" element={<BlockfrostPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />
           <Route path="/dreps/:actorId" element={<VoterProfilePage actorType="drep" />} />
           <Route path="/delegate/:drepId" element={<DelegatePage />} />

@@ -10108,6 +10108,11 @@ const server = http.createServer(async (req, res) => {
         govActionId: "gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sxypfkyr",
         ekkProposalId: "6a1512d73ea9a75799cf8f13",
       },
+      // On-chain only — this action was never on an Ekklesia ballot.
+      blockfrost: {
+        govActionId: "gov_action12sumv9qky4pkenmqp7gshv9nxqdk9zyn8gkd77fewkyy3t5tnxtsq457vgq",
+        ekkProposalId: null,
+      },
     };
     const trackKey = String(url.searchParams.get("proposal") || "intersect").toLowerCase();
     const track = INTERSECT_TRACKS[trackKey] || INTERSECT_TRACKS.intersect;
@@ -10134,8 +10139,11 @@ const server = http.createServer(async (req, res) => {
       const activeDreps = regularDreps.filter(d => isActiveCalendarDrep(d));
       const totalActiveAda = activeDreps.reduce((s, d) => s + Number(d.votingPowerAda || 0), 0) + alwaysNoConfAda;
 
-      // 2. Ekklesia votes — use cache or fetch fresh (shared function above)
-      const ekkData = await getEkklesiaVotesCached().catch(() => ({ votes: {}, allVoters: [] }));
+      // 2. Ekklesia votes — use cache or fetch fresh (shared function above).
+      //    Skip entirely for on-chain-only tracks (no Ekklesia ballot).
+      const ekkData = INTERSECT_EKK_PROPOSAL
+        ? await getEkklesiaVotesCached().catch(() => ({ votes: {}, allVoters: [] }))
+        : { votes: {}, allVoters: [] };
       const ekkVotesRaw = (ekkData.votes[INTERSECT_EKK_PROPOSAL] || []);
 
       // Keep any Ekklesia voter that appears in the Civitas snapshot (active or not)
