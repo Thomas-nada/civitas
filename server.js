@@ -9719,6 +9719,138 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Treasury Administration accountability (Intersect Administration API) ──
+  // Post-approval execution of treasury withdrawals: vendor contracts (projects),
+  // how much of the approved amount has actually been drawn down, milestone
+  // progress, and paused/stalled projects. Read-only, no auth, on-chain data.
+  // Cached server-side (never called from the browser) with retry + stale fallback.
+  if (req.method === "GET" && url.pathname === "/api/treasury-admin") {
+    const CACHE_KEY = "_treasuryAdminCache_v1";
+    const TTL_MS = 5 * 60 * 1000;
+    const cache = global[CACHE_KEY];
+    if (cache && Date.now() - cache.fetchedAt < TTL_MS) {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=60" });
+      res.end(JSON.stringify(cache.data));
+      return;
+    }
+
+    const https2 = require("https");
+    const ADMIN_HOST = "administration.info.intersectmbo.org";
+    function adminGet(path) {
+      return new Promise((resolve) => {
+        const r = https2.request(
+          { hostname: ADMIN_HOST, path, method: "GET",
+            headers: { Accept: "application/json", "User-Agent": "civitas-proxy/1.0", Host: ADMIN_HOST } },
+          (r2) => {
+            const cs = [];
+            r2.on("data", (c) => cs.push(c));
+            r2.on("end", () => {
+              if (r2.statusCode !== 200) { resolve(null); return; }
+              try { resolve(JSON.parse(Buffer.concat(cs).toString())); } catch { resolve(null); }
+            });
+          }
+        );
+        r.setTimeout(20000, () => { r.destroy(); resolve(null); });
+        r.on("error", () => resolve(null));
+        r.end();
+      });
+    }
+    async function adminGetRetry(path, tries = 4) {
+      for (let i = 0; i < tries; i++) {
+        const r = await adminGet(path);
+        if (r) return r;
+        await new Promise((x) => setTimeout(x, 700));
+      }
+      return null;
+    }
+
+    try {
+      // Paginate projects (limit 100 covers current count with room to spare).
+      const projects = [];
+      let page = 1;
+      for (; page <= 10; page++) {
+        const resp = await adminGetRetry(`/api/v1/projects?limit=100&page=${page}`);
+        const list = resp?.data || resp?.projects || (Array.isArray(resp) ? resp : []);
+        if (!Array.isArray(list) || list.length === 0) break;
+        projects.push(...list);
+        const pg = resp?.meta?.pagination || resp?.pagination || {};
+        if (!pg.has_next) break;
+      }
+      const status = await adminGetRetry("/api/v1/status");
+
+      if (projects.length === 0) {
+        // Serve stale cache if we have it; otherwise report unavailable (frontend hides the section).
+        if (cache) {
+          res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=30" });
+          res.end(JSON.stringify({ ...cache.data, stale: true }));
+          return;
+        }
+        json(res, 200, { available: false });
+        return;
+      }
+
+      const adaOf = (l) => Math.round(Number(l || 0) / 1e6);
+      let allocated = 0, withdrawn = 0, balance = 0;
+      const byStatus = {};
+      const ms = { total: 0, completed: 0, withdrawn: 0, pending: 0, paused: 0 };
+      const rows = projects.map((p) => {
+        const f = p.financials || {};
+        const a = Number(f.total_allocated_lovelace || 0);
+        const w = Number(f.total_withdrawn_lovelace || 0);
+        allocated += a; withdrawn += w; balance += Number(f.current_balance_lovelace || 0);
+        const st = String(p.status || "unknown").toLowerCase();
+        byStatus[st] = (byStatus[st] || 0) + 1;
+        const m = p.milestones_summary || {};
+        ms.total += Number(m.total || 0); ms.completed += Number(m.completed || 0);
+        ms.withdrawn += Number(m.withdrawn || 0); ms.pending += Number(m.pending || 0);
+        ms.paused += Number(m.paused || 0);
+        return {
+          projectId: String(p.project_id || ""),
+          name: String(p.project_name || "").trim(),
+          status: st,
+          allocatedAda: adaOf(a),
+          withdrawnAda: adaOf(w),
+          drawdownPct: a > 0 ? Math.min(100, Math.round((w / a) * 100)) : 0,
+          milestones: {
+            total: Number(m.total || 0),
+            done: Number(m.completed || 0) + Number(m.withdrawn || 0),
+            paused: Number(m.paused || 0),
+          },
+          fundTxHash: String(p.fund_tx_hash || ""),
+        };
+      });
+      rows.sort((a, b) => b.allocatedAda - a.allocatedAda);
+
+      const data = {
+        available: true,
+        fetchedAt: Date.now(),
+        syncedBlock: status?.data?.chain?.indexer_block || null,
+        syncedAt: status?.data?.chain?.indexer_time?.iso || null,
+        projectCount: projects.length,
+        byStatus,
+        allocatedAda: adaOf(allocated),
+        withdrawnAda: adaOf(withdrawn),
+        balanceAda: adaOf(balance),
+        drawdownPct: allocated > 0 ? Number((withdrawn / allocated * 100).toFixed(1)) : 0,
+        pausedCount: byStatus.paused || 0,
+        milestones: ms,
+        projects: rows,
+      };
+      global[CACHE_KEY] = { data, fetchedAt: Date.now() };
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=60" });
+      res.end(JSON.stringify(data));
+    } catch (e) {
+      if (cache) {
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=30" });
+        res.end(JSON.stringify({ ...cache.data, stale: true }));
+        return;
+      }
+      console.error("[/api/treasury-admin]", e?.message || e);
+      json(res, 200, { available: false, error: e?.message || "Failed to load treasury administration data." });
+    }
+    return;
+  }
+
   // ── Treasury analytics (expanded NCL view) ────────────────────────────────
   if (req.method === "GET" && url.pathname === "/api/treasury") {
     const [current, previous] = await Promise.all([

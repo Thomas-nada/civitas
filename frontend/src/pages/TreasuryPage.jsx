@@ -70,6 +70,18 @@ export default function TreasuryPage() {
 
   useSnapshotUpdates({ onUpdate: () => load({ soft: true }) });
 
+  // Treasury Administration accountability (post-approval execution).
+  // Loaded independently so a slow/unavailable external API never blocks the page.
+  const [admin, setAdmin] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/treasury-admin")
+      .then((r) => r.json())
+      .then((d) => { if (alive && d && d.available) setAdmin(d); })
+      .catch(() => { /* section stays hidden */ });
+    return () => { alive = false; };
+  }, []);
+
   const periods = payload?.periods || [];
   const periodData = periodKey === "current" ? payload?.current : payload?.previous;
   const totals = periodData?.totals || {};
@@ -375,6 +387,107 @@ export default function TreasuryPage() {
           </table>
         ) : null}
       </section>
+
+      {/* ── Treasury Accountability (post-approval execution) ── */}
+      {admin ? (
+        <section className="panel">
+          <h2>Treasury Accountability — Funded Projects</h2>
+          <p className="muted" style={{ marginTop: "-0.25rem" }}>
+            What has happened to approved withdrawals since enactment — how much has actually been drawn
+            down against milestones. Live on-chain data via the Intersect Administration API
+            {admin.syncedBlock ? `, synced to block ${Number(admin.syncedBlock).toLocaleString()}` : ""}.
+            {admin.stale ? " (showing last cached snapshot)" : ""}
+          </p>
+
+          <section className="cards" style={{ marginBottom: "1rem" }}>
+            <article className="card">
+              <p>Approved / Allocated</p>
+              <strong>{fmtAdaShort(admin.allocatedAda)} ₳</strong>
+              <p className="muted">{admin.projectCount} funded projects</p>
+            </article>
+            <article className="card">
+              <p>Drawn Down</p>
+              <strong style={{ color: "#4ade80" }}>{fmtAdaShort(admin.withdrawnAda)} ₳</strong>
+              <p className="muted">{fmtPct(admin.drawdownPct)} of allocated</p>
+            </article>
+            <article className="card">
+              <p>Still Locked</p>
+              <strong>{fmtAdaShort(Math.max(0, admin.allocatedAda - admin.withdrawnAda))} ₳</strong>
+              <p className="muted">approved but undrawn</p>
+            </article>
+            <article className="card">
+              <p>Paused Projects</p>
+              <strong style={{ color: admin.pausedCount > 0 ? "#fbbf24" : undefined }}>{admin.pausedCount}</strong>
+              <p className="muted">
+                {admin.projectCount > 0 ? `${Math.round((admin.pausedCount / admin.projectCount) * 100)}% of all projects` : "—"}
+              </p>
+            </article>
+          </section>
+
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
+            <span>Drawn down — {fmtAdaShort(admin.withdrawnAda)} ₳</span>
+            <span>{admin.milestones?.total || 0} milestones · {admin.milestones?.withdrawn || 0} withdrawn · {admin.milestones?.pending || 0} pending · {admin.milestones?.paused || 0} paused</span>
+          </div>
+          <div className="treasury-progress-track">
+            <div className="treasury-progress-fill" style={{ width: `${Math.min(100, admin.drawdownPct)}%`, background: "#4ade80" }} />
+          </div>
+
+          {admin.projects && admin.projects.length > 0 ? (
+            <table style={{ marginTop: "1.25rem" }}>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Status</th>
+                  <th>Allocated</th>
+                  <th>Withdrawn</th>
+                  <th>Drawdown</th>
+                  <th>Milestones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {admin.projects.slice(0, 15).map((p) => {
+                  const barColor = p.status === "paused"
+                    ? "#fbbf24"
+                    : (p.milestones.total > 0 && p.drawdownPct < (p.milestones.done / p.milestones.total) * 100 - 20)
+                      ? "#f87171" : "#4ade80";
+                  return (
+                    <tr key={p.projectId || p.name}>
+                      <td>
+                        <strong>{p.name || "Unnamed project"}</strong>
+                        {p.projectId ? <div className="mono" style={{ fontSize: "0.7rem", opacity: 0.6 }}>{p.projectId}</div> : null}
+                      </td>
+                      <td>
+                        <span className={`pill pill--${p.status === "completed" ? "enacted" : p.status === "active" ? "active" : "expired"}`}>
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </span>
+                      </td>
+                      <td>{fmtAdaShort(p.allocatedAda)} ₳</td>
+                      <td>{fmtAdaShort(p.withdrawnAda)} ₳</td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 130 }}>
+                          <div className="treasury-progress-track" style={{ flex: 1, margin: 0, height: 7 }}>
+                            <div className="treasury-progress-fill" style={{ width: `${p.drawdownPct}%`, background: barColor }} />
+                          </div>
+                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: 38, textAlign: "right" }}>{p.drawdownPct}%</span>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        <strong style={{ color: "var(--text)" }}>{p.milestones.done}</strong>/{p.milestones.total} done
+                        {p.milestones.paused > 0 ? <span style={{ color: "#fbbf24" }}> · {p.milestones.paused} paused</span> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : null}
+          {admin.projects && admin.projects.length > 15 ? (
+            <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}>
+              Showing top 15 of {admin.projects.length} projects by allocation.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* ── Ratified (pending payout) ── */}
       <section className="panel">
