@@ -537,6 +537,17 @@ export default function ProposalDetailPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const silentRefreshRef = useRef(false);
 
+  // Delivery record: admin-API projects this treasury withdrawal funds (heuristic match).
+  const [delivery, setDelivery] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/treasury-admin/mapping")
+      .then((r) => r.json())
+      .then((d) => { if (alive && d && d.proposalToProjects) setDelivery(d.proposalToProjects[decodedProposalId] || null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [decodedProposalId]);
+
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -828,6 +839,44 @@ export default function ProposalDetailPage() {
         </div>
         <p className="mono muted pdp-action-id">{decodedProposalId}</p>
       </section>
+
+      {/* ── Delivery / execution (treasury withdrawals) ─────────────── */}
+      {isTreasury && delivery && delivery.length > 0 && (
+        <section className="stats-section stats-section--wide">
+          <div className="panel" style={{ margin: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Delivery &amp; Execution</h2>
+              <Link className="mode-btn" to="/treasury/explorer" style={{ fontSize: "0.78rem" }}>Treasury Explorer →</Link>
+            </div>
+            <p className="muted" style={{ margin: "0.4rem 0 0.9rem", fontSize: "0.83rem" }}>
+              On-chain funding administered for this withdrawal via the Intersect Administration API — how much
+              has actually been drawn down against milestones.
+              {delivery.some((d) => d.confidence !== "strong") ? " Matches are inferred from amount and name; verify where marked “likely”." : ""}
+            </p>
+            {delivery.map((proj) => (
+              <div key={proj.projectId} style={{ display: "flex", alignItems: "center", gap: "0.9rem", flexWrap: "wrap", padding: "0.6rem 0", borderTop: "1px solid var(--line)" }}>
+                <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+                  <Link to={`/treasury/explorer/${encodeURIComponent(proj.projectId)}`} style={{ fontWeight: 600 }}>{proj.name || proj.projectId}</Link>
+                  <span className={`pill pill--${proj.status === "completed" ? "enacted" : proj.status === "active" ? "active" : "expired"}`} style={{ marginLeft: 8, fontSize: "0.68rem" }}>
+                    {proj.status ? proj.status.charAt(0).toUpperCase() + proj.status.slice(1) : "—"}
+                  </span>
+                  {proj.confidence !== "strong" && (
+                    <span className="pill" style={{ marginLeft: 6, fontSize: "0.66rem", background: "rgba(251,191,36,.14)", color: "#fbbf24", border: "1px solid rgba(251,191,36,.4)" }}>likely match</span>
+                  )}
+                </div>
+                <div style={{ flex: "1 1 220px", display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 160 }}>
+                  <div className="treasury-progress-track" style={{ flex: 1, margin: 0, height: 8 }}>
+                    <div className="treasury-progress-fill" style={{ width: `${proj.drawdownPct}%`, background: proj.status === "paused" ? "#fbbf24" : "#4ade80" }} />
+                  </div>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                    ₳{Number(proj.withdrawnAda).toLocaleString()} / ₳{Number(proj.allocatedAda).toLocaleString()} drawn ({proj.drawdownPct}%)
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Hash mismatch warning ───────────────────────────────────── */}
       {metadata?.hashMismatch && (

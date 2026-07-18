@@ -79,7 +79,16 @@ function MilestoneRow({ m, index }) {
 export default function TreasuryProjectPage() {
   const { projectId } = useParams();
   const [p, setP] = useState(null);
+  const [match, setMatch] = useState(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/treasury-admin/mapping").then(r => r.json()).then(d => {
+      if (alive && d && d.projectToProposal) setMatch(d.projectToProposal[projectId] || null);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [projectId]);
   useSeoMeta({ title: p?.name ? `${p.name} — Treasury` : "Treasury Project", description: "Funded Cardano treasury project detail: milestones, evidence, and on-chain activity." });
 
   useEffect(() => {
@@ -116,6 +125,17 @@ export default function TreasuryProjectPage() {
           <span className={`pill pill--${statusPillMod(p.status)}`} style={{ fontSize: "0.8rem" }}>{p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span>
         </div>
         {p.description ? <p style={{ marginTop: "0.75rem", maxWidth: "80ch", lineHeight: 1.55 }}>{p.description}</p> : null}
+
+        {match ? (
+          <div style={{ marginTop: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-soft)", fontSize: "0.85rem" }}>
+            <span className="muted">Funded by governance action </span>
+            <Link to={`/actions/${encodeURIComponent(match.proposalId)}`} style={{ fontWeight: 600 }}>{match.proposalName || match.proposalId}</Link>
+            <span className="pill" style={{ marginLeft: 8, fontSize: "0.68rem", background: match.confidence === "strong" ? "rgba(74,222,128,.14)" : "rgba(251,191,36,.14)", color: match.confidence === "strong" ? "#4ade80" : "#fbbf24", border: `1px solid ${match.confidence === "strong" ? "rgba(74,222,128,.4)" : "rgba(251,191,36,.4)"}` }}>
+              {match.confidence === "strong" ? "matched" : "likely match"}
+            </span>
+            {match.outcome ? <span className="muted" style={{ marginLeft: 6 }}>· {match.outcome}</span> : null}
+          </div>
+        ) : null}
 
         <section className="cards" style={{ marginTop: "1rem" }}>
           <article className="card"><p>Allocated</p><strong>{fmtAdaShort(p.allocatedAda)} ₳</strong><p className="muted">{fmtAda(p.allocatedAda)} ₳</p></article>

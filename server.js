@@ -9889,6 +9889,96 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Treasury Explorer: heuristic proposal → project mapping ───────────────
+  // No explicit key exists between a governance action and an admin-API project,
+  // so we match on withdrawal amount + project-name similarity. Each link carries
+  // a confidence so the UI can be honest about it. Cached 30 min (stable data).
+  if (req.method === "GET" && url.pathname === "/api/treasury-admin/mapping") {
+    const CACHE_KEY = "_treasuryAdminMappingCache_v1";
+    const TTL_MS = 30 * 60 * 1000;
+    const cache = global[CACHE_KEY];
+    if (cache && Date.now() - cache.fetchedAt < TTL_MS) {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
+      res.end(JSON.stringify(cache.data));
+      return;
+    }
+    try {
+      // Admin projects
+      const projects = [];
+      for (let page = 1; page <= 10; page++) {
+        const resp = await treasuryAdminGet(`/api/v1/projects?limit=100&page=${page}`);
+        const list = resp?.data || (Array.isArray(resp) ? resp : []);
+        if (!Array.isArray(list) || list.length === 0) break;
+        projects.push(...list);
+        if (!(resp?.meta?.pagination?.has_next)) break;
+      }
+      // Governance treasury withdrawals from the live snapshot
+      const proposalInfo = (snapshot && snapshot.proposalInfo) || {};
+      const govActions = [];
+      for (const [id, info] of Object.entries(proposalInfo)) {
+        const gt = String(info?.governanceType || "").toLowerCase();
+        if (!gt.includes("treasury")) continue;
+        govActions.push({ id, name: String(info?.actionName || ""), outcome: String(info?.outcome || "") });
+      }
+
+      // Matching helpers
+      const STOP = new Set(["the","a","an","of","for","and","to","in","on","by","with","withdrawal","treasury","budget","proposal","cardano","ada","initiative","program","project","administered","maintenance","withdraw","loan"]);
+      const toks = (s) => new Set(String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w) && w.length > 2));
+      const jaccard = (a, b) => { const A = toks(a), B = toks(b); if (!A.size || !B.size) return 0; let i = 0; for (const x of A) if (B.has(x)) i++; return i / (A.size + B.size - i); };
+      const stripBoiler = (n) => String(n).replace(/withdraw\s*₳?[0-9,.]*\s*(ada)?\s*(for)?/i, " ").replace(/administered by.*/i, " ");
+      const parseAmt = (n) => { const m = String(n).replace(/,/g, "").match(/([0-9]{5,})/); return m ? Number(m[1]) : null; };
+
+      const projectToProposal = {};
+      const proposalToProjects = {};
+      for (const p of projects) {
+        const pAmt = Math.round(Number(p.initial_amount_lovelace || p.financials?.total_allocated_lovelace || 0) / 1e6);
+        let best = null, bestScore = 0, bestAmt = false, bestName = 0;
+        for (const g of govActions) {
+          const gAmt = parseAmt(g.name);
+          const amtMatch = pAmt > 0 && gAmt && Math.abs(gAmt - pAmt) <= Math.max(2, pAmt * 0.001);
+          const nameScore = jaccard(p.project_name, stripBoiler(g.name));
+          const score = nameScore + (amtMatch ? 0.6 : 0);
+          if (score > bestScore) { bestScore = score; best = g; bestAmt = amtMatch; bestName = nameScore; }
+        }
+        if (!best || bestScore < 0.34) continue;
+        const confidence = bestScore >= 0.6 ? "strong" : "medium";
+        const f = p.financials || {};
+        const projSummary = {
+          projectId: String(p.project_id || ""),
+          name: String(p.project_name || "").trim(),
+          status: String(p.status || "").toLowerCase(),
+          allocatedAda: adaFromLovelace(f.total_allocated_lovelace),
+          withdrawnAda: adaFromLovelace(f.total_withdrawn_lovelace),
+          drawdownPct: Number(f.total_allocated_lovelace) > 0
+            ? Math.min(100, Math.round((Number(f.total_withdrawn_lovelace) / Number(f.total_allocated_lovelace)) * 100)) : 0,
+        };
+        projectToProposal[projSummary.projectId] = {
+          proposalId: best.id, proposalName: best.name, outcome: best.outcome,
+          confidence, score: Number(bestScore.toFixed(2)), amountMatched: bestAmt, nameScore: Number(bestName.toFixed(2)),
+        };
+        (proposalToProjects[best.id] = proposalToProjects[best.id] || []).push({ ...projSummary, confidence });
+      }
+
+      const data = {
+        available: true,
+        fetchedAt: Date.now(),
+        projectCount: projects.length,
+        matchedProjects: Object.keys(projectToProposal).length,
+        matchedProposals: Object.keys(proposalToProjects).length,
+        projectToProposal,
+        proposalToProjects,
+      };
+      global[CACHE_KEY] = { data, fetchedAt: Date.now() };
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
+      res.end(JSON.stringify(data));
+    } catch (e) {
+      if (cache) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ...cache.data, stale: true })); return; }
+      console.error("[/api/treasury-admin/mapping]", e?.message || e);
+      json(res, 200, { available: false, projectToProposal: {}, proposalToProjects: {} });
+    }
+    return;
+  }
+
   // ── Treasury Administration accountability (Intersect Administration API) ──
   // Post-approval execution of treasury withdrawals: vendor contracts (projects),
   // how much of the approved amount has actually been drawn down, milestone
