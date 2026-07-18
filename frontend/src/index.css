@@ -1678,6 +1678,12 @@ a {
   transition: width 0.5s ease;
 }
 
+@media (max-width: 860px) {
+  .treasury-admin-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .wallet-menu-wrap {
   position: relative;
   display: flex;

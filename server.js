@@ -9777,6 +9777,9 @@ const server = http.createServer(async (req, res) => {
         if (!pg.has_next) break;
       }
       const status = await adminGetRetry("/api/v1/status");
+      // Recent activity feed + treasury contract balance (best-effort; tolerate null).
+      const eventsResp = await adminGetRetry("/api/v1/events?limit=25");
+      const treasuryResp = await adminGetRetry("/api/v1/treasury");
 
       if (projects.length === 0) {
         // Serve stale cache if we have it; otherwise report unavailable (frontend hides the section).
@@ -9810,15 +9813,36 @@ const server = http.createServer(async (req, res) => {
           status: st,
           allocatedAda: adaOf(a),
           withdrawnAda: adaOf(w),
+          balanceAda: adaOf(f.current_balance_lovelace || 0),
           drawdownPct: a > 0 ? Math.min(100, Math.round((w / a) * 100)) : 0,
           milestones: {
             total: Number(m.total || 0),
             done: Number(m.completed || 0) + Number(m.withdrawn || 0),
+            completed: Number(m.completed || 0),
+            withdrawn: Number(m.withdrawn || 0),
+            pending: Number(m.pending || 0),
             paused: Number(m.paused || 0),
           },
+          fundedIso: p.fund_time?.iso || null,
+          lastActivityIso: p.last_event_time?.iso || null,
+          eventCount: Number(p.event_count || 0),
           fundTxHash: String(p.fund_tx_hash || ""),
         };
       });
+
+      // Recent activity feed
+      const evList = eventsResp?.data || eventsResp?.events || (Array.isArray(eventsResp) ? eventsResp : []);
+      const recentEvents = (Array.isArray(evList) ? evList : []).slice(0, 20).map((e) => ({
+        type: String(e.event_type || "").toLowerCase(),
+        amountAda: e.amount_lovelace ? adaOf(e.amount_lovelace) : null,
+        dateIso: e.block_time?.iso || e.block_time || null,
+        project: String(e.project?.project_name || e.project?.project_id || "").trim(),
+        milestone: String(e.milestone?.label || e.milestone?.milestone_id || "").trim().replace(/\s+/g, " "),
+        txHash: String(e.tx_hash || ""),
+      }));
+      const eventsByType = status?.data?.totals?.events_by_type || {};
+      const treasuryBalanceAda = treasuryResp?.data?.financials?.balance_lovelace
+        ? adaOf(treasuryResp.data.financials.balance_lovelace) : null;
       rows.sort((a, b) => b.allocatedAda - a.allocatedAda);
 
       const data = {
@@ -9833,7 +9857,11 @@ const server = http.createServer(async (req, res) => {
         balanceAda: adaOf(balance),
         drawdownPct: allocated > 0 ? Number((withdrawn / allocated * 100).toFixed(1)) : 0,
         pausedCount: byStatus.paused || 0,
+        treasuryBalanceAda,
         milestones: ms,
+        eventsByType,
+        eventTotal: status?.data?.totals?.events || null,
+        recentEvents,
         projects: rows,
       };
       global[CACHE_KEY] = { data, fetchedAt: Date.now() };

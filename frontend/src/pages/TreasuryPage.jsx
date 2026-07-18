@@ -26,6 +26,272 @@ function fmtPct(value) {
   return `${n.toFixed(2)}%`;
 }
 
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function fmtAgo(iso) {
+  if (!iso) return "";
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "";
+  const days = Math.floor((Date.now() - d) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? "1 month ago" : `${months} months ago`;
+}
+
+// Semantic colour + label for admin-API event types.
+const ADMIN_EVENT_META = {
+  fund:       { color: "#60a5fa", label: "Funded" },
+  disburse:   { color: "#60a5fa", label: "Disbursed" },
+  withdraw:   { color: "#4ade80", label: "Withdrawal" },
+  complete:   { color: "#4ade80", label: "Completed" },
+  pause:      { color: "#fbbf24", label: "Paused" },
+  resume:     { color: "#38bdf8", label: "Resumed" },
+  modify:     { color: "#a78bfa", label: "Modified" },
+  initialize: { color: "#94a3b8", label: "Initialized" },
+  publish:    { color: "#94a3b8", label: "Published" },
+};
+function adminStatusPill(status) {
+  return status === "completed" ? "enacted" : status === "active" ? "active" : "expired";
+}
+
+function TreasuryAdminSection({ admin }) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showAll, setShowAll] = useState(false);
+
+  const undrawn = Math.max(0, admin.allocatedAda - admin.withdrawnAda);
+  const msDone = (admin.milestones?.completed || 0) + (admin.milestones?.withdrawn || 0);
+  const msTotal = admin.milestones?.total || 0;
+  const statuses = ["all", "active", "paused", "completed"];
+  const filtered = (admin.projects || []).filter(
+    (p) => statusFilter === "all" || p.status === statusFilter
+  );
+  const shown = showAll ? filtered : filtered.slice(0, 12);
+
+  // Milestone stacked bar segments (% of total)
+  const seg = (n) => (msTotal > 0 ? (Number(n || 0) / msTotal) * 100 : 0);
+
+  const evOrder = ["complete", "withdraw", "pause", "resume", "disburse", "fund", "modify", "initialize"];
+  const evEntries = evOrder
+    .filter((k) => admin.eventsByType && admin.eventsByType[k])
+    .map((k) => [k, admin.eventsByType[k]]);
+
+  return (
+    <section className="panel">
+      <h2>Treasury Accountability — Funded Projects</h2>
+      <p className="muted" style={{ marginTop: "-0.25rem" }}>
+        What has happened to approved withdrawals since enactment — how much has actually been drawn down
+        against milestones, and which projects have stalled. Live on-chain data via the Intersect
+        Administration API{admin.syncedBlock ? `, synced to block ${Number(admin.syncedBlock).toLocaleString()}` : ""}
+        {admin.syncedAt ? ` (${fmtDate(admin.syncedAt)})` : ""}.
+        {admin.stale ? " Showing last cached snapshot." : ""}
+      </p>
+
+      {/* KPI cards */}
+      <section className="cards" style={{ marginBottom: "1rem" }}>
+        <article className="card">
+          <p>Approved / Allocated</p>
+          <strong>{fmtAdaShort(admin.allocatedAda)} ₳</strong>
+          <p className="muted">{admin.projectCount} funded projects</p>
+        </article>
+        <article className="card">
+          <p>Drawn Down</p>
+          <strong style={{ color: "#4ade80" }}>{fmtAdaShort(admin.withdrawnAda)} ₳</strong>
+          <p className="muted">{fmtPct(admin.drawdownPct)} of allocated</p>
+        </article>
+        <article className="card">
+          <p>Still Locked</p>
+          <strong>{fmtAdaShort(undrawn)} ₳</strong>
+          <p className="muted">approved but undrawn</p>
+        </article>
+        {admin.treasuryBalanceAda != null ? (
+          <article className="card">
+            <p>Treasury Contract</p>
+            <strong>{fmtAdaShort(admin.treasuryBalanceAda)} ₳</strong>
+            <p className="muted">current on-chain balance</p>
+          </article>
+        ) : null}
+        <article className="card">
+          <p>Milestones</p>
+          <strong>{msDone}<span style={{ opacity: 0.5, fontSize: "0.7em" }}> / {msTotal}</span></strong>
+          <p className="muted">{admin.milestones?.pending || 0} pending · {admin.milestones?.paused || 0} paused</p>
+        </article>
+        <article className="card">
+          <p>Paused Projects</p>
+          <strong style={{ color: admin.pausedCount > 0 ? "#fbbf24" : undefined }}>{admin.pausedCount}</strong>
+          <p className="muted">
+            {admin.projectCount > 0 ? `${Math.round((admin.pausedCount / admin.projectCount) * 100)}% of all projects` : "—"}
+          </p>
+        </article>
+      </section>
+
+      {/* ADA drawdown bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
+        <span>Funds drawn down — {fmtAdaShort(admin.withdrawnAda)} ₳ of {fmtAdaShort(admin.allocatedAda)} ₳</span>
+        <span>{fmtPct(admin.drawdownPct)}</span>
+      </div>
+      <div className="treasury-progress-track">
+        <div className="treasury-progress-fill" style={{ width: `${Math.min(100, admin.drawdownPct)}%`, background: "#4ade80" }} />
+      </div>
+
+      {/* Milestone breakdown bar */}
+      {msTotal > 0 ? (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", margin: "1rem 0 0.35rem" }}>
+            <span>Milestone progress — {msTotal} total</span>
+            <span>{admin.milestones.withdrawn} withdrawn · {admin.milestones.completed} completed · {admin.milestones.pending} pending · {admin.milestones.paused} paused</span>
+          </div>
+          <div className="treasury-progress-track" style={{ display: "flex", overflow: "hidden" }}>
+            <div className="treasury-progress-fill" style={{ width: `${seg(admin.milestones.withdrawn)}%`, background: "#4ade80" }} title={`${admin.milestones.withdrawn} withdrawn`} />
+            <div className="treasury-progress-fill" style={{ width: `${seg(admin.milestones.completed)}%`, background: "#38bdf8" }} title={`${admin.milestones.completed} completed (not withdrawn)`} />
+            <div className="treasury-progress-fill" style={{ width: `${seg(admin.milestones.pending)}%`, background: "#64748b" }} title={`${admin.milestones.pending} pending`} />
+            <div className="treasury-progress-fill" style={{ width: `${seg(admin.milestones.paused)}%`, background: "#fbbf24" }} title={`${admin.milestones.paused} paused`} />
+          </div>
+        </>
+      ) : null}
+
+      {/* Event-type activity summary */}
+      {evEntries.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1.1rem" }}>
+          {evEntries.map(([k, n]) => {
+            const meta = ADMIN_EVENT_META[k] || { color: "#94a3b8", label: k };
+            return (
+              <span key={k} style={{
+                fontSize: "0.75rem", padding: "3px 10px", borderRadius: 999,
+                border: `1px solid ${meta.color}55`, background: `${meta.color}18`, color: meta.color, fontWeight: 600,
+              }}>
+                {meta.label} · {n}
+              </span>
+            );
+          })}
+          {admin.eventTotal ? (
+            <span style={{ fontSize: "0.75rem", padding: "3px 10px", color: "var(--text-muted)" }}>
+              {admin.eventTotal} on-chain events total
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Projects table + activity feed */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2.4fr) minmax(0, 1fr)", gap: "1.5rem", marginTop: "1.5rem", alignItems: "start" }} className="treasury-admin-grid">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem", alignItems: "center" }}>
+            <strong style={{ fontSize: "0.9rem" }}>Projects</strong>
+            {statuses.map((s) => (
+              <button
+                key={s}
+                onClick={() => { setStatusFilter(s); setShowAll(false); }}
+                className="mode-btn"
+                style={{
+                  fontSize: "0.75rem", padding: "3px 11px", textTransform: "capitalize",
+                  borderColor: statusFilter === s ? "var(--mint)" : undefined,
+                  color: statusFilter === s ? "var(--mint)" : undefined,
+                }}
+              >
+                {s}{s !== "all" && admin.byStatus?.[s] ? ` (${admin.byStatus[s]})` : ""}
+              </button>
+            ))}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Status</th>
+                  <th>Allocated</th>
+                  <th>Drawdown</th>
+                  <th>Milestones</th>
+                  <th>Funded</th>
+                  <th>Last activity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((p) => {
+                  const msProgress = p.milestones.total > 0 ? (p.milestones.done / p.milestones.total) * 100 : 0;
+                  const barColor = p.status === "paused"
+                    ? "#fbbf24"
+                    : (p.drawdownPct < msProgress - 20) ? "#f87171" : "#4ade80";
+                  return (
+                    <tr key={p.projectId || p.name}>
+                      <td style={{ maxWidth: 260 }}>
+                        <strong>{p.name || "Unnamed project"}</strong>
+                        {p.projectId ? <div className="mono" style={{ fontSize: "0.68rem", opacity: 0.55 }}>{p.projectId}</div> : null}
+                      </td>
+                      <td>
+                        <span className={`pill pill--${adminStatusPill(p.status)}`}>
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {fmtAdaShort(p.allocatedAda)} ₳
+                        <div className="muted" style={{ fontSize: "0.7rem" }}>{fmtAdaShort(p.withdrawnAda)} drawn</div>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 120 }}>
+                          <div className="treasury-progress-track" style={{ flex: 1, margin: 0, height: 7 }}>
+                            <div className="treasury-progress-fill" style={{ width: `${p.drawdownPct}%`, background: barColor }} />
+                          </div>
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", width: 34, textAlign: "right" }}>{p.drawdownPct}%</span>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        <strong style={{ color: "var(--text)" }}>{p.milestones.done}</strong>/{p.milestones.total}
+                        {p.milestones.paused > 0 ? <span style={{ color: "#fbbf24" }}> · {p.milestones.paused}⏸</span> : null}
+                      </td>
+                      <td style={{ fontSize: "0.78rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{fmtDate(p.fundedIso)}</td>
+                      <td style={{ fontSize: "0.78rem", color: "var(--text-muted)", whiteSpace: "nowrap" }} title={fmtDate(p.lastActivityIso)}>{fmtAgo(p.lastActivityIso) || "—"}</td>
+                    </tr>
+                  );
+                })}
+                {shown.length === 0 ? (
+                  <tr><td colSpan={7} className="muted" style={{ padding: "1rem", textAlign: "center" }}>No projects match this filter.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length > 12 ? (
+            <button className="mode-btn" style={{ marginTop: "0.75rem", fontSize: "0.78rem" }} onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "Show fewer" : `Show all ${filtered.length}`}
+            </button>
+          ) : null}
+        </div>
+
+        {/* Recent activity feed */}
+        <div style={{ minWidth: 0 }}>
+          <strong style={{ fontSize: "0.9rem", display: "block", marginBottom: "0.75rem" }}>Recent activity</strong>
+          {admin.recentEvents && admin.recentEvents.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              {admin.recentEvents.slice(0, 12).map((e, i) => {
+                const meta = ADMIN_EVENT_META[e.type] || { color: "#94a3b8", label: e.type };
+                return (
+                  <div key={`${e.txHash}-${i}`} style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start", fontSize: "0.8rem", lineHeight: 1.35 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: meta.color, marginTop: 6, flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ color: meta.color, fontWeight: 600 }}>{meta.label}</span>
+                      {e.amountAda ? <span> · {fmtAdaShort(e.amountAda)} ₳</span> : null}
+                      <span className="muted"> · {fmtAgo(e.dateIso)}</span>
+                      {e.project ? <div style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.project}</div> : null}
+                      {e.milestone ? <div className="muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.72rem" }}>{e.milestone}</div> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="muted" style={{ fontSize: "0.8rem" }}>No recent events available.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function TreasuryPage() {
   useSeoMeta({
     title: "Treasury",
@@ -390,103 +656,7 @@ export default function TreasuryPage() {
 
       {/* ── Treasury Accountability (post-approval execution) ── */}
       {admin ? (
-        <section className="panel">
-          <h2>Treasury Accountability — Funded Projects</h2>
-          <p className="muted" style={{ marginTop: "-0.25rem" }}>
-            What has happened to approved withdrawals since enactment — how much has actually been drawn
-            down against milestones. Live on-chain data via the Intersect Administration API
-            {admin.syncedBlock ? `, synced to block ${Number(admin.syncedBlock).toLocaleString()}` : ""}.
-            {admin.stale ? " (showing last cached snapshot)" : ""}
-          </p>
-
-          <section className="cards" style={{ marginBottom: "1rem" }}>
-            <article className="card">
-              <p>Approved / Allocated</p>
-              <strong>{fmtAdaShort(admin.allocatedAda)} ₳</strong>
-              <p className="muted">{admin.projectCount} funded projects</p>
-            </article>
-            <article className="card">
-              <p>Drawn Down</p>
-              <strong style={{ color: "#4ade80" }}>{fmtAdaShort(admin.withdrawnAda)} ₳</strong>
-              <p className="muted">{fmtPct(admin.drawdownPct)} of allocated</p>
-            </article>
-            <article className="card">
-              <p>Still Locked</p>
-              <strong>{fmtAdaShort(Math.max(0, admin.allocatedAda - admin.withdrawnAda))} ₳</strong>
-              <p className="muted">approved but undrawn</p>
-            </article>
-            <article className="card">
-              <p>Paused Projects</p>
-              <strong style={{ color: admin.pausedCount > 0 ? "#fbbf24" : undefined }}>{admin.pausedCount}</strong>
-              <p className="muted">
-                {admin.projectCount > 0 ? `${Math.round((admin.pausedCount / admin.projectCount) * 100)}% of all projects` : "—"}
-              </p>
-            </article>
-          </section>
-
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
-            <span>Drawn down — {fmtAdaShort(admin.withdrawnAda)} ₳</span>
-            <span>{admin.milestones?.total || 0} milestones · {admin.milestones?.withdrawn || 0} withdrawn · {admin.milestones?.pending || 0} pending · {admin.milestones?.paused || 0} paused</span>
-          </div>
-          <div className="treasury-progress-track">
-            <div className="treasury-progress-fill" style={{ width: `${Math.min(100, admin.drawdownPct)}%`, background: "#4ade80" }} />
-          </div>
-
-          {admin.projects && admin.projects.length > 0 ? (
-            <table style={{ marginTop: "1.25rem" }}>
-              <thead>
-                <tr>
-                  <th>Project</th>
-                  <th>Status</th>
-                  <th>Allocated</th>
-                  <th>Withdrawn</th>
-                  <th>Drawdown</th>
-                  <th>Milestones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {admin.projects.slice(0, 15).map((p) => {
-                  const barColor = p.status === "paused"
-                    ? "#fbbf24"
-                    : (p.milestones.total > 0 && p.drawdownPct < (p.milestones.done / p.milestones.total) * 100 - 20)
-                      ? "#f87171" : "#4ade80";
-                  return (
-                    <tr key={p.projectId || p.name}>
-                      <td>
-                        <strong>{p.name || "Unnamed project"}</strong>
-                        {p.projectId ? <div className="mono" style={{ fontSize: "0.7rem", opacity: 0.6 }}>{p.projectId}</div> : null}
-                      </td>
-                      <td>
-                        <span className={`pill pill--${p.status === "completed" ? "enacted" : p.status === "active" ? "active" : "expired"}`}>
-                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        </span>
-                      </td>
-                      <td>{fmtAdaShort(p.allocatedAda)} ₳</td>
-                      <td>{fmtAdaShort(p.withdrawnAda)} ₳</td>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 130 }}>
-                          <div className="treasury-progress-track" style={{ flex: 1, margin: 0, height: 7 }}>
-                            <div className="treasury-progress-fill" style={{ width: `${p.drawdownPct}%`, background: barColor }} />
-                          </div>
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: 38, textAlign: "right" }}>{p.drawdownPct}%</span>
-                        </div>
-                      </td>
-                      <td style={{ fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                        <strong style={{ color: "var(--text)" }}>{p.milestones.done}</strong>/{p.milestones.total} done
-                        {p.milestones.paused > 0 ? <span style={{ color: "#fbbf24" }}> · {p.milestones.paused} paused</span> : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : null}
-          {admin.projects && admin.projects.length > 15 ? (
-            <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}>
-              Showing top 15 of {admin.projects.length} projects by allocation.
-            </p>
-          ) : null}
-        </section>
+        <TreasuryAdminSection admin={admin} />
       ) : null}
 
       {/* ── Ratified (pending payout) ── */}
