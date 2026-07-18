@@ -32,6 +32,8 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
 const NclPage = lazy(() => import("./pages/NclPage"));
 const TreasuryPage = lazy(() => import("./pages/TreasuryPage"));
+const TreasuryExplorerPage = lazy(() => import("./pages/TreasuryExplorerPage"));
+const TreasuryProjectPage = lazy(() => import("./pages/TreasuryProjectPage"));
 const SurveysListPage = lazy(() => import("./pages/SurveysListPage"));
 const SurveyDetailPage = lazy(() => import("./pages/SurveyDetailPage"));
 const CreateSurveyPage = lazy(() => import("./pages/CreateSurveyPage"));
@@ -462,6 +464,8 @@ export default function App() {
           <Route path="/surveys/:txHash/:surveyIndex" element={<SurveyDetailPage />} />
           <Route path="/ncl" element={<Navigate to="/treasury" replace />} />
           <Route path="/treasury" element={<TreasuryPage />} />
+          <Route path="/treasury/explorer" element={<TreasuryExplorerPage />} />
+          <Route path="/treasury/explorer/:projectId" element={<TreasuryProjectPage />} />
           <Route path="/intersect" element={<IntersectPage />} />
           <Route path="/blockfrost" element={<BlockfrostPage />} />
           <Route path="/dreps" element={<DashboardPage actorType="drep" />} />

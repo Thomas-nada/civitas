@@ -84,8 +84,11 @@ function TreasuryAdminSection({ admin }) {
 
   return (
     <section className="panel">
-      <h2>Treasury Accountability — Funded Projects</h2>
-      <p className="muted" style={{ marginTop: "-0.25rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <h2 style={{ margin: 0 }}>Treasury Accountability — Funded Projects</h2>
+        <Link className="mode-btn" to="/treasury/explorer" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>Open full explorer →</Link>
+      </div>
+      <p className="muted" style={{ marginTop: "0.5rem" }}>
         What has happened to approved withdrawals since enactment — how much has actually been drawn down
         against milestones, and which projects have stalled. Live on-chain data via the Intersect
         Administration API{admin.syncedBlock ? `, synced to block ${Number(admin.syncedBlock).toLocaleString()}` : ""}

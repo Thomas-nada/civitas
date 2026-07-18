@@ -1028,6 +1028,44 @@ function isActiveCalendarDrep(drep) {
   return status !== "expired" && status !== "retired";
 }
 
+// ── Intersect Administration API (treasury execution) shared fetch helper ─────
+// Read-only, no auth. Retries to ride out intermittent TLS resets on that host.
+const TREASURY_ADMIN_HOST = "administration.info.intersectmbo.org";
+function treasuryAdminGetOnce(path) {
+  return new Promise((resolve) => {
+    const https2 = require("https");
+    const r = https2.request(
+      { hostname: TREASURY_ADMIN_HOST, path, method: "GET",
+        headers: { Accept: "application/json", "User-Agent": "civitas-proxy/1.0", Host: TREASURY_ADMIN_HOST } },
+      (r2) => {
+        const cs = [];
+        r2.on("data", (c) => cs.push(c));
+        r2.on("end", () => {
+          if (r2.statusCode !== 200) { resolve(null); return; }
+          try { resolve(JSON.parse(Buffer.concat(cs).toString())); } catch { resolve(null); }
+        });
+      }
+    );
+    r.setTimeout(20000, () => { r.destroy(); resolve(null); });
+    r.on("error", () => resolve(null));
+    r.end();
+  });
+}
+async function treasuryAdminGet(path, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    const r = await treasuryAdminGetOnce(path);
+    if (r) return r;
+    await new Promise((x) => setTimeout(x, 700));
+  }
+  return null;
+}
+const adaFromLovelace = (l) => Math.round(Number(l || 0) / 1e6);
+// Anchor URLs in the admin API arrive split across array elements — rejoin them.
+function joinAnchorUrl(u) {
+  if (Array.isArray(u)) return u.join("");
+  return String(u || "");
+}
+
 function isCalendarNoConfidenceAction(governanceType) {
   return String(governanceType || "").toLowerCase().includes("no confidence");
 }
@@ -9716,6 +9754,138 @@ const server = http.createServer(async (req, res) => {
       clearInterval(heartbeat);
       sseClients.delete(res);
     });
+    return;
+  }
+
+  // ── Treasury Explorer: single project detail (milestones + events + utxos) ──
+  if (req.method === "GET" && url.pathname === "/api/treasury-admin/project") {
+    const projectId = String(url.searchParams.get("id") || "").trim();
+    if (!projectId) { json(res, 400, { error: "Missing project id." }); return; }
+    const CACHE_KEY = "_treasuryAdminProjectCache_v1";
+    const TTL_MS = 5 * 60 * 1000;
+    if (!global[CACHE_KEY]) global[CACHE_KEY] = {};
+    const hit = global[CACHE_KEY][projectId];
+    if (hit && Date.now() - hit.fetchedAt < TTL_MS) {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=60" });
+      res.end(JSON.stringify(hit.data));
+      return;
+    }
+    try {
+      const enc = encodeURIComponent(projectId);
+      const [detailResp, msResp, evResp, utxoResp] = await Promise.all([
+        treasuryAdminGet(`/api/v1/projects/${enc}`),
+        treasuryAdminGet(`/api/v1/projects/${enc}/milestones?limit=100`),
+        treasuryAdminGet(`/api/v1/projects/${enc}/events?limit=100`),
+        treasuryAdminGet(`/api/v1/projects/${enc}/utxos?limit=100`),
+      ]);
+      const d = detailResp?.data || detailResp;
+      if (!d || !d.project_id) {
+        if (hit) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ...hit.data, stale: true })); return; }
+        json(res, 404, { available: false, error: "Project not found or upstream unavailable." });
+        return;
+      }
+      const f = d.financials || {};
+      const msList = (msResp?.data || []).map((m) => ({
+        milestoneId: String(m.milestone_id || ""),
+        order: Number(m.milestone_order || 0),
+        label: String(m.label || "").trim(),
+        description: String(m.description || "").trim(),
+        acceptanceCriteria: String(m.acceptance_criteria || "").trim(),
+        amountAda: adaFromLovelace(m.amount_lovelace),
+        timeLimitIso: m.time_limit ? new Date(Number(m.time_limit)).toISOString() : null,
+        withdrawn: !!m.withdrawn,
+        evidenceProvided: !!m.evidence_provided,
+        paused: !!m.paused,
+        archived: !!m.archived,
+        completion: m.completion ? {
+          txHash: String(m.completion.tx_hash || ""),
+          timeIso: m.completion.time?.iso || null,
+          description: String(m.completion.description || "").trim(),
+          evidence: (m.completion.evidence || []).map((ev) => ({
+            label: String(ev.label || "").trim(),
+            url: joinAnchorUrl(ev.anchorUrl),
+          })),
+        } : null,
+        withdrawal: m.withdrawal ? {
+          txHash: String(m.withdrawal.tx_hash || ""),
+          timeIso: m.withdrawal.time?.iso || null,
+          amountAda: adaFromLovelace(m.withdrawal.amount_lovelace),
+        } : null,
+        pauseHistory: Array.isArray(m.pause_history) ? m.pause_history.length : 0,
+      })).sort((a, b) => a.order - b.order);
+
+      const events = (evResp?.data || []).map((e) => ({
+        type: String(e.event_type || "").toLowerCase(),
+        amountAda: e.amount_lovelace ? adaFromLovelace(e.amount_lovelace) : null,
+        dateIso: e.block_time?.iso || null,
+        blockNumber: e.block_number || null,
+        reason: String(e.reason || "").trim(),
+        milestone: String(e.milestone?.label || e.milestone?.milestone_id || "").trim().replace(/\s+/g, " "),
+        txHash: String(e.tx_hash || ""),
+      }));
+
+      const utxos = (utxoResp?.data || []).map((u) => ({
+        txHash: String(u.tx_hash || u.txHash || ""),
+        outputIndex: u.output_index ?? u.outputIndex ?? null,
+        amountAda: adaFromLovelace(u.amount_lovelace || u.value_lovelace),
+      }));
+
+      const data = {
+        available: true,
+        fetchedAt: Date.now(),
+        projectId: String(d.project_id || ""),
+        name: String(d.project_name || "").trim(),
+        description: String(d.description || "").trim(),
+        status: String(d.status || "unknown").toLowerCase(),
+        vendorAddress: String(d.vendor_address || ""),
+        contractAddress: String(d.contract_address || ""),
+        fundTxHash: String(d.fund_tx_hash || ""),
+        fundedIso: d.fund_time?.iso || null,
+        lastActivityIso: d.last_event_time?.iso || null,
+        eventCount: Number(d.event_count || 0),
+        allocatedAda: adaFromLovelace(f.total_allocated_lovelace),
+        withdrawnAda: adaFromLovelace(f.total_withdrawn_lovelace),
+        balanceAda: adaFromLovelace(f.current_balance_lovelace),
+        drawdownPct: Number(f.total_allocated_lovelace) > 0
+          ? Math.min(100, Math.round((Number(f.total_withdrawn_lovelace) / Number(f.total_allocated_lovelace)) * 100)) : 0,
+        milestones: msList,
+        events,
+        utxos,
+      };
+      global[CACHE_KEY][projectId] = { data, fetchedAt: Date.now() };
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=60" });
+      res.end(JSON.stringify(data));
+    } catch (e) {
+      if (hit) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ...hit.data, stale: true })); return; }
+      console.error("[/api/treasury-admin/project]", e?.message || e);
+      json(res, 200, { available: false, error: e?.message || "Failed to load project." });
+    }
+    return;
+  }
+
+  // ── Treasury Explorer: paginated on-chain activity feed ───────────────────
+  if (req.method === "GET" && url.pathname === "/api/treasury-admin/events") {
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 50)));
+    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+    try {
+      const resp = await treasuryAdminGet(`/api/v1/events?limit=${limit}&page=${page}`);
+      const list = resp?.data || [];
+      const events = (Array.isArray(list) ? list : []).map((e) => ({
+        type: String(e.event_type || "").toLowerCase(),
+        amountAda: e.amount_lovelace ? adaFromLovelace(e.amount_lovelace) : null,
+        dateIso: e.block_time?.iso || null,
+        reason: String(e.reason || "").trim(),
+        project: String(e.project?.project_name || "").trim(),
+        projectId: String(e.project?.project_id || "").trim(),
+        milestone: String(e.milestone?.label || e.milestone?.milestone_id || "").trim().replace(/\s+/g, " "),
+        txHash: String(e.tx_hash || ""),
+      }));
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=60" });
+      res.end(JSON.stringify({ available: true, page, limit, events }));
+    } catch (e) {
+      console.error("[/api/treasury-admin/events]", e?.message || e);
+      json(res, 200, { available: false, events: [] });
+    }
     return;
   }
 
