@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_46.jsonld -->
+<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_47.jsonld -->
 # Cerkoryn
 
 **Proposal:** Withdraw 540,750 ada for UTxO RPC by TxPipe Maintaining Cardano’s Integratio
