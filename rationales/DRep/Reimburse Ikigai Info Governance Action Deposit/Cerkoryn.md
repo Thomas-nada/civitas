@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_34.jsonld -->
+<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/Info_20.jsonld -->
 # Cerkoryn
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-It was a clear accident when the proposal deposit from Ikigai was mistakenly sent to the treasury in September 2024 rather than being returned to the proposer.  This vote is an easy YES.
+This proposal is an instant YES from me.  Ikigai was one of the first entities to submit a governance action on mainnet and as a pioneer were the first to discover this unfortunate bug/mistake resulting in the loss of 100k ADA.  I only wish that they could have been refunded much sooner.
