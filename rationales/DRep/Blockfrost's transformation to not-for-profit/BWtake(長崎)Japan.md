@@ -1,24 +1,26 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR1Gj5x2uk6pbeQVA4h7aDjC7Da82UhwaZokYxeq1LCU9 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZiVMJ6grFiDKbCh9vSZBGqbrvFTaufznZAzxhvPXCvME -->
 # BWtake(長崎)Japan
 
 **Proposal:** Blockfrost's transformation to not-for-profit
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1ytcw6qzpqqclx2yd0zy64ztvlkkhnf6yrzza8whgnq4vz5gh89626`
 
 ---
 
-私は本Treasury Withdrawalに反対します。
-Blockfrostが、Cardano開発者、wallet、dApp、explorer、governance toolingにとって重要なaccess layerであることは認めます。また、community-governed public goodへの移行、IP移管、公開レポート、Icebreakersによる分散運用の方向性も評価します。
-しかし、Cardanoが重んじるべき価値は、単一の強力な入口を公共財化することだけではなく、複数の選択肢が並存するインフラ多様性を守ることだと考えます。公共財化しても、その多様性が自動的に守られるわけではありません。
-Cardanoには、Blockfrost以外にも、Koios、Ogmios/Kupo、Dolos、UTxO RPC、Oura、Maestro、自前node運用など複数のaccess layerがあります。本提案は、多くのepochでCardano transactionsの50%以上がBlockfrost経由でsubmitされていると述べています。これはBlockfrostの重要性を示す一方で、access layer集中リスクの証拠でもあります。
-私は、Blockfrostが重要すぎるからこそ、Treasury資金はBlockfrostを維持するだけでなく、Blockfrost依存を下げ、Cardano全体のaccess diversityを高める方向にも使われるべきだと考えます。
+私は、本Treasury Withdrawalに賛成します。
+Blockfrostは、Cardanoの開発者、ウォレット、dApp、取引所、ガバナンスツールにとって重要なアクセスレイヤーです。私は、その知的財産と運営をコミュニティ統治の非営利組織へ移管し、公開報告、マイルストーン管理、Icebreakersによる分散運用を進める本提案を支持します。
+一方で、多くのエポックでCardanoトランザクションの50％以上がBlockfrost経由とされる状況は、その重要性と同時に集中リスクも示しています。CardanoにはKoios、Ogmios/Kupo、Dolos、UTxO RPC、Oura、Maestro、自前ノード運用など複数の選択肢があり、Blockfrost支援は、それらに代わるものではなく、インフラ多様化戦略の一部であるべきです。
+本提案は、重要なインフラを維持し、コミュニティ管理と分散運用へ移行するための現実的な橋渡しになると考えます。今後も代替プロバイダー、オープンスタンダード、自前運用を支援し、単一のアクセス経路への依存を減らすことを期待します。
+以上の理由から、私は本提案に賛成票を投じます。
 
 ---
 
-I vote NO on this Treasury Withdrawal.
+I vote YES on this Treasury Withdrawal.
 
-I recognize that Blockfrost is an important access layer for Cardano developers, wallets, dApps, explorers, and governance tooling. I also value the direction of transitioning Blockfrost into a community-governed public good, including IP transfer, public reporting, and decentralized operation through Icebreakers.
+Blockfrost is an important access layer for Cardano developers, wallets, dApps, exchanges, and governance tools. I support this proposal to transfer its intellectual property and operations to a community-governed nonprofit organization, with public reporting, milestone-based oversight, and further decentralization through Icebreakers.
 
-However, I believe Cardano should protect infrastructure diversity, not only turn one strong access point into a public good. Public-good status does not automatically preserve that diversity.
+At the same time, the claim that more than 50% of Cardano transactions have been submitted through Blockfrost in many epochs also shows a concentration risk. Cardano already has other access-layer options, including Koios, Ogmios/Kupo, Dolos, UTxO RPC, Oura, Maestro, and self-hosted nodes. Supporting Blockfrost should therefore be part of a broader infrastructure-diversity strategy, not a replacement for these alternatives.
 
-Cardano already has multiple access-layer options, including Koios, Ogmios/Kupo, Dolos, UTxO RPC, Oura, Maestro, and self-hosted nodes. The proposal also states that, in many epochs, more than 50% of Cardano transactions are submitted through Blockfrost. This shows Blockfrost’s importance, but it also shows a concentration risk at the access layer.
+I believe this proposal offers a practical bridge to preserve important infrastructure while moving it toward community control and more decentralized operation. I also expect continued support for alternative providers, open standards, and self-hosted solutions to reduce dependence on any single access point.
+
+For these reasons, I vote YES.
