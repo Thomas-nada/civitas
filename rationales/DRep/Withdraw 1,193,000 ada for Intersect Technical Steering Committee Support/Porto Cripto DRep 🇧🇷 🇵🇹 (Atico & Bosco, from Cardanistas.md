@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA132-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Withdraw 1,193,000 ada for Intersect Technical Steering Committee Support
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Withdraw 1,193,000 ADA for Intersect Technical Steering Committee Support" (gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sxypfkyr), pois entendemos que a proposta fortalece uma estrutura importante para a governança técnica da Cardano, apoiando a análise de parâmetros do protocolo, a avaliação de propostas técnicas e a produção de pareceres independentes que auxiliam a comunidade e os DReps na tomada de decisões mais bem fundamentadas. O valor solicitado, de ₳1.193.000 para um período de 12 meses, nos parece compatível com o escopo das atividades previstas e apresenta uma boa relação custo-benefício, considerando que financia trabalho técnico especializado com potencial de beneficiar todo o ecossistema. Também avaliamos positivamente os mecanismos de governança e transparência previstos na proposta, incluindo desembolsos condicionados ao cumprimento de marcos, prestação de contas periódica, auditoria independente, acompanhamento público por meio de registros on-chain e a devolução de eventuais recursos não utilizados ao Tesouro. Esses elementos contribuem para uma execução mais transparente, responsável e passível de verificação pela comunidade.
+[English]
+We chose to vote "YES" on this governance action "Withdraw 1,193,000 ADA for Intersect Technical Steering Committee Support" (gov_action1k02990lhw6wh74t7c6ufw3mqaek9ujtvyan99dj5qv5kvcs7pn8sxypfkyr), because we believe the proposal strengthens an important component of Cardano’s technical governance by supporting protocol parameter analysis, the evaluation of technical proposals, and the production of independent assessments that help the community and DReps make more informed decisions. The requested ₳1,193,000 for a 12-month period appears proportionate to the proposed scope of work and offers good value, as it funds specialized technical expertise that can benefit the ecosystem as a whole. We also view the proposal’s governance and transparency mechanisms positively, including milestone-based disbursements, regular accountability reports, independent auditing, public on-chain monitoring, and the return of any unused funds to the Treasury. Together, these measures promote responsible execution, transparency, and effective oversight by the community.
