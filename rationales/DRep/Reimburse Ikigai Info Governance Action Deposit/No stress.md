@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmP4SXSS8FigZKRk4U5obZGKKSJHTRtRJiSxZ47UBB5vYs -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTCuD4SPnLuKED47Tz7XKnYNUzmmcaiXw77gViD9rkh3G -->
 # No stress
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-It would be travesty not to reimburse them.
+Why is this so difficult?!! lets refund them already. this is a no-brainer.
