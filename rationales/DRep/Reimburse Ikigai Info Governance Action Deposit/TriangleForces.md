@@ -1,4 +1,4 @@
-<!-- url: https://ipfs.io/ipfs/QmbNksEuUgPQzLfVGok1yD5G7E71eh8sm6CtV8cjPVtyb4 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmP2qBPoSfUafPGeUgb16pwF9ExUK3SBVMDg7xnEFWxzhV -->
 # TriangleForces
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,8 +7,10 @@
 
 ---
 
-Building on my earlier Yes vote regarding the info action, I still support reimbursing the original 100k ADA deposit that was lost because of the governance protocol bug. It’s only fair to recognize early contributors who took risks during Cardano’s on-chain governance startup. This not only upholds community trust but also shows respect for those who were involved from the beginning.
+**I support reimbursing the original 100,000 ADA deposit** lost due to the governance protocol bug, recognizing the submitter’s pioneering role in Cardano’s on-chain governance infancy. This repayment is a fair acknowledgment that early participants should not be unduly penalized for technical failures outside their control.
 
-That said, I want to clearly oppose the additional 3k ADA being requested for staking rewards and opportunity costs. There’s no clear, verifiable reason for this, and allowing such claims could set a risky precedent that drains our treasury resources meant for growing the ecosystem.
+However, **I firmly oppose the inclusion of the additional 3,000 ADA claimed for staking rewards and opportunity costs**. These are speculative losses lacking transparent, auditable justification. **Treasury funds must prioritize activities that provide measurable ecosystem value rather than compensating subjective or unverifiable claims.**
 
-To avoid similar issues in the future, we need to establish clear guardrails around treasury reimbursements so that the Treasury isn’t left vulnerable to future liabilities. If we really want to protect early participants from technical risks, creating a dedicated, sustainably funded insurance mechanism is the only responsible way to go!
+Beyond this specific reimbursement, **it is imperative to establish explicit guardrails within Cardano’s governance framework. The treasury must not be treated as an insurance mechanism for technical bugs or user errors unless clearly codified by governance policy. Approving this reimbursement must be explicitly declared a one-off exception with no precedent for future compensation claims arising from operational faults.**
+
+If the community deems **an insurance** mechanism necessary to protect early testers or contributors from technical risks, such a **fund should be created deliberately through a dedicated account funded by transaction fees or other sustainable sources**; not ad hoc treasury withdrawals.
