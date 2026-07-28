@@ -1,10 +1,10 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmb85QJSFRCD8me6Vs2c2aSwMRiZmghVj6uZYAH32di7Q6 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmaq2pdB1uCoaii4tdyR6ccP1JqAJaEn6Fhpn39EDgn12g -->
 # AKYO
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
-**Vote:** Abstain
+**Vote:** No
 **Voter ID:** `drep1yts3qdjsqcnhld4r3uek2uu0n2tnh824tgnf75a83q3yhequuy54u`
 
 ---
 
-私は本提案の趣旨（バグに起因する100,000ADAデポジットの返還）には賛同します。一方で、付随的損失として計上されている3,000ADAについては、補填の必要性が明確ではなく、制度的な前例を生む可能性があると考えます。したがって、本提案の趣旨は理解しつつも、今回は棄権します。\n\nI support the intent of this proposal, which seeks to return the 100,000 ADA deposit lost due to a bug. However, the necessity of the additional 3,000 ADA compensation is unclear and could set an institutional precedent. Therefore, while I understand and acknowledge the purpose of this proposal, I choose to abstain.
+私は本提案に反対します。ガバナンスアクション提出時に失われた100,000ADAのデポジットを返還するという考え方については理解できます。提案本文によれば、この損失はCardanoノードのバグによって発生したものであり、提出者が初期のガバナンス参加者であったことも考慮すべき事情であると考えます。一方で、本提案には当初失われたデポジットに加え、失われたステーキング報酬の補償として追加の3,000ADAが含まれています。私は、失われたデポジットの返還とステーキング報酬の補償は区別して考えるべきであり、Treasuryから機会損失まで補償することには慎重であるべきだと考えます。そのため、本提案には反対します。\n\nI am voting No on this proposal. I understand the rationale for reimbursing the 100,000 ADA deposit that was lost when the governance action was submitted. According to the proposal, this loss resulted from a bug in the Cardano node, and I believe the fact that the submitter was an early participant in Cardano governance is a factor that should be taken into consideration. However, this proposal includes an additional 3,000 ADA as compensation for lost staking rewards on top of the original deposit. I believe reimbursement of the lost deposit should be considered separately from compensation for staking rewards, and I am cautious about extending Treasury funding to cover opportunity costs. For this reason, I am voting No on this proposal.
