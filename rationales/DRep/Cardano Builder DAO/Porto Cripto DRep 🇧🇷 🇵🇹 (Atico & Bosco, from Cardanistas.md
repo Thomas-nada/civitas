@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA141-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Cardano Builder DAO
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Cardano Builder DAO" (gov_action1fdatlfcdnzzcw5x9pnt9r42v992nqw65zze57s8tyk0jll78eyusqccn9gc), pois entendemos que a proposta fortalece um mecanismo já testado de financiamento para projetos capazes de impulsionar o crescimento mensurável do ecossistema Cardano, com foco em indicadores como usuários ativos, transações on-chain e valor total bloqueado (TVL). O orçamento solicitado apresenta uma relação custo-benefício favorável, considerando o histórico da Builder DAO, que já distribuiu 11,1 milhões de ADA para 34 projetos e demonstrou capacidade de execução, governança e participação ativa da comunidade. Também avaliamos positivamente os mecanismos de governança, controle e transparência previstos na proposta, incluindo liberação de recursos condicionada ao cumprimento de marcos, custódia em carteira multisig independente, supervisão por membros da dRep DAO, acompanhamento público de indicadores de desempenho (KPIs) e devolução ao Tesouro dos recursos não utilizados. Esses mecanismos contribuem para uma gestão mais responsável dos recursos e oferecem à comunidade meios adequados para acompanhar e fiscalizar a execução do programa.
+[English]
+We chose to vote "YES" on this governance action "Cardano Builder DAO" (gov_action1fdatlfcdnzzcw5x9pnt9r42v992nqw65zze57s8tyk0jll78eyusqccn9gc), because we believe the proposal strengthens a funding mechanism that has already demonstrated its ability to support projects capable of delivering measurable growth across the Cardano ecosystem, with a focus on key metrics such as active users, on-chain transactions, and total value locked (TVL). The requested budget offers a favorable cost-benefit profile, considering the Builder DAO has already allocated 11.1 million ADA to 34 projects while demonstrating effective execution, governance, and strong community participation. We also view the proposal’s governance, oversight, and transparency mechanisms positively. These include milestone-based fund disbursements, custody through an independent multisignature wallet, oversight by members of the dRep DAO, public tracking of key performance indicators (KPIs), and the return of any unused funds to the Treasury. Together, these measures promote responsible stewardship of Treasury resources while providing the community with effective tools to monitor and verify the program’s execution.
