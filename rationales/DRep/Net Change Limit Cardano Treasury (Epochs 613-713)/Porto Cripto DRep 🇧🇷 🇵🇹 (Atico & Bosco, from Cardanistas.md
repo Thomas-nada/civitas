@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA147-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Net Change Limit Cardano Treasury (Epochs 613-713)
+**Vote:** Yes
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "SIM" nesta ação de governança "Net Change Limit: Cardano Treasury (Epochs 613–713)" (gov_action15atytcy8ru7mkcs8m7r8mx7k5x36t0h6grtgmak6v5wmf4nq07lsqhakceq), pois entendemos que a atualização do Net Change Limit para 500 milhões de ADA estabelece um limite de movimentação do Tesouro compatível com as necessidades atuais da governança, preservando a capacidade de financiar iniciativas estratégicas para o ecossistema sem representar uma autorização automática de gastos. Também avaliamos positivamente a relação entre custo e benefício da proposta, uma vez que ela apenas amplia o teto máximo disponível para movimentação, mantendo cada retirada do Tesouro sujeita à análise, deliberação e aprovação individual dos DReps por meio de ações de governança específicas. Além disso, a metodologia de contabilização apresentada é clara e objetiva, considerando apenas valores efetivamente registrados on-chain e incluindo as retiradas já realizadas no período de vigência, o que fortalece a previsibilidade orçamentária, a transparência, a rastreabilidade e o controle sobre a utilização dos recursos comunitários.
+[English]
+We chose to vote "YES" on this governance action "Net Change Limit: Cardano Treasury (Epochs 613–713)" (gov_action15atytcy8ru7mkcs8m7r8mx7k5x36t0h6grtgmak6v5wmf4nq07lsqhakceq), because we believe updating the Net Change Limit to 500 million ADA establishes a Treasury spending ceiling that is appropriate for the current needs of Cardano’s governance while preserving the ecosystem’s ability to fund strategic initiatives without constituting automatic authorization for Treasury expenditures. We also believe the proposal presents a sound cost-benefit profile because it only increases the maximum amount that may be withdrawn, while preserving the requirement that every individual Treasury withdrawal must still be reviewed and approved separately by DReps through dedicated governance actions. Furthermore, the proposed accounting methodology is clear and transparent, considering only amounts actually recorded on-chain and including withdrawals already executed during the applicable period. This approach strengthens budget predictability, accountability, transparency, and the traceability of community funds.
