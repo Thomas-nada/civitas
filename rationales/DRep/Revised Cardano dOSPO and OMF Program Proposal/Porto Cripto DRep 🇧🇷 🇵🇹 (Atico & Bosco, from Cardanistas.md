@@ -1,0 +1,13 @@
+<!-- url: https://raw.githubusercontent.com/portocripto/drep-entry/refs/heads/main/votes/GA149-info-ncl-rationale.jsonld -->
+# Porto Cripto DRep 🇧🇷 🇵🇹 (Atico & Bosco, from Cardanistas Stake Pool - CARDs)
+
+**Proposal:** Revised Cardano dOSPO and OMF Program Proposal
+**Vote:** No
+**Voter ID:** `drep1ywuk39acvmkzda9e8kfmy7fwf946jd5uaa4l696atlas66s68f0fl`
+
+---
+
+[Portuguese]
+Optamos por votar "NÃO" nesta ação de governança "Revised Cardano dOSPO and OMF Program Proposal" (gov_action19apfhh339syqd0gkrxw6zr6pghdfspckr6vagjrpwnr0hx53lxpsq637y3t), pois, embora reconheçamos a importância de criar mecanismos sustentáveis para a manutenção de infraestrutura open source e para a formação de novos mantenedores no ecossistema Cardano, consideramos que o valor solicitado, de ₳4.094.000 por 12 meses, é elevado para uma estrutura que ainda precisa demonstrar sua efetividade operacional na prática. Reconhecemos que a proposta apresenta mecanismos relevantes de transparência, controle e prestação de contas, incluindo auditorias trimestrais, relatórios públicos, registro on-chain das decisões, devolução de recursos não utilizados e possibilidade de substituição do administrador pelos DReps. Ainda assim, entendemos que a concentração inicial da autoridade financeira em um único administrador, combinada ao custo total do programa e ao caráter ainda experimental do modelo, resulta em uma relação entre risco e benefício que consideramos insuficiente para justificar o financiamento solicitado neste momento.
+[English]
+We chose to vote "NO" on this governance action "Revised Cardano dOSPO and OMF Program Proposal" (gov_action19apfhh339syqd0gkrxw6zr6pghdfspckr6vagjrpwnr0hx53lxpsq637y3t), because although we recognize the importance of creating sustainable mechanisms for maintaining open-source infrastructure and developing new maintainers within the Cardano ecosystem, we believe the requested ₳4,094,000 over 12 months is substantial for a structure that has yet to demonstrate its operational effectiveness in practice. We acknowledge that the proposal includes meaningful transparency, oversight, and accountability mechanisms, including quarterly audits, public reporting, on-chain publication of decisions, the return of unused funds, and the ability for DReps to replace the administrator. Nevertheless, we believe that the initial concentration of financial authority in a single administrator, combined with the program’s overall cost and the still-experimental nature of the model, results in a risk-benefit profile that does not sufficiently justify the requested Treasury funding at this stage.
