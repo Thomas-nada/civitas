@@ -453,7 +453,7 @@ const NCL_PERIODS = {
     label: "Current NCL Window",
     startEpoch: 613,
     endEpoch: 713,
-    limitAda: 350000000
+    limitAda: 500000000
   },
   previous: {
     key: "previous",
