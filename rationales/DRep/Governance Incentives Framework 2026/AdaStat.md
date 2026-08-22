@@ -1,7 +1,7 @@
 <!-- url: https://adastat.net/_meta/drep/vote149-150.jsonld -->
 # AdaStat
 
-**Proposal:** Reimburse Ikigai Info Governance Action Deposit
+**Proposal:** Governance Incentives Framework 2026
 **Vote:** Abstain
 **Voter ID:** `drep1yfe9en4hsgc3r6nhtmwjeljh06hgnvt9yzzkwqcftvdj34cdxdg7u`
 
