@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmcemfnMjYLmNruj3rNfmNz2a11T4TPZg3f4KWBC5SktEP -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbvYM6Wvz7oHXNAzthBL4S4o9JS1PFCAQZG5Xh3eZb6Gv -->
 # Cardanians
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,8 @@
 
 ---
 
-This proposal corrects an early governance bug that caused the Ikigai Info Action submitter to lose their 100,000 ADA deposit through no fault of their own, as documented in the abstract and motivation sections. Reimbursing the deposit, plus a modest adjustment for lost rewards (total 103,000 ADA), upholds fairness for early participants and reinforces trust in Cardano’s governance process. The amount is small, constitutionally compliant, and directly resolves a long-standing issue acknowledged by the community.
+We support reimbursing the Ikigai Info Action deposit because the 100,000 ADA loss appears to have resulted from a protocol/tooling issue during early governance, not from normal governance risk.
+
+The request is limited: 100,000 ADA for the lost deposit plus 3,000 ADA for missed staking rewards and opportunity cost.
+
+This should not set a general precedent for reimbursing failed or expired governance actions. We support it only as a specific reimbursement for a technical issue.
