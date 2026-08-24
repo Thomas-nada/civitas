@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdvaiyHofUCfXGrWZMiqWeU37dzD14b2Nwk81tgcntJCv -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmfE46NEQMHtD9uj8GFpSoTcfHVNn5rQLZUtxWPvKkSL3F -->
 # SASA_nagamaru_ながまる
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,34 +7,10 @@
 
 ---
 
-I vote YES.
+The proposer was unable to recover the 100,000 ADA deposit due to a node issue during the early stage of Cardano’s on-chain governance.
 
-This governance action seeks to resolve the loss suffered by an early and sincere participant in Cardano governance, caused not by their actions but by a protocol implementation bug.
+Reimbursing a loss caused by an issue within Cardano’s own infrastructure is important for maintaining fairness and trust in the governance system. I also consider the additional 3,000 ADA reasonable compensation for the staking rewards lost during this period. Therefore, I support this proposal.
 
-It is natural that those who step forward first take on some risk.
-However, when unfair, system-originated risk is left unaddressed, it discourages others from stepping forward and ultimately stalls governance itself.
+本件は、初期のオンチェーン・ガバナンスにおけるノードの不具合により、提案者が100,000 ADAのデポジットを回収できなくなったものです。
 
-For Cardano to advance, participants must trust that good-faith contributions are properly protected.
-
-This is not a personal benefit but a reasonable and minimal remedy to restore what was lost due to a system failure.
-It reflects the values and integrity we want our governance culture to stand on.
-
-In respect for those who took the first steps —
-and to support those who will take the next —
-I vote YES.
-
-僕は YES に投票します。
-
-Cardanoガバナンスの初期段階で、誠実に行動した参加者がノード実装のバグによって不当に損失を被った問題を解決するための提案です。
-
-「先に進む者が一定のリスクを負うのは当然」です。
-しかし、バグによる 制度外の不条理なリスクを放置してしまえば、次に続く人を阻むメッセージとなり、ガバナンスは停滞します。
-
-Cardanoのガバナンスが発展するためには、正しく行動した者が正しく守られるという信頼が土台であるべきです。
-
-これは単なる金銭補償ではなく、コミュニティの信義とガバナンス文化の健全性を守る選択です。
-
-この提案は、利益供与ではなく、
-システム起因の損失を公平かつ最小限に回復する合理的な提案です。
-
-先に進もうとした人への敬意として、そして次に進もうとする人の背中を押すために、僕はこのコミットメントを尊重します。
+Cardanoの仕組み上の問題によって生じた損失を補填することは、公平性とガバナンスへの信頼を維持するうえで重要だと考えます。追加の3,000 ADAも、失われたステーキング報酬に対する補償として過大ではないと判断し、本提案を支持します。
