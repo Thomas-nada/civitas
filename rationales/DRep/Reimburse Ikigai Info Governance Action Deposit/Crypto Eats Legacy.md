@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmakZtqYXaiCGnAsjres5N5tBcEv6otSQk88BCYkVSkXV3 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmPYvoX5iBSKv42K36emyqB3kPGRZk5dcfHekFnLqK2GwN -->
 # Crypto Eats Legacy
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Thanks to the twitter person who verified that this is indeed the same person who lost the deposit
+We have the ability to fix this error of someone who was actively using the protocol, so we should. This amount is a lot for one person, but not a lot on the scale of the treasury
