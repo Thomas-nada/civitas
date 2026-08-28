@@ -1,12 +1,12 @@
-<!-- url: https://raw.githubusercontent.com/EMGDRep/rationale/refs/heads/main/UpdateCC.jsonld -->
+<!-- url: https://raw.githubusercontent.com/EMGDRep/rationale/refs/heads/main/CC2026_Revised.jsonld -->
 # EMURGO
 
 **Proposal:** Update Constitutional Committee 2026
-**Vote:** Abstain
+**Vote:** Yes
 **Voter ID:** `drep1ytvlwvyjmzfyn56n0zz4f6lj94wxhmsl5zky6knnzrf4jygpyahug`
 
 ---
 
-EMURGO as a DRep votes ABSTAIN on Update Constitutional Committee 2026 with rationale outlined below.
+EMURGO as a DRep previously voted ABSTAIN on Update Constitutional Committee 2026. At the time, we chose to withhold judgment in light of the ongoing situation in the ecosystem.
 
-Given the ongoing situation in the ecosystem, responsible governance requires us to act with full clarity and confidence. Until the current situation reaches resolution, EMURGO prefers to withhold judgment rather than vote without the certainty our mandate demands. We will revisit this proposal once the situation is resolved.
+After further consideration, EMURGO is changing the vote to YES. We recognise the importance of ensuring that the Constitutional Committee remains operational and able to carry out its constitutional responsibilities when needed. This action implements the outcome of the 2026 Constitutional Committee election and renews the seats whose terms are expiring. Supporting this update is important for the continuity and stability of Cardano governance. EMURGO therefore votes YES.
