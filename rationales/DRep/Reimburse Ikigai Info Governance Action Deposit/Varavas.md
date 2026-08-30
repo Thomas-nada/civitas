@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmWBNd5EJpjPHX2FQXg9itFSwLG3ZSSGvbzKscxTa4swAq -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmW8mJSUWs668kuDvUUH52K6FRuN7Gg3xHFodd1rrd98kV -->
 # Varavas
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-For the sweet love of Jesus, please vote to reimburse these guys!
+Thank you for your work in the early stages and regarding the lost funds, I hope the community will unite in agreeing to facilitate the refund.

@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbjUg1wbcmTjfSZWg1KYQBELAGSLyYYSJdDQvDLwd4LBH -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmcHb7DEfK4gpj4ZS1p7iVLShgqDwkuQNPmLkzuLvtTsuk -->
 # Army of Spies
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Voting once again for this reimbursement.  This should have already been completed for the reasons I previously articulated.
+Please see X.com post of the same date related to this vote.
