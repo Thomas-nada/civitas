@@ -1,4 +1,4 @@
-<!-- url: https://ipfs.blockfrost.dev/ipfs/QmT9HS4TjouADQ4PXAX5rby7biL57Re8UkbE913Z9WmfbY -->
+<!-- url: https://ipfs.blockfrost.dev/ipfs/QmNcV9z6uG9LmkdwPpeYuDiJgMg4ZEjSW1YmUgWmZUENGu -->
 # Tingvard
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,24 @@
 
 ---
 
-This governance action is properly framed as a budget Info action under Article III, § 4 and Article IV, § 1. It requests a budget allocation of 103,000 ada to reimburse the submitter of the September 2024 “Ikigai” Info action, who irrevocably lost their 100,000 ada governance deposit due to a software defect that allowed a governance action to be submitted using an unregistered stake key. The proposal includes an abstract, motivation, rationale, and valid anchor hash as required under Article III, § 5. The governance action satisfies the structural requirements of Article IV, § 2 through § 5. For purposes of administration, the DReps are designated as the temporary “administrator” responsible for executing the distribution, thereby meeting the administrator designation requirement under Article IV, § 2, despite the absence of ongoing or complex fund management. Because the entire amount is disbursed directly to the intended recipient, the administrative burden is minimal yet sufficiently aligned with the constitutional requirement. The requested amount is well within the Net-Change Limit as defined under Article IV, § 3. The proposal also satisfies Article IV, § 4, since the distribution can be immutably verified on-chain and requires no ongoing auditing beyond the public record of the disbursement itself. The Constitution does not require independent audit processes for immediate one-time distributions when full auditability is inherently guaranteed through the ledger. The purpose of this reimbursement — correcting a loss originating from a defect in Cardano’s governance infrastructure — aligns with the constitutional Tenets of fairness, transparency, and long-term sustainability. By providing redress for harms caused by systemic shortcomings rather than user misbehavior or speculation, the action reinforces trust in the governance system during its early lifespan and strengthens the incentives for constructive community participation.
+This governance action is a Treasury Withdrawals action requesting 103,000 ada to reimburse the 100,000 ada deposit associated with the September 2024 “Cardanoの生きがい - Ikigai -” Info governance action, together with an additional 3,000 ada intended to compensate for staking rewards forgone since the original deposit was lost.
+
+The action satisfies the applicable constitutional requirements under Article II, § 6 and Article II, § 7.
+
+Under Article II, § 6, the governance action is presented in a standardized and legible format and is supported by immutable governance metadata containing the required information.
+
+Under Article II, § 7.1, the terms of the withdrawal are sufficiently specified. The purpose is reimbursement of the lost governance-action deposit and associated staking rewards. The payment is intended to occur immediately upon enactment. The relevant cost is the requested 103,000 ada, and the proposal specifies that there are no circumstances under which the withdrawal would be refunded to the Treasury.
+
+The requirement under Article II, § 7.2 is addressed by the proposal's explicit statement that the recipient has not previously received funds from the Cardano Treasury.
+
+The requested amount is within the applicable Net Change Limit, satisfying Article II, § 7.3.
+
+Article II, § 7.4 requires an allocation for periodic independent audits and implementation of oversight metrics regarding the use of Treasury funds. This withdrawal is materially different from a Treasury withdrawal funding an ongoing programme of activities. It is a single, unconditional payment that is completed by the protocol upon enactment. There is no subsequent programme expenditure, milestone delivery, or ongoing use of Treasury funds requiring periodic oversight. The payment, amount, destination, and enactment are all independently verifiable on-chain. Tingvard therefore considers the direct and immutable on-chain record sufficient to satisfy the purpose of the audit and oversight requirement in this specific circumstance, without requiring a separate audit allocation.
+
+Article II, § 7.5 requires the designation of one or more administrators responsible for monitoring how the funds are used and ensuring the deliverables are achieved. The proposal nominates DReps as Administrator. Tingvard does not consider the DReps to be the appropriate administrator for this purpose. The proposed withdrawal contains no discretionary administration after enactment: the sole deliverable is the immediate payment itself, which is executed and recorded by the Cardano ledger. On these facts, the protocol performs the relevant administrative function by executing and evidencing the payment. The constitutional requirement is therefore satisfied by the protocol's execution of this singular and unconditional withdrawal.
+
+Article II, § 7.6 applies to ada being held by an administrator prior to further disbursement to the Treasury Withdrawal Recipient. No such intermediate custody occurs here. The funds move directly from the Treasury to the identified recipient upon enactment. Consequently, the custody and delegation requirements of Article II, § 7.6 do not attach to this withdrawal.
+
+The narrow treatment of Article II, § 7.4 through § 7.6 is justified by the nature of this particular withdrawal. These provisions provide important accountability safeguards for ordinary Treasury-funded programmes involving administrators, expenditure over time, milestones, and deliverables. None of those circumstances exists here. Introducing an intermediary administrator or periodic audit process into a single automated reimbursement would add cost and complexity without providing additional meaningful oversight of the Treasury funds.
+
+Tingvard therefore finds that the action satisfies the constitutional requirements applicable to this Treasury Withdrawal.
