@@ -1,128 +1,112 @@
-<!-- url: https://beacnpool.github.io/beacn-drep-web/data/output/public/r/884266f7fd0a7327cfa7adad.md -->
+<!-- url: https://beacnpool.github.io/beacn-drep-web/data/output/public/r/98ef440d89da1151ab579813.md -->
 # BEACNpool
 
 **Proposal:** Governance Incentives Framework 2026
-**Vote:** Abstain
+**Vote:** No
 **Voter ID:** `drep1yg3fzjm63hjg37k3rtdt7wx0mgmn303lwv2s50xxkjzsv5qfhynxg`
 
 ---
 
 # Rationale: f57f8fcb4e83ad1b6f58bffd4a302aacbb5a90874c83c5f84a7f8b4bb43ce9bc#0
-Recommendation: **ABSTAIN**
-Score: `0.0` (binding treasury composite; advisory raw signal `0.0`; LLM lean `+0.0` recorded, not added) | Confidence: `0.1` | Readiness: `0`
-
+Recommendation: **NO**
+Score: `-0.15` (binding treasury composite; advisory raw signal `-0.15`; LLM lean `+0.0` recorded, not added) | Confidence: `0.7575` | Readiness: `0.65`
+> Reasoning layer (precomputed): The supplied claims show strong governance alignment, staged public deliverables, and measurable outputs, but the large treasury request and separately maintained detailed budget are treasury-stewardship issues already suited to the deterministic assessment rather than a discretionary nudge.
 
 ## Plain-language explanation (deterministic-heuristic)
-BEACN records ABSTAIN on Governance Incentives Framework 2026. This is a conservative abstention because the evidence does not justify stronger certainty.
+BEACN records NO on Governance Incentives Framework 2026. On the evidence available to BEACN's published review, the request does not clear the bar for spending shared treasury funds.
 
-The action is a TreasuryWithdrawals. The cached anchor describes the request as: Governance Incentives Framework 2026. The strongest grounded claim is: Cardano is approaching consequential decisions about governance incentives without a shared evidence base for determining which mechanisms work, what they cost, or who should remain accountable for their outcomes.
+The action is a TreasuryWithdrawals. The cached anchor describes the request as: Fund a 12-month Governance Incentives Framework project to research, model, test, document, and submit a governance incentive framework and integration pathway for Cardano. It asks the treasury for 4207967 ADA. The strongest grounded claim is: The proposal says active DReps declined in every 12-epoch period during Cardano's first year of on-chain governance, while the DRep Gini coefficient rose from 0.92 to 0.94 and 11-16 DReps represented 51% of voting power.
 
-Open blockers: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py). BEACN's own independent diligence is also incomplete — before this vote could move to YES, BEACN's published review still needs complete proposal summary; budget analysis; feasibility assessment. Reason code: MISSING_BASELINE_EVIDENCE.
+A material claim remains proposer-asserted or thinly supported: The proposal states that Cardano lacks a structured, data-driven framework for determining how governance contributions should be incentivized, measured, or supported over time.
 
 ## Review Tree
-- overall_status: `blocked`
+- overall_status: `incomplete`
 
 ### Intake
-- status: `blocked`
+- status: `complete`
 - finding: Action type: TreasuryWithdrawals
 - finding: Status: active
 - finding: Proposed epoch: 649
 - finding: Expires after epoch: 656
-- finding: Treasury request: not specified
+- finding: Treasury request: 4.21M ADA
 - finding: Anchor pinned locally: yes
-- missing: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
 - conclusion: Baseline fields and source anchors establish whether the proposal can be reviewed at all.
 
 ### Claims and evidence
-- status: `complete`
+- status: `thin`
 - finding: Proposal anchor: pinned and replayable
 - finding: Proposal document read by reasoning layer: yes
 - finding: Snapshot freshness source: deep_research_dossiers.csv
-- finding: Deep research dossier: required
-- finding: Requested: Governance Incentives Framework 2026
-- finding: Recipient: 
-- finding: Stated amount: not stated in document
-- finding: Deliverables: Cardano is approaching consequential decisions about governance incentives without a shared evidence base for determining which mechanisms work, what they cost, or who should remain accountable for their outcomes., The project separates evidence-based validation from governance legitimacy: candidate incentive mechanisms will first be evaluated through research, data, modeling, and evidence, and then presented to governance for a decision on adoption., Significant work already exists across Cardano on governance compensation, participation, rationale incentives, reward distribution, voting-power concentration, and governance reward design., The Governance Incentives Working Group has already created a mapping document identifying 49 relevant efforts, proposals, research papers, tools, and related initiatives across this space [1].
-- finding: Deadline/expiry: not stated in document
-- finding: Claim (economic, independently_verifiable, medium materiality): Cardano is approaching consequential decisions about governance incentives without a shared evidence base for determining which mechanisms work, what they cost, or who should remain accountable for their outcomes.
-- finding: Claim (economic, independently_verifiable, medium materiality): The project separates evidence-based validation from governance legitimacy: candidate incentive mechanisms will first be evaluated through research, data, modeling, and evidence, and then presented to governance for a decision on adoption.
-- finding: Claim (economic, independently_verifiable, medium materiality): Significant work already exists across Cardano on governance compensation, participation, rationale incentives, reward distribution, voting-power concentration, and governance reward design.
-- finding: Claim (economic, independently_verifiable, medium materiality): The Governance Incentives Working Group has already created a mapping document identifying 49 relevant efforts, proposals, research papers, tools, and related initiatives across this space [1].
-- finding: Claim (economic, independently_verifiable, medium materiality): Cardano governance depends on sustained, informed, and high-integrity participation from governance actors and stakeholders.
-- finding: Claim (economic, independently_verifiable, low materiality): However, there is currently no structured and data-driven framework for determining how these contributions should be incentivized, measured, or supported over time.
-- missing: complete proposal summary
-- missing: budget analysis
-- missing: feasibility assessment
-- missing: risk analysis
-- missing: alternatives analysis
-- missing: failure-mode analysis
-- missing: community impact analysis
+- finding: Deep research dossier: complete
+- finding: Requested: Fund a 12-month Governance Incentives Framework project to research, model, test, document, and submit a governance incentive framework and integration pathway for Cardano.
+- finding: Recipient: not stated in document
+- finding: Stated amount: 4207967
+- finding: Deliverables: Governance Incentives Framework report, public dataset and dashboard, documented incentive models and formula outputs, controlled incentive pilot findings, at least one publication-ready research paper submitted for peer review, completed and submitted Governance Incentives Framework CIP, governance integration pathway, final financial and milestone report
+- finding: Deadline/expiry: 12 months
+- finding: Claim (governance, proposer_asserted, high materiality): The proposal states that Cardano lacks a structured, data-driven framework for determining how governance contributions should be incentivized, measured, or supported over time.
+- finding: Claim (governance, independently_verifiable, high materiality): The proposal says active DReps declined in every 12-epoch period during Cardano's first year of on-chain governance, while the DRep Gini coefficient rose from 0.92 to 0.94 and 11-16 DReps represented 51% of voting power.
+- finding: Claim (governance, independently_verifiable, medium materiality): The proposal states that the Governance Incentives Working Group mapped 49 relevant efforts, proposals, papers, tools, and initiatives related to governance incentives.
+- finding: Claim (technical, supported_in_proposal, high materiality): The project will evaluate incentive mechanisms using research, governance data, modeling, controlled testing, and community input before presenting adoption decisions to governance.
+- finding: Claim (other, supported_in_proposal, high materiality): The proposal commits to seven staged milestones over 12 months, moving from discovery through framework design, data collection, modeling, dashboarding, pilot testing, final validation, and governance integration.
+- finding: Claim (governance, supported_in_proposal, high materiality): The project will produce public research and feedback reports, structured governance activity data, a public dashboard, documented incentive models, controlled pilot findings, and a submitted Governance Incentives Framework CIP.
+- missing: Independent evidence for: The proposal states that Cardano lacks a structured, data-driven framework for determining how governance contributions should be incentivized, measured, or supported over time.
+- missing: Independent evidence for: The detailed operational budget is maintained separately and the anchor document presents only workstream-level allocations.
 - conclusion: Each claim must map to replayable public evidence; proposer assertions alone are not enough for confidence.
 
 ### Treasury analysis
-- status: `incomplete`
-- finding: Requested ADA: not specified
-- finding: Budget granularity: unknown
+- status: `complete`
+- finding: Requested ADA: 4207967
+- finding: Budget granularity: not confirmed
 - finding: Milestone payment gates: unknown
-- finding: Clawback/refund path: unknown
-- finding: Cost/benefit clarity: unknown
+- finding: Clawback/refund path: confirmed
+- finding: Cost/benefit clarity: confirmed
 - finding: Recurring funding dependency: unknown
 - finding: Six-month treasury flow regime: unsustainable (basis: total inflow (tau + donations) vs enacted withdrawals)
-- finding: Financial confidence: unknown
+- finding: Financial confidence: 0.73
 - missing: line-item budget
 - missing: milestone-gated disbursement
 - missing: sustainability path
-- missing: cost-benefit clarity
 - conclusion: Treasury votes require a higher bar because they consume shared ADA and create precedent.
 
 ### Risk review
-- status: `thin`
+- status: `complete`
 - finding: Execution risk: unknown
 - finding: Governance risk: unknown
 - finding: Technical risk: unknown
 - finding: Treasury exposure risk: unknown
-- finding: Mitigation evidence: unknown
-- finding: Independent assurance: unknown
-- finding: Rollback/remedy path: unknown
-- finding: Flag count: 0
-- missing: mitigation evidence
+- finding: Mitigation evidence: confirmed
+- finding: Independent assurance: not confirmed
+- finding: Rollback/remedy path: confirmed
+- finding: Flag count: 1
 - missing: independent assurance
-- missing: rollback/remedy path
 - missing: dependency map
 - conclusion: Risk is not a side note; unmitigated execution or governance risk can dominate an otherwise attractive proposal.
 
 ### Counterargument pass
 - status: `complete`
-- finding: Strongest YES: the proposal substantiates "Cardano is approaching consequential decisions about governance incentives without a shared evidence base for determining which mechanisms work, what they cost, or who should remain accountable for their outcomes." though 8 review blocker(s) remain open.
-- finding: Strongest NO: an unresolved blocker (treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)) means costs or weak controls may outweigh the claimed benefit.
-- finding: Strongest hold: a treasury action without a complete deep-research dossier cannot be voted directionally without pretending certainty.
+- finding: Strongest YES: the proposal substantiates "The proposal says active DReps declined in every 12-epoch period during Cardano's first year of on-chain governance, while the DRep Gini coefficient rose from 0.92 to 0.94 and 11-16 DReps represented 51% of voting power." and clears the evidence gates.
+- finding: Strongest NO: a material claim is unsupported — "The proposal states that Cardano lacks a structured, data-driven framework for determining how governance contributions should be incentivized, measured, or supported over time." — so cost or precedent may outweigh the benefit.
+- finding: Strongest hold: if claims cannot be tied to replayable evidence, abstaining avoids overclaiming certainty.
 - conclusion: A defensible rationale must show the best opposing case before it reaches a vote.
 
 ### Synthesis
-- status: `blocked`
+- status: `ready`
 - finding: Final vote must be derived from completed sections above, not from a prose summary.
 - finding: The public rationale should name the decisive section and the strongest counterargument.
-- missing: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
-- missing: missing complete proposal summary
-- missing: missing budget analysis
-- missing: missing feasibility assessment
-- missing: missing risk analysis
-- missing: missing alternatives analysis
-- missing: missing failure-mode analysis
-- missing: missing community impact analysis
 - conclusion: The vote is only credible if the assessment tree shows enough work for a skeptical delegator to audit.
 
 ## Facts
-- Critical evidence fields are missing for this action.
+- Pinned anchor document is available for this action.
+- Treasury withdrawal actions require elevated scrutiny.
 - Intake: Action type: TreasuryWithdrawals
 - Claims and evidence: Proposal anchor: pinned and replayable
-- Treasury analysis: Requested ADA: not specified
+- Treasury analysis: Requested ADA: 4207967
 - Risk review: Execution risk: unknown
-- Counterargument pass: Strongest YES: the proposal substantiates "Cardano is approaching consequential decisions about governance incentives without a shared evidence base for determining which mechanisms work, what they cost, or who should remain accountable for their outcomes." though 8 review blocker(s) remain open.
+- Counterargument pass: Strongest YES: the proposal substantiates "The proposal says active DReps declined in every 12-epoch period during Cardano's first year of on-chain governance, while the DRep Gini coefficient rose from 0.92 to 0.94 and 11-16 DReps represented 51% of voting power." and clears the evidence gates.
 - Synthesis: Final vote must be derived from completed sections above, not from a prose summary.
 
 ## Inferences
-- Cannot produce a responsible recommendation without baseline evidence.
+- Directional NO forced: the applicable Net Change Limit is exhausted — treasury withdrawals already enacted within this NCL period leave no remaining capacity.
 - Intake: Baseline fields and source anchors establish whether the proposal can be reviewed at all.
 - Claims and evidence: Each claim must map to replayable public evidence; proposer assertions alone are not enough for confidence.
 - Treasury analysis: Treasury votes require a higher bar because they consume shared ADA and create precedent.
@@ -131,31 +115,24 @@ Open blockers: treasury_amount_lovelace is missing, zero, or non-positive for a 
 - Synthesis: The vote is only credible if the assessment tree shows enough work for a skeptical delegator to audit.
 
 ## Uncertainty
-- Missing: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
-- Intake missing: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
-- Intake status is blocked.
-- Claims and evidence missing: complete proposal summary
-- Claims and evidence missing: budget analysis
+- Treasury flow signal is in unsustainable regime, ratio 2.14 (total inflow (tau + donations) vs enacted withdrawals); advisory penalty applied.
+- DRep ratification support is below threshold; this is not treated as active opposition.
+- Claims and evidence missing: Independent evidence for: The proposal states that Cardano lacks a structured, data-driven framework for determining how governance contributions should be incentivized, measured, or supported over time.
+- Claims and evidence missing: Independent evidence for: The detailed operational budget is maintained separately and the anchor document presents only workstream-level allocations.
+- Claims and evidence status is thin.
 - Treasury analysis missing: line-item budget
 - Treasury analysis missing: milestone-gated disbursement
-- Treasury analysis status is incomplete.
-- Risk review missing: mitigation evidence
 - Risk review missing: independent assurance
-- Risk review status is thin.
-- Synthesis missing: treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
-- Synthesis missing: missing complete proposal summary
-
-## Missing Evidence
-- treasury_amount_lovelace is missing, zero, or non-positive for a treasury withdrawal (backfill via beacn-drep-resources/scripts/backfill_treasury_amounts.py)
+- Risk review missing: dependency map
 
 ## Reproducibility
-- input_hash: `b6a9648c66f609d6b8ca6c6e4b9a97d9f63016f0cc20cc664865a11ef0d5edc9`
-- snapshot_bundle_hash: `059ef766ffc02356294eff08f00bef91aaae264427910977ddd3d0f8bcc30160`
+- input_hash: `1a1e34c6fdfb840e214063d8f0dbefc1680ffbafc71256fe187caa81ada40d90`
+- snapshot_bundle_hash: `61aee7110ecaf7251918277b4e884374edfc3faa9edff27d950ade81521d1407`
 - soul_commit: `c813ed97f64dba61150d01964327553baf720d38`
 - soul_text_hash: `fa491ed711b9834e5a3c72d35903cec18afe8d93e1262f42ffcb20f5fce2c276`
-- resource_registry_commit: `480a04af9041d4372ef8a5c8ae7abf3a77fcefc5`
+- resource_registry_commit: `7532f2d0da41a7116f5a6d587dedd0b18bd03c80`
 - resources_used: `gov_actions_snapshot, treasury_withdrawals_snapshot, drep_vote_history_snapshot, gov_actions_all_snapshot, gov_actions_active_snapshot, gov_treasury_recipients_snapshot, gov_action_flags_snapshot, gov_poll_runs_snapshot, top_drep_votes_snapshot, gov_anchor_documents, deep_research_dossiers, ecosystem_value_profiles, treasury_policy_state, treasury_portfolio, governance_outcomes, protocol_readiness_profiles`
 - snapshot_age_seconds: `0`
-- uncertainty_band: `LOW`
-- evidence_depth_score: `3`
-- decision_probs: `{"ABSTAIN": 0.345, "NO": 0.3275, "YES": 0.3275}`
+- uncertainty_band: `MEDIUM`
+- evidence_depth_score: `4`
+- decision_probs: `{"ABSTAIN": 0.2253, "NO": 0.6794, "YES": 0.0953}`
