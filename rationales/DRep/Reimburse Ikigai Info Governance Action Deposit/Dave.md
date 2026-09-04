@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmXvWbp3eHCHEpjxuH1wySLryUw1FFB5fd7MpGYVMnouUg -->
+<!-- url: ipfs://QmWuy3N7nr4J3rSrfAEGuXriPRcBsQsrKAVaf5a5tTDbM9 -->
 # Dave
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,8 @@
 
 ---
 
-I am voting YES. This early governance pioneer lost their 100,000 ADA deposit due to unforeseen technical complications. As a community, we should support those who actively participated in our earliest governance milestones. Reimbursing the original deposit along with 3,000 ADA for missed staking rewards is a fair and equitable way to make this community member whole.
+A [PDF version][pdf-link] of this rationale is also made available.
+
+[pdf-link]: https://ipfs.io/ipfs/QmW8ssKKE4W1keyJWttdo2WAQxTVPB3TA4PLQvhpDUwBB9
+
+Early pioneers of our new governance system should not be impacted financially through no fault of their own and this proposal has my full support.
