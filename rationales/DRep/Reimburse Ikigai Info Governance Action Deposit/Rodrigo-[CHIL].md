@@ -1,4 +1,4 @@
-<!-- url: https://gateway.pinata.cloud/ipfs/QmbqE5HDkz95k7E9cj2GVq2pDS1Va8VEjRnMHQN3TdgJvk -->
+<!-- url: https://gateway.pinata.cloud/ipfs/QmRRPFUTWexqR58UqTxLY76c1mhpPneXbcuDXMv96aQ7Qb -->
 # Rodrigo-[CHIL]
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Yes and im sorry it took so long
+Yes of course, thank you for your work at the beginning
