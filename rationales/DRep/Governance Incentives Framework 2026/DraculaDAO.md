@@ -1,0 +1,20 @@
+<!-- url: https://raw.githubusercontent.com/Dracula-DAO/cardano-drep/main/2026/2026-09-06_Gov_Incentives.jsonld -->
+# DraculaDAO
+
+**Proposal:** Governance Incentives Framework 2026
+**Vote:** Yes
+**Voter ID:** `drep1ygs99wsy49h9vydggncfeck2xwmngyeltp66pvgzl6jz63s6qmu3p`
+
+---
+
+Vote: YES
+
+This is a Treasury Withdrawal (gov_action174lclj6wswk3km6chl755vp24ja44yy8fjput7z20795hdpuax7qq67pvcp), proposed in epoch 649 and expiring epoch 656, requesting ₳4,207,967 for a twelve-month research program into Cardano's governance incentive mechanisms. The work is led by Seomon, Sebastian Pereira and Cerkoryn of the Governance Incentives Working Group, structured across seven milestones producing an incentives mapping, actor-specific models, simulations against real governance data, a governance activity dataset and dashboard, one controlled pilot, and a final framework submitted as a CIP. No compensation scheme is enacted by this action; the deliverable is evidence and a recommendation the community can then accept or reject on its merits.
+
+Dracula DAO judges research proposals on whether the question is worth answering, whether the answer is worth its price, and whether it will actually improve governance. On the first test this clears comfortably. The problem is documented rather than speculative: the number of active DReps has declined in every twelve-epoch period since governance went live, and between eleven and sixteen DReps now control fifty-one percent of voting power. Concentration at that level is a threat to the legitimacy of on-chain governance itself, and it is precisely the sort of slow-moving structural risk that an ultra long-term approach demands be addressed before it hardens. The alternative to funding this work is not saving ₳4.2M; it is deciding DRep compensation reactively, under pressure, with no evidence base — and a badly designed incentive that rewards superficial voting or further entrenches large holders would cost the ecosystem far more than this proposal asks.
+
+On the third test the proposal is better hedged than most research asks. A framework CIP can be ignored, and Dracula DAO does not assume this one will be adopted. But the governance activity dataset, the dashboard, and the pilot results retain their value independently of whether the framework is ratified: they become shared infrastructure for anyone reasoning about participation, and they outlast this particular team's conclusions. The commitment to test one mechanism in a controlled pilot with predefined termination conditions, rather than modeling in the abstract, is the right methodology. The proposal also returns unused contingency and pilot reserves to the treasury, and refunds proportionally where deliverables are cancelled or reduced.
+
+The honest concern is price. ₳472,000 for administration and ₳437,328 held as contingency together account for roughly a fifth of the ask, ₳253,333 for a website and dashboard is generous for what it is, and the proposal states that the detailed operational budget is maintained separately rather than exposing it here. The seven milestones read as a delivery plan rather than as payment gates, and the ₳126,239 audit and oversight allocation is thinly specified. Dracula DAO's standing preference remains payment against signed-off delivery with unspent funds returning to the treasury, and this proposal approximates that only partially. Dracula DAO expects the oversight function to be independent of the delivery team and the milestone reporting to be public, and will judge any follow-on request from this working group against what was actually produced.
+
+Weighed against the value of the question, the durability of the artifacts, and an amount that sits below other governance and infrastructure work this DREP has supported, the concerns are about efficiency rather than merit. The health of the DRep body is foundational to everything else Cardano governance decides, and it is currently deteriorating on measurable trend. Dracula DAO votes YES.
