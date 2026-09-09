@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreiehyxmwe2vvjhtyufhcphydpq5iauoix27v7munatzz2nmbef7y6q -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmcHHUKZUtDCy1hy84uoz9RxeNUn6CnxAkZdf57KFtEwzK -->
 # AtlasHub
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-This should have been resolved by our official entities long ago.
+As previously described, AtlasHub supports this request.
