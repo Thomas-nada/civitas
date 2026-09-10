@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreig3kaxt5jlb6g4rqvhsx6utxtlh3cxquyr6fgerv7f7rbd3lb4yvq -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTugokGyb1jWZKGJsA1uFoqGh28dADucWQc9yhfM3ck1t -->
 # Peter Horsfall
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Voting yes as this was part of our 'Oceania' proposal as well to have this reimbursed. Promises made, promised kept.
+Voted yes on this multiple times - hoping this ones goes through.
