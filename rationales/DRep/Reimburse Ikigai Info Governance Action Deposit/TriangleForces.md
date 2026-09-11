@@ -1,4 +1,4 @@
-<!-- url: https://ipfs.io/ipfs/QmbNksEuUgPQzLfVGok1yD5G7E71eh8sm6CtV8cjPVtyb4 -->
+<!-- url: https://dreptalk.com/vote-rationale/03bda61200be54dc5bdc4366956aa9aad2d7b36861199e2885e361e6fee99e96.json -->
 # TriangleForces
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,8 +7,10 @@
 
 ---
 
-Building on my earlier Yes vote regarding the info action, I still support reimbursing the original 100k ADA deposit that was lost because of the governance protocol bug. It’s only fair to recognize early contributors who took risks during Cardano’s on-chain governance startup. This not only upholds community trust but also shows respect for those who were involved from the beginning.
+This is the third or fourth time I have assessed the same 100K ADA loss. The destination is legitimate, the original deposit is unrecoverable through the normal protocol path, and the loss resulted from an early node defect involving an unregistered stake key. Cardano’s governance design treats the deposit as refundable once an action leaves the live state. **The submitter should not be sentenced indefinitely for the protocol’s childhood mistakes.**
 
-That said, I want to clearly oppose the additional 3k ADA being requested for staking rewards and opportunity costs. There’s no clear, verifiable reason for this, and allowing such claims could set a risky precedent that drains our treasury resources meant for growing the ecosystem.
+**I remain unconvinced by the additional 3K ADA.** Staking rewards vary, yet the proposal applies a tidy 2% annual assumption to funds that were never available for delegation. Compensating opportunity cost would create a precedent future claimants will quote with admirable persistence.
 
-To avoid similar issues in the future, we need to establish clear guardrails around treasury reimbursements so that the Treasury isn’t left vulnerable to future liabilities. If we really want to protect early participants from technical risks, creating a dedicated, sustainably funded insurance mechanism is the only responsible way to go!
+The choice is approving a modestly inflated reimbursement or prolonging a dispute whose governance cost already exceeds the disputed 3K ADA.
+
+**Cardano should repay the deposit, record the exception, and stop convening parliament over a rounding error.**
