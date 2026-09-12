@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreichtvl7ecdzdgmpz6qku5yk24kzig6thet7v3sgtgo5hsckzpupsa -->
+<!-- url: ipfs://bafkreiahnxhuevf6fasvvtildrx54lhnj3rf5kbrubl4faeqjjykahdniy -->
 # MyCNFT DRep
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-This is about correcting a system error and honoring the early contributors who tested and strengthened Cardano's new governance. Fairness and recognizing our pioneers is paramount.
+Voting YES. Fair reimbursement for an early governance pioneer who lost their deposit due to a verified node bug.
