@@ -1,4 +1,4 @@
-<!-- url: https://adastat.net/_meta/drep/vote149-150.jsonld -->
+<!-- url: https://adastat.net/_meta/drep/vote120.jsonld -->
 # AdaStat
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,6 +7,4 @@
 
 ---
 
-Because of fundamental concerns with the current treasury process, I vote Abstain on all Treasury Withdrawal proposals until the treasury budgeting process undergoes fundamental reform.
-
-More information: https://x.com/ada_stat/status/2068315882539921703
+I fully support returning the lost deposit to its owner. However, I still have some concerns and unanswered questions that I raised in the previous Info Action. So I will abstain.

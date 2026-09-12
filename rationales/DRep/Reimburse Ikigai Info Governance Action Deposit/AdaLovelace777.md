@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/AdaLovelace777/Bug.ada/refs/heads/main/Vote_Context%20(60).jsonld -->
+<!-- url: https://raw.githubusercontent.com/AdaLovelace777/ds/refs/heads/main/Vote_Context%20-%202026-09-06T150553.885.jsonld -->
 # AdaLovelace777
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I support this. I think it’s fair to reimburse the Ikigai submitter since they lost their deposit due to a bug, not their own actions. We don't get many bugs of this nature, so this is a rare occurrence. Covering the original amount plus a small compensation for missed rewards feels reasonable especially since he found the bug.
+Yes, refund the glitch!

@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmP2qBPoSfUafPGeUgb16pwF9ExUK3SBVMDg7xnEFWxzhV -->
+<!-- url: https://dreptalk.com/vote-rationale/03bda61200be54dc5bdc4366956aa9aad2d7b36861199e2885e361e6fee99e96.json -->
 # TriangleForces
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,10 +7,10 @@
 
 ---
 
-**I support reimbursing the original 100,000 ADA deposit** lost due to the governance protocol bug, recognizing the submitter’s pioneering role in Cardano’s on-chain governance infancy. This repayment is a fair acknowledgment that early participants should not be unduly penalized for technical failures outside their control.
+This is the third or fourth time I have assessed the same 100K ADA loss. The destination is legitimate, the original deposit is unrecoverable through the normal protocol path, and the loss resulted from an early node defect involving an unregistered stake key. Cardano’s governance design treats the deposit as refundable once an action leaves the live state. **The submitter should not be sentenced indefinitely for the protocol’s childhood mistakes.**
 
-However, **I firmly oppose the inclusion of the additional 3,000 ADA claimed for staking rewards and opportunity costs**. These are speculative losses lacking transparent, auditable justification. **Treasury funds must prioritize activities that provide measurable ecosystem value rather than compensating subjective or unverifiable claims.**
+**I remain unconvinced by the additional 3K ADA.** Staking rewards vary, yet the proposal applies a tidy 2% annual assumption to funds that were never available for delegation. Compensating opportunity cost would create a precedent future claimants will quote with admirable persistence.
 
-Beyond this specific reimbursement, **it is imperative to establish explicit guardrails within Cardano’s governance framework. The treasury must not be treated as an insurance mechanism for technical bugs or user errors unless clearly codified by governance policy. Approving this reimbursement must be explicitly declared a one-off exception with no precedent for future compensation claims arising from operational faults.**
+The choice is approving a modestly inflated reimbursement or prolonging a dispute whose governance cost already exceeds the disputed 3K ADA.
 
-If the community deems **an insurance** mechanism necessary to protect early testers or contributors from technical risks, such a **fund should be created deliberately through a dedicated account funded by transaction fees or other sustainable sources**; not ad hoc treasury withdrawals.
+**Cardano should repay the deposit, record the exception, and stop convening parliament over a rounding error.**
