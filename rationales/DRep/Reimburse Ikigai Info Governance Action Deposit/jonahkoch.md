@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmVvpucDeofGDq4ukUxQYtiD6mbJzuSGPC81Ku6L4tozYH -->
+<!-- url: ipfs://QmV1E1TKoHMmJVv3WhPRB8xBfCGDgY7ozWd17AvgdobY9o -->
 # jonahkoch
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -9,6 +9,6 @@
 
 A [PDF version][pdf-link] of this rationale is also made available.
 
-[pdf-link]: https://ipfs.io/ipfs/QmZDPuBNNpBpfEDKwGuguVRYK57gjz2KFT2WkiWqyqCGbi
+[pdf-link]: https://ipfs.io/ipfs/QmTJHhp39F8oGm1GogtAdF4iL2PPKnvEboJGFW2cKnJRZB
 
-Yes - Season 3
+Yes
