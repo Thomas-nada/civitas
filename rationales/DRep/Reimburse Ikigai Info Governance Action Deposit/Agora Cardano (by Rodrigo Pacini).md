@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmU9U583EQ6WCTiFbqyGn69x8sXVSh2mmYR26XSHgRBvXn -->
+<!-- url: https://ipfs.io/ipfs/QmVfRSdMzPKtRHYxxYKPxPDYeFZZCs8LmMnwXwNDRLxr6i -->
 # Agora Cardano (by Rodrigo Pacini)
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,78 +7,32 @@
 
 ---
 
-# Governance Action Report [EN]
+# Governance Action Review
 
-## 1. Introduction
+## Vote: YES
 
-This governance action requests a treasury withdrawal of 103,000 ADA to reimburse the submitter of the “Cardanoの生きがい - Ikigai -” Info governance action. The original action was submitted in September 2024, shortly after the Chang hard fork introduced on-chain governance, and asked the community to agree with a symbolic statement thanking those who helped Cardano reach that stage and expressing hope for the future.
+This governance action is materially equivalent to the previous submission on the same issue, and the voting position remains consistent with the prior assessment of this scope.
 
-A bug in the Cardano node allowed an unregistered stake key to be used in the governance action. As a result, the submitter was unable to recover the original 100,000 ADA deposit. The current withdrawal request includes the 100,000 ADA deposit plus an additional 3,000 ADA to compensate for lost staking rewards at a rate of 2% per year.
+The purpose is limited and specific: to reimburse the 100,000 ADA deposit lost by the submitter of the original Ikigai Info governance action, plus 3,000 ADA in estimated lost staking rewards. The case does not involve funding a new project, creating an operational budget, or approving discretionary ecosystem spending. It concerns a corrective treasury withdrawal for an objective loss connected to an early technical issue in Cardano’s on-chain governance process.
 
-The action states that delivery would occur instantly through on-chain enactment. It also states that there are no associated costs or expenses, no refund circumstances, no prior treasury funding for the recipient, and no need for separate administration or custody because the funds would be distributed directly. DReps are nominated as the Administrator only to satisfy the relevant constitutional requirement.
+The main concern in the previous assessment was whether the recipient of the reimbursement could be sufficiently linked to the original submitter affected by the lost deposit. That concern has already been addressed through the available on-chain verification showing continuity between the stake address associated with the original Ikigai action and the current reimbursement request.
 
-## 2. Governance Action Analysis
+Given that the new governance action maintains the same substantive scope, rationale, amount, and purpose, there is no reason to change the previous position. Approving this action is a matter of procedural fairness and institutional consistency. Refusing reimbursement in this specific context would create an unfair precedent for early governance participants who acted in good faith and were affected by a technical failure outside their control.
 
-### Positive aspects
+For these reasons, the vote remains **YES**.
 
-The concern over the recipient of the reimbursement was sufficiently clarified by the verification that the same stake address is linked to the original action and to the current treasury withdrawal.
+---
 
-The reimbursement of 103,000 ADA is justified as a specific correction for an objective loss that occurred at the beginning of on-chain governance and was caused by a technical failure of the system itself.
+# Revisão da Ação de Governança
 
-### Risks and concerns
+## Voto: SIM
 
-The central concern was confirming whether the reimbursement recipient is the same participant affected by the loss of the Ikigai governance action deposit.
+Esta ação de governança é materialmente equivalente à submissão anterior sobre o mesmo tema, e a posição de voto permanece coerente com a avaliação anterior deste mesmo escopo.
 
-Denying this reimbursement would create an unfair precedent for participants who legitimately used governance mechanisms and were harmed by a failure outside their control.
+A finalidade é limitada e específica: reembolsar o depósito de 100.000 ADA perdido pelo submitter da ação de governança informativa original Ikigai, acrescido de 3.000 ADA em recompensas de staking estimadas que deixaram de ser recebidas. O caso não envolve financiar um novo projeto, criar um orçamento operacional ou aprovar gasto discricionário para o ecossistema. Trata-se de uma retirada corretiva do tesouro para reparar uma perda objetiva ligada a um problema técnico ocorrido no início do processo de governança on-chain da Cardano.
 
-## 3. Vote and Rationale
+A principal preocupação na avaliação anterior era se o destinatário do reembolso poderia ser suficientemente vinculado ao submitter original afetado pela perda do depósito. Essa preocupação já foi endereçada pela verificação on-chain disponível, que demonstra continuidade entre a stake address associada à ação Ikigai original e a solicitação atual de reembolso.
 
-Vote: YES.
+Como a nova ação de governança mantém o mesmo escopo substantivo, a mesma justificativa, o mesmo valor e a mesma finalidade, não há razão para alterar a posição anterior. Aprovar esta ação é uma questão de justiça procedimental e consistência institucional. Recusar o reembolso neste contexto específico criaria um precedente injusto para participantes iniciais da governança que agiram de boa-fé e foram afetados por uma falha técnica fora de seu controle.
 
-The final position is YES. The central concern was confirming whether the reimbursement recipient is the same participant affected by the loss of the Ikigai governance action deposit. This doubt was sufficiently clarified by the verification that the same stake address is linked to the original action and to the current treasury withdrawal.
-
-Given this, the reimbursement of 103,000 ADA is justified as a specific correction for an objective loss that occurred at the beginning of on-chain governance and was caused by a technical failure of the system itself. Denying this reimbursement would create an unfair precedent for participants who legitimately used governance mechanisms and were harmed by a failure outside their control.
-
-Therefore, the vote is YES.
-
-## 4. Conclusion
-
-The decisive point is that the reimbursement recipient was sufficiently verified through the link between the same stake address and both the original governance action and the current treasury withdrawal. The 103,000 ADA reimbursement is supported as a specific correction for an objective loss caused by a technical failure outside the participant’s control.
-
-# Relatório de Ação de Governança [PT]
-
-## 1. Introdução
-
-Esta ação de governança solicita uma retirada do tesouro de 103.000 ADA para reembolsar o proponente da ação de governança informativa “Cardanoの生きがい - Ikigai -”. A ação original foi submetida em setembro de 2024, pouco depois do hard fork Chang introduzir a governança on-chain, e perguntou à comunidade se concordava com uma declaração simbólica de agradecimento àqueles que ajudaram Cardano a chegar até aquele ponto e de esperança para o futuro.
-
-Uma falha no código do Cardano node permitiu que uma stake key não registrada fosse utilizada na ação de governança. Como resultado, o proponente não conseguiu recuperar o depósito original de 100.000 ADA. A retirada atual inclui o depósito de 100.000 ADA mais 3.000 ADA adicionais para compensar recompensas de staking perdidas a uma taxa de 2% ao ano.
-
-A ação afirma que a entrega ocorreria instantaneamente por meio da promulgação on-chain. Também afirma que não há custos ou despesas associadas, não há circunstâncias de reembolso ao tesouro, não houve financiamento prévio do tesouro para o destinatário, e não há necessidade de administração ou custódia separada porque os fundos seriam distribuídos diretamente. Os DReps são nomeados como Administrador apenas para cumprir o requisito constitucional relevante.
-
-## 2. Análise da Ação de Governança
-
-### Aspectos positivos
-
-A preocupação sobre o destinatário do reembolso foi suficientemente esclarecida pela verificação de que a mesma stake address está vinculada à ação original e à treasury withdrawal atual.
-
-O reembolso de 103.000 ADA é justificado como uma correção pontual por uma perda objetiva ocorrida no início da governança on-chain e causada por uma falha técnica do próprio sistema.
-
-### Riscos e preocupações
-
-A preocupação central era confirmar se o destinatário do reembolso é o mesmo participante afetado pela perda do depósito da Ikigai governance action.
-
-Negar esse reembolso criaria um precedente injusto para participantes que utilizaram legitimamente os mecanismos de governança e foram prejudicados por uma falha fora de seu controle.
-
-## 3. Voto e Fundamentação
-
-Voto: YES.
-
-A posição final é YES. A preocupação central era confirmar se o destinatário do reembolso é o mesmo participante afetado pela perda do depósito da Ikigai governance action. Essa dúvida foi suficientemente esclarecida pela verificação de que a mesma stake address está vinculada à ação original e à treasury withdrawal atual.
-
-Diante disso, o reembolso de 103.000 ADA é justificado como uma correção pontual por uma perda objetiva ocorrida no início da governança on-chain, causada por uma falha técnica do próprio sistema. Negar esse reembolso criaria um precedente injusto para participantes que utilizaram legitimamente os mecanismos de governança e foram prejudicados por uma falha fora de seu controle.
-
-Portanto, o voto é YES.
-
-## 4. Conclusão
-
-O ponto decisivo é que o destinatário do reembolso foi suficientemente verificado pelo vínculo entre a mesma stake address e a ação de governança original e a treasury withdrawal atual. O reembolso de 103.000 ADA é sustentado como uma correção pontual por uma perda objetiva causada por uma falha técnica fora do controle do participante.
+Por essas razões, o voto permanece **SIM**.

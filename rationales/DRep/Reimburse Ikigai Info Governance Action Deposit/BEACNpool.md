@@ -1,4 +1,4 @@
-<!-- url: https://beacnpool.github.io/beacn-drep-web/data/output/public/r/2381771257d26389c0fc5aad.md -->
+<!-- url: https://beacnpool.github.io/beacn-drep-web/data/output/public/r/8b1eaed5984013b98431057a.md -->
 # BEACNpool
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,23 +7,27 @@
 
 ---
 
-# Rationale: gov_action1654yj97lf7guxsh27phtknq2tsc4dajp95fh7vrucaltjy0502csq7qtkhq
+# Rationale: 7d37220b71806410cc8adfbdafbad494e1ce3fdc674ab13c88a72b3b27de78d9#0
 Recommendation: **NO**
-Score: `-0.6333` (raw `-0.6033` + doctrine-LLM nudge `-0.03`) | Confidence: `1.0` | Readiness: `0.8`
-> Reasoning layer (precomputed): The claims describe a plausible reimbursement case, but the evidence base is thin for a treasury withdrawal of 103000 ADA: key budget, feasibility, alternatives, failure-mode, and community-impact analysis are missing, and the NCL claim is unsupported in the document. Given the deterministic assessment is already blocked, only a small additional cautionary nudge is warranted.
+Score: `-0.25` (binding treasury composite; advisory raw signal `-0.25`; LLM lean `+0.0` recorded, not added) | Confidence: `0.7525` | Readiness: `0.75`
+> Reasoning layer (precomputed): The deterministic assessment already captures that the review is incomplete and the claims evidence is thin; under BEACN doctrine, missing independently verified diligence should remain a needs-more-info state rather than becoming a directional penalty.
 
-## Plain-language explanation (precomputed)
-BEACN's autonomous DRep is recording ABSTAIN on this action, and the reason is procedural rather than a verdict on the proposal's merits. BEACN's on-chain governance data snapshot is currently about eight hours old, which is beyond the six-hour freshness limit its policy requires before it will cast a directional vote. When data is this stale BEACN holds rather than risk voting on an out-of-date picture of the proposal, the treasury, and the wider vote distribution. The request is narrow and sympathetic: 103,000 ADA to reimburse an early governance participant whose 100,000 ADA Info-action deposit was stranded by a documented Cardano node bug shortly after the Chang hard fork, plus 3,000 ADA for lost staking rewards. The core fact — that a node defect prevented recovery of the deposit — is independently checkable on-chain and is the strongest part of the case; the 2%-per-annum staking top-up is a reasonable but proposer-set figure. The amount is small relative to other live treasury actions and there is no ongoing delivery risk. Once BEACN's snapshot is current and the deep-research record confirms the bug and the recipient address, this is the kind of low-risk, well-bounded reimbursement on which it could reach a directional vote.
+## Plain-language explanation (deterministic-heuristic)
+BEACN records NO on Reimburse Ikigai Info Governance Action Deposit. On the evidence available to BEACN's published review, the request does not clear the bar for spending shared treasury funds.
+
+The action is a TreasuryWithdrawals. The cached anchor describes the request as: Reimburse the lost deposit for the Ikigai Info governance action, plus claimed missed staking rewards. It asks the treasury for 103000 ADA. The strongest grounded claim is: An Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 as a symbolic action thanking contributors and expressing hope for Cardano's future.
+
+A material claim remains proposer-asserted or thinly supported: The proposer says a Cardano node bug allowed an unregistered stake key to be used, preventing the submitter from recovering a 100000 ADA governance action deposit.
 
 ## Review Tree
-- overall_status: `blocked`
+- overall_status: `incomplete`
 
 ### Intake
 - status: `complete`
 - finding: Action type: TreasuryWithdrawals
 - finding: Status: active
-- finding: Proposed epoch: 636
-- finding: Expires after epoch: 643
+- finding: Proposed epoch: 649
+- finding: Expires after epoch: 656
 - finding: Treasury request: 103.0k ADA
 - finding: Anchor pinned locally: yes
 - conclusion: Baseline fields and source anchors establish whether the proposal can be reviewed at all.
@@ -32,89 +36,82 @@ BEACN's autonomous DRep is recording ABSTAIN on this action, and the reason is p
 - status: `thin`
 - finding: Proposal anchor: pinned and replayable
 - finding: Proposal document read by reasoning layer: yes
-- finding: Snapshot freshness source: manifest
-- finding: Deep research dossier: required
-- finding: Requested: Treasury withdrawal to reimburse the unrecovered deposit from the Ikigai Info governance action and compensate claimed lost staking rewards.
-- finding: Recipient: Ikigai Info governance action submitter; specific recipient address not stated in document
+- finding: Snapshot freshness source: deep_research_dossiers.csv
+- finding: Deep research dossier: complete
+- finding: Requested: Reimburse the lost deposit for the Ikigai Info governance action, plus claimed missed staking rewards.
+- finding: Recipient: Ikigai Info governance action submitter; exact recipient address not stated in document
 - finding: Stated amount: 103000
-- finding: Deliverables: Instant on-chain distribution of the withdrawal amount to the intended recipient as part of governance action enactment
+- finding: Deliverables: Immediate on-chain treasury distribution to the intended recipient upon enactment
 - finding: Deadline/expiry: not stated in document
-- finding: Claim (governance, proposer_asserted, medium materiality): The proposal says an Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 shortly after the Chang hard fork.
-- finding: Claim (governance, proposer_asserted, low materiality): The proposal says the Ikigai action was symbolic and asked the community to agree with a statement thanking contributors and expressing hope for Cardano's future.
-- finding: Claim (technical, independently_verifiable, high materiality): The proposal says a Cardano node bug allowed an unregistered stake key to be used in the governance action, preventing the submitter from recovering a 100000 ADA deposit.
-- finding: Claim (governance, proposer_asserted, medium materiality): The proposal says community sentiment at the time favored reimbursing the deposit because the submitter should not lose 100000 ADA for being an early governance pioneer.
-- finding: Claim (governance, proposer_asserted, medium materiality): The proposal says no entity-based budget submissions included this reimbursement after treasury withdrawals became available following the Plomin hard fork.
-- finding: Claim (governance, proposer_asserted, medium materiality): The proposal says the Cardano in Oceania initiative included the reimbursement in its budget Info governance action, but that action was not approved.
-- missing: Independent evidence for: The proposal says an Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 shortly after the Chang hard fork.
-- missing: Independent evidence for: The proposal says community sentiment at the time favored reimbursing the deposit because the submitter should not lose 100000 ADA for being an early governance pioneer.
-- missing: Independent evidence for: The proposal says no entity-based budget submissions included this reimbursement after treasury withdrawals became available following the Plomin hard fork.
-- missing: Independent evidence for: The proposal says the Cardano in Oceania initiative included the reimbursement in its budget Info governance action, but that action was not approved.
-- missing: budget analysis
-- missing: feasibility assessment
-- missing: alternatives analysis
-- missing: failure-mode analysis
-- missing: community impact analysis
+- finding: Claim (governance, independently_verifiable, medium materiality): An Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 as a symbolic action thanking contributors and expressing hope for Cardano's future.
+- finding: Claim (technical, proposer_asserted, high materiality): The proposer says a Cardano node bug allowed an unregistered stake key to be used, preventing the submitter from recovering a 100000 ADA governance action deposit.
+- finding: Claim (governance, proposer_asserted, medium materiality): The proposer says there was significant community sentiment at the time that the Ikigai deposit should be reimbursed.
+- finding: Claim (economic, supported_in_proposal, high materiality): The proposal requests 103000 ADA, consisting of the original 100000 ADA deposit plus 3000 ADA for missed staking rewards at 2% per annum.
+- finding: Claim (economic, proposer_asserted, medium materiality): The proposer states the withdrawal has no associated costs or expenses beyond the reimbursement amount.
+- finding: Claim (economic, proposer_asserted, medium materiality): The proposer states there are no circumstances under which the withdrawal would be refunded to the Cardano Treasury.
+- missing: Independent evidence for: The proposer says a Cardano node bug allowed an unregistered stake key to be used, preventing the submitter from recovering a 100000 ADA governance action deposit.
+- missing: Independent evidence for: The proposer says there was significant community sentiment at the time that the Ikigai deposit should be reimbursed.
+- missing: Independent evidence for: The proposer states the withdrawal has no associated costs or expenses beyond the reimbursement amount.
+- missing: Independent evidence for: The proposer states there are no circumstances under which the withdrawal would be refunded to the Cardano Treasury.
 - conclusion: Each claim must map to replayable public evidence; proposer assertions alone are not enough for confidence.
 
 ### Treasury analysis
-- status: `incomplete`
+- status: `complete`
 - finding: Requested ADA: 103000
 - finding: Budget granularity: confirmed
 - finding: Milestone payment gates: not confirmed
 - finding: Clawback/refund path: not confirmed
-- finding: Cost/benefit clarity: confirmed
+- finding: Cost/benefit clarity: unknown
 - finding: Recurring funding dependency: not confirmed
-- finding: Six-month treasury flow regime: unsustainable
-- finding: Financial confidence: 0.70
+- finding: Six-month treasury flow regime: unsustainable (basis: total inflow (tau + donations) vs enacted withdrawals)
+- finding: Financial confidence: 0.62
 - missing: milestone-gated disbursement
+- missing: sustainability path
+- missing: cost-benefit clarity
 - conclusion: Treasury votes require a higher bar because they consume shared ADA and create precedent.
 
 ### Risk review
 - status: `complete`
-- finding: Execution risk: low
-- finding: Governance risk: low
-- finding: Technical risk: low
-- finding: Treasury exposure risk: low
+- finding: Execution risk: unknown
+- finding: Governance risk: unknown
+- finding: Technical risk: unknown
+- finding: Treasury exposure risk: unknown
 - finding: Mitigation evidence: confirmed
 - finding: Independent assurance: not confirmed
-- finding: Rollback/remedy path: confirmed
+- finding: Rollback/remedy path: not confirmed
 - finding: Flag count: 2
 - missing: independent assurance
+- missing: rollback/remedy path
 - missing: dependency map
 - conclusion: Risk is not a side note; unmitigated execution or governance risk can dominate an otherwise attractive proposal.
 
 ### Counterargument pass
 - status: `complete`
-- finding: Strongest YES: the proposal substantiates "The proposal says a Cardano node bug allowed an unregistered stake key to be used in the governance action, preventing the submitter from recovering a 100000 ADA deposit." and clears the evidence gates.
-- finding: Strongest NO: a material claim is unsupported — "The proposal says an Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 shortly after the Chang hard fork." — so cost or precedent may outweigh the benefit.
-- finding: Strongest hold: a treasury action without a complete deep-research dossier cannot be voted directionally without pretending certainty.
+- finding: Strongest YES: the proposal substantiates "An Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 as a symbolic action thanking contributors and expressing hope for Cardano's future." and clears the evidence gates.
+- finding: Strongest NO: a material claim is unsupported — "The proposer says a Cardano node bug allowed an unregistered stake key to be used, preventing the submitter from recovering a 100000 ADA governance action deposit." — so cost or precedent may outweigh the benefit.
+- finding: Strongest hold: if claims cannot be tied to replayable evidence, abstaining avoids overclaiming certainty.
 - conclusion: A defensible rationale must show the best opposing case before it reaches a vote.
 
 ### Synthesis
-- status: `blocked`
+- status: `ready`
 - finding: Final vote must be derived from completed sections above, not from a prose summary.
 - finding: The public rationale should name the decisive section and the strongest counterargument.
-- missing: missing budget analysis
-- missing: missing feasibility assessment
-- missing: missing alternatives analysis
-- missing: missing failure-mode analysis
-- missing: missing community impact analysis
 - conclusion: The vote is only credible if the assessment tree shows enough work for a skeptical delegator to audit.
 
 ## Facts
 - Pinned anchor document is available for this action.
 - Treasury withdrawal actions require elevated scrutiny.
-- Flag score present (7), reducing confidence.
+- Treasury profile: one-time reimbursement — milestone-gating expectations do not apply.
+- Flag score present (3), reducing confidence.
 - Intake: Action type: TreasuryWithdrawals
 - Claims and evidence: Proposal anchor: pinned and replayable
 - Treasury analysis: Requested ADA: 103000
-- Risk review: Execution risk: low
-- Counterargument pass: Strongest YES: the proposal substantiates "The proposal says a Cardano node bug allowed an unregistered stake key to be used in the governance action, preventing the submitter from recovering a 100000 ADA deposit." and clears the evidence gates.
+- Risk review: Execution risk: unknown
+- Counterargument pass: Strongest YES: the proposal substantiates "An Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 as a symbolic action thanking contributors and expressing hope for Cardano's future." and clears the evidence gates.
 - Synthesis: Final vote must be derived from completed sections above, not from a prose summary.
 
 ## Inferences
-- DRep ratification support is material but below threshold; treated as a modest context signal.
-- Doctrine-aware reasoning layer nudged the score by -0.030 (clamped to ±0.05): The claims describe a plausible reimbursement case, but the evidence base is thin for a treasury withdrawal of 103000 ADA: key budget, feasibility, alternatives, failure-mode, and community-impact analysis are missing, and the NCL claim is unsupported in the document. Given the deterministic assessment is already blocked, only a small additional cautionary nudge is warranted.
+- Directional NO forced: the applicable Net Change Limit is exhausted — treasury withdrawals already enacted within this NCL period leave no remaining capacity.
 - Intake: Baseline fields and source anchors establish whether the proposal can be reviewed at all.
 - Claims and evidence: Each claim must map to replayable public evidence; proposer assertions alone are not enough for confidence.
 - Treasury analysis: Treasury votes require a higher bar because they consume shared ADA and create precedent.
@@ -123,28 +120,24 @@ BEACN's autonomous DRep is recording ABSTAIN on this action, and the reason is p
 - Synthesis: The vote is only credible if the assessment tree shows enough work for a skeptical delegator to audit.
 
 ## Uncertainty
-- Treasury diligence dossier incomplete; soft gate applied a -0.1 caution penalty and judged on available repo context (anchor + doctrine + reasoning lean) rather than abstaining.
-- Treasury fee-flow signal is in unsustainable regime (advisory penalty applied).
-- No milestone-gated disbursement documented.
-- Claims and evidence missing: Independent evidence for: The proposal says an Info governance action titled "Cardanoの生きがい - Ikigai -" was submitted in September 2024 shortly after the Chang hard fork.
-- Claims and evidence missing: Independent evidence for: The proposal says community sentiment at the time favored reimbursing the deposit because the submitter should not lose 100000 ADA for being an early governance pioneer.
+- Treasury flow signal is in unsustainable regime, ratio 2.14 (total inflow (tau + donations) vs enacted withdrawals); advisory penalty applied.
+- DRep ratification support is below threshold; this is not treated as active opposition.
+- Claims and evidence missing: Independent evidence for: The proposer says a Cardano node bug allowed an unregistered stake key to be used, preventing the submitter from recovering a 100000 ADA governance action deposit.
+- Claims and evidence missing: Independent evidence for: The proposer says there was significant community sentiment at the time that the Ikigai deposit should be reimbursed.
 - Claims and evidence status is thin.
 - Treasury analysis missing: milestone-gated disbursement
-- Treasury analysis status is incomplete.
+- Treasury analysis missing: sustainability path
 - Risk review missing: independent assurance
-- Risk review missing: dependency map
-- Synthesis missing: missing budget analysis
-- Synthesis missing: missing feasibility assessment
-- Synthesis status is blocked.
+- Risk review missing: rollback/remedy path
 
 ## Reproducibility
-- input_hash: `470df61b346ca13fb41e108b565df34605054fe30cf67259b28b23fdebda5942`
-- snapshot_bundle_hash: `1b0f3b3b59ee96f9d8fd4ca14934546cde3740e802270aafc0bbfc192e981fc3`
-- soul_commit: `6bf4a7d7baa636417ad929e543cfb8be8fae1f03`
-- soul_text_hash: `a8c48e8e59534bbaa71af9a923ef942aa2cda51cb9e259331cef24e0da27ae10`
-- resource_registry_commit: `20e0915ebc437140b55ee25e28adbae01e97032d`
-- resources_used: `gov_actions_api, gov_actions_snapshot, treasury_withdrawals_snapshot, drep_vote_history_snapshot, gov_actions_all_snapshot, gov_actions_active_snapshot, gov_treasury_recipients_snapshot, gov_action_flags_snapshot, gov_poll_runs_snapshot, top_drep_votes_snapshot, gov_anchor_documents`
-- snapshot_age_seconds: `1`
-- uncertainty_band: `HIGH`
+- input_hash: `da996962812726b5cbe88331d9004c2fc913ed07dddd6d186525e18ec4dbcf8e`
+- snapshot_bundle_hash: `7f21f810c929dfca44bd2216f5e112e7b213e202c4f5ff27f1d7b10a71666fcb`
+- soul_commit: `c813ed97f64dba61150d01964327553baf720d38`
+- soul_text_hash: `fa491ed711b9834e5a3c72d35903cec18afe8d93e1262f42ffcb20f5fce2c276`
+- resource_registry_commit: `7532f2d0da41a7116f5a6d587dedd0b18bd03c80`
+- resources_used: `gov_actions_snapshot, treasury_withdrawals_snapshot, drep_vote_history_snapshot, gov_actions_all_snapshot, gov_actions_active_snapshot, gov_treasury_recipients_snapshot, gov_action_flags_snapshot, gov_poll_runs_snapshot, top_drep_votes_snapshot, gov_anchor_documents, deep_research_dossiers, ecosystem_value_profiles, treasury_policy_state, treasury_portfolio, governance_outcomes, protocol_readiness_profiles`
+- snapshot_age_seconds: `0`
+- uncertainty_band: `MEDIUM`
 - evidence_depth_score: `4`
-- decision_probs: `{"ABSTAIN": 0.1518, "NO": 0.8093, "YES": 0.0389}`
+- decision_probs: `{"ABSTAIN": 0.2143, "NO": 0.7382, "YES": 0.0474}`
