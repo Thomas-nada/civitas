@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYHsH1xq83FmL9hE89wLchERsqL4VLGHyMQPdf5yZRPqp -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYdoKqSavY5ovBHZ3uQbbY7u564hAVrAytWLmcrnFZ71C -->
 # Dr. Navjit Dhaliwal
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Reimbursing owed funds, should be a yes
+Seems reasonable ask. Although I think that 3k ADA shouldn't be included.
