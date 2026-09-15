@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreiai6imh7z7fdmxwa3q4azlwxvvcnzqljfcsk2zeb4esxjtgnny34y -->
+<!-- url: https://dreptalk.com/vote-rationale/953c69c547761eaaed25b5f4f960e4ac549171c25357a39720a691ebfa749cb2.json -->
 # InputEndorsers
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,22 +7,14 @@
 
 ---
 
-I was one of the many Cardano community members who supported for the reimbursement of the submitters of the Cardanoの生きがい - Ikigai governance action. Thanks for being an early tester of Cardano governance. Sad about what happened. I am glad to support your claim - with some advice below - for the Treasury Withdrawal stage. 
+I vote **Yes** on the [Reimburse Ikigai Info Governance Action Deposit](https://gov.tools/outcomes/governance_actions/d52a4917df4f91c342eaf06ebb4c0a5c3156f6412d137f307cc77eb911f47ab1) proposal.
 
-In general, I do support this motion. I agree that the submitter should not lose one hundred thousand ada, for being an early pioneer of Cardano governance and for the glitch with the submission of governance actions - that did not refund the funds. It was a sufficiently unique case that requires a tailored remedy. 
-Please note that my final vote on the Treasury Withdrawal will depend on the following:
-a. I will vote NO on the Treasury Withdrawal if it does not include verifiable addresses and proof that it was submitted by the same wallet / proposers that submitted the Cardanoの生きがい - Ikigai governance action. I do not want to refund the sum to the wrong wallet/persons. 
+The purpose of this withdrawal is to reimburse the deposit lost in connection with the original [**Cardanoの生きがい - Ikigai -** governance action](https://adastat.net/governances/59fd353253eb177e2104e8f23ea4c63e3d32ef95c7865d03e90d3884424dc1db00), after a Cardano node issue prevented the deposit from being recovered.
 
-From what I can see - (just glancing through explorers, I may be wrong):
+Importantly, the recipient of the reimbursement is:
 
-Cardanoの生きがい - Ikigai - was submitted by Stake Address: stake1uys93fhep4lc2u6lu0q09kcxayxzthasded35c0x0w60ugc9s0cm5
+`stake1uys93fhep4lc2u6lu0q09kcxayxzthasded35c0x0w60ugc9s0cm5`
 
-This motion is being submitted by stake address: stake1u8453de8xhhqa9c4ftvylkke8we84tmaq5hz75qwfgaaf2qac45ja
+This is the same stake address associated with the original **Cardanoの生きがい - Ikigai -** action. This provides an on-chain link between the original action and the intended recipient of the reimbursement and addresses the main concern that the funds should go to the party that actually lost the deposit.
 
-If the original address wasn't staked back then (which caused the problem), then I am not reading the on-chain data well. 
-So, my point is: the burden of investigating the the chain of events is now being shifted to me as a DRep instead of being provided in a clear and easily understandable way inside the current governance action. Include the addresses from which the Cardanoの生きがい - Ikigai governance action was submitted and the address to which you intend to receive the payout. Walk me through why I should be convinced that this is the same person/submitter.  
-b. I will vote NO on the Treasury Withdrawal if  the total compensation sum goes above the 100,000 ADA plus a calculation (not just self-declared) staking rewards. The average staking rewards - from epoch when you submitted to epoch when the withdrawal is roughly approved - should be calculated and the calculation should be included in the Treasury Withdrawal action - and it should be easily verifiable by DReps. Yes, there is some leeway there in terms of precision, but I want to follow the calculation. 
-
-c. I will vote NO on the Treasury Withdrawal if it asks for further additions, for example "Increasing the compensation sum for Midnight airdrop eligibility and other opportunities" - this will not be acceptable to me as it opens new precedents - which is not necessary here, imho. As any precedent to include additional compensation funds - has to be air-tight. The Midnight airdrop was optional and is not an automatic part of the Cardano protocol - nor have all Cardano participants claimed it. "And other opportunities" opens the way for refunds from the Treasury for other things by others, such as claims towards the treasury - for the a missed ability to provide liquidity to Cardano DeFi... etc.. 
-
-TL;DR I agree to refund the 100,000 ADA + precisely calculated staking rewards that were missed out on (small variations understandable) - with clear and verifiable proof that the identity of the original proposer / wallets and the current proposer are the same. I do not want to refund the sum to the wrong wallet/persons. If compensation for anything else is included ("airdrop eligibility / other opportunities") I will probably vote No on the treasury withdrawal.
+For these reasons, I support the reimbursement and vote **Yes**.
