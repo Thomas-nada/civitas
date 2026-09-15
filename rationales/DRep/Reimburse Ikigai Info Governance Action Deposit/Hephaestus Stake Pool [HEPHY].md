@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/hephy-io/mainnet/refs/heads/main/drep_rationales/GA125-twga-ikigai.jsonld -->
+<!-- url: https://raw.githubusercontent.com/hephy-io/mainnet/refs/heads/main/drep_rationales/GA074-info-ikigai_refund.jsonld -->
 # Hephaestus Stake Pool [HEPHY]
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,6 +7,4 @@
 
 ---
 
-I vote YES on the treasury withdrawal action “Reimburse Ikigai Info Governance Action Deposit.” (d52a4917df4f91c342eaf06ebb4c0a5c3156f6412d137f307cc77eb911f47ab1#0).
-
-This one has been a long running saga in Cardano’s short governance history. The withdrawal stake address matches the stake address that submitted the original info action that lost the funds (donated to treasury). While the 3000 ada “interest” can be questionable, as we cannot guarantee that these funds would have continued to have been held by the ada owner for all of this time. I do feel that it is time to put this particular discussion to bed. It happened early in governance, everyone was still learning at the time and it was a genuine mistake. Let’s correct it and move on.
+I vote YES on the budget info action to reimburse the proposers of the Ikigai info action (59fd353253eb177e2104e8f23ea4c63e3d32ef95c7865d03e90d3884424dc1db#0) with the funds that were lost due to a bug that allowed an unregistered stake key to submit a governance action. As a result, the governance deposit was sent to the treasury and not returned the proposer. The anonymity of the author or this proposal does give a reason for pause, however, provided that any subsequent treasury withdrawal action identifies the same address as was used to submit the Ikigai info action (59fd353253eb177e2104e8f23ea4c63e3d32ef95c7865d03e90d3884424dc1db#0) then I see little reason to vote NO on this proposal.
