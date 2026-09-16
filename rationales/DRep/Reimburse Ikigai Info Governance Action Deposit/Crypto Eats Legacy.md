@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmPYvoX5iBSKv42K36emyqB3kPGRZk5dcfHekFnLqK2GwN -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSv9riXWmjuBLS9peSDtC2kiLU3Wat52eg2E6g4X7A2xS -->
 # Crypto Eats Legacy
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-We have the ability to fix this error of someone who was actively using the protocol, so we should. This amount is a lot for one person, but not a lot on the scale of the treasury
+We have the ability to refund this early governance action, to support someone who was in the trenches in the early days.

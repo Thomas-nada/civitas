@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/Info_20.jsonld -->
+<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_63.jsonld -->
 # Cerkoryn
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-This proposal is an instant YES from me.  Ikigai was one of the first entities to submit a governance action on mainnet and as a pioneer were the first to discover this unfortunate bug/mistake resulting in the loss of 100k ADA.  I only wish that they could have been refunded much sooner.
+It is unfortunate that it has taken this long, but I think this is only fair to reimburse Ikigai for being one of the first to submit a governance action on-chain and encountering this issue.  Easy YES for me.
