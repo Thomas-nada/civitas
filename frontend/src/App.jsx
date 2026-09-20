@@ -324,7 +324,18 @@ export default function App() {
         import("bech32"),
         import("blakejs")
       ]);
-      const api = await BrowserWallet.enable(key);
+      // The Mesh handle signs and submits every transaction, so it must be
+      // enabled with the CIP-95 extension too: under CIP-95 a wallet uses its
+      // DRep key (for example to sign a required_signers entry) only for a
+      // connection that asked for the extension. The raw handle above already
+      // holds that approval, so this is the same grant, not a second prompt.
+      let api;
+      try {
+        api = await BrowserWallet.enable(key, rawApi?.cip95 ? [{ cip: 95 }] : []);
+      } catch (e) {
+        if (!rawApi?.cip95 || isUserDecline(e)) throw e;
+        api = await BrowserWallet.enable(key);
+      }
       const netId = await api.getNetworkId();
       if (!isExpectedNetwork(netId)) throw new WalletFlowError(networkMismatchMessage(netId), "network");
       const [rewardAddresses, lovelace] = await Promise.all([
