@@ -10256,6 +10256,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Which governance actions link a survey (action id → surveys).
+  if (req.method === "GET" && url.pathname === "/api/surveys/links") {
+    try {
+      json(res, 200, await surveyReader().linksByAction());
+    } catch (error) {
+      surveyErrorResponse(res, error, "Failed to load survey links.");
+    }
+    return;
+  }
+
   // Whether a just-submitted response transaction has reached the index.
   {
     const m = url.pathname.match(/^\/api\/surveys\/tx\/([0-9a-fA-F]{64})$/);
@@ -10290,36 +10300,65 @@ const server = http.createServer(async (req, res) => {
     const proposalId = String(url.searchParams.get("proposalId") || "").trim();
     if (!proposalId) { json(res, 400, { error: "proposalId is required." }); return; }
     try {
-      const [rawMetadata, rawDetail] = await Promise.all([
-        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
-        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
-      ]);
-      const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-      const link = await surveys.parseGovernanceLink(metadata?.json_metadata || null);
-      if (!link.surveyRef) {
-        json(res, 200, { linked: false, problems: link.problems });
-        return;
-      }
-      const surveyRef = `${link.surveyRef.txId}:${link.surveyRef.index}`;
-      const survey = await surveyReader().byRef(surveyRef);
+      // The index already resolved the action's anchor link (and checked the
+      // survey itself); only an action it has not linked yet is read from
+      // the anchor directly, which covers indexing lag.
+      let survey = await surveyReader().byAction(proposalId);
+      let expirationEpoch = Number(survey?.govLinks?.find((l) => l.actionId === proposalId)?.endEpoch ?? NaN);
+      let source = "index";
       if (!survey) {
-        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey is not in the index (unavailable or invalid)." });
-        return;
+        source = "anchor";
+        // The action's anchor, from the metadata cache when this action was
+        // already read, else from Blockfrost. Without a key, or when the read
+        // fails, the index's answer (no link) stands.
+        let anchor = null;
+        const cachedMeta = proposalMetadataCache.get(proposalId)?.payload;
+        if (cachedMeta?.json_metadata) {
+          anchor = { jsonMetadata: cachedMeta.json_metadata, expiration: cachedMeta.expirationEpoch };
+        } else if (BLOCKFROST_API_KEY) {
+          try {
+            const [rawMetadata, rawDetail] = await Promise.all([
+              blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
+              blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
+            ]);
+            const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
+            anchor = { jsonMetadata: metadata?.json_metadata || null, expiration: rawDetail?.expiration };
+          } catch (error) {
+            console.warn(`[surveys] anchor read failed for ${proposalId}: ${error?.message || error}`);
+          }
+        }
+        if (!anchor) {
+          json(res, 200, { linked: false, source: "index" });
+          return;
+        }
+        const link = await surveys.parseGovernanceLink(anchor.jsonMetadata);
+        if (!link.surveyRef) {
+          json(res, 200, { linked: false, source, problems: link.problems });
+          return;
+        }
+        const surveyRef = `${link.surveyRef.txId}:${link.surveyRef.index}`;
+        survey = await surveyReader().byRef(surveyRef);
+        if (!survey) {
+          json(res, 200, { linked: true, available: false, surveyRef, source, problem: "The linked survey is not in the index (unavailable or invalid)." });
+          return;
+        }
+        expirationEpoch = Number(anchor.expiration ?? NaN);
       }
-      const expirationEpoch = Number(rawDetail?.expiration ?? NaN);
+      const surveyRef = survey.key;
+      const base = { linked: true, surveyRef, survey, proposalId, expirationEpoch: Number.isFinite(expirationEpoch) ? expirationEpoch : null, source };
       if (!Number.isFinite(expirationEpoch) || expirationEpoch !== Number(survey.endEpoch)) {
-        json(res, 200, { linked: true, available: false, surveyRef, problem: "The survey end epoch does not match the governance action expiry epoch." });
+        json(res, 200, { ...base, available: false, problem: "The survey end epoch does not match the governance action expiry epoch." });
         return;
       }
       if (survey.lifecycle === "cancelled") {
-        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey has been cancelled." });
+        json(res, 200, { ...base, available: false, problem: "The linked survey has been cancelled." });
         return;
       }
       if (survey.lifecycle === "untalliable") {
-        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey has an invalid definition." });
+        json(res, 200, { ...base, available: false, problem: "The linked survey has an invalid definition." });
         return;
       }
-      json(res, 200, { linked: true, available: true, surveyRef, survey, proposalId, expirationEpoch });
+      json(res, 200, { ...base, available: true });
     } catch (error) {
       surveyErrorResponse(res, error, "Failed to resolve the proposal survey.");
     }

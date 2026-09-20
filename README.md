@@ -90,6 +90,7 @@ npm run test:e2e
 - `GET /api/surveys` — CIP-179 surveys (mainnet), read from the Tessera index
 - `GET /api/surveys/<txHash>/<index>` — one survey with its responses and informational tally
 - `GET /api/surveys/tx/<txHash>` — whether a response transaction has reached the index
+- `GET /api/surveys/links` — which governance actions link which surveys (action id → surveys)
 - `GET /api/proposal-survey?proposalId=<id>` — the survey a governance action's anchor links, if any
 
 ## Frontend routes

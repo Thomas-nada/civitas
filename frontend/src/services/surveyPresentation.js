@@ -49,3 +49,34 @@ export function adaLabel(lovelace) {
         : ada.toFixed(abs < 10 ? 2 : 0);
   return `${compact} ₳`;
 }
+
+// The state of a governance action, worded as the action pages word it
+// (same rules as ProposalDetailPage's deriveStatus), for the action cards a
+// survey shows.
+export function actionStatus(info) {
+  if (!info) return "";
+  if (String(info.outcome || "").toLowerCase() === "pending") return "Active";
+  const govType = String(info.governanceType || "").toLowerCase();
+  if (govType.includes("info action") || govType === "info") return "";
+  const droppedEpoch = Number(info.droppedEpoch || 0);
+  const expiredEpoch = Number(info.expiredEpoch || 0);
+  const expirationEpoch = Number(info.expirationEpoch || 0);
+  if (droppedEpoch > 0 && expiredEpoch > 0) {
+    return expirationEpoch > 0 && droppedEpoch < expirationEpoch ? "Dropped" : "Expired";
+  }
+  if (droppedEpoch > 0) return expirationEpoch > 0 && droppedEpoch >= expirationEpoch ? "Expired" : "Dropped";
+  if (expiredEpoch > 0) return "Expired";
+  if (Number(info.enactedEpoch || 0) > 0) return "Enacted";
+  if (Number(info.ratifiedEpoch || 0) > 0) return "Ratified";
+  return String(info.outcome || "");
+}
+
+export function actionStatusPill(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "active") return "pill--active";
+  if (s === "ratified") return "pill--ratified";
+  if (s === "enacted") return "pill--enacted";
+  if (s === "expired") return "pill--expired";
+  if (s === "dropped") return "pill--dropped";
+  return "pill--unknown";
+}

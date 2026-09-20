@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { WalletContext } from "../context/WalletContext";
 import { deadlineLabel } from "../services/surveyNetwork";
@@ -63,6 +63,7 @@ export default function SurveysListPage() {
     description: "CIP-179 on-chain surveys and polls for Cardano governance participants, read from the Tessera index."
   });
   const wallet = useContext(WalletContext);
+  const navigate = useNavigate();
   const walletApi = wallet?.walletApi;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -217,7 +218,21 @@ export default function SurveysListPage() {
                     {s.govLinks?.length ? (
                       <div className="sv-survey-link-row muted">
                         Linked from {s.govLinks.length === 1 ? "governance action" : `${s.govLinks.length} governance actions`}
-                        {s.govLinks[0]?.title ? `: ${s.govLinks[0].title}` : ""}
+                        {s.govLinks[0]?.title ? (
+                          <>
+                            {": "}
+                            <span
+                              role="link"
+                              tabIndex={0}
+                              className="sv-survey-link-action"
+                              title="Open the governance action"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/actions/${encodeURIComponent(s.govLinks[0].actionId)}`); }}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); navigate(`/actions/${encodeURIComponent(s.govLinks[0].actionId)}`); } }}
+                            >
+                              {s.govLinks[0].title} →
+                            </span>
+                          </>
+                        ) : ""}
                       </div>
                     ) : null}
                   </div>

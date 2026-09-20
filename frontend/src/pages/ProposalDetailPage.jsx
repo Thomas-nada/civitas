@@ -3,6 +3,7 @@ import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import MetaVerifyPill from "../components/MetaVerifyPill";
+import LinkedSurveyCard from "../components/survey/LinkedSurveyCard";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -839,6 +840,9 @@ export default function ProposalDetailPage() {
         </div>
         <p className="mono muted pdp-action-id">{decodedProposalId}</p>
       </section>
+
+      {/* ── Linked CIP-179 survey (answerable here) ─────────────────── */}
+      <LinkedSurveyCard proposalId={decodedProposalId} />
 
       {/* ── Delivery / execution (treasury withdrawals) ─────────────── */}
       {isTreasury && delivery && delivery.length > 0 && (

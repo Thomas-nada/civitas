@@ -186,3 +186,20 @@ test("a governance anchor is parsed into a survey reference only when well-forme
   assert.equal(bad.surveyRef, null);
   assert.ok(bad.problems.length > 0);
 });
+
+test("the action → surveys map is derived from the surveys' governance links", () => {
+  const summary = (key, links) => ({
+    key, txHash: key.split(":")[0], index: Number(key.split(":")[1]), title: key, lifecycle: "open", lifecycleLabel: "Open",
+    endEpoch: 700, eligibleRoles: ["DRep"], responseCount: 3, sealed: false, questions: [{}, {}], govLinks: links,
+  });
+  const byAction = surveys.indexLinksByAction([
+    summary(`${TX_A}:0`, [{ actionId: "gov_action1aaa", title: "A", endEpoch: 700 }]),
+    summary(`${TX_B}:0`, [{ actionId: "gov_action1aaa", title: "A", endEpoch: 700 }, { actionId: "gov_action1bbb", title: "B", endEpoch: 700 }]),
+    summary(`${TX_B}:1`, []),
+  ]);
+  assert.deepEqual(Object.keys(byAction).sort(), ["gov_action1aaa", "gov_action1bbb"]);
+  assert.equal(byAction.gov_action1aaa.length, 2);
+  assert.equal(byAction.gov_action1bbb[0].key, `${TX_B}:0`);
+  assert.equal(byAction.gov_action1bbb[0].questionCount, 2);
+  assert.equal(byAction.gov_action1bbb[0].actionEndEpoch, 700);
+});

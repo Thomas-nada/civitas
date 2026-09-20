@@ -1728,6 +1728,8 @@ export default function GuidePage() {
               Go to <strong>Surveys</strong> in the navigation bar.
               The list shows every survey the Tessera index holds (the reference CIP-179 index, mainnet).
               Open surveys accept answers through their closing epoch, inclusive.
+              A survey a governance action links (CIP-179: the action's anchor names the survey) is marked <strong>Linked</strong> here,
+              carries a <strong>Survey</strong> tag in the Governance Actions list, and is shown on that action's page, where you can answer it without leaving the action.
             </p>
 
             <h3>Step 2 — Open the survey</h3>

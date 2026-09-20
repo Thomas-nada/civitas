@@ -1,34 +1,21 @@
 // One CIP-179 survey, read from Tessera through /api/surveys: the record, its
-// responses, the informational tally, and the answering panel. Answering is
-// Tessera's own <tessera-respond> form; Civitas supplies the wallet, checks
-// the network, attaches the payload at label 17 and submits.
+// responses, the informational tally, the governance actions that link it,
+// and the answering panel (SurveyRespond: Tessera's own <tessera-respond>
+// form; Civitas supplies the wallet, attaches the payload at label 17 and
+// submits).
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { WalletContext } from "../context/WalletContext";
 import { deadlineLabel, explorerTxUrl, formatUnixDate } from "../services/surveyNetwork";
-import {
-  Role,
-  buildAndSubmitSurveyCancellation,
-  getConnectedPaymentKeyHash,
-  responderCredentials,
-  submitLabel17Payload
-} from "../services/surveyTxService";
+import { buildAndSubmitSurveyCancellation, getConnectedPaymentKeyHash } from "../services/surveyTxService";
 import { readableError } from "../lib/wallet/walletError";
-import { lifecycleLabel, participationLabel } from "../services/surveyPresentation";
+import { participationLabel } from "../services/surveyPresentation";
 import SurveyBadges from "../components/survey/SurveyBadges";
 import SurveyTally from "../components/survey/SurveyTally";
-import TesseraRespond from "../components/survey/TesseraRespond";
-
-const ROLE_COLORS = {
-  DRep: "var(--mint)",
-  SPO: "var(--amber)",
-  CC: "#a78bfa",
-  Stakeholder: "rgba(200,200,210,0.6)",
-  Keyholder: "rgba(200,200,210,0.6)"
-};
-
-const ROLE_NUMBERS = { DRep: Role.DRep, SPO: Role.SPO, CC: Role.CC, Stakeholder: Role.Stakeholder, Keyholder: Role.Keyholder };
+import SurveyRespond from "../components/survey/SurveyRespond";
+import RolePill from "../components/survey/RolePill";
+import LinkedActionCard from "../components/survey/LinkedActionCard";
 
 const EXCLUSION_LABELS = {
   "after-deadline": "after the deadline",
@@ -43,13 +30,6 @@ function shortHash(value, head = 10, tail = 6) {
   return s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
-function RolePill({ role }) {
-  const color = ROLE_COLORS[role] || "rgba(200,200,210,0.5)";
-  return (
-    <span className="pill" style={{ background: `${color}22`, borderColor: `${color}88`, color }}>{role}</span>
-  );
-}
-
 // Retries a survey that is not in the index yet (a just-published one).
 function PendingPoller({ onTick }) {
   useEffect(() => {
@@ -57,181 +37,6 @@ function PendingPoller({ onTick }) {
     return () => clearInterval(id);
   }, [onTick]);
   return null;
-}
-
-// ── Answering ────────────────────────────────────────────────────────────────
-
-function RespondPanel({ survey, data, onSubmitted }) {
-  const wallet = useContext(WalletContext);
-  const walletApi = wallet?.walletApi;
-  const [credentials, setCredentials] = useState(null); // { responder, hashes } | null
-  const [credentialError, setCredentialError] = useState("");
-  const [record, setRecord] = useState(null);
-  const [status, setStatus] = useState({ kind: "idle" }); // idle | submitting | done | error
-  const [indexed, setIndexed] = useState(false);
-
-  const eligible = survey.eligibleRoles || [];
-  const isOpen = survey.lifecycle === "open";
-
-  // The wallet's credentials, narrowed to the roles this survey accepts. A
-  // DRep credential is offered only to a registered DRep signed in with the
-  // DRep key, so an answer is never recorded against a DRep the session did
-  // not prove.
-  useEffect(() => {
-    if (!walletApi) { setCredentials(null); return undefined; }
-    let alive = true;
-    setCredentialError("");
-    responderCredentials(walletApi, { includeDrep: Boolean(wallet?.actingAsDrep) })
-      .then(({ responder, hashes }) => {
-        if (!alive) return;
-        const allowed = new Set(eligible.map((name) => ROLE_NUMBERS[name]).filter((n) => n != null));
-        const narrowed = {};
-        const narrowedHashes = {};
-        for (const [role, credential] of Object.entries(responder)) {
-          if (allowed.has(Number(role))) { narrowed[role] = credential; narrowedHashes[role] = hashes[role]; }
-        }
-        setCredentials({ responder: narrowed, hashes: narrowedHashes });
-      })
-      .catch((e) => { if (alive) setCredentialError(readableError(e, "Could not read the wallet's credentials.")); });
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletApi, wallet?.actingAsDrep, survey.key]);
-
-  // The stored record is the wire form cip-179 wrote; the widget wants it
-  // decoded (bytes, bigints) so it signs the record as it is on chain.
-  useEffect(() => {
-    let alive = true;
-    setRecord(null);
-    if (!survey.record) return undefined;
-    import("cip-179/tally")
-      .then(({ decodeSurveyRecord }) => { if (alive) setRecord(decodeSurveyRecord(survey.record)); })
-      .catch(() => { if (alive) setCredentialError("The survey definition could not be decoded for the form."); });
-    return () => { alive = false; };
-  }, [survey.record]);
-
-  // Once submitted, watch the index until the transaction is picked up.
-  useEffect(() => {
-    if (status.kind !== "done" || indexed) return undefined;
-    let alive = true;
-    let tries = 0;
-    const tick = async () => {
-      tries += 1;
-      try {
-        const res = await fetch(`/api/surveys/tx/${status.txHash}`);
-        const state = await res.json();
-        if (alive && state?.indexed) { setIndexed(true); onSubmitted?.(); }
-      } catch {
-        // Try again on the next tick.
-      }
-    };
-    const id = setInterval(() => { if (tries < 45) tick(); }, 20_000);
-    return () => { alive = false; clearInterval(id); };
-  }, [status, indexed, onSubmitted]);
-
-  const priorAnswers = useMemo(() => {
-    if (!credentials) return [];
-    const mine = new Set(Object.values(credentials.hashes));
-    return (data?.responses || []).filter((r) => mine.has(r.credentialHash));
-  }, [credentials, data]);
-
-  const onResponse = useCallback(async (result) => {
-    if (!walletApi || status.kind === "submitting") return;
-    setStatus({ kind: "submitting" });
-    try {
-      const { bytesToHex } = await import("cip-179/domain");
-      const signerHashes = (result.proveCredentials || [])
-        .filter((p) => p.credential?.type === "key")
-        .map((p) => bytesToHex(p.credential.keyHash));
-      const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes);
-      setStatus({ kind: "done", txHash });
-    } catch (e) {
-      setStatus({ kind: "error", message: readableError(e, "The transaction could not be submitted.") });
-    }
-  }, [walletApi, status.kind]);
-
-  if (!walletApi) {
-    return (
-      <section className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
-        <h2 style={{ marginTop: 0 }}>{wallet?.isCliSession ? "A browser wallet is needed to answer" : "Sign in with a wallet to answer"}</h2>
-        <p className="muted" style={{ maxWidth: "460px", margin: "0 auto 1rem" }}>
-          {wallet?.isCliSession
-            ? "You are signed in with cardano-signer, which cannot sign a browser transaction. Connect a wallet that holds an eligible credential, or answer from Tessera with your own tooling."
-            : `Answering records your answers on chain as one small transaction (you pay the network fee only). Your wallet must hold a credential this survey accepts: ${eligible.join(", ") || "—"}. Use Sign in in the top bar.`}
-        </p>
-        {survey.tesseraUrl ? (
-          <a className="ext-link" href={survey.tesseraUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.82rem" }}>Open on Tessera ↗</a>
-        ) : null}
-      </section>
-    );
-  }
-
-  const roles = credentials ? Object.keys(credentials.responder).map((n) => Object.keys(ROLE_NUMBERS).find((name) => ROLE_NUMBERS[name] === Number(n))) : [];
-  const disclosure = survey.sealed
-    ? "Your answers stay encrypted until the survey's reveal time, but your credential and your role are public on chain, permanently."
-    : "Your credential, your role and your answers go on chain publicly and permanently.";
-
-  return (
-    <div className="svy-respond">
-      {status.kind === "done" ? (
-        <section className="panel svy-success" style={{ padding: "1rem 1.1rem" }}>
-          <strong>Answer submitted.</strong>
-          <span className="muted">
-            {indexed
-              ? "The index has picked it up; the figures on this page now include it."
-              : "The figures on this page update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
-          </span>
-          <span className="mono" style={{ fontSize: "0.8rem" }}>
-            Transaction: <a className="ext-link" href={explorerTxUrl(status.txHash)} target="_blank" rel="noreferrer">{status.txHash}</a>
-          </span>
-        </section>
-      ) : null}
-
-      {status.kind !== "done" ? (
-        <section className="panel" style={{ padding: "1rem 1.1rem" }}>
-          <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem" }}>Answer this survey</h2>
-          {!isOpen ? (
-            <p className="muted svy-respond-note">This survey is {lifecycleLabel(survey.lifecycle).toLowerCase()}; it no longer accepts answers.</p>
-          ) : null}
-          <p className="muted svy-respond-note">
-            Answering as <strong>{wallet.walletName}</strong>
-            {roles.length ? <> with your {roles.join(" / ")} credential{roles.length > 1 ? "s" : ""}.</> : "."}{" "}
-            {disclosure} The wallet pays only the network fee.
-          </p>
-          {eligible.includes("DRep") && !wallet.actingAsDrep ? (
-            <p className="muted svy-respond-note">
-              To answer as a DRep, sign in as a DRep (a registered DRep with the DRep key). Signed in as {wallet.roleLabel}, this wallet answers with its stake or payment credential where the survey allows it.
-            </p>
-          ) : null}
-          {priorAnswers.length ? (
-            <p className="muted svy-respond-note">
-              You already answered this survey ({priorAnswers.length === 1 ? "1 response" : `${priorAnswers.length} responses`} on chain). A new answer replaces the earlier one in full and costs another network fee.
-            </p>
-          ) : null}
-          {credentialError ? <p className="vote-error">{credentialError}</p> : null}
-          {credentials && Object.keys(credentials.responder).length === 0 ? (
-            <p className="vote-notice">
-              This wallet holds no credential this survey accepts ({eligible.join(", ")}). {eligible.includes("DRep") && !wallet.actingAsDrep ? "Sign in as a DRep to answer with your DRep key." : ""}
-            </p>
-          ) : null}
-          {status.kind === "submitting" ? <p className="muted svy-respond-note">Awaiting wallet signature…</p> : null}
-          {status.kind === "error" ? (
-            <p className="vote-error">{status.message} <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>Try again</button></p>
-          ) : null}
-          {isOpen && record && credentials && Object.keys(credentials.responder).length > 0 ? (
-            <TesseraRespond
-              definition={record.definition}
-              surveyRef={record.ref}
-              responder={credentials.responder}
-              tipEpoch={data?.currentEpoch}
-              cancelled={survey.lifecycle === "cancelled"}
-              onResponse={onResponse}
-              onError={(e) => setStatus({ kind: "error", message: e.message })}
-            />
-          ) : null}
-        </section>
-      ) : null}
-    </div>
-  );
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
@@ -404,15 +209,13 @@ export default function SurveyDetailPage() {
       {survey.govLinks?.length ? (
         <section className="panel svy-side-card" style={{ marginBottom: "1rem" }}>
           <h3>Linked governance {survey.govLinks.length === 1 ? "action" : "actions"}</h3>
-          <ul className="svy-links">
-            {survey.govLinks.map((link) => (
-              <li key={link.actionId}>
-                <Link to={`/actions/${encodeURIComponent(link.actionId)}`} className="inline-link">{link.title || link.actionId}</Link>
-                <span className="muted"> · expires epoch {link.endEpoch}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="muted svy-note">A survey answer is separate from a vote: it is survey metadata, not a governance vote, and it neither replaces nor implies one.</p>
+          <div className="lac-list">
+            {survey.govLinks.map((link) => <LinkedActionCard key={link.actionId} link={link} />)}
+          </div>
+          <p className="muted svy-note">
+            {survey.govLinks.length === 1 ? "This action's anchor names this survey (CIP-179), so the survey is shown on the action's page and can be answered there too." : "These actions' anchors name this survey (CIP-179), so it is shown on each action's page and can be answered there too."}{" "}
+            A survey answer is separate from a vote: it is survey metadata, not a governance vote, and it neither replaces nor implies one.
+          </p>
         </section>
       ) : null}
 
@@ -486,7 +289,7 @@ export default function SurveyDetailPage() {
         </section>
       ) : null}
 
-      {tab === "respond" ? <RespondPanel survey={survey} data={data} onSubmitted={onSubmitted} /> : null}
+      {tab === "respond" ? <SurveyRespond survey={survey} data={data} onSubmitted={onSubmitted} /> : null}
 
       {data?.fetchedAt ? (
         <p className="muted" style={{ fontSize: "0.76rem", marginTop: "0.8rem" }}>

@@ -597,6 +597,16 @@ export default function GovernanceActionsPage() {
   const detailPanelRef = useRef(null);
   const latestSnapshotRef = useRef("");
   const syncPollBusyRef = useRef(false);
+  // action id → the surveys whose anchor link names it (from the survey index).
+  const [surveyLinks, setSurveyLinks] = useState({});
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/surveys/links")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => { if (alive && payload?.byAction) setSurveyLinks(payload.byAction); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -1722,6 +1732,14 @@ export default function GovernanceActionsPage() {
                           <span className="ga-title-main">
                             <span className="ga-title-name">{row.actionName}</span>
                             <ExpiryCountdownPill row={row} nowMs={nowMs} />
+                            {surveyLinks[row.proposalId]?.length ? (
+                              <span
+                                className={`ga-survey-pill ga-survey-pill--${surveyLinks[row.proposalId][0].lifecycle}`}
+                                title={`Linked CIP-179 survey: ${surveyLinks[row.proposalId][0].title || "untitled"} (${surveyLinks[row.proposalId][0].lifecycleLabel})`}
+                              >
+                                Survey{surveyLinks[row.proposalId][0].lifecycle === "open" ? " open" : ""}
+                              </span>
+                            ) : null}
                           </span>
                         </div>
                       </td>
@@ -1995,7 +2013,7 @@ export default function GovernanceActionsPage() {
                       </div>
                       <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
                         A survey answer is separate from your vote: it is survey metadata, not a governance vote, and it neither
-                        replaces nor implies one. Answer it on the survey page, before or after voting.
+                        replaces nor implies one. Answer it on the action's page or the survey page, before or after voting.
                       </p>
                     </section>
                   ) : null}
