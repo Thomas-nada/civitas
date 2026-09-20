@@ -235,7 +235,19 @@ export async function buildVoteAnchor(rawUrl) {
  * ledger enforces the DRep witness for the vote, and that vote proves the
  * response credential when the action is one the survey links.
  */
-async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [], { vote } = {}) {
+/**
+ * The DRep's current metadata anchor from Civitas (Koios), as the { anchorUrl,
+ * anchorDataHash } a certificate takes, or undefined for a DRep without one.
+ */
+export async function currentDrepAnchor(drepId) {
+  const res = await fetch(`/api/auth/drep-status?id=${encodeURIComponent(drepId)}`);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok || payload?.ok !== true) throw new Error("The DRep's current registration could not be read; try again in a moment.");
+  if (!payload.registered) throw new Error("This DRep key is not a registered DRep.");
+  return payload.anchor ? { anchorUrl: payload.anchor.url, anchorDataHash: payload.anchor.hash } : undefined;
+}
+
+async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [], { vote, drepUpdate } = {}) {
   const utxos = await walletApi.getUtxos();
   if (!utxos?.length) {
     throw new Error("No UTxOs found in wallet. Fund your wallet with ADA and try again.");
@@ -255,6 +267,11 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [],
       { txHash, txIndex },
       { voteKind: vote.choice, ...(vote.anchor ? { anchor: vote.anchor } : {}) },
     );
+  }
+  if (drepUpdate) {
+    // A DRep update certificate re-stating the current anchor: no change to
+    // the DRep, no deposit, but the ledger demands the DRep witness for it.
+    tx.txBuilder.drepUpdateCertificate(drepUpdate.drepId, drepUpdate.anchor);
   }
   const unsignedTx = await tx.build();
   const signedTx = await walletApi.signTx(unsignedTx, true, true);

@@ -9733,3 +9733,12 @@ tessera-respond {
 .svy-vote .btn-primary {
   align-self: flex-start;
 }
+
+.svy-proof-alt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}

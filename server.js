@@ -949,7 +949,12 @@ async function lookupDrepRegistration(drepId) {
   const registered = info
     ? (typeof info.drep_status === "string" ? info.drep_status === "registered" : info.registered === true)
     : false;
-  return { registered, active: Boolean(info) && info.active !== false, hasScript: info?.has_script === true };
+  // The DRep's current metadata anchor (Koios meta_url / meta_hash), so a
+  // client can re-state it in a no-change DRep update certificate.
+  const anchorUrl = typeof info?.meta_url === "string" ? info.meta_url.trim() : "";
+  const anchorHash = typeof info?.meta_hash === "string" ? info.meta_hash.trim().toLowerCase() : "";
+  const anchor = anchorUrl && /^[0-9a-f]{64}$/.test(anchorHash) ? { url: anchorUrl, hash: anchorHash } : null;
+  return { registered, active: Boolean(info) && info.active !== false, hasScript: info?.has_script === true, anchor };
 }
 
 async function resolveAuthIdentity(role, publicKeyHex) {
