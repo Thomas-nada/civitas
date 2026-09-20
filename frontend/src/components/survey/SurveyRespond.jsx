@@ -120,7 +120,8 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
         const anchor = await buildVoteAnchor(voteRationaleUrl);
         vote = { drepId, actionId: voteLink.actionId, choice: voteChoice, anchor };
       } else if (proof === "drep-update" && drepId) {
-        drepUpdate = { drepId, anchor: await currentDrepAnchor(drepId) };
+        const { anchor, confirmedNone } = await currentDrepAnchor(drepId);
+        drepUpdate = { drepId, anchor, confirmedNone };
       }
       const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes, { vote, drepUpdate });
       setStatus({ kind: "done", txHash, voted: vote ? { choice: vote.choice, title: voteLink.title || voteLink.actionId } : null, restated: Boolean(drepUpdate) });

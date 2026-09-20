@@ -244,7 +244,17 @@ export async function currentDrepAnchor(drepId) {
   const payload = await res.json().catch(() => ({}));
   if (!res.ok || payload?.ok !== true) throw new Error("The DRep's current registration could not be read; try again in a moment.");
   if (!payload.registered) throw new Error("This DRep key is not a registered DRep.");
-  return payload.anchor ? { anchorUrl: payload.anchor.url, anchorDataHash: payload.anchor.hash } : undefined;
+  // An update certificate REPLACES the anchor, so "unknown" must never be
+  // written as "none": a server that does not report the anchor at all
+  // (an older build) refuses here rather than clearing the DRep's metadata.
+  if (!Object.prototype.hasOwnProperty.call(payload, "anchor")) {
+    throw new Error("Civitas could not confirm your DRep's current metadata anchor, so it will not build a DRep update certificate. Cast a vote with the answer instead, or try again later.");
+  }
+  if (payload.anchor === null) return { anchor: undefined, confirmedNone: true };
+  if (!payload.anchor?.url || !/^[0-9a-f]{64}$/i.test(String(payload.anchor?.hash || ""))) {
+    throw new Error("Your DRep's current metadata anchor could not be read cleanly, so no DRep update certificate was built.");
+  }
+  return { anchor: { anchorUrl: payload.anchor.url, anchorDataHash: String(payload.anchor.hash).toLowerCase() }, confirmedNone: false };
 }
 
 async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [], { vote, drepUpdate } = {}) {
@@ -271,6 +281,10 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [],
   if (drepUpdate) {
     // A DRep update certificate re-stating the current anchor: no change to
     // the DRep, no deposit, but the ledger demands the DRep witness for it.
+    // It is built only from a confirmed anchor (or a confirmed absence).
+    if (!drepUpdate.anchor && !drepUpdate.confirmedNone) {
+      throw new Error("Refusing to build a DRep update certificate without the DRep's confirmed current anchor.");
+    }
     tx.txBuilder.drepUpdateCertificate(drepUpdate.drepId, drepUpdate.anchor);
   }
   const unsignedTx = await tx.build();
