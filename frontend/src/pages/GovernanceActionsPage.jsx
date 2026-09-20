@@ -8,6 +8,8 @@ import blakejs from "blakejs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WalletContext } from "../context/WalletContext";
+import TesseraRespond from "../components/survey/TesseraRespond";
+import { Role, responderCredentials } from "../services/surveyTxService";
 
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -588,6 +590,10 @@ export default function GovernanceActionsPage() {
   const [proposalSurveys, setProposalSurveys] = useState({});
   const [surveysLoading, setSurveysLoading] = useState(false);
   const [surveyLoadError, setSurveyLoadError] = useState("");
+  // Batch answering: each linked survey's decoded record (for Tessera's
+  // form) and the DRep credential the answers are given with.
+  const [batchSurveyRecords, setBatchSurveyRecords] = useState({}); // surveyRef -> decoded record
+  const [batchResponder, setBatchResponder] = useState(null); // { [Role.DRep]: credential } | null
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteNotice, setVoteNotice] = useState("");
   const [voteError, setVoteError] = useState("");
@@ -1264,6 +1270,41 @@ export default function GovernanceActionsPage() {
     return () => { cancelled = true; };
   }, [selectedBatchProposalKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Decode the linked surveys' records once they are known; the form signs
+  // the record as it is on chain, so it wants the decoded (bytes, bigint) form.
+  useEffect(() => {
+    const pending = Object.values(proposalSurveys)
+      .filter((link) => link?.available && link.survey?.record && !batchSurveyRecords[link.surveyRef]);
+    if (!pending.length) return undefined;
+    let cancelled = false;
+    import("cip-179/tally")
+      .then(({ decodeSurveyRecord }) => {
+        if (cancelled) return;
+        const next = {};
+        for (const link of pending) {
+          try { next[link.surveyRef] = decodeSurveyRecord(link.survey.record); } catch { /* left out: no form for it */ }
+        }
+        setBatchSurveyRecords((prev) => ({ ...prev, ...next }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [proposalSurveys]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The DRep credential the batch answers with (the vote in the same
+  // transaction proves it, so only that credential is offered).
+  useEffect(() => {
+    if (!batchVoteModalOpen || !wallet?.walletApi || !wallet?.actingAsDrep) { setBatchResponder(null); return undefined; }
+    let cancelled = false;
+    responderCredentials(wallet.walletApi, { includeDrep: true, drepPubKeyHex: wallet?.walletDrep?.pubDRepKey || "" })
+      .then(({ responder }) => {
+        if (cancelled) return;
+        setBatchResponder(responder[Role.DRep] ? { [Role.DRep]: responder[Role.DRep] } : null);
+      })
+      .catch(() => { if (!cancelled) setBatchResponder(null); });
+    return () => { cancelled = true; };
+  }, [batchVoteModalOpen, wallet?.walletApi, wallet?.actingAsDrep, wallet?.walletDrep?.pubDRepKey]);
+
+  const batchSurveyAnswerCount = selectedBatchVoteRows.filter((row) => batchVoteDrafts[row.proposalId]?.surveyAnswer).length;
   const batchVoteReadyCount = selectedBatchVoteRows.filter((row) => batchVoteDrafts[row.proposalId]?.choice).length;
   const batchVoteReady = batchVoteCount > 0 && batchVoteReadyCount === batchVoteCount && !surveysLoading;
 
@@ -1429,7 +1470,8 @@ export default function GovernanceActionsPage() {
         setVoteNotice("Warning: wallet is on testnet. Proceeding anyway...");
       }
 
-      setVoteNotice(`Building transaction with ${rowsToVote.length} votes...`);
+      const surveyAnswers = rowsToVote.map(({ draft }) => draft.surveyAnswer).filter(Boolean);
+      setVoteNotice(`Building transaction with ${rowsToVote.length} votes${surveyAnswers.length ? ` and ${surveyAnswers.length} survey ${surveyAnswers.length === 1 ? "answer" : "answers"}` : ""}...`);
       const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
       tx.setNetwork("mainnet");
       for (const { row, draft } of rowsToVote) {
@@ -1441,6 +1483,15 @@ export default function GovernanceActionsPage() {
           { txHash: row.txHash, txIndex: row.certIndex ?? 0 },
           { voteKind: draft.choice, ...(anchor ? { anchor } : {}) }
         );
+      }
+      if (surveyAnswers.length) {
+        // One label-17 payload holds every answer: a CIP-179 responses
+        // payload is [tag, [response, ...]], and each form emits one of
+        // those with a single response, so the response lists are joined.
+        // Each answer's DRep credential is proven by this transaction's vote
+        // on the survey's linked action (mechanism B).
+        const merged = [surveyAnswers[0].payload[0], surveyAnswers.flatMap((answer) => answer.payload[1])];
+        tx.setMetadata(17, merged);
       }
 
       const unsignedTx = await tx.build();
@@ -1606,6 +1657,7 @@ export default function GovernanceActionsPage() {
             <strong>{batchVoteCount}</strong>
             <span>{batchVoteCount === 1 ? "action selected" : "actions selected"}</span>
             {batchVoteCount ? <span>{batchVoteReadyCount}/{batchVoteCount} ready</span> : null}
+            {batchSurveyAnswerCount ? <span>{batchSurveyAnswerCount} survey {batchSurveyAnswerCount === 1 ? "answer" : "answers"} attached</span> : null}
           </div>
           <div className="batch-vote-actions">
             <button type="button" className="mode-btn" onClick={selectVisibleDrepActions}>
@@ -1995,28 +2047,63 @@ export default function GovernanceActionsPage() {
                   {linked?.available && !showLinkedEditor ? (
                     <p className="muted">This action links the same survey shown with {firstLinkedRow?.actionName}.</p>
                   ) : null}
-                  {showLinkedEditor ? (
-                    <section className="cip179-linked-survey">
-                      <div className="cip179-linked-survey-head">
-                        <div>
-                          <span className="sq-qtype-label">CIP-179 survey linked to this action</span>
-                          <h4>{linked.survey.title || "Untitled survey"}</h4>
-                          {linked.survey.description ? <p className="muted">{linked.survey.description}</p> : null}
+                  {showLinkedEditor ? (() => {
+                    const surveyOpen = linked.survey.lifecycle === "open";
+                    const record = batchSurveyRecords[linked.surveyRef];
+                    const attached = draft.surveyAnswer;
+                    return (
+                      <section className="cip179-linked-survey">
+                        <div className="cip179-linked-survey-head">
+                          <div>
+                            <span className="sq-qtype-label">CIP-179 survey linked to this action</span>
+                            <h4>{linked.survey.title || "Untitled survey"}</h4>
+                            {linked.survey.description ? <p className="muted">{linked.survey.description}</p> : null}
+                          </div>
+                          <Link
+                            to={`/surveys/${linked.survey.txHash}/${linked.survey.index}`}
+                            className="mode-btn"
+                            onClick={() => setBatchVoteModalOpen(false)}
+                          >
+                            Open survey
+                          </Link>
                         </div>
-                        <Link
-                          to={`/surveys/${linked.survey.txHash}/${linked.survey.index}`}
-                          className="mode-btn"
-                          onClick={() => setBatchVoteModalOpen(false)}
-                        >
-                          Open survey
-                        </Link>
-                      </div>
-                      <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                        A survey answer is separate from your vote: it is survey metadata, not a governance vote, and it neither
-                        replaces nor implies one. Answer it on the action's page or the survey page, before or after voting.
-                      </p>
-                    </section>
-                  ) : null}
+                        <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
+                          A survey answer is separate from your vote: it is survey metadata, not a governance vote, and it neither
+                          replaces nor implies one. Answered here, it rides in the same transaction as this batch of votes, as a DRep answer.
+                        </p>
+                        {attached ? (
+                          <div className="batch-survey-attached">
+                            <span>✓ Answer attached to this batch{attached.answered != null ? ` (${attached.answered} ${attached.answered === 1 ? "question" : "questions"} answered)` : ""}. It goes on chain when you submit the votes.</span>
+                            <button type="button" className="link-btn" onClick={() => updateBatchVoteDraft(row.proposalId, { surveyAnswer: null })}>Remove</button>
+                          </div>
+                        ) : !surveyOpen ? (
+                          <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>This survey is {String(linked.survey.lifecycleLabel || linked.survey.lifecycle).toLowerCase()}; it no longer accepts answers.</p>
+                        ) : !batchResponder ? (
+                          <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>Reading the DRep credential…</p>
+                        ) : !record ? (
+                          <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>Loading the survey form…</p>
+                        ) : (
+                          <div className="batch-survey-form">
+                            <p className="muted" style={{ margin: "0.6rem 0 0", fontSize: "0.8rem" }}>
+                              Fill in the survey and press its <strong>Sign &amp; submit</strong>: in a batch that only attaches the answer here. Nothing is signed until you submit the votes.
+                            </p>
+                            <TesseraRespond
+                              definition={record.definition}
+                              surveyRef={record.ref}
+                              responder={batchResponder}
+                              tipEpoch={linked.currentEpoch}
+                              cancelled={false}
+                              onResponse={(result) => {
+                                const answered = Array.isArray(result?.payload?.[1]?.[0]?.[4]) ? result.payload[1][0][4].length : null;
+                                updateBatchVoteDraft(row.proposalId, { surveyAnswer: { payload: result.payload, surveyRef: linked.surveyRef, answered } });
+                              }}
+                              onError={(e) => setVoteError(e?.message || "The survey form reported an error.")}
+                            />
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })() : null}
                 </div>
 
                 {wallet.walletNetworkId !== 1 ? (

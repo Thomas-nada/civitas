@@ -9794,3 +9794,26 @@ tessera-respond {
   gap: 0.6rem;
   flex-wrap: wrap;
 }
+
+/* Batch vote modal: the survey answered inside the batch */
+.batch-survey-attached {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--mint) 40%, var(--bg));
+  background: color-mix(in srgb, var(--mint) 8%, var(--bg));
+  font-size: 0.84rem;
+}
+
+.batch-survey-form {
+  margin-top: 0.25rem;
+}
+
+.batch-survey-form tessera-respond {
+  margin-top: 0.5rem;
+}

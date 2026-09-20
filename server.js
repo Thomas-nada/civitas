@@ -10350,7 +10350,8 @@ const server = http.createServer(async (req, res) => {
         expirationEpoch = Number(anchor.expiration ?? NaN);
       }
       const surveyRef = survey.key;
-      const base = { linked: true, surveyRef, survey, proposalId, expirationEpoch: Number.isFinite(expirationEpoch) ? expirationEpoch : null, source };
+      const currentEpoch = await surveyReader().calendarEpoch().catch(() => null);
+      const base = { linked: true, surveyRef, survey, proposalId, expirationEpoch: Number.isFinite(expirationEpoch) ? expirationEpoch : null, source, currentEpoch };
       if (!Number.isFinite(expirationEpoch) || expirationEpoch !== Number(survey.endEpoch)) {
         json(res, 200, { ...base, available: false, problem: "The survey end epoch does not match the governance action expiry epoch." });
         return;
