@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useSnapshotUpdates } from "../hooks/useSnapshotUpdates";
 import MetaVerifyPill from "../components/MetaVerifyPill";
 import LinkedSurveyCard from "../components/survey/LinkedSurveyCard";
+import DrepVotePanel from "../components/vote/DrepVotePanel";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -840,6 +841,9 @@ export default function ProposalDetailPage() {
         </div>
         <p className="mono muted pdp-action-id">{decodedProposalId}</p>
       </section>
+
+      {/* ── DRep vote (any active action, survey or not) ─────────────── */}
+      <DrepVotePanel proposalId={decodedProposalId} actionName={payloadDoc.title || info?.actionName} status={status} votes={allVotes} />
 
       {/* ── Linked CIP-179 survey (answerable here) ─────────────────── */}
       <LinkedSurveyCard proposalId={decodedProposalId} />

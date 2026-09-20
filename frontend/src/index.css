@@ -9742,3 +9742,55 @@ tessera-respond {
   margin-bottom: 0.25rem;
   border-bottom: 1px solid var(--line);
 }
+
+/* Action page: the DRep vote panel */
+.dvp {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.dvp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dvp-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.dvp-kicker {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mint);
+}
+
+.dvp-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+}
+
+.dvp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.dvp-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}

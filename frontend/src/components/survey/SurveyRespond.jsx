@@ -6,7 +6,9 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { WalletContext } from "../../context/WalletContext";
 import { explorerTxUrl } from "../../services/surveyNetwork";
-import { Role, SurveyTxError, buildVoteAnchor, currentDrepAnchor, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
+import { Role, SurveyTxError, currentDrepAnchor, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
+import { EMPTY_RATIONALE, resolveRationaleAnchor } from "../../services/voteTxService";
+import RationaleInput from "../vote/RationaleInput";
 import { readableError } from "../../lib/wallet/walletError";
 import { lifecycleLabel } from "../../services/surveyPresentation";
 import TesseraRespond from "./TesseraRespond";
@@ -24,7 +26,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
   // A DRep vote carried in the same transaction (CIP-179 mechanism B).
   const [voteChoice, setVoteChoice] = useState(""); // "" | Yes | No | Abstain
   const [voteActionId, setVoteActionId] = useState("");
-  const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
+  const [voteRationale, setVoteRationale] = useState(EMPTY_RATIONALE); // { mode, url, text }
   const [pendingResult, setPendingResult] = useState(null); // the form's payload after a failed submit
   const [voteNeeded, setVoteNeeded] = useState(false); // the wallet skipped the DRep key: a vote is the way through
 
@@ -117,7 +119,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
       let vote;
       let drepUpdate;
       if (proof === "vote" && voteChoice && voteLink && drepId) {
-        const anchor = await buildVoteAnchor(voteRationaleUrl);
+        const anchor = await resolveRationaleAnchor(voteRationale);
         vote = { drepId, actionId: voteLink.actionId, choice: voteChoice, anchor };
       } else if (proof === "drep-update" && drepId) {
         const { anchor, confirmedNone } = await currentDrepAnchor(drepId);
@@ -161,7 +163,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
       }
       setStatus({ kind: "error", message: readableError(e, "The transaction could not be submitted.") });
     }
-  }, [walletApi, status.kind, credentials, wallet?.walletName, wallet?.walletDrep?.dRepIDCip105, voteChoice, voteLink, voteRationaleUrl, votableLinks.length]);
+  }, [walletApi, status.kind, credentials, wallet?.walletName, wallet?.walletDrep?.dRepIDCip105, voteChoice, voteLink, voteRationale, votableLinks.length]);
 
   const canOfferVote = Boolean(isOpen && wallet?.actingAsDrep && credentials?.responder?.[Role.DRep] && (votableLinks.length > 0 || voteNeeded));
 
@@ -282,12 +284,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
                 ))}
               </div>
               ) : null}
-              {voteChoice ? (
-                <label className="svy-vote-rationale">
-                  <span className="muted">Rationale URL (optional, CIP-100 document)</span>
-                  <input type="url" placeholder="https://… or ipfs://…" value={voteRationaleUrl} onChange={(e) => setVoteRationaleUrl(e.target.value)} />
-                </label>
-              ) : null}
+              {voteChoice ? <RationaleInput value={voteRationale} onChange={setVoteRationale} rows={6} /> : null}
               {voteNeeded && pendingResult && votableLinks.length > 0 && status.kind !== "submitting" ? (
                 <button type="button" className="btn-primary" disabled={!voteChoice} onClick={() => onResponse(pendingResult, "vote")}>
                   {voteChoice ? `Vote ${voteChoice} and submit the answer` : "Choose a vote to continue"}

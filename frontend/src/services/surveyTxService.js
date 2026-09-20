@@ -308,11 +308,18 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [],
     );
   }
 
+  return submitSignedTx(walletApi, signedTx);
+}
+
+/**
+ * Submits a signed transaction through the wallet; when the wallet's submit
+ * fails without a usable reason, through Koios, which either gets it on
+ * chain or names the ledger rule that rejected it.
+ */
+export async function submitSignedTx(walletApi, signedTx) {
   try {
     return await walletApi.submitTx(signedTx);
   } catch (walletError) {
-    // The wallet's submit failed without a usable reason; submit through
-    // Koios, which either gets the transaction on chain or names the rule.
     try {
       return await submitViaKoios(signedTx);
     } catch (koiosError) {
