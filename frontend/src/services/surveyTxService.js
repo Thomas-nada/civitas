@@ -207,9 +207,12 @@ export async function getConnectedPaymentKeyHash(walletApi) {
  * The credentials the connected wallet can answer as, keyed by CIP-179 role
  * number for <tessera-respond>, plus each credential's hash hex for the
  * required-signer proof. `includeDrep` is decided by the session: only a
- * registered DRep signed in with the DRep key answers as a DRep.
+ * registered DRep signed in with the DRep key answers as a DRep. The DRep
+ * key itself is the session's CIP-95 public key (`drepPubKeyHex`, read
+ * from the raw wallet API at sign-in); Mesh's getDRep() is only a fallback,
+ * since it needs the wallet enabled with CIP-95 through Mesh.
  */
-export async function responderCredentials(walletApi, { includeDrep = false } = {}) {
+export async function responderCredentials(walletApi, { includeDrep = false, drepPubKeyHex = "" } = {}) {
   const responder = {};
   const hashes = {};
   const changeAddress = await walletApi.getChangeAddress();
@@ -227,14 +230,21 @@ export async function responderCredentials(walletApi, { includeDrep = false } = 
     // No stake credential exposed; the wallet answers as a keyholder only.
   }
   if (includeDrep) {
-    try {
-      const drep = await walletApi.getDRep();
-      if (drep?.publicKeyHash) {
-        responder[Role.DRep] = { type: "key", keyHash: hexToBytes(drep.publicKeyHash) };
-        hashes[Role.DRep] = drep.publicKeyHash;
+    let drepHash = "";
+    const pubKey = String(drepPubKeyHex || "").trim().toLowerCase();
+    if (/^[0-9a-f]{64}$/.test(pubKey)) {
+      drepHash = blakejs.blake2bHex(hexToBytes(pubKey), null, 28);
+    } else {
+      try {
+        const drep = await walletApi.getDRep();
+        if (drep?.publicKeyHash) drepHash = String(drep.publicKeyHash).toLowerCase();
+      } catch {
+        // Wallet without CIP-95 through Mesh: no DRep credential to offer.
       }
-    } catch {
-      // Wallet without CIP-95: no DRep credential to offer.
+    }
+    if (drepHash) {
+      responder[Role.DRep] = { type: "key", keyHash: hexToBytes(drepHash) };
+      hashes[Role.DRep] = drepHash;
     }
   }
   return { responder, hashes };

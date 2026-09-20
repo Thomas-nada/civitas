@@ -33,7 +33,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
     if (!walletApi) { setCredentials(null); return undefined; }
     let alive = true;
     setCredentialError("");
-    responderCredentials(walletApi, { includeDrep: Boolean(wallet?.actingAsDrep) })
+    responderCredentials(walletApi, { includeDrep: Boolean(wallet?.actingAsDrep), drepPubKeyHex: wallet?.walletDrep?.pubDRepKey || "" })
       .then(({ responder, hashes }) => {
         if (!alive) return;
         const allowed = new Set(eligible.map((name) => ROLE_NUMBERS[name]).filter((n) => n != null));
@@ -47,7 +47,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
       .catch((e) => { if (alive) setCredentialError(readableError(e, "Could not read the wallet's credentials.")); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletApi, wallet?.actingAsDrep, survey.key]);
+  }, [walletApi, wallet?.actingAsDrep, wallet?.walletDrep?.pubDRepKey, survey.key]);
 
   // The stored record is the wire form cip-179 wrote; the widget wants it
   // decoded (bytes, bigints) so it signs the record as it is on chain.
@@ -182,6 +182,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
               definition={record.definition}
               surveyRef={record.ref}
               responder={credentials.responder}
+              initialRole={credentials.responder[Role.DRep] ? Role.DRep : undefined}
               tipEpoch={data?.currentEpoch}
               cancelled={survey.lifecycle === "cancelled"}
               onResponse={onResponse}

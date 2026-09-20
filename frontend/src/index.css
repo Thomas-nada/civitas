@@ -9408,7 +9408,9 @@ tessera-respond {
   --tessera-line: var(--line);
   --tessera-line2: var(--line);
   --tessera-hair: color-mix(in srgb, var(--line) 55%, var(--bg));
-  --tessera-surface2: var(--surface-soft-2);
+  /* The widget also paints the active "Responding as" chip's text with
+     surface2, so it must be a solid colour that reads on the accent. */
+  --tessera-surface2: var(--bg);
   --tessera-surface3: var(--surface-soft);
   --tessera-header-line: var(--line);
   --tessera-card-bg: var(--surface-soft);
