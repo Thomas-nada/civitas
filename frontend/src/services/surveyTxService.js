@@ -290,7 +290,7 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [],
     throw new SurveyTxError(
       "The wallet signed the transaction, but not with every key this answer has to prove.",
       "unsigned-required-signer",
-      { missing },
+      { missing, signedTx, attached: { vote: Boolean(vote), drepUpdate: Boolean(drepUpdate) } },
     );
   }
 

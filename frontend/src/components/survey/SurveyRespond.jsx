@@ -136,11 +136,20 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
         const names = e.missing.map((h) => roleOf[h] || `key ${h.slice(0, 10)}…`);
         const drepSkipped = names.includes("DRep");
         if (drepSkipped && wallet?.walletDrep?.dRepIDCip105) {
+          // Keep the signed transaction inspectable: which keys it carries
+          // is the whole question when a wallet skips one.
+          console.warn("[survey] DRep witness missing from the signed transaction", { attached: e.attached, missing: e.missing, signedTx: e.signedTx });
           setVoteNeeded(true);
-          setStatus({
-            kind: "error",
-            message: `${wallet.walletName} signed the transaction, but not with your DRep key: it uses that key only for a DRep vote or a DRep certificate. Pick one of the two ways below to carry the key and submit again.`,
-          });
+          const attached = e.attached || {};
+          let message;
+          if (attached.drepUpdate) {
+            message = `${wallet.walletName} was asked to sign a DRep update certificate and still did not sign with your DRep key, so this wallet uses that key for votes only. ${votableLinks.length > 0 ? "Cast your vote on the linked action below to answer as a DRep, or answer" : "Answer"} with your stake credential (choose Stakeholder in the form), or use a wallet that signs with the DRep key, such as Eternl.`;
+          } else if (attached.vote) {
+            message = `${wallet.walletName} did not sign with your DRep key even with the vote in the transaction. Answer with your stake credential (choose Stakeholder in the form), or use a wallet that signs with the DRep key, such as Eternl.`;
+          } else {
+            message = `${wallet.walletName} signed the transaction, but not with your DRep key: it uses that key only for a DRep vote or a DRep certificate. Pick one of the ways below to carry the key and submit again.`;
+          }
+          setStatus({ kind: "error", message, attempted: attached });
           return;
         }
         setStatus({
@@ -237,9 +246,10 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
                   <p className="muted svy-respond-note">
                     The transaction carries a DRep update certificate that re-states your current DRep metadata anchor. Nothing about your DRep changes and there is no deposit, only the network fee; the wallet shows it as a DRep update and signs it with the DRep key, which is the signature this answer needs.
                   </p>
-                  {status.kind !== "submitting" ? (
+                  {status.kind !== "submitting" && !status.attempted?.drepUpdate ? (
                     <button type="button" className="btn-primary" onClick={() => onResponse(pendingResult, "drep-update")}>Submit the answer without a vote</button>
                   ) : null}
+                  {status.attempted?.drepUpdate ? <p className="vote-notice" style={{ margin: 0 }}>Tried: the wallet did not sign the certificate with the DRep key.</p> : null}
                 </div>
               ) : null}
               {votableLinks.length > 0 ? (
