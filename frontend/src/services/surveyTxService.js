@@ -14,7 +14,8 @@ import {
 } from "cip-179";
 import { QUICKNET_CHAIN_HASH, hexToBytes } from "cip-179/domain";
 import { maxPlaintextSize } from "cip-179/tlock";
-import { Transaction, resolvePaymentKeyHash, resolveStakeKeyHash } from "@meshsdk/core";
+import { Transaction, resolvePaymentKeyHash, resolveStakeKeyHash, resolveTxHash } from "@meshsdk/core";
+import { deserializeTx } from "@meshsdk/core-cst";
 import blakejs from "blakejs";
 
 export { METADATA_LABEL, Role };
@@ -140,6 +141,65 @@ function toQuestion(question) {
 // Builds, signs and submits a transaction carrying `metadatum` at label 17,
 // with every hash in `signerHashes` as a required signer (CIP-179 mechanism
 // A: the carrying transaction proves the credentials it names).
+// Koios' public submit endpoint (no key). Used when the wallet's own submit
+// fails: most wallets then hide the node's reason behind a generic error, and
+// some relay through their own backend, while Koios reports the ledger rule
+// that rejected the transaction.
+const KOIOS_SUBMIT_URL = "https://api.koios.rest/api/v1/submittx";
+
+/** The key hashes (hex) of every vkey witness in a signed transaction. */
+function witnessedKeyHashes(signedTxHex) {
+  const witnessed = new Set();
+  const vkeys = deserializeTx(signedTxHex).witnessSet().vkeys();
+  for (const witness of vkeys ? vkeys.values() : []) {
+    witnessed.add(blakejs.blake2bHex(hexToBytes(String(witness.vkey())), null, 28));
+  }
+  return witnessed;
+}
+
+export class SurveyTxError extends Error {
+  constructor(message, code, extra = {}) {
+    super(message);
+    this.name = "SurveyTxError";
+    this.code = code;
+    Object.assign(this, extra);
+  }
+}
+
+// The ledger rules a rejected survey transaction is likely to hit, in plain words.
+const NODE_REASONS = [
+  ["MissingVKeyWitnessesUTXOW", "the transaction lacks a signature the ledger requires (a required signer was not signed)"],
+  ["MissingRequiredSigners", "the transaction lacks a signature the ledger requires (a required signer was not signed)"],
+  ["BadInputsUTxO", "its inputs are already spent (a previous submission of this or another transaction may already be on its way; wait a moment and check the wallet)"],
+  ["ValueNotConservedUTxO", "its inputs and outputs do not balance"],
+  ["FeeTooSmallUTxO", "its fee is too small"],
+  ["OutsideValidityIntervalUTxO", "its validity window has passed; try again"],
+  ["MaxTxSizeUTxO", "it is larger than the network allows"],
+  ["InvalidMetadata", "its metadata is invalid"],
+  ["DeserialiseFailure", "it could not be decoded"],
+];
+
+function describeNodeRejection(text) {
+  const raw = String(text || "");
+  for (const [needle, words] of NODE_REASONS) {
+    if (raw.includes(needle)) return `The network rejected the transaction: ${words}. (${needle})`;
+  }
+  const short = raw.replace(/\s+/g, " ").trim().slice(0, 240);
+  return `The network rejected the transaction${short ? `: ${short}` : "."}`;
+}
+
+async function submitViaKoios(signedTxHex) {
+  const res = await fetch(KOIOS_SUBMIT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/cbor" },
+    body: hexToBytes(signedTxHex),
+  });
+  const text = await res.text().catch(() => "");
+  if (!res.ok) throw new SurveyTxError(describeNodeRejection(text), "node-rejected", { nodeMessage: text });
+  const hash = text.trim().replace(/^"|"$/g, "");
+  return /^[0-9a-f]{64}$/i.test(hash) ? hash.toLowerCase() : resolveTxHash(signedTxHex);
+}
+
 async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = []) {
   const utxos = await walletApi.getUtxos();
   if (!utxos?.length) {
@@ -149,12 +209,43 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [])
   const tx = new Transaction({ initiator: walletApi });
   tx.sendLovelace(changeAddress, "2000000");
   tx.setMetadata(METADATA_LABEL, metadatum);
-  for (const signerHash of new Set(signerHashes.filter(Boolean))) {
+  const required = [...new Set(signerHashes.filter(Boolean).map((h) => String(h).toLowerCase()))];
+  for (const signerHash of required) {
     tx.txBuilder.requiredSignerHash(signerHash);
   }
   const unsignedTx = await tx.build();
   const signedTx = await walletApi.signTx(unsignedTx, true, true);
-  return walletApi.submitTx(signedTx);
+
+  // A required signer the wallet did not sign for would be rejected by the
+  // node with a message most wallets swallow; say which key is missing
+  // before anything is submitted.
+  let missing = [];
+  try {
+    const witnessed = witnessedKeyHashes(signedTx);
+    missing = required.filter((h) => !witnessed.has(h));
+  } catch {
+    // If the signed transaction cannot be decoded here, let the network judge it.
+  }
+  if (missing.length) {
+    throw new SurveyTxError(
+      "The wallet signed the transaction, but not with every key this answer has to prove.",
+      "unsigned-required-signer",
+      { missing },
+    );
+  }
+
+  try {
+    return await walletApi.submitTx(signedTx);
+  } catch (walletError) {
+    // The wallet's submit failed without a usable reason; submit through
+    // Koios, which either gets the transaction on chain or names the rule.
+    try {
+      return await submitViaKoios(signedTx);
+    } catch (koiosError) {
+      if (koiosError instanceof SurveyTxError) throw koiosError;
+      throw walletError;
+    }
+  }
 }
 
 /**

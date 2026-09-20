@@ -6,7 +6,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { WalletContext } from "../../context/WalletContext";
 import { explorerTxUrl } from "../../services/surveyNetwork";
-import { Role, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
+import { Role, SurveyTxError, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
 import { readableError } from "../../lib/wallet/walletError";
 import { lifecycleLabel } from "../../services/surveyPresentation";
 import TesseraRespond from "./TesseraRespond";
@@ -97,9 +97,21 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
       const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes);
       setStatus({ kind: "done", txHash });
     } catch (e) {
+      if (e instanceof SurveyTxError && e.code === "unsigned-required-signer") {
+        // Name the role whose key the wallet skipped; the DRep key is the
+        // usual one (not every wallet signs arbitrary transactions with it).
+        const roleOf = Object.fromEntries(Object.entries(credentials?.hashes || {}).map(([n, h]) => [String(h).toLowerCase(), Object.keys(ROLE_NUMBERS).find((name) => ROLE_NUMBERS[name] === Number(n)) || n]));
+        const names = e.missing.map((h) => roleOf[h] || `key ${h.slice(0, 10)}…`);
+        const drepSkipped = names.includes("DRep");
+        setStatus({
+          kind: "error",
+          message: `${wallet.walletName} signed the transaction, but not with your ${names.join(" / ")} key, so the network would reject it. ${drepSkipped ? "This wallet does not sign survey transactions with the DRep key; answer with your stake credential instead (choose Stakeholder in the form), or use a wallet that does, such as Eternl." : "Choose another role in the form, or use a different wallet."}`,
+        });
+        return;
+      }
       setStatus({ kind: "error", message: readableError(e, "The transaction could not be submitted.") });
     }
-  }, [walletApi, status.kind]);
+  }, [walletApi, status.kind, credentials, wallet?.walletName]);
 
   const panelClass = compact ? "svy-respond-inner" : "panel";
   const panelStyle = compact ? undefined : { padding: "1rem 1.1rem" };
