@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
-const cip179 = require("./lib/cip179");
+const surveys = require("./lib/surveys");
 // BLAKE2b — pure JS, RFC 7693, no external deps. `outlen` is the digest length
 // in bytes: 32 for metadata hashes, 28 for Cardano key/credential hashes.
 function blake2b(data, outlen = 32) {
@@ -117,12 +117,6 @@ const PORT = Number(process.env.PORT || 8080);
 const CANONICAL_URL = (process.env.CANONICAL_URL || "").replace(/\/+$/, ""); // e.g. https://civitas.gov
 const BLOCKFROST_BASE_URL = process.env.BLOCKFROST_BASE_URL || "https://cardano-mainnet.blockfrost.io/api/v0";
 const BLOCKFROST_API_KEY = process.env.BLOCKFROST_API_KEY || "";
-// Surveys (CIP-0179) can be browsed on preview independently of the app's main
-// (mainnet) Blockfrost config, which the rest of Civitas keeps using untouched.
-// A dedicated preview key powers the surveys Preview toggle; if unset, preview
-// simply shows an empty list.
-const SURVEYS_BLOCKFROST_PREVIEW_URL = process.env.SURVEYS_BLOCKFROST_PREVIEW_URL || "https://cardano-preview.blockfrost.io/api/v0";
-const SURVEYS_BLOCKFROST_PREVIEW_KEY = process.env.SURVEYS_BLOCKFROST_PREVIEW_KEY || "";
 const BLOCKFROST_IPFS_KEY = process.env.BLOCKFROST_IPFS_KEY || "";
 const BLOCKFROST_MAX_RETRIES = Number(process.env.BLOCKFROST_MAX_RETRIES || 3);
 const BLOCKFROST_REQUEST_TIMEOUT_MS = Number(process.env.BLOCKFROST_REQUEST_TIMEOUT_MS || 10000);
@@ -397,18 +391,46 @@ const GITHUB_TOKEN = String(process.env.GITHUB_TOKEN || "").trim();
 let cipIndexCache = { fetchedAt: 0, cips: [] };
 const cipContentCache = {};
 
-// ── Survey / Label-17 index cache ─────────────────────────────────────────
-const LABEL17_TTL_MS = Number(process.env.LABEL17_TTL_MS || 30_000);
-const LABEL17_MAX_PAGES = Math.max(1, Number(process.env.LABEL17_MAX_PAGES || 50));
-// Per-network survey caches so mainnet and preview never clobber each other.
-const emptyLabel17Cache = () => ({ fetchedAt: 0, surveys: [], responsesBySurvey: {}, cancelledRefs: new Set(), incomplete: false });
-const label17CacheByNetwork = new Map();      // network -> cache object
-const label17BuildPromiseByNetwork = new Map(); // network -> in-flight build
-function label17CacheFor(network) {
-  if (!label17CacheByNetwork.has(network)) label17CacheByNetwork.set(network, emptyLabel17Cache());
-  return label17CacheByNetwork.get(network);
+
+// ── Surveys (CIP-179) via Tessera ────────────────────────────────
+// Surveys are read from a Tessera backend (the reference CIP-179 indexer);
+// see lib/surveys.js. Mainnet by default, like the rest of Civitas.
+const TESSERA_BACKEND_URL = process.env.TESSERA_BACKEND_URL || "https://tessera-backend-mainnet.matthieu-pizenberg.workers.dev";
+const TESSERA_APP_URL = process.env.TESSERA_APP_URL || "https://tessera-mainnet.matthieu-pizenberg.workers.dev";
+const SURVEY_LIST_TTL_MS = Number(process.env.SURVEY_LIST_TTL_MS || 120_000);
+const SURVEY_BUNDLE_TTL_MS = Number(process.env.SURVEY_BUNDLE_TTL_MS || 60_000);
+let surveyReaderInstance = null;
+function surveyReader() {
+  if (!surveyReaderInstance) {
+    surveyReaderInstance = surveys.createSurveyReader({
+      backendUrl: TESSERA_BACKEND_URL,
+      appUrl: TESSERA_APP_URL,
+      network: "mainnet",
+      listTtlMs: SURVEY_LIST_TTL_MS,
+      bundleTtlMs: SURVEY_BUNDLE_TTL_MS,
+      // The live tally weights DRep responses by the voting power the
+      // snapshot already holds, keyed by CIP-129 id.
+      getPowerLookup: () => surveys.buildDrepPowerLookup(surveyPowerSnapshot(), drepIdFromCredentialHash),
+    });
+  }
+  return surveyReaderInstance;
 }
-const label17GovLinks = new Map();
+// The snapshot the live tally weights DReps by: the in-memory one once it
+// holds DReps, else the seed file (a fresh process with boot hydration
+// skipped has an empty snapshot until the first sync).
+let surveyPowerSeed = null;
+function surveyPowerSnapshot() {
+  if (Array.isArray(snapshot?.dreps) && snapshot.dreps.length > 0) return snapshot;
+  if (surveyPowerSeed === null) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_SEED_PATH, "utf8"));
+      surveyPowerSeed = Array.isArray(parsed?.dreps) ? parsed : false;
+    } catch {
+      surveyPowerSeed = false;
+    }
+  }
+  return surveyPowerSeed || snapshot;
+}
 
 let epochBackfillState = {
   running: false,
@@ -895,6 +917,22 @@ function drepIdFromPubKeyHex(publicKeyHex) {
 // cc_hot_hex for a key-based committee member).
 function keyHashHexFromPubKeyHex(publicKeyHex) {
   return Buffer.from(blake2b(Buffer.from(publicKeyHex, "hex"), 28)).toString("hex");
+}
+
+// CIP-129 drep1 id for a DRep credential hash (0x22 key, 0x23 script), the
+// form the Civitas snapshot names DReps by.
+function drepIdFromCredentialHash(hashHex, isScript) {
+  return bech32Encode("drep", Buffer.concat([Buffer.from([isScript ? 0x23 : 0x22]), Buffer.from(hashHex, "hex")]));
+}
+
+// Turns a survey-reader failure into a response: the index warming up (503),
+// a Tessera error (502), anything else 500.
+function surveyErrorResponse(res, error, fallback) {
+  const status = error?.name === "SurveyIndexError" ? (error.status || 503)
+    : error?.name === "TesseraHttpError" ? 502
+    : 500;
+  if (status === 500) console.error("[surveys]", error?.message || error);
+  json(res, status, { error: status === 500 ? fallback : (error?.message || fallback) });
 }
 
 // Resolves the on-chain role for a verified public key. Returns
@@ -7998,302 +8036,6 @@ async function fetchCipContent(cipId) {
   };
 }
 
-function label17ResolveResponseWeight(response, weighting) {
-  if (weighting === "StakeBased") {
-    const stakeAda = Number(response?.responseStakeAda || 0);
-    return Number.isFinite(stakeAda) && stakeAda > 0 ? stakeAda : 0;
-  }
-  if (weighting === "PledgeBased") {
-    const pledgeAda = Number(response?.responsePledgeAda || 0);
-    return Number.isFinite(pledgeAda) && pledgeAda > 0 ? pledgeAda : 0;
-  }
-  return 1;
-}
-
-function label17FormatRangeLabel(lo, hi, isLast) {
-  const loText = Number.isInteger(lo) ? String(lo) : lo.toFixed(2);
-  const hiText = Number.isInteger(hi) ? String(hi) : hi.toFixed(2);
-  return isLast ? `${loText}-${hiText}` : `${loText}-${hiText}`;
-}
-
-function label17WeightedMedian(pairs) {
-  if (!Array.isArray(pairs) || pairs.length === 0) return null;
-  const totalWeight = pairs.reduce((sum, pair) => sum + Number(pair?.weight || 0), 0);
-  if (!(totalWeight > 0)) return null;
-  const sorted = [...pairs].sort((a, b) => Number(a?.value || 0) - Number(b?.value || 0));
-  let cumulative = 0;
-  for (const pair of sorted) {
-    cumulative += Number(pair?.weight || 0);
-    if (cumulative >= totalWeight / 2) return Number(pair?.value || 0);
-  }
-  return Number(sorted[sorted.length - 1]?.value || 0);
-}
-
-// ── Survey network selection ────────────────────────────────────────────────
-// Surveys are browsable on either network; the rest of the app is unaffected.
-const SURVEY_NETWORKS = new Set(["mainnet", "preview"]);
-function normalizeSurveyNetwork(value) {
-  const v = String(value || "").trim().toLowerCase();
-  return SURVEY_NETWORKS.has(v) ? v : "mainnet";
-}
-function surveyBlockfrostConfig(network) {
-  return network === "preview"
-    ? { baseUrl: SURVEYS_BLOCKFROST_PREVIEW_URL, key: SURVEYS_BLOCKFROST_PREVIEW_KEY }
-    : { baseUrl: BLOCKFROST_BASE_URL, key: BLOCKFROST_API_KEY };
-}
-function surveyNetworkHasKey(network) {
-  return Boolean(surveyBlockfrostConfig(network).key);
-}
-// A Blockfrost getter bound to a survey network (mainnet reuses the app key).
-function surveyBlockfrostGet(network) {
-  const cfg = surveyBlockfrostConfig(network);
-  return (endpointWithQuery) => blockfrostGet(endpointWithQuery, cfg);
-}
-
-// Latest epoch for a survey network, briefly cached — the frontend needs it to
-// mark surveys active/ended and it differs per network.
-const surveyEpochCache = new Map(); // network -> { epoch, at }
-const SURVEY_EPOCH_TTL_MS = 60_000;
-async function currentEpochForNetwork(network) {
-  const cached = surveyEpochCache.get(network);
-  if (cached && Date.now() - cached.at < SURVEY_EPOCH_TTL_MS) return cached.epoch;
-  if (!surveyNetworkHasKey(network)) return null;
-  try {
-    const latest = await surveyBlockfrostGet(network)("/epochs/latest");
-    const epoch = Number.isFinite(Number(latest?.epoch)) ? Number(latest.epoch) : null;
-    surveyEpochCache.set(network, { epoch, at: Date.now() });
-    return epoch;
-  } catch {
-    return cached ? cached.epoch : null;
-  }
-}
-
-async function fetchSurveyByRef(txHash, surveyIndex = 0, network = "mainnet") {
-  const safeHash = String(txHash || "").trim().toLowerCase();
-  const safeIndex = Number(surveyIndex);
-  if (!/^[0-9a-f]{64}$/.test(safeHash) || !Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex > 65535) return null;
-  return cip179.decodeDefinitionTransaction({ get: surveyBlockfrostGet(network), txHash: safeHash, surveyIndex: safeIndex });
-}
-
-async function linkedActionsForCip179() {
-  const linksBySurvey = new Map(
-    [...label17GovLinks].map(([surveyRef, actionIds]) => [surveyRef, new Set(actionIds)])
-  );
-  for (const [actionId, info] of Object.entries(snapshot?.proposalInfo || {})) {
-    const link = await cip179.parseGovernanceLink(info?.metadataJson);
-    if (!link.surveyRef) continue;
-    const surveyRef = `${link.surveyRef.txId}:${link.surveyRef.index}`;
-    if (!linksBySurvey.has(surveyRef)) linksBySurvey.set(surveyRef, new Set());
-    linksBySurvey.get(surveyRef).add({
-      actionId,
-      expirationEpoch: Number(info?.expirationEpoch),
-    });
-  }
-  return linksBySurvey;
-}
-
-async function buildLabel17Index(network = "mainnet") {
-  const net = normalizeSurveyNetwork(network);
-  const cache = label17CacheFor(net);
-  const now = Date.now();
-  if (cache.fetchedAt > 0 && now - cache.fetchedAt < LABEL17_TTL_MS) return cache;
-  // No key for this network ⇒ nothing to scan; serve an (empty) resolved cache
-  // rather than hammering Blockfrost with unauthenticated calls.
-  if (!surveyNetworkHasKey(net)) {
-    const empty = { ...emptyLabel17Cache(), fetchedAt: Date.now() };
-    label17CacheByNetwork.set(net, empty);
-    return empty;
-  }
-  const hasWarmCache = cache.fetchedAt > 0;
-  if (!label17BuildPromiseByNetwork.has(net)) {
-    // Governance-action linkage is derived from the mainnet snapshot, so it only
-    // applies to mainnet surveys; preview gets no linkage.
-    const linkedActions = net === "mainnet" ? linkedActionsForCip179() : Promise.resolve(new Map());
-    const promise = linkedActions
-      .then((linkedActionsBySurvey) => cip179.buildIndex({
-        get: surveyBlockfrostGet(net),
-        maxPages: LABEL17_MAX_PAGES,
-        linkedActionsBySurvey,
-      }))
-      .then((index) => {
-        const next = { ...index, fetchedAt: Date.now() };
-        label17CacheByNetwork.set(net, next);
-        return next;
-      })
-      .catch((error) => {
-        console.warn(`[cip179] v5 index build failed (${net}):`, error?.message || error);
-        return label17CacheFor(net);
-      })
-      .finally(() => { label17BuildPromiseByNetwork.delete(net); });
-    label17BuildPromiseByNetwork.set(net, promise);
-  }
-  if (!hasWarmCache) return label17BuildPromiseByNetwork.get(net);
-  return cache;
-}
-// Method type sets used by the tally function
-const CHOICE_METHODS = new Set([
-  "urn:cardano:poll-method:single-choice:v2",
-  "urn:cardano:poll-method:multi-select:v2",
-  "urn:cardano:poll-method:ranking:v1",
-]);
-const NUMERIC_METHODS = new Set([
-  "urn:cardano:poll-method:numeric-range:v2",
-]);
-const POINTS_METHODS = new Set(["urn:cardano:poll-method:points-allocation:v1"]);
-const RATING_METHODS = new Set(["urn:cardano:poll-method:rating:v1"]);
-
-function label17TallySurvey(details, responses) {
-  const questions = details?.questions ?? [];
-  if (questions.length === 0 || responses.length === 0) {
-    return { totalResponses: 0, uniqueCredentials: 0, totalWeight: 0, roleTallies: [], questionTallies: [] };
-  }
-
-  // Deduplicate: latest-response-wins per (role, credential)
-  const latestByKey = {};
-  for (const r of responses) {
-    const key = `${r.responderRole}|${r.responseCredential}`;
-    latestByKey[key] = r;
-  }
-  const deduped = Object.values(latestByKey);
-
-  const roleEntries = (details.eligibleRoles ?? []).map((role) => [role, "CredentialBased"]);
-  const roleTallies = roleEntries.map(([role, weighting]) => {
-    const roleResps = deduped.filter((r) => r.responderRole === role);
-    const roleWeightTotal = roleResps.reduce((sum, response) => sum + label17ResolveResponseWeight(response, weighting), 0);
-    const questionTallies = questions.map((q) => {
-      const isChoice  = CHOICE_METHODS.has(q.methodType);
-      const isNumeric = NUMERIC_METHODS.has(q.methodType);
-      const isPoints  = POINTS_METHODS.has(q.methodType);
-      const isRating  = RATING_METHODS.has(q.methodType);
-
-      const qt = {
-        questionId: q.questionId,
-        question: q.question,
-        methodType: q.methodType,
-        required: q.required ?? false,
-        weighted: weighting === "StakeBased" || weighting === "PledgeBased",
-        weighting,
-        abstainCount: 0,
-        optionTallies: isChoice
-          ? (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 }))
-          : undefined,
-        pointsTally: isPoints
-          ? (q.options ?? []).map((label, index) => ({ index, label, totalPoints: 0, weight: 0 }))
-          : undefined,
-        ratingTally: isRating
-          ? (q.options ?? []).map((label, index) => ({ index, label, scoreSum: 0, weightedScoreSum: 0, count: 0, weight: 0, meanScore: null }))
-          : undefined,
-        numericTally: null,
-        customTexts: (!isChoice && !isNumeric && !isPoints && !isRating) ? [] : undefined,
-      };
-
-      const numericValues = [];
-      for (const r of roleResps) {
-        const answer = (r.answers ?? []).find((a) => a.questionId === q.questionId);
-        if (!answer) {
-          qt.abstainCount++;
-          continue;
-        }
-        const responseWeight = label17ResolveResponseWeight(r, weighting);
-
-        if (isChoice) {
-          for (const idx of (answer.selection ?? [])) {
-            if (idx >= 0 && idx < qt.optionTallies.length) {
-              qt.optionTallies[idx].count++;
-              qt.optionTallies[idx].weight += responseWeight;
-            }
-          }
-        } else if (isPoints && Array.isArray(answer.pointsAllocation)) {
-          for (const [idx, pts] of answer.pointsAllocation) {
-            if (idx >= 0 && idx < qt.pointsTally.length) {
-              qt.pointsTally[idx].totalPoints += pts;
-              qt.pointsTally[idx].weight += responseWeight;
-            }
-          }
-        } else if (isRating && Array.isArray(answer.ratings)) {
-          for (const [idx, score] of answer.ratings) {
-            if (idx >= 0 && idx < qt.ratingTally.length) {
-              qt.ratingTally[idx].scoreSum += score;
-              qt.ratingTally[idx].weightedScoreSum += score * responseWeight;
-              qt.ratingTally[idx].count++;
-              qt.ratingTally[idx].weight += responseWeight;
-            }
-          }
-        } else if (isNumeric && answer.numericValue != null) {
-          numericValues.push({ value: Number(answer.numericValue), weight: responseWeight });
-        } else if (qt.customTexts != null && answer.customValue != null) {
-          qt.customTexts.push(typeof answer.customValue === "string" ? answer.customValue : JSON.stringify(answer.customValue));
-        }
-      }
-
-      // Finalize rating mean scores
-      if (isRating) {
-        for (const entry of qt.ratingTally) {
-          entry.meanScore = entry.count > 0 ? entry.scoreSum / entry.count : null;
-          entry.weightedMeanScore = entry.weight > 0 ? entry.weightedScoreSum / entry.weight : null;
-        }
-      }
-
-      if (isNumeric && numericValues.length > 0) {
-        const sorted = [...numericValues].sort((a, b) => a.value - b.value);
-        const rawValues = sorted.map((entry) => entry.value);
-        const totalWeight = sorted.reduce((sum, entry) => sum + Number(entry.weight || 0), 0);
-        const weightedMeanBase = sorted.reduce((sum, entry) => sum + (entry.value * Number(entry.weight || 0)), 0);
-        const mean = totalWeight > 0 ? weightedMeanBase / totalWeight : rawValues.reduce((s, v) => s + v, 0) / rawValues.length;
-        const mid = Math.floor(sorted.length / 2);
-        const median = totalWeight > 0
-          ? label17WeightedMedian(sorted)
-          : (sorted.length % 2 === 0 ? (sorted[mid - 1].value + sorted[mid].value) / 2 : sorted[mid].value);
-        const nc = q.numericConstraints ?? { minValue: rawValues[0], maxValue: rawValues[rawValues.length - 1] };
-        const range = nc.maxValue - nc.minValue;
-        const binCount = Math.max(1, Math.min(10, range + 1));
-        const binSize = range / binCount || 1;
-        const bins = [];
-        for (let i = 0; i < binCount; i++) {
-          const lo = nc.minValue + i * binSize;
-          const hi = i === binCount - 1 ? nc.maxValue : nc.minValue + (i + 1) * binSize;
-          const inBin = sorted.filter((entry) => i === binCount - 1
-            ? entry.value >= lo && entry.value <= hi
-            : entry.value >= lo && entry.value < hi);
-          bins.push({
-            range: label17FormatRangeLabel(lo, hi, i === binCount - 1),
-            count: inBin.length,
-            weight: inBin.reduce((sum, entry) => sum + Number(entry.weight || 0), 0)
-          });
-        }
-        qt.numericTally = {
-          values: rawValues,
-          mean,
-          median,
-          min: rawValues[0],
-          max: rawValues[rawValues.length - 1],
-          totalWeight,
-          weighted: qt.weighted,
-          bins
-        };
-      }
-
-      return qt;
-    });
-
-    return {
-      role,
-      weighting,
-      responses: roleResps.length,
-      totalWeight: roleWeightTotal,
-      questionTallies
-    };
-  });
-
-  return {
-    totalResponses: deduped.length,
-    uniqueCredentials: deduped.length,
-    totalWeight: roleTallies.reduce((sum, row) => sum + Number(row.totalWeight || 0), 0),
-    roleTallies,
-    questionTallies: roleTallies.find((r) => r.responses > 0)?.questionTallies ?? [],
-  };
-}
-
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -10494,75 +10236,50 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Surveys: force-refresh the label-17 index ────────────────────────────
-  if (req.method === "POST" && url.pathname === "/api/surveys/refresh") {
-    const net = normalizeSurveyNetwork(url.searchParams.get("network"));
-    label17CacheByNetwork.set(net, emptyLabel17Cache());
-    label17BuildPromiseByNetwork.delete(net);
-    buildLabel17Index(net).catch(() => {});
-    json(res, 200, { ok: true, network: net });
-    return;
-  }
-
-  // ── Surveys: list all CIP-0179 label-17 surveys ──────────────────────────
+  // ── Surveys (CIP-179): read from Tessera ────────────────────────────────
   if (req.method === "GET" && url.pathname === "/api/surveys") {
-    const net = normalizeSurveyNetwork(url.searchParams.get("network"));
     try {
-      const [index, currentEpoch] = await Promise.all([
-        buildLabel17Index(net),
-        currentEpochForNetwork(net),
-      ]);
+      const listing = await surveyReader().list();
       json(res, 200, {
-        network: net,
-        currentEpoch,
-        // Signal preview asked for but unconfigured, so the UI can hint at it.
-        networkConfigured: surveyNetworkHasKey(net),
-        cachedAt: index.fetchedAt,
-        count: index.surveys.length,
-        surveys: index.surveys,
-        incomplete: index.incomplete,
+        network: listing.network,
+        currentEpoch: listing.currentEpoch,
+        tip: listing.tip,
+        fetchedAt: listing.fetchedAt,
+        incomplete: listing.incomplete,
+        counts: listing.counts,
+        surveys: listing.surveys,
+        tesseraAppUrl: TESSERA_APP_URL,
       });
-    } catch (e) {
-      json(res, 500, { error: e?.message || "Failed to load surveys." });
+    } catch (error) {
+      surveyErrorResponse(res, error, "Failed to load surveys.");
     }
     return;
   }
 
-  // ── Surveys: detail + responses + tally for an explicit v5 survey ref ────
+  // Whether a just-submitted response transaction has reached the index.
   {
-    const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})(?:\/(\d+))?$/);
+    const m = url.pathname.match(/^\/api\/surveys\/tx\/([0-9a-fA-F]{64})$/);
     if (req.method === "GET" && m) {
-      const net = normalizeSurveyNetwork(url.searchParams.get("network"));
       try {
-        const txHash = m[1].toLowerCase();
-        const surveyIndex = Number(m[2] || 0);
-        const surveyRef = `${txHash}:${surveyIndex}`;
-        const [index, currentEpoch] = await Promise.all([
-          buildLabel17Index(net),
-          currentEpochForNetwork(net),
-        ]);
-        const survey = index.surveys.find((s) => s.surveyTxId === txHash && s.surveyIndex === surveyIndex)
-          || await fetchSurveyByRef(txHash, surveyIndex, net);
-        if (!survey) { json(res, 404, { error: "Survey not found." }); return; }
-        // A survey dropped from the active list (because the owner cancelled it)
-        // can still be reached by direct link — flag it so the page can say so.
-        const cancelled = index.cancelledRefs instanceof Set
-          && index.cancelledRefs.has(surveyRef);
-        if (cancelled) survey.cancelled = true;
-        const responses = index.responsesBySurvey[surveyRef] || [];
-        const tally = label17TallySurvey(survey.details, responses);
-        json(res, 200, {
-          network: net,
-          currentEpoch,
-          survey,
-          responses,
-          tally,
-          cachedAt: index.fetchedAt,
-          incomplete: index.incomplete,
-          membershipAudited: false,
-        });
-      } catch (e) {
-        json(res, 500, { error: e?.message || "Failed to load survey." });
+        json(res, 200, await surveyReader().txState(m[1].toLowerCase()));
+      } catch (error) {
+        surveyErrorResponse(res, error, "Failed to check the transaction.");
+      }
+      return;
+    }
+  }
+
+  // ── Surveys: one survey with its responses and informational tally ─────
+  {
+    const m = url.pathname.match(/^\/api\/surveys\/([0-9a-fA-F]{64})(?:\/(\d{1,5}))?$/);
+    if (req.method === "GET" && m) {
+      const key = `${m[1].toLowerCase()}:${Number(m[2] || 0)}`;
+      try {
+        const detail = await surveyReader().detail(key);
+        if (!detail) { json(res, 404, { error: "Survey not found." }); return; }
+        json(res, 200, detail);
+      } catch (error) {
+        surveyErrorResponse(res, error, "Failed to load survey.");
       }
       return;
     }
@@ -10578,40 +10295,33 @@ const server = http.createServer(async (req, res) => {
         blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
       ]);
       const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-      const parsed = metadata?.json_metadata || null;
-      const link = await cip179.parseGovernanceLink(parsed);
+      const link = await surveys.parseGovernanceLink(metadata?.json_metadata || null);
       if (!link.surveyRef) {
         json(res, 200, { linked: false, problems: link.problems });
         return;
       }
-      const { txId, index: surveyIndex } = link.surveyRef;
-      const surveyRef = `${txId}:${surveyIndex}`;
-      const index = await buildLabel17Index();
-      const survey = index.surveys.find((item) => item.surveyTxId === txId && item.surveyIndex === surveyIndex)
-        || await fetchSurveyByRef(txId, surveyIndex);
+      const surveyRef = `${link.surveyRef.txId}:${link.surveyRef.index}`;
+      const survey = await surveyReader().byRef(surveyRef);
       if (!survey) {
-        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked v5 survey is unavailable or has invalid owner proof." });
+        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey is not in the index (unavailable or invalid)." });
         return;
       }
       const expirationEpoch = Number(rawDetail?.expiration ?? NaN);
-      if (!Number.isFinite(expirationEpoch) || expirationEpoch !== Number(survey.details?.endEpoch)) {
+      if (!Number.isFinite(expirationEpoch) || expirationEpoch !== Number(survey.endEpoch)) {
         json(res, 200, { linked: true, available: false, surveyRef, problem: "The survey end epoch does not match the governance action expiry epoch." });
         return;
       }
-      if (index.cancelledRefs.has(surveyRef)) {
+      if (survey.lifecycle === "cancelled") {
         json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey has been cancelled." });
         return;
       }
-      if (!label17GovLinks.has(surveyRef)) label17GovLinks.set(surveyRef, new Set());
-      const links = label17GovLinks.get(surveyRef);
-      const wasKnown = links.has(proposalId);
-      links.add(proposalId);
-      // A newly discovered gov link changes mainnet survey linkage — force a
-      // rebuild of the mainnet index on next request.
-      if (!wasKnown) label17CacheFor("mainnet").fetchedAt = 0;
+      if (survey.lifecycle === "untalliable") {
+        json(res, 200, { linked: true, available: false, surveyRef, problem: "The linked survey has an invalid definition." });
+        return;
+      }
       json(res, 200, { linked: true, available: true, surveyRef, survey, proposalId, expirationEpoch });
     } catch (error) {
-      json(res, 500, { error: error?.message || "Failed to resolve the proposal survey." });
+      surveyErrorResponse(res, error, "Failed to resolve the proposal survey.");
     }
     return;
   }

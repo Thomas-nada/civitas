@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@evolution-sdk/evolution": "^0.5.9",
-    "cip-179": "^0.2.0"
+    "cardano-tessera-client": "^0.3.0",
+    "cip-179": "^0.5.0"
   }
 }

@@ -27,6 +27,7 @@ Civitas is built to make on-chain governance legible, verifiable, and decision-u
 - Supports historical "time travel" reads by snapshot file key.
 - Exposes sync status, backfill control, proposal metadata, and vote rationale APIs.
 - Frontend includes wallet-assisted on-chain vote delegation to selected DRep (via Mesh/CIP-30 wallet extension).
+- Surveys & Polls (CIP-179) are read from [Tessera](https://github.com/mpizenberg/Tessera), the reference CIP-179 index (`TESSERA_BACKEND_URL`, mainnet by default): the list, each survey's responses and Tessera's proof verdicts, governance links and final tally artifacts. Civitas draws an informational tally under CIP-179's own rules (DRep head count next to voting-power-weighted figures), answers through Tessera's `<tessera-respond>` form with the signed-in wallet, and still publishes and cancels surveys itself.
 - Sign in with a CIP-30/CIP-95 browser wallet (as DRep or delegator) or, for keys that never touch a browser, with `cardano-signer` on the command line (as DRep, SPO or CC member): the server issues a challenge, verifies the pasted signature and checks the identity on-chain.
 
 ## Runtime model
@@ -86,6 +87,10 @@ npm run test:e2e
 - `GET /api/vote-rationale?proposalId=<id>&voterId=<id>&voterRole=<drep|constitutional_committee>[&url=<anchor>]`
 - `POST /api/auth/challenge` — single-use challenge for cardano-signer sign-in
 - `POST /api/auth/verify` — verifies a cardano-signer Ed25519 signature and resolves the DRep / SPO / CC identity on-chain
+- `GET /api/surveys` — CIP-179 surveys (mainnet), read from the Tessera index
+- `GET /api/surveys/<txHash>/<index>` — one survey with its responses and informational tally
+- `GET /api/surveys/tx/<txHash>` — whether a response transaction has reached the index
+- `GET /api/proposal-survey?proposalId=<id>` — the survey a governance action's anchor links, if any
 
 ## Frontend routes
 
@@ -123,6 +128,7 @@ Network/sources:
 - `BLOCKFROST_API_KEY` (required for sync)
 - `BLOCKFROST_BASE_URL` (default `https://cardano-mainnet.blockfrost.io/api/v0`)
 - `KOIOS_BASE_URL` (default `https://api.koios.rest/api/v1`)
+- `TESSERA_BACKEND_URL` (default the mainnet Tessera backend) and `TESSERA_APP_URL` (for "Open on Tessera" links)
 - `KOIOS_API_KEY` (optional)
 
 HTTP:

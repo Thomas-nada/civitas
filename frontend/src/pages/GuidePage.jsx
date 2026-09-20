@@ -1626,7 +1626,7 @@ export default function GuidePage() {
 
             <h3>Before you start</h3>
             <ul>
-              <li>Connect a Cardano wallet (top-right corner). Connecting is free.</li>
+              <li>Sign in with a Cardano wallet (top-right corner). Signing in is free.</li>
               <li>Your wallet needs a small amount of ADA to cover the transaction fee when you publish — typically under 1 ADA.</li>
               <li>Your wallet address must match at least one of the roles you target (DRep, SPO, CC Member, or Stakeholder).</li>
             </ul>
@@ -1717,7 +1717,7 @@ export default function GuidePage() {
 
             <h3>Before you start</h3>
             <ul>
-              <li>Connect a Cardano wallet (top-right corner). Connecting is free.</li>
+              <li>Sign in with a Cardano wallet (top-right corner). Signing in is free.</li>
               <li>Your wallet needs a small amount of ADA to cover the transaction fee when you submit — typically under 1 ADA.</li>
               <li>Your wallet must expose a key for an eligible role. Browser wallets can normally prove DRep, Stakeholder, or Keyholder credentials; SPO and CC responses require tooling with those signing keys.</li>
               <li>The survey must still be within its active epoch.</li>
@@ -1726,33 +1726,33 @@ export default function GuidePage() {
             <h3>Step 1 — Find an active survey</h3>
             <p>
               Go to <strong>Surveys</strong> in the navigation bar.
-              The list shows all on-chain surveys.
-              Active surveys (within their end epoch) will accept new responses.
+              The list shows every survey the Tessera index holds (the reference CIP-179 index, mainnet).
+              Open surveys accept answers through their closing epoch, inclusive.
             </p>
 
             <h3>Step 2 — Open the survey</h3>
             <p>
               Click a survey to open its detail page.
-              You will see the questions, a list of existing responses, and a <strong>Submit Response</strong> tab.
+              You will see the informational tally (with the questions), the responses on chain, and an <strong>Answer</strong> tab.
             </p>
 
             <h3>Step 3 — Select your role</h3>
             <p>
-              In the response form, choose the role you are responding as.
-              Only roles the survey creator designated as eligible are available.
+              The answer form is Tessera's own CIP-179 form. It offers the roles the survey accepts that your wallet can prove:
+              stakeholder (stake key), keyholder (payment key) and, when you are signed in as a registered DRep with the DRep key, DRep.
             </p>
 
             <h3>Step 4 — Answer the questions</h3>
             <p>Work through each question in the form:</p>
             <ul>
               <li>Required questions must be answered before you can submit.</li>
-              <li>Optional questions show a <strong>Skip</strong> button — click it to dim and skip that question. Click again to un-skip.</li>
-              <li>Skipped questions are recorded as no-answer and do not count in result tallies.</li>
+              <li>Optional questions can be left unanswered; only the answers you give are recorded.</li>
+              <li>On a sealed survey the form encrypts your answers before they leave your browser; they stay unreadable until the survey's reveal time.</li>
             </ul>
 
             <h3>Step 5 — Submit your response</h3>
             <p>
-              Once all required questions are answered, click the submit button at the bottom of the form.
+              Once all required questions are answered, submit the form. Your wallet asks you to sign one transaction: your credential, role and answers are attached as label-17 metadata, and the wallet pays only the network fee. The page shows the transaction hash and updates once the index has read it, usually within a few minutes. You can answer again while the survey is open; the later answer replaces the earlier one.
             </p>
 
             <div className="wiki-table-wrap" style={{ marginBottom: "1rem" }}>

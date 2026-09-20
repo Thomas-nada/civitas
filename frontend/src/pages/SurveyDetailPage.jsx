@@ -1,1107 +1,361 @@
+// One CIP-179 survey, read from Tessera through /api/surveys: the record, its
+// responses, the informational tally, and the answering panel. Answering is
+// Tessera's own <tessera-respond> form; Civitas supplies the wallet, checks
+// the network, attaches the payload at label 17 and submits.
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useCurrentEpoch } from "../hooks/useCurrentEpoch";
-import { useSeoMeta } from "../hooks/useSeoMeta";
 import { Link, useParams } from "react-router-dom";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useSeoMeta } from "../hooks/useSeoMeta";
 import { WalletContext } from "../context/WalletContext";
-import { decodeAnswerItem, Role, validateResponse } from "cip-179";
-import { hexToBytes } from "cip-179/domain";
-import { decryptWithBeacon, fetchBeacon, unixTimeForRound } from "cip-179/tlock";
-import { buildAndSubmitSurveyResponse, buildAndSubmitSurveyCancellation, definitionFromDetails, getConnectedPaymentKeyHash, hashAnchorContent, metadatumCodec } from "../services/surveyTxService";
-import { hydrateSurveyPresentation } from "../services/surveyPresentationService";
-import { getSurveyNetwork, epochEndDate, explorerTxUrl } from "../services/surveyNetwork";
+import { deadlineLabel, explorerTxUrl, formatUnixDate } from "../services/surveyNetwork";
+import {
+  Role,
+  buildAndSubmitSurveyCancellation,
+  getConnectedPaymentKeyHash,
+  responderCredentials,
+  submitLabel17Payload
+} from "../services/surveyTxService";
+import { readableError } from "../lib/wallet/walletError";
+import { lifecycleLabel, participationLabel } from "../services/surveyPresentation";
+import SurveyBadges from "../components/survey/SurveyBadges";
+import SurveyTally from "../components/survey/SurveyTally";
+import TesseraRespond from "../components/survey/TesseraRespond";
 
-function fmtDate(ts) {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+const ROLE_COLORS = {
+  DRep: "var(--mint)",
+  SPO: "var(--amber)",
+  CC: "#a78bfa",
+  Stakeholder: "rgba(200,200,210,0.6)",
+  Keyholder: "rgba(200,200,210,0.6)"
+};
+
+const ROLE_NUMBERS = { DRep: Role.DRep, SPO: Role.SPO, CC: Role.CC, Stakeholder: Role.Stakeholder, Keyholder: Role.Keyholder };
+
+const EXCLUSION_LABELS = {
+  "after-deadline": "after the deadline",
+  invalid: "invalid",
+  unproven: "credential not proven",
+  superseded: "replaced by a later answer",
+  undecryptable: "did not reveal"
+};
+
+function shortHash(value, head = 10, tail = 6) {
+  const s = String(value || "");
+  return s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
-function fmtAda(value, opts = {}) {
-  const amount = Number(value || 0);
-  if (!Number.isFinite(amount)) return "—";
-  return `${amount.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: opts.compact ? 1 : 2,
-  })} ADA`;
+function RolePill({ role }) {
+  const color = ROLE_COLORS[role] || "rgba(200,200,210,0.5)";
+  return (
+    <span className="pill" style={{ background: `${color}22`, borderColor: `${color}88`, color }}>{role}</span>
+  );
 }
 
-function shortAddr(addr) {
-  if (!addr || addr.length < 16) return addr || "—";
-  return `${addr.slice(0, 10)}…${addr.slice(-8)}`;
-}
-
-// ── CIP-179 v5 method helpers ─────────────────────────────────────────────────
-
-function isSingleChoice(m)  { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:single-choice:"); }
-function isMultiSelect(m)   { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:multi-select:"); }
-function isRanking(m)       { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:ranking:"); }
-function isNumericRange(m)  { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:numeric-range:"); }
-function isPointsAlloc(m)   { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:points-allocation:"); }
-function isRating(m)        { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:rating:"); }
-function isCustom(m)        { return typeof m === "string" && m.startsWith("urn:cardano:poll-method:custom:"); }
-function isChoiceOrRank(m)  { return isSingleChoice(m) || isMultiSelect(m) || isRanking(m); }
-
-// Returns the stable v5 answer tag for a question's methodType.
-function getAnswerTag(methodType) {
-  if (isCustom(methodType))       return 0;
-  if (isSingleChoice(methodType)) return 1;
-  if (isMultiSelect(methodType))  return 2;
-  if (isRanking(methodType))      return 3;
-  if (isNumericRange(methodType)) return 4;
-  if (isPointsAlloc(methodType))  return 5;
-  if (isRating(methodType))       return 6;
+// Retries a survey that is not in the index yet (a just-published one).
+function PendingPoller({ onTick }) {
+  useEffect(() => {
+    const id = setInterval(onTick, 20_000);
+    return () => clearInterval(id);
+  }, [onTick]);
   return null;
 }
 
-const METHOD_LABELS = {
-  "urn:cardano:poll-method:single-choice:v2":     "Single choice",
-  "urn:cardano:poll-method:multi-select:v2":      "Multi-select",
-  "urn:cardano:poll-method:ranking:v1":           "Ranking",
-  "urn:cardano:poll-method:numeric-range:v2":     "Numeric range",
-  "urn:cardano:poll-method:points-allocation:v1": "Points allocation",
-  "urn:cardano:poll-method:rating:v1":            "Rating",
-  "urn:cardano:poll-method:custom:v1":            "Custom",
-};
+// ── Answering ────────────────────────────────────────────────────────────────
 
-function methodLabel(m) {
-  return METHOD_LABELS[m] ?? "Custom";
-}
+function RespondPanel({ survey, data, onSubmitted }) {
+  const wallet = useContext(WalletContext);
+  const walletApi = wallet?.walletApi;
+  const [credentials, setCredentials] = useState(null); // { responder, hashes } | null
+  const [credentialError, setCredentialError] = useState("");
+  const [record, setRecord] = useState(null);
+  const [status, setStatus] = useState({ kind: "idle" }); // idle | submitting | done | error
+  const [indexed, setIndexed] = useState(false);
 
-const ROLE_COLORS = {
-  DRep:        "var(--mint)",
-  SPO:         "var(--amber)",
-  CC:          "#a78bfa",
-  Stakeholder: "rgba(200,200,210,0.6)",
-  Keyholder:   "rgba(200,200,210,0.4)",
-};
+  const eligible = survey.eligibleRoles || [];
+  const isOpen = survey.lifecycle === "open";
 
-function getSurveyRoles(details) {
-  return Array.isArray(details?.eligibleRoles) ? details.eligibleRoles : [];
-}
-
-// ── Sealed response decryption ────────────────────────────────────────────────
-
-function normaliseRevealedAnswer(answer) {
-  const questionId = `q${answer.questionIndex}`;
-  switch (answer.type) {
-    case "custom": return { questionId, customValue: answer.value };
-    case "singleChoice": return { questionId, selection: [answer.optionIndex] };
-    case "multiSelect": return { questionId, selection: answer.optionIndices };
-    case "ranking": return { questionId, selection: answer.ranking };
-    case "numeric": return { questionId, numericValue: answer.value.toString() };
-    case "pointsAllocation": return { questionId, pointsAllocation: answer.allocations.map((a) => [a.optionIndex, a.points]) };
-    case "rating": return { questionId, ratings: answer.ratings.map((r) => [r.optionIndex, r.rating.toString()]) };
-    default: return null;
-  }
-}
-
-const ROLE_VALUES = {
-  DRep: Role.DRep,
-  SPO: Role.SPO,
-  CC: Role.CC,
-  Stakeholder: Role.Stakeholder,
-  Keyholder: Role.Keyholder,
-};
-
-function responseCredential(value) {
-  const [type, hash] = String(value || "").split(":");
-  if (!/^[0-9a-f]{56}$/i.test(hash || "")) throw new Error("invalid response credential");
-  return type === "script"
-    ? { type: "script", scriptHash: hexToBytes(hash) }
-    : type === "key"
-      ? { type: "key", keyHash: hexToBytes(hash) }
-      : (() => { throw new Error("invalid response credential type"); })();
-}
-
-async function decryptSealedResponses(responses, round, survey) {
-  const beacon = await fetchBeacon(round);
-  const definition = {
-    ...definitionFromDetails(survey.details),
-    submissionMode: { type: "public" },
-  };
-  const validByCredential = new Map();
-
-  const ordered = [...responses].sort((a, b) =>
-    Number(a.slot || 0) - Number(b.slot || 0)
-    || Number(a.txIndexInBlock || 0) - Number(b.txIndexInBlock || 0)
-    || Number(a.responseIndex || 0) - Number(b.responseIndex || 0)
-  );
-  for (const resp of ordered) {
-    if (!resp.sealedHexChunks?.length) continue;
-    try {
-      // Reassemble hex chunks → Uint8Array
-      const totalBytes = resp.sealedHexChunks.reduce((s, h) => s + h.length / 2, 0);
-      const allBytes = new Uint8Array(totalBytes);
-      let offset = 0;
-      for (const hex of resp.sealedHexChunks) {
-        for (let i = 0; i < hex.length; i += 2) {
-          allBytes[offset++] = parseInt(hex.slice(i, i + 2), 16);
-        }
-      }
-      const plaintext = await decryptWithBeacon(allBytes, beacon);
-      const metadatum = metadatumCodec.cborToMetadatum(plaintext);
-      if (!Array.isArray(metadatum)) throw new Error("decrypted answers are not a list");
-      const decodedAnswers = metadatum.map((item, index) => decodeAnswerItem(item, `answer[${index}]`));
-      const candidate = {
-        specVersion: 5,
-        surveyRef: { txId: hexToBytes(survey.surveyTxId), index: survey.surveyIndex },
-        role: ROLE_VALUES[resp.responderRole],
-        credential: responseCredential(resp.responseCredential),
-        answers: { type: "public", answers: decodedAnswers },
-      };
-      if (validateResponse(definition, candidate).length) continue;
-      const answers = decodedAnswers.map(normaliseRevealedAnswer).filter(Boolean);
-      validByCredential.set(
-        `${resp.responderRole}|${resp.responseCredential}`,
-        { ...resp, answers, sealedHexChunks: undefined },
-      );
-    } catch (e) {
-      console.warn("tlock decrypt failed for", resp.txId, e.message);
-    }
-  }
-  return [...validByCredential.values()];
-}
-
-function buildQuestionTallies(questions, responses) {
-  const totalResponses = responses.length;
-  return questions.map((q) => {
-    const allAnswers = responses.flatMap((r) =>
-      (r.answers || []).filter((a) => a.questionId === q.questionId)
-    );
-    const responseCount = allAnswers.length;
-    const base = {
-      questionId: q.questionId,
-      question: q.question,
-      methodType: q.methodType,
-      required: q.required ?? false,
-      weighted: false,
-      responseCount,
-      abstainCount: Math.max(0, totalResponses - responseCount),
-    };
-    if (isChoiceOrRank(q.methodType)) {
-      const counts = {};
-      for (const ans of allAnswers)
-        for (const sel of (ans.selection || []))
-          counts[sel] = (counts[sel] || 0) + 1;
-      return {
-        ...base,
-        optionTallies: (q.options || []).map((opt, i) => ({
-          index: i, label: opt, count: counts[i] || 0, weight: 0,
-          pct: responseCount > 0 ? Math.round(((counts[i] || 0) / responseCount) * 100) : 0,
-        })),
-      };
-    }
-    if (isNumericRange(q.methodType)) {
-      const nums = allAnswers.map((a) => Number(a.numericValue)).filter((v) => Number.isFinite(v));
-      return {
-        ...base,
-        numericTally: {
-          values: nums,
-          min: nums.length ? Math.min(...nums) : null,
-          max: nums.length ? Math.max(...nums) : null,
-          mean: nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null,
-          median: nums.length ? [...nums].sort((a, b) => a - b)[Math.floor(nums.length / 2)] : null,
-        },
-      };
-    }
-    if (isPointsAlloc(q.methodType)) {
-      const sums = {}; let total = 0;
-      for (const ans of allAnswers)
-        for (const alloc of (ans.pointsAllocation || [])) {
-          const [idx, pts] = Array.isArray(alloc) ? alloc : [alloc.optionIndex, alloc.points];
-          sums[idx] = (sums[idx] || 0) + Number(pts || 0);
-          total += Number(pts || 0);
-        }
-      return {
-        ...base,
-        pointsTally: (q.options || []).map((opt, i) => ({
-          index: i, label: opt, totalPoints: sums[i] || 0,
-          pct: total > 0 ? Math.round(((sums[i] || 0) / total) * 100) : 0,
-        })),
-      };
-    }
-    if (isRating(q.methodType)) {
-      const rd = {};
-      for (const ans of allAnswers)
-        for (const r of (ans.ratings || [])) {
-          const [idx, score] = Array.isArray(r) ? r : [r.optionIndex, r.score];
-          if (!rd[idx]) rd[idx] = { sum: 0, count: 0 };
-          rd[idx].sum += Number(score || 0);
-          rd[idx].count++;
-        }
-      return {
-        ...base,
-        ratingTally: (q.options || []).map((opt, i) => ({
-          index: i, label: opt,
-          meanScore: rd[i] ? rd[i].sum / rd[i].count : null,
-          count: rd[i]?.count || 0,
-        })),
-      };
-    }
-    return { ...base, customTexts: allAnswers.map((a) => a.customValue).filter((v) => v != null) };
-  });
-}
-
-function buildClientTally(questions, responses, roles) {
-  const roleTallies = roles.map((role) => {
-    const roleResponses = responses.filter((response) => response.responderRole === role);
-    return {
-      role,
-      weighting: "CredentialBased",
-      responses: roleResponses.length,
-      totalWeight: 0,
-      questionTallies: buildQuestionTallies(questions, roleResponses),
-    };
-  });
-  return {
-    totalResponses: responses.length,
-    totalWeight: 0,
-    roleTallies,
-    questionTallies: roleTallies.find((row) => row.responses > 0)?.questionTallies ?? [],
-  };
-}
-
-// ── Pending poller ───────────────────────────────────────────────────────────
-
-function PendingPoller({ onFound }) {
-  const [attempts, setAttempts] = useState(0);
+  // The wallet's credentials, narrowed to the roles this survey accepts. A
+  // DRep credential is offered only to a registered DRep signed in with the
+  // DRep key, so an answer is never recorded against a DRep the session did
+  // not prove.
   useEffect(() => {
-    const id = setInterval(() => {
-      setAttempts((n) => n + 1);
-      onFound();
-    }, 10_000);
-    return () => clearInterval(id);
-  }, [onFound]);
-  return (
-    <p className="muted" style={{ fontSize: "0.82rem", marginTop: "0.5rem" }}>
-      Checking… (attempt {attempts + 1})
-    </p>
-  );
-}
+    if (!walletApi) { setCredentials(null); return undefined; }
+    let alive = true;
+    setCredentialError("");
+    responderCredentials(walletApi, { includeDrep: Boolean(wallet?.actingAsDrep) })
+      .then(({ responder, hashes }) => {
+        if (!alive) return;
+        const allowed = new Set(eligible.map((name) => ROLE_NUMBERS[name]).filter((n) => n != null));
+        const narrowed = {};
+        const narrowedHashes = {};
+        for (const [role, credential] of Object.entries(responder)) {
+          if (allowed.has(Number(role))) { narrowed[role] = credential; narrowedHashes[role] = hashes[role]; }
+        }
+        setCredentials({ responder: narrowed, hashes: narrowedHashes });
+      })
+      .catch((e) => { if (alive) setCredentialError(readableError(e, "Could not read the wallet's credentials.")); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletApi, wallet?.actingAsDrep, survey.key]);
 
-// ── Tally charts ────────────────────────────────────────────────────────────
+  // The stored record is the wire form cip-179 wrote; the widget wants it
+  // decoded (bytes, bigints) so it signs the record as it is on chain.
+  useEffect(() => {
+    let alive = true;
+    setRecord(null);
+    if (!survey.record) return undefined;
+    import("cip-179/tally")
+      .then(({ decodeSurveyRecord }) => { if (alive) setRecord(decodeSurveyRecord(survey.record)); })
+      .catch(() => { if (alive) setCredentialError("The survey definition could not be decoded for the form."); });
+    return () => { alive = false; };
+  }, [survey.record]);
 
-function OptionTallyChart({ optionTallies, totalResponses, totalWeight = 0, weighted = false }) {
-  if (!optionTallies || optionTallies.length === 0) return <p className="muted">No responses yet.</p>;
-  const metricKey = weighted ? "weight" : "count";
-  const max = Math.max(...optionTallies.map((o) => Number(o?.[metricKey] || 0)), 1);
-  const totalMetric = weighted ? totalWeight : totalResponses;
-  return (
-    <div className="option-tally-list">
-      {optionTallies.map((opt) => (
-        <div key={opt.index} className="option-tally-row">
-          <span className="option-tally-label">{opt.label}</span>
-          <div className="option-tally-bar-wrap">
-            <div className="option-tally-bar" style={{ width: `${((Number(opt?.[metricKey] || 0) / max) * 100)}%` }} />
-          </div>
-          <div className="option-tally-stat">
-            <span className="option-tally-count">{weighted ? fmtAda(opt.weight, { compact: true }) : opt.count}</span>
-            {weighted ? <span className="muted option-tally-subcount">{opt.count} responses</span> : null}
-          </div>
-          <span className="muted option-tally-percent">
-            {totalMetric > 0 ? `${((Number(opt?.[metricKey] || 0) / totalMetric) * 100).toFixed(1)}%` : "—"}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PointsAllocTallyChart({ pointsTally }) {
-  if (!pointsTally || pointsTally.length === 0) return <p className="muted">No responses yet.</p>;
-  const total = pointsTally.reduce((s, o) => s + o.totalPoints, 0);
-  const max = Math.max(...pointsTally.map((o) => o.totalPoints), 1);
-  return (
-    <div className="option-tally-list">
-      {pointsTally.map((opt) => (
-        <div key={opt.index} className="option-tally-row">
-          <span className="option-tally-label">{opt.label}</span>
-          <div className="option-tally-bar-wrap">
-            <div className="option-tally-bar" style={{ width: `${(opt.totalPoints / max) * 100}%` }} />
-          </div>
-          <div className="option-tally-stat">
-            <span className="option-tally-count">{opt.totalPoints} pts</span>
-          </div>
-          <span className="muted option-tally-percent">
-            {total > 0 ? `${((opt.totalPoints / total) * 100).toFixed(1)}%` : "—"}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RatingTallyChart({ ratingTally }) {
-  if (!ratingTally || ratingTally.length === 0) return <p className="muted">No responses yet.</p>;
-  const maxScore = Math.max(...ratingTally.map((o) => o.meanScore ?? 0), 1);
-  return (
-    <div className="option-tally-list">
-      {ratingTally.map((opt) => (
-        <div key={opt.index} className="option-tally-row">
-          <span className="option-tally-label">{opt.label}</span>
-          <div className="option-tally-bar-wrap">
-            <div className="option-tally-bar" style={{ width: `${((opt.meanScore ?? 0) / maxScore) * 100}%` }} />
-          </div>
-          <div className="option-tally-stat">
-            <span className="option-tally-count">{opt.meanScore != null ? opt.meanScore.toFixed(2) : "—"}</span>
-            <span className="muted option-tally-subcount">{opt.count} ratings</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function NumericTallyChart({ numericTally }) {
-  if (!numericTally || numericTally.values.length === 0) return <p className="muted">No responses yet.</p>;
-  const weighted = Boolean(numericTally.weighted);
-  const barKey = weighted ? "weight" : "count";
-  return (
-    <div>
-      <div className="numeric-tally-stats">
-        <span>{weighted ? "Weighted mean" : "Mean"}: <strong>{numericTally.mean.toFixed(2)}</strong></span>
-        <span>Median: <strong>{numericTally.median.toFixed(2)}</strong></span>
-        <span>Min: <strong>{numericTally.min}</strong></span>
-        <span>Max: <strong>{numericTally.max}</strong></span>
-        <span>Responses: <strong>{numericTally.values.length}</strong></span>
-        {weighted ? <span>Counted stake: <strong>{fmtAda(numericTally.totalWeight, { compact: true })}</strong></span> : null}
-      </div>
-      {numericTally.bins?.length > 0 && (
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={numericTally.bins} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-            <XAxis dataKey="range" tick={{ fill: "rgba(200,200,210,0.75)", fontSize: 10 }} />
-            <YAxis allowDecimals={weighted} tick={{ fill: "rgba(200,200,210,0.75)", fontSize: 10 }} />
-            <Tooltip
-              contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-              labelStyle={{ color: "rgba(200,200,210,0.9)" }}
-              itemStyle={{ color: "rgba(200,200,210,0.85)" }}
-              formatter={(value) => weighted ? fmtAda(value, { compact: true }) : value}
-            />
-            <Bar dataKey={barKey} fill="var(--mint)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-}
-
-function QuestionTallyCard({ qt, totalResponses, totalWeight }) {
-  const label = methodLabel(qt.methodType);
-  const showOption  = isChoiceOrRank(qt.methodType);
-  const showPoints  = isPointsAlloc(qt.methodType);
-  const showRating  = isRating(qt.methodType);
-  const showNumeric = isNumericRange(qt.methodType);
-  return (
-    <div className="panel question-tally-card">
-      <div className="question-tally-header">
-        <p className="muted question-tally-method">{label}</p>
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-          {qt.required ? (
-            <span className="question-tally-weight-badge" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444", borderColor: "rgba(239,68,68,0.3)" }}>Required</span>
-          ) : null}
-          {qt.weighted ? <span className="question-tally-weight-badge">Weighted by stake</span> : null}
-        </div>
-      </div>
-      <h4>{qt.question}</h4>
-      {showOption  ? <OptionTallyChart optionTallies={qt.optionTallies} totalResponses={totalResponses} totalWeight={totalWeight} weighted={qt.weighted} /> : null}
-      {showPoints  ? <PointsAllocTallyChart pointsTally={qt.pointsTally} /> : null}
-      {showRating  ? <RatingTallyChart ratingTally={qt.ratingTally} /> : null}
-      {showNumeric ? <NumericTallyChart numericTally={qt.numericTally} /> : null}
-      {qt.customTexts?.length > 0 ? (
-        <ul className="custom-text-list">
-          {qt.customTexts.map((t, i) => <li key={i}>{t}</li>)}
-        </ul>
-      ) : null}
-      {qt.abstainCount > 0 ? (
-        <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem" }}>
-          {qt.abstainCount} abstain{qt.abstainCount !== 1 ? "s" : ""}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-// ── Response form ────────────────────────────────────────────────────────────
-
-function PointsAllocInput({ question, value, onChange }) {
-  const budget = question.budget ?? 100;
-  const options = question.options ?? [];
-  const allocMap = useMemo(() => {
-    const m = {};
-    for (const [idx, pts] of (value?.pointsAllocation ?? [])) m[idx] = pts;
-    return m;
-  }, [value]);
-  const allocated = Object.values(allocMap).reduce((s, v) => s + Number(v || 0), 0);
-  const remaining = budget - allocated;
-
-  function setPoints(idx, pts) {
-    const next = { ...allocMap, [idx]: Math.max(0, Number(pts)) };
-    const tuples = Object.entries(next)
-      .filter(([, v]) => Number(v) > 0)
-      .map(([k, v]) => [Number(k), Number(v)]);
-    onChange({ pointsAllocation: tuples });
-  }
-
-  return (
-    <div className="question-input-points">
-      <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.4rem" }}>
-        Budget: {budget} points — <strong style={{ color: remaining < 0 ? "#ef4444" : "inherit" }}>{remaining} remaining</strong>
-      </p>
-      {options.map((opt, idx) => (
-        <div key={idx} className="points-alloc-row">
-          <span className="points-alloc-label">{opt}</span>
-          <input
-            type="number"
-            min={0}
-            max={budget}
-            value={allocMap[idx] ?? 0}
-            onChange={(e) => setPoints(idx, e.target.value)}
-            style={{ width: "80px" }}
-          />
-          <span className="muted" style={{ fontSize: "0.78rem" }}>pts</span>
-        </div>
-      ))}
-      {remaining < 0 ? (
-        <p style={{ color: "#ef4444", fontSize: "0.82rem", marginTop: "0.3rem" }}>
-          Over budget by {Math.abs(remaining)} points.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function RatingInput({ question, value, onChange }) {
-  const [minR, maxR] = question.ratingScale ?? [1, 5];
-  const ratingLabels = question.ratingLabels ?? [];
-  const options = question.options ?? [];
-  const ratingsMap = useMemo(() => {
-    const m = {};
-    for (const [idx, score] of (value?.ratings ?? [])) m[idx] = score;
-    return m;
-  }, [value]);
-
-  function setScore(idx, score) {
-    const next = { ...ratingsMap, [idx]: score };
-    const tuples = Object.entries(next).map(([k, v]) => [Number(k), v]);
-    onChange({ ratings: tuples });
-  }
-
-  const safeRange = Number.isSafeInteger(Number(minR))
-    && Number.isSafeInteger(Number(maxR))
-    && Number(maxR) - Number(minR) <= 1000;
-
-  return (
-    <div className="question-input-rating">
-      {options.map((opt, idx) => {
-        const score = ratingsMap[idx] ?? minR;
-        return (
-          <div key={idx} className="rating-row">
-            <span className="rating-label">{opt}</span>
-            <input
-              type={safeRange ? "range" : "number"}
-              min={minR}
-              max={maxR}
-              step={1}
-              value={score}
-              onChange={(e) => setScore(idx, e.target.value)}
-              className="survey-range-input rating-range"
-            />
-            <strong className="rating-value">{ratingLabels[score] || score}</strong>
-          </div>
-        );
-      })}
-      <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>
-        Scale: {ratingLabels.length ? ratingLabels.join(" – ") : `${minR}–${maxR}`}
-      </p>
-    </div>
-  );
-}
-
-function CustomInput({ question, value, onChange }) {
-  if (question.customTextSupported === false) {
-    return <p className="vote-notice">{question.customSchemaError || "This custom answer schema is not supported by Civitas."}</p>;
-  }
-  return (
-    <div className="question-input-custom">
-      {question.contentAnchor?.uri ? (
-        <a className="ext-link" href={question.contentAnchor.uri} target="_blank" rel="noreferrer"
-          style={{ fontSize: "0.8rem", display: "inline-block", marginBottom: "8px" }}>
-          Reference for this question ↗
-        </a>
-      ) : null}
-      <textarea
-        className="cs-text-input"
-        rows={3}
-        placeholder="Type your answer…"
-        value={value?.customValue ?? ""}
-        onChange={(e) => onChange({ customValue: e.target.value })}
-        style={{ width: "100%", resize: "vertical" }}
-      />
-    </div>
-  );
-}
-
-function QuestionInput({ question, value, onChange }) {
-  const m = question.methodType;
-  const isChoice  = isSingleChoice(m) || isMultiSelect(m);
-  const isRank    = isRanking(m);
-  const isMulti   = isMultiSelect(m);
-  const isNumeric = isNumericRange(m);
-  const nc = question.numericConstraints ?? { minValue: 0, maxValue: 100 };
-  const selection = value?.selection ?? [];
-  const maxSelections = Number(question.maxSelections || 0) || null;
-  const maxRanked = Number(question.maxRanked || 0) || null;
-
-  function handleCheckbox(idx, checked) {
-    if (checked && maxSelections && selection.length >= maxSelections && !selection.includes(idx)) return;
-    const next = checked ? [...selection, idx] : selection.filter((i) => i !== idx);
-    onChange({ selection: next });
-  }
-
-  function handleRankToggle(idx) {
-    if (selection.includes(idx)) {
-      onChange({ selection: selection.filter((i) => i !== idx) });
-    } else if (!maxRanked || selection.length < maxRanked) {
-      onChange({ selection: [...selection, idx] });
-    }
-  }
-
-  if (isChoice) {
-    return (
-      <div className="question-input-options">
-        {(question.options ?? []).map((opt, idx) => (
-          <label
-            key={idx}
-            className={`response-option${selection.includes(idx) ? " selected" : ""}${isMulti && maxSelections && selection.length >= maxSelections && !selection.includes(idx) ? " disabled" : ""}`}
-          >
-            <input
-              type={isMulti ? "checkbox" : "radio"}
-              name={`q_${question.questionId}`}
-              checked={isMulti ? selection.includes(idx) : selection[0] === idx}
-              disabled={isMulti && maxSelections && selection.length >= maxSelections && !selection.includes(idx)}
-              onChange={(e) => {
-                if (isMulti) handleCheckbox(idx, e.target.checked);
-                else onChange({ selection: [idx] });
-              }}
-            />
-            <span className={`response-option-indicator${selection.includes(idx) ? " selected" : ""}`}>
-              {isMulti ? (selection.includes(idx) ? "✓" : "+") : ""}
-            </span>
-            <span className="response-option-text">{opt}</span>
-          </label>
-        ))}
-      </div>
-    );
-  }
-
-  if (isRank) {
-    return (
-      <div className="question-input-options">
-        {(question.options ?? []).map((opt, idx) => {
-          const rank = selection.indexOf(idx);
-          const ranked = rank !== -1;
-          const disabled = !ranked && maxRanked && selection.length >= maxRanked;
-          return (
-            <label
-              key={idx}
-              className={`response-option${ranked ? " selected" : ""}${disabled ? " disabled" : ""}`}
-              onClick={() => !disabled && handleRankToggle(idx)}
-              style={{ cursor: disabled ? "not-allowed" : "pointer" }}
-            >
-              <span className={`response-option-indicator${ranked ? " selected" : ""}`}>
-                {ranked ? rank + 1 : "+"}
-              </span>
-              <span className="response-option-text">{opt}</span>
-            </label>
-          );
-        })}
-        {selection.length > 0 ? (
-          <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>
-            Ranked order: {selection.map((i) => question.options?.[i]).join(" → ")}
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (isNumeric) {
-    const numVal = value?.numericValue ?? nc.minValue;
-    return (
-      <div className="question-input-numeric">
-        <div className="numeric-value-display">
-          <strong>{numVal}</strong>
-          <span className="muted">Selected value</span>
-        </div>
-        <input
-          className="survey-range-input"
-          type="range"
-          min={nc.minValue}
-          max={nc.maxValue}
-          step={nc.step ?? 1}
-          value={numVal}
-          onChange={(e) => onChange({ numericValue: e.target.value })}
-        />
-        <div className="numeric-range-scale">
-          <span>{nc.minValue}</span>
-          <span>Range</span>
-          <span>{nc.maxValue}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (isPointsAlloc(m)) {
-    return <PointsAllocInput question={question} value={value} onChange={onChange} />;
-  }
-
-  if (isRating(m)) {
-    return <RatingInput question={question} value={value} onChange={onChange} />;
-  }
-
-  return <CustomInput question={question} value={value} onChange={onChange} />;
-}
-
-function ResponseForm({ survey, isActive, onSubmitted }) {
-  const { walletApi, walletDrep, walletRewardAddress } = useContext(WalletContext);
-  const isSealed = Boolean(survey.details?.isTimelocked);
-  const roles = getSurveyRoles(survey.details);
-  const claimableRoles = useMemo(() => roles.filter((role) => (
-    role === "Keyholder" ||
-    (role === "DRep" && walletDrep) ||
-    (role === "Stakeholder" && walletRewardAddress)
-  )), [roles, walletDrep, walletRewardAddress]);
-
-  const defaultRole = useMemo(() => {
-    if (walletDrep && claimableRoles.includes("DRep")) return "DRep";
-    return claimableRoles[0] ?? "";
-  }, [walletDrep, claimableRoles]);
-
-  const [responderRole, setResponderRole] = useState(defaultRole);
-  const [answers, setAnswers] = useState({});
-  const [skipped, setSkipped] = useState({});
-  const [rationaleUrl, setRationaleUrl] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const questions = survey.details?.questions ?? [];
-  const answeredCount = questions.filter((q) => {
-    const answer = answers[q.questionId];
-    const hasSelection = Array.isArray(answer?.selection)
-      && (answer.selection.length > 0 || isMultiSelect(q.methodType));
-    const hasCustom = answer?.customValue != null
-      && !(typeof answer.customValue === "string" && answer.customValue.trim() === "");
-    return hasSelection
-      || answer?.numericValue != null
-      || hasCustom
-      || answer?.pointsAllocation?.length > 0
-      || answer?.ratings?.length > 0;
-  }).length;
-
-  const handleAnswer = useCallback((questionId, val) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: val }));
-  }, []);
-
-  function toggleSkip(questionId) {
-    setSkipped((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setSubmitError("");
-
-    const answerTuples = questions.flatMap((q, questionIndex) => {
-      const answer = answers[q.questionId];
-      if (!answer) return [];
-      const tag = getAnswerTag(q.methodType);
-      if (tag === null) return [];
-
-      if (isSingleChoice(q.methodType)) {
-        if (!answer.selection?.length) return [];
-        return [[tag, questionIndex, answer.selection[0]]];
+  // Once submitted, watch the index until the transaction is picked up.
+  useEffect(() => {
+    if (status.kind !== "done" || indexed) return undefined;
+    let alive = true;
+    let tries = 0;
+    const tick = async () => {
+      tries += 1;
+      try {
+        const res = await fetch(`/api/surveys/tx/${status.txHash}`);
+        const state = await res.json();
+        if (alive && state?.indexed) { setIndexed(true); onSubmitted?.(); }
+      } catch {
+        // Try again on the next tick.
       }
-      if (isMultiSelect(q.methodType)) {
-        if (!Array.isArray(answer.selection)) return [];
-        return [[tag, questionIndex, answer.selection]];
-      }
-      if (isRanking(q.methodType)) {
-        if (!answer.selection?.length) return [];
-        return [[tag, questionIndex, answer.selection]];
-      }
-      if (isNumericRange(q.methodType)) {
-        if (answer.numericValue == null) return [];
-        return [[tag, questionIndex, answer.numericValue]];
-      }
-      if (isPointsAlloc(q.methodType)) {
-        if (!answer.pointsAllocation?.length) return [];
-        return [[tag, questionIndex, answer.pointsAllocation]];
-      }
-      if (isRating(q.methodType)) {
-        if (!answer.ratings?.length) return [];
-        return [[tag, questionIndex, answer.ratings]];
-      }
-      if (isCustom(q.methodType)) {
-        const text = typeof answer.customValue === "string" ? answer.customValue.trim() : answer.customValue;
-        if (text == null || text === "") return [];
-        return [[tag, questionIndex, text]];
-      }
-      return [];
-    });
+    };
+    const id = setInterval(() => { if (tries < 45) tick(); }, 20_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [status, indexed, onSubmitted]);
 
-    if (answerTuples.length === 0) {
-      setSubmitError("Please answer at least one question.");
-      return;
-    }
-    setSubmitting(true);
+  const priorAnswers = useMemo(() => {
+    if (!credentials) return [];
+    const mine = new Set(Object.values(credentials.hashes));
+    return (data?.responses || []).filter((r) => mine.has(r.credentialHash));
+  }, [credentials, data]);
+
+  const onResponse = useCallback(async (result) => {
+    if (!walletApi || status.kind === "submitting") return;
+    setStatus({ kind: "submitting" });
     try {
-      const surveyIndex = survey.surveyIndex ?? 0;
-      const sealOpts = isSealed && survey.details?.drandRound
-        ? { drandRound: survey.details.drandRound, padding: survey.details.padding ?? 256 }
-        : undefined;
-      const url = rationaleUrl.trim();
-      const rationale = url ? { url, hash: await hashAnchorContent(url) } : undefined;
-      const result = await buildAndSubmitSurveyResponse(walletApi, survey.surveyTxId, surveyIndex, responderRole, answerTuples, sealOpts, rationale, survey.details);
-      setSubmitted(true);
-      onSubmitted?.(result.txId);
-    } catch (err) {
-      setSubmitError(err?.message || "Transaction failed. Please try again.");
-    } finally {
-      setSubmitting(false);
+      const { bytesToHex } = await import("cip-179/domain");
+      const signerHashes = (result.proveCredentials || [])
+        .filter((p) => p.credential?.type === "key")
+        .map((p) => bytesToHex(p.credential.keyHash));
+      const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes);
+      setStatus({ kind: "done", txHash });
+    } catch (e) {
+      setStatus({ kind: "error", message: readableError(e, "The transaction could not be submitted.") });
     }
-  }
+  }, [walletApi, status.kind]);
 
-  if (!walletApi) return null;
-  if (!isActive) return <p className="muted" style={{ marginTop: "16px" }}>This survey has ended.</p>;
-  if (submitted) {
+  if (!walletApi) {
     return (
-      <div className="sq-responded-banner" style={{ marginTop: "16px" }}>
-        <div className="sq-responded-check">✓</div>
-        <div>
-          <div className="sq-responded-title">Response submitted!</div>
-          <div className="sq-responded-sub">It will appear in results once confirmed on-chain.</div>
-        </div>
-      </div>
+      <section className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
+        <h2 style={{ marginTop: 0 }}>{wallet?.isCliSession ? "A browser wallet is needed to answer" : "Sign in with a wallet to answer"}</h2>
+        <p className="muted" style={{ maxWidth: "460px", margin: "0 auto 1rem" }}>
+          {wallet?.isCliSession
+            ? "You are signed in with cardano-signer, which cannot sign a browser transaction. Connect a wallet that holds an eligible credential, or answer from Tessera with your own tooling."
+            : `Answering records your answers on chain as one small transaction (you pay the network fee only). Your wallet must hold a credential this survey accepts: ${eligible.join(", ") || "—"}. Use Sign in in the top bar.`}
+        </p>
+        {survey.tesseraUrl ? (
+          <a className="ext-link" href={survey.tesseraUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.82rem" }}>Open on Tessera ↗</a>
+        ) : null}
+      </section>
     );
   }
 
+  const roles = credentials ? Object.keys(credentials.responder).map((n) => Object.keys(ROLE_NUMBERS).find((name) => ROLE_NUMBERS[name] === Number(n))) : [];
+  const disclosure = survey.sealed
+    ? "Your answers stay encrypted until the survey's reveal time, but your credential and your role are public on chain, permanently."
+    : "Your credential, your role and your answers go on chain publicly and permanently.";
+
   return (
-    <form onSubmit={handleSubmit}>
-      <div style={{ marginTop: "12px", marginBottom: "4px" }}>
-        <Link
-          to="/guide?section=tool-survey-respond"
-          className="inline-link"
-          style={{ fontSize: "0.78rem" }}
-        >
-          How to respond to a survey →
-        </Link>
-      </div>
-      {/* Role selector as chip buttons */}
-      <div style={{ marginTop: "16px" }}>
-        <div className="sq-meta-cell-label" style={{ marginBottom: "8px" }}>Responding as</div>
-        <div className="sq-role-select-row">
-          {claimableRoles.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`sq-role-select-btn${responderRole === r ? " selected" : ""}`}
-              onClick={() => setResponderRole(r)}
-            >
-              <span style={{
-                width: 7, height: 7, borderRadius: "50%",
-                background: ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)",
-                display: "inline-block", flex: "0 0 auto",
-              }} />
-              {r}
-            </button>
-          ))}
-        </div>
-        {!claimableRoles.length ? (
-          <p className="muted" style={{ marginTop: "8px" }}>
-            This wallet cannot prove any of the survey's eligible roles.
-          </p>
-        ) : null}
-      </div>
-
-      {/* Question cards */}
-      {questions.map((q, index) => {
-        const isSkipped = Boolean(skipped[q.questionId]);
-        return (
-          <div key={q.questionId} className="sq-qcard">
-            <div className="sq-qcard-header">
-              <div className="sq-qcard-left">
-                <span className="sq-qbadge">Q{index + 1}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="sq-qcard-meta-row">
-                    <span className="sq-qtype-label">{methodLabel(q.methodType)}</span>
-                    {q.required ? <span className="sq-required-badge">Required</span> : null}
-                  </div>
-                  <p className="sq-qprompt">{q.question}</p>
-                </div>
-              </div>
-              {!q.required ? (
-                <button
-                  type="button"
-                  className={`sq-skip-btn${isSkipped ? " skipped" : ""}`}
-                  onClick={() => toggleSkip(q.questionId)}
-                >
-                  {isSkipped ? "Unskip" : "Skip"}
-                </button>
-              ) : null}
-            </div>
-
-            <div className={`sq-qbody${isSkipped ? " skipped" : ""}`}>
-              {isMultiSelect(q.methodType) ? (
-                  <p className="sq-qhint">
-                    {q.minSelections > 0
-                      ? `Select ${q.minSelections}–${q.maxSelections ?? "∞"}.`
-                      : `Select up to ${q.maxSelections ?? "∞"}.`}
-                    {" "}Currently selected: {answers[q.questionId]?.selection?.length ?? 0}
-                  </p>
-                ) : null}
-                {isRanking(q.methodType) ? (
-                  <p className="sq-qhint">
-                    Click options in your preferred order (most preferred first).
-                    {q.maxRanked ? ` Rank up to ${q.maxRanked}.` : ""}
-                    {q.minRanked > 0 ? ` At least ${q.minRanked} required.` : ""}
-                  </p>
-                ) : null}
-                {isNumericRange(q.methodType) ? (
-                  <p className="sq-qhint">
-                    Move the slider to choose a value between{" "}
-                    {q.numericConstraints?.minValue ?? 0} and {q.numericConstraints?.maxValue ?? 100}.
-                  </p>
-                ) : null}
-                {isPointsAlloc(q.methodType) ? (
-                  <p className="sq-qhint">Distribute {q.budget ?? 100} points among the options below.</p>
-                ) : null}
-                {isRating(q.methodType) ? (
-                  <p className="sq-qhint">
-                    Rate each option on a scale of {q.ratingScale?.[0] ?? 1}–{q.ratingScale?.[1] ?? 5}.
-                  </p>
-                ) : null}
-                <QuestionInput
-                  question={q}
-                  value={answers[q.questionId]}
-                  onChange={(val) => handleAnswer(q.questionId, val)}
-                />
-              </div>
-          </div>
-        );
-      })}
-
-      {/* Optional voter rationale */}
-      <div className="sq-qcard" style={{ marginTop: "12px" }}>
-        <div className="sq-qcard-meta-row" style={{ marginBottom: "6px" }}>
-          <span className="sq-qtype-label">Rationale (optional)</span>
-        </div>
-        <p className="sq-qhint" style={{ marginTop: 0 }}>
-          Link to a document explaining your answer (e.g. a forum post or IPFS file). Recorded on-chain with your response.
-        </p>
-        <input
-          type="url"
-          className="cs-text-input"
-          placeholder="https://… or ipfs://…"
-          value={rationaleUrl}
-          onChange={(e) => setRationaleUrl(e.target.value)}
-          style={{ width: "100%" }}
-        />
-      </div>
-
-      {submitError ? (
-        <p style={{ marginTop: "14px", color: "var(--rose)", fontSize: "0.84rem" }}>{submitError}</p>
+    <div className="svy-respond">
+      {status.kind === "done" ? (
+        <section className="panel svy-success" style={{ padding: "1rem 1.1rem" }}>
+          <strong>Answer submitted.</strong>
+          <span className="muted">
+            {indexed
+              ? "The index has picked it up; the figures on this page now include it."
+              : "The figures on this page update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
+          </span>
+          <span className="mono" style={{ fontSize: "0.8rem" }}>
+            Transaction: <a className="ext-link" href={explorerTxUrl(status.txHash)} target="_blank" rel="noreferrer">{status.txHash}</a>
+          </span>
+        </section>
       ) : null}
 
-      {/* Sticky submit bar */}
-      <div className="sq-sticky-bar">
-        <div className="sq-sticky-bar-inner">
-          <div style={{ flex: 1 }}>
-            <div className="sq-sticky-bar-label">{answeredCount} of {questions.length} answered</div>
-            <div className="sq-sticky-bar-sub">Responding as {responderRole}</div>
-            {isSealed ? (
-              <div className="sq-sticky-bar-sealed">
-                <span>◆</span>
-                <span>sealed survey · responses visible at reveal</span>
-              </div>
-            ) : null}
-          </div>
-          <button type="submit" className="btn-primary" disabled={submitting || !responderRole} style={{ whiteSpace: "nowrap" }}>
-            {submitting ? "Submitting…" : isSealed ? "Seal & Submit →" : "Submit Response"}
-          </button>
-        </div>
-      </div>
-    </form>
+      {status.kind !== "done" ? (
+        <section className="panel" style={{ padding: "1rem 1.1rem" }}>
+          <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem" }}>Answer this survey</h2>
+          {!isOpen ? (
+            <p className="muted svy-respond-note">This survey is {lifecycleLabel(survey.lifecycle).toLowerCase()}; it no longer accepts answers.</p>
+          ) : null}
+          <p className="muted svy-respond-note">
+            Answering as <strong>{wallet.walletName}</strong>
+            {roles.length ? <> with your {roles.join(" / ")} credential{roles.length > 1 ? "s" : ""}.</> : "."}{" "}
+            {disclosure} The wallet pays only the network fee.
+          </p>
+          {eligible.includes("DRep") && !wallet.actingAsDrep ? (
+            <p className="muted svy-respond-note">
+              To answer as a DRep, sign in as a DRep (a registered DRep with the DRep key). Signed in as {wallet.roleLabel}, this wallet answers with its stake or payment credential where the survey allows it.
+            </p>
+          ) : null}
+          {priorAnswers.length ? (
+            <p className="muted svy-respond-note">
+              You already answered this survey ({priorAnswers.length === 1 ? "1 response" : `${priorAnswers.length} responses`} on chain). A new answer replaces the earlier one in full and costs another network fee.
+            </p>
+          ) : null}
+          {credentialError ? <p className="vote-error">{credentialError}</p> : null}
+          {credentials && Object.keys(credentials.responder).length === 0 ? (
+            <p className="vote-notice">
+              This wallet holds no credential this survey accepts ({eligible.join(", ")}). {eligible.includes("DRep") && !wallet.actingAsDrep ? "Sign in as a DRep to answer with your DRep key." : ""}
+            </p>
+          ) : null}
+          {status.kind === "submitting" ? <p className="muted svy-respond-note">Awaiting wallet signature…</p> : null}
+          {status.kind === "error" ? (
+            <p className="vote-error">{status.message} <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>Try again</button></p>
+          ) : null}
+          {isOpen && record && credentials && Object.keys(credentials.responder).length > 0 ? (
+            <TesseraRespond
+              definition={record.definition}
+              surveyRef={record.ref}
+              responder={credentials.responder}
+              tipEpoch={data?.currentEpoch}
+              cancelled={survey.lifecycle === "cancelled"}
+              onResponse={onResponse}
+              onError={(e) => setStatus({ kind: "error", message: e.message })}
+            />
+          ) : null}
+        </section>
+      ) : null}
+    </div>
   );
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// ── Page ────────────────────────────────────────────────────────────────────
 
 export default function SurveyDetailPage() {
   const { txHash, surveyIndex } = useParams();
-  const resolvedSurveyIndex = surveyIndex ?? "0";
-  const { walletApi } = useContext(WalletContext);
+  const index = Number(surveyIndex ?? 0);
+  const wallet = useContext(WalletContext);
+  const walletApi = wallet?.walletApi;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState("results");
-  // Surveys can live on preview or mainnet; follow the choice persisted on the
-  // list page (the rest of Civitas is always mainnet).
-  const [network] = useState(getSurveyNetwork());
+  const [connectedKeyHash, setConnectedKeyHash] = useState(null);
+  const [cancelState, setCancelState] = useState("idle"); // idle | submitting | done | error
+  const [cancelError, setCancelError] = useState("");
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/surveys/${txHash}/${resolvedSurveyIndex}?network=${encodeURIComponent(network)}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to load survey.");
-      try {
-        json.survey = await hydrateSurveyPresentation(json.survey);
-      } catch (presentationError) {
-        json.presentationError = presentationError?.message || "External survey presentation could not be verified.";
-      }
-      setData(json);
+      const res = await fetch(`/api/surveys/${txHash}/${index}`);
+      const payload = await res.json().catch(() => ({}));
+      if (res.status === 404) { setNotFound(true); return; }
+      if (!res.ok) throw new Error(payload.error || "Failed to load survey.");
+      setNotFound(false);
+      setData(payload);
     } catch (e) {
       if (!silent) setError(e.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [txHash, resolvedSurveyIndex, network]);
+  }, [txHash, index]);
 
   useEffect(() => { load(); }, [load]);
 
-  const survey = data?.survey;
-  const responses = useMemo(() => data?.responses ?? [], [data?.responses]);
-  const tally = data?.tally ?? {};
-  const details = survey?.details ?? {};
-  useSeoMeta({
-    title: details.title ? `${details.title} — Survey` : "Governance Survey",
-    description: details.description || "A CIP-179 v5 on-chain Cardano governance survey."
-  });
-  const questions = details.questions ?? [];
-  const roles = getSurveyRoles(details);
-  // The network's current epoch comes back with the survey payload; fall back to
-  // the app's mainnet epoch hook only while browsing mainnet before it loads.
-  const mainnetEpoch = useCurrentEpoch();
-  const currentEpoch = data?.currentEpoch != null
-    ? data.currentEpoch
-    : (network === "mainnet" ? mainnetEpoch : null);
-  const isActive = currentEpoch != null && details.endEpoch != null ? currentEpoch <= details.endEpoch : true;
-
-  // ── Sealed response decryption ──────────────────────────────────────────────
-  const isSealed = Boolean(details?.isTimelocked);
-  const drandRound = details?.drandRound ?? null;
-  const revealTimeMs = isSealed && drandRound != null ? unixTimeForRound(drandRound) * 1000 : null;
-  const isPastReveal = revealTimeMs != null && Date.now() > revealTimeMs;
-  const hasSealedChunks = responses.some((r) => r.sealedHexChunks?.length > 0);
-
-  const [decryptState, setDecryptState] = useState("idle"); // idle | decrypting | done | error
-  const [decryptedResponses, setDecryptedResponses] = useState(null);
-
   useEffect(() => {
-    if (!isPastReveal || !hasSealedChunks || decryptState !== "idle") return;
-    setDecryptState("decrypting");
-    decryptSealedResponses(responses, drandRound, survey)
-      .then((dec) => { setDecryptedResponses(dec); setDecryptState("done"); })
-      .catch((e) => { console.error("Sealed decrypt error:", e); setDecryptState("error"); });
-  }, [isPastReveal, hasSealedChunks, decryptState, responses, drandRound, survey]);
-
-  const effectiveResponses = decryptedResponses ?? responses;
-  const effectiveTally = decryptedResponses ? buildClientTally(questions, decryptedResponses, roles) : tally;
-
-  // ── Owner-only cancellation ─────────────────────────────────────────────────
-  const ownerKeyHash = details?.ownerKeyHash ?? null;
-  const [connectedKeyHash, setConnectedKeyHash] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
     if (!walletApi) { setConnectedKeyHash(null); return; }
-    getConnectedPaymentKeyHash(walletApi)
-      .then((kh) => { if (!cancelled) setConnectedKeyHash((kh || "").toLowerCase()); })
-      .catch(() => { if (!cancelled) setConnectedKeyHash(null); });
-    return () => { cancelled = true; };
+    getConnectedPaymentKeyHash(walletApi).then(setConnectedKeyHash).catch(() => setConnectedKeyHash(null));
   }, [walletApi]);
-  const isOwner = Boolean(ownerKeyHash && connectedKeyHash && ownerKeyHash.toLowerCase() === connectedKeyHash);
-  const isCancelled = Boolean(survey?.cancelled);
-  const [cancelState, setCancelState] = useState("idle"); // idle | submitting | done | error
-  const [cancelError, setCancelError] = useState("");
+
+  const survey = data?.survey;
+  useSeoMeta({
+    title: survey?.title ? `${survey.title} — Survey` : "Governance Survey",
+    description: survey?.description || "A CIP-179 on-chain Cardano governance survey."
+  });
+
+  const responses = useMemo(() => data?.responses || [], [data]);
+  const questions = survey?.questions || [];
+  const isOwner = Boolean(survey && connectedKeyHash && survey.owner?.type === "key" && survey.owner.hash === connectedKeyHash);
+  const onSubmitted = useCallback(() => { load(true); }, [load]);
+  const retry = useCallback(() => { load(true); }, [load]);
 
   async function handleCancelSurvey() {
-    if (!window.confirm("Cancel this survey? This is permanent and on-chain. Existing responses will be hidden and no new responses will be accepted.")) return;
+    if (!walletApi || !survey) return;
+    if (!window.confirm("Cancel this survey on chain? This cannot be undone.")) return;
     setCancelState("submitting");
     setCancelError("");
     try {
-      await buildAndSubmitSurveyCancellation(walletApi, survey.surveyTxId, survey.surveyIndex ?? 0);
+      await buildAndSubmitSurveyCancellation(walletApi, survey.txHash, survey.index);
       setCancelState("done");
     } catch (e) {
-      setCancelError(e?.message || "Cancellation failed.");
       setCancelState("error");
+      setCancelError(readableError(e, "Cancellation could not be submitted."));
     }
   }
 
-  const roleTallies = effectiveTally.roleTallies ?? [];
-  const [selectedRole, setSelectedRole] = useState(null);
-  const visibleTally = selectedRole
-    ? roleTallies.find((r) => r.role === selectedRole)
-    : roleTallies.find((r) => r.responses > 0) ?? roleTallies[0];
-  const questionTallies = visibleTally?.questionTallies ?? effectiveTally.questionTallies ?? [];
-  const tallyResponseCount = visibleTally?.responses ?? effectiveTally.totalResponses ?? 0;
-  const tallyWeight = visibleTally?.totalWeight ?? effectiveTally.totalWeight ?? 0;
-  const showStakeWeight = roleTallies.some((row) => row.weighting === "StakeBased" && Number(row.totalWeight || 0) > 0)
-    || effectiveResponses.some((response) => Number(response.responseStakeAda || 0) > 0);
-  // CIP-179 roles express eligibility, not weighting; Civitas displays one count per credential.
-  // "weight" is a vote count — not ADA. The stake shown per response is informational.
-  // Surface the aggregate as "Stake represented" (sum of responders' live stake).
-  const isStakeWeighted = roleTallies.some((row) => row.weighting === "StakeBased");
-  const totalStakeRepresented = effectiveResponses.reduce(
-    (sum, r) => sum + Number(r.responseStakeAda || 0), 0
-  );
+  if (loading) {
+    return (
+      <main className="shell">
+        <header className="hero"><h1>Survey</h1></header>
+        <section className="status-row"><p className="muted">Loading…</p></section>
+      </main>
+    );
+  }
 
-  if (loading) return (
-    <main className="shell">
-      <header className="hero"><h1>Survey</h1></header>
-      <section className="status-row"><p className="muted">Loading…</p></section>
-    </main>
-  );
-
-  if (error) {
+  if (notFound) {
     return (
       <main className="shell">
         <header className="hero"><h1>Survey</h1></header>
         <section className="status-row">
           <p className="muted">
-            {error.includes("not found")
-              ? "Survey not indexed yet — it may take a minute or two for the transaction to be confirmed and indexed. This page will refresh automatically."
-              : `Error: ${error}`}
+            This survey is not in the index yet. A just-published survey appears once its transaction is confirmed and the index has read it, usually within a few minutes; this page checks again automatically.
           </p>
-          {error.includes("not found") ? (
-            <PendingPoller onFound={() => load()} />
-          ) : null}
+          <PendingPoller onTick={retry} />
         </section>
       </main>
     );
   }
+
+  if (error || !survey) {
+    return (
+      <main className="shell">
+        <header className="hero"><h1>Survey</h1></header>
+        <section className="status-row">
+          <p className="vote-error">{error || "Failed to load survey."}</p>
+          <button type="button" className="mode-btn" onClick={() => load()}>Try again</button>
+        </section>
+      </main>
+    );
+  }
+
+  const countedText = participationLabel(survey);
 
   return (
     <main className="shell">
       <header className="hero dashboard-header">
         <div className="survey-hero-copy">
           <div className="survey-hero-topline">
-            <Link className="muted back-link" to="/surveys">← All Surveys</Link>
-            {isCancelled || cancelState === "done"
-              ? <span className="pill" style={{ background: "rgba(244,63,94,0.14)", borderColor: "rgba(244,63,94,0.45)", color: "var(--rose)" }}>Cancelled</span>
-              : <span className={`pill ${isActive ? "good" : "muted-pill"}`}>{isActive ? "Active" : "Ended"}</span>}
+            <Link className="muted back-link" to="/surveys">← All surveys</Link>
+            <SurveyBadges survey={survey} />
             {isOwner ? <span className="pill" style={{ background: "rgba(84,228,188,0.12)", borderColor: "rgba(84,228,188,0.4)", color: "var(--mint)" }}>You own this</span> : null}
           </div>
-          <h1 className="survey-hero-title">{details.title || "Survey"}</h1>
-          {details.description ? <p className="muted survey-hero-description">{details.description}</p> : null}
-          {details.contentAnchor?.uri ? (
-            <a className="ext-link" href={details.contentAnchor.uri} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
-              Reference document ↗
-            </a>
+          <h1 className="survey-hero-title">{survey.title || `Survey (${survey.txHash.slice(0, 8)}:${survey.index})`}</h1>
+          {survey.external ? (
+            <p className="muted survey-hero-description">The survey text lives in an external document that is not loaded here.</p>
+          ) : survey.description ? (
+            <p className="muted survey-hero-description">{survey.description}</p>
           ) : null}
-          {data?.presentationError ? (
-            <p className="vote-notice">{data.presentationError} On-chain constraints are still shown with placeholder labels.</p>
+          {survey.contentAnchor?.uri ? (
+            <a className="ext-link" href={survey.contentAnchor.uri} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>Reference document ↗</a>
           ) : null}
-          {isOwner && !isCancelled && cancelState !== "done" ? (
+          {isOwner && survey.lifecycle === "open" && cancelState !== "done" ? (
             <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -1115,190 +369,113 @@ export default function SurveyDetailPage() {
               <span className="muted" style={{ fontSize: "0.76rem" }}>Only you, the owner, can do this.</span>
             </div>
           ) : null}
-          {cancelState === "done" ? (
-            <p className="muted" style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--mint)" }}>
-              ✓ Cancellation submitted. It will drop off the active list once confirmed on-chain.
-            </p>
-          ) : null}
-          {cancelState === "error" ? (
-            <p style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--rose)" }}>{cancelError}</p>
-          ) : null}
+          {cancelState === "done" ? <p className="muted" style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--mint)" }}>✓ Cancellation submitted. The index reflects it once the transaction is confirmed.</p> : null}
+          {cancelState === "error" ? <p className="vote-error" style={{ marginTop: "0.6rem" }}>{cancelError}</p> : null}
         </div>
       </header>
 
-      {/* Meta row */}
       <section className="survey-meta-row">
         <div className="survey-meta-item">
-          <span className="muted">Ends epoch</span>
-          <strong>{details.endEpoch ?? "—"}</strong>
-          {details.endEpoch != null ? (
-            <span className="muted" style={{ fontSize: "0.74rem" }}>~{epochEndDate(network, details.endEpoch)}</span>
-          ) : null}
+          <span className="muted">{survey.lifecycle === "open" ? "Closes" : "Closed"}</span>
+          <strong>Epoch {survey.endEpoch}</strong>
+          <span className="muted" style={{ fontSize: "0.74rem" }}>{deadlineLabel(survey.lifecycle, survey.endEpoch)}</span>
         </div>
         <div className="survey-meta-item">
-          <span className="muted">Eligible roles</span>
-          <div className="survey-meta-pill-row">
-            {roles.map((r) => (
-              <span key={r} className="pill" style={{
-                background: `${ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)"}22`,
-                borderColor: `${ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)"}88`,
-                color: ROLE_COLORS[r] ?? "inherit",
-              }}>{r}</span>
-            ))}
-          </div>
+          <span className="muted">Who can answer</span>
+          <div className="survey-meta-pill-row">{survey.eligibleRoles.map((r) => <RolePill key={r} role={r} />)}</div>
         </div>
         <div className="survey-meta-item">
-          <span className="muted">Total responses</span>
-          <strong>{effectiveResponses.length}</strong>
+          <span className="muted">Participation</span>
+          <strong>{countedText}</strong>
+          {survey.responseCount != null ? <span className="muted" style={{ fontSize: "0.74rem" }}>{survey.responseCount} distinct {survey.responseCount === 1 ? "responder" : "responders"} in total</span> : null}
         </div>
-        {isStakeWeighted ? (
-          <div className="survey-meta-item">
-            <span className="muted">Counted stake</span>
-            <strong>{fmtAda(tallyWeight, { compact: true })}</strong>
-          </div>
-        ) : totalStakeRepresented > 0 ? (
-          <div className="survey-meta-item">
-            <span className="muted">Stake represented</span>
-            <strong>{fmtAda(totalStakeRepresented, { compact: true })}</strong>
-          </div>
-        ) : null}
         <div className="survey-meta-item">
-          <span className="muted">Created</span>
-          <strong>{fmtDate(survey?.blockTime)}</strong>
+          <span className="muted">Published</span>
+          <strong>{formatUnixDate(survey.submittedAt)}</strong>
+          <span className="muted" style={{ fontSize: "0.74rem" }}>epoch {survey.epochNo}</span>
         </div>
         <div className="survey-meta-item">
           <span className="muted">Survey TX</span>
-          <a className="ext-link mono survey-tx-link"
-            href={explorerTxUrl(network, txHash)}
-            target="_blank" rel="noreferrer">
-            {txHash?.slice(0, 12)}…{txHash?.slice(-8)}
-          </a>
+          <a className="ext-link mono survey-tx-link" href={explorerTxUrl(survey.txHash)} target="_blank" rel="noreferrer">{shortHash(survey.txHash, 12, 8)}</a>
+          {survey.tesseraUrl ? <a className="ext-link" href={survey.tesseraUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.74rem" }}>Open on Tessera ↗</a> : null}
         </div>
       </section>
 
-      {/* Tab bar */}
-      <div className="survey-tabs">
-        <button type="button" className={`survey-tab${tab === "results" ? " active" : ""}`} onClick={() => setTab("results")}>Results</button>
-        <button type="button" className={`survey-tab${tab === "responses" ? " active" : ""}`} onClick={() => setTab("responses")}>
-          Responses ({effectiveResponses.length})
-        </button>
-        <button type="button" className={`survey-tab${tab === "respond" ? " active" : ""}`} onClick={() => setTab("respond")}>
-          Submit Response
-        </button>
-      </div>
-
-      {/* Results tab */}
-      {tab === "results" ? (
-        <section>
-          {questions.length > 0 ? (
-            <p className="muted" style={{ fontSize: "0.82rem", margin: "0 0 1rem" }}>
-              {isSealed
-                ? "Sealed survey: answers stay encrypted until the reveal date, then everyone can see the tally below. "
-                : "Each bar shows how responders answered. "}
-              Each counted role credential contributes one response. Open the <strong>Responses</strong> tab to see each individual response on-chain.
-            </p>
-          ) : null}
-          {data?.membershipAudited === false ? (
-            <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 1rem" }}>
-              Results validate CIP-179 structure and transaction proof. Historical role membership is not audited by Civitas.
-            </p>
-          ) : null}
-          {isSealed && !isPastReveal && revealTimeMs != null ? (
-            <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--amber)" }}>
-              <span>◆</span>
-              <span>Sealed — responses are encrypted until <strong style={{ color: "var(--amber)" }}>{new Date(revealTimeMs).toLocaleString(undefined, { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} UTC</strong></span>
-            </div>
-          ) : null}
-          {isSealed && isPastReveal && decryptState === "decrypting" ? (
-            <div className="panel" style={{ marginBottom: "1rem", fontSize: "0.82rem", color: "var(--text-muted)" }}>
-              Decrypting responses…
-            </div>
-          ) : null}
-          {isSealed && isPastReveal && decryptState === "error" ? (
-            <div className="panel" style={{ marginBottom: "1rem", fontSize: "0.82rem", color: "var(--rose)" }}>
-              Decryption failed — the drand beacon may not have published the signature yet. Try refreshing.
-            </div>
-          ) : null}
-          {isSealed && isPastReveal && decryptState === "done" ? (
-            <div className="panel" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.82rem", color: "var(--mint)" }}>
-              <span>✓</span>
-              <span>Responses revealed and decrypted</span>
-            </div>
-          ) : null}
-          {roleTallies.length > 1 ? (
-            <div className="survey-role-filter">
-              <span className="muted" style={{ fontSize: "0.82rem" }}>View tally by role:</span>
-              {roleTallies.map((rt) => (
-                <button
-                  type="button"
-                  key={rt.role}
-                  className={`survey-role-btn${(selectedRole ?? (roleTallies.find((r) => r.responses > 0)?.role ?? roleTallies[0]?.role)) === rt.role ? " active" : ""}`}
-                  onClick={() => setSelectedRole(rt.role)}
-                >
-                  {rt.role} ({rt.weighting === "StakeBased" ? fmtAda(rt.totalWeight || 0, { compact: true }) : rt.responses})
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {questionTallies.length === 0 && !(isSealed && !isPastReveal) ? (
-            <div className="panel"><p className="muted">No responses yet — be the first to respond.</p></div>
-          ) : questionTallies.length > 0 ? (
-            questionTallies.map((qt) => (
-              <QuestionTallyCard key={qt.questionId} qt={qt} totalResponses={tallyResponseCount} totalWeight={tallyWeight} />
-            ))
-          ) : null}
+      {survey.govLinks?.length ? (
+        <section className="panel svy-side-card" style={{ marginBottom: "1rem" }}>
+          <h3>Linked governance {survey.govLinks.length === 1 ? "action" : "actions"}</h3>
+          <ul className="svy-links">
+            {survey.govLinks.map((link) => (
+              <li key={link.actionId}>
+                <Link to={`/actions/${encodeURIComponent(link.actionId)}`} className="inline-link">{link.title || link.actionId}</Link>
+                <span className="muted"> · expires epoch {link.endEpoch}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted svy-note">A survey answer is separate from a vote: it is survey metadata, not a governance vote, and it neither replaces nor implies one.</p>
         </section>
       ) : null}
 
-      {/* Responses tab */}
+      <div className="survey-tabs">
+        <button type="button" className={`survey-tab${tab === "results" ? " active" : ""}`} onClick={() => setTab("results")}>Results</button>
+        <button type="button" className={`survey-tab${tab === "responses" ? " active" : ""}`} onClick={() => setTab("responses")}>Responses ({responses.length})</button>
+        <button type="button" className={`survey-tab${tab === "respond" ? " active" : ""}`} onClick={() => setTab("respond")}>Answer</button>
+      </div>
+
+      {tab === "results" ? (
+        <SurveyTally survey={survey} tally={data.tally} refusal={data.tallyRefusal} artifact={data.artifact} />
+      ) : null}
+
       {tab === "responses" ? (
         <section className="panel">
-          <h2>Response List</h2>
-          {effectiveResponses.length === 0 ? (
+          <h2>Responses on chain</h2>
+          <p className="muted" style={{ fontSize: "0.8rem" }}>
+            Every response transaction the index holds, newest first. "Counted" follows CIP-179's own rules (in window, valid, credential proven, latest per credential); a response with a pending proof still counts.
+          </p>
+          {responses.length === 0 ? (
             <p className="muted">No responses yet.</p>
           ) : (
             <table>
               <thead>
                 <tr>
-                  <th>Address</th>
                   <th>Role</th>
-                  {showStakeWeight ? <th>Stake</th> : null}
-                  <th>Date</th>
+                  <th>Credential</th>
+                  <th>Answers</th>
+                  <th>Epoch</th>
+                  <th>Status</th>
                   <th>TX</th>
                 </tr>
               </thead>
               <tbody>
-                {effectiveResponses.map((r) => (
-                  <tr key={r.txId}>
-                    <td className="mono" style={{ fontSize: "0.82rem" }}>{shortAddr(r.inputAddress)}</td>
-                    <td>
-                      <span className="pill" style={{
-                        background: `${ROLE_COLORS[r.responderRole] ?? "rgba(200,200,210,0.5)"}22`,
-                        borderColor: `${ROLE_COLORS[r.responderRole] ?? "rgba(200,200,210,0.5)"}88`,
-                        color: ROLE_COLORS[r.responderRole] ?? "inherit",
-                      }}>{r.responderRole}</span>
+                {responses.map((r) => (
+                  <tr key={`${r.txHash}:${r.responseIndex}`}>
+                    <td><RolePill role={r.role} /></td>
+                    <td className="mono" style={{ fontSize: "0.78rem" }} title={r.credential}>{shortHash(r.credentialHash, 8, 6)}</td>
+                    <td style={{ fontSize: "0.82rem" }}>
+                      {r.sealed ? (
+                        <span className="muted">sealed</span>
+                      ) : r.answers.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <ul style={{ margin: 0, paddingLeft: "1rem" }}>
+                          {r.answers.map((a) => (
+                            <li key={a.questionIndex}><span className="muted">Q{a.questionIndex + 1}:</span> {a.text}</li>
+                          ))}
+                        </ul>
+                      )}
                     </td>
-                    {showStakeWeight ? (
-                      <td>
-                        <div className="survey-response-stake">
-                          <strong>{Number(r.responseStakeAda || 0) > 0 ? fmtAda(r.responseStakeAda, { compact: true }) : "—"}</strong>
-                          {r.rewardAddress ? <span className="muted mono">{shortAddr(r.rewardAddress)}</span> : null}
-                        </div>
-                      </td>
-                    ) : null}
-                    <td>{fmtDate(r.blockTime)}</td>
+                    <td>{r.epochNo}</td>
+                    <td style={{ fontSize: "0.8rem" }}>
+                      {r.counted ? (
+                        <span style={{ color: "var(--mint)" }}>counted{r.verdict === null ? " (proof pending)" : ""}</span>
+                      ) : (
+                        <span className="muted">{EXCLUSION_LABELS[r.exclusion] || r.exclusion || "not counted"}</span>
+                      )}
+                    </td>
                     <td>
-                      <a className="ext-link mono" style={{ fontSize: "0.78rem" }}
-                        href={explorerTxUrl(network, r.txId)}
-                        target="_blank" rel="noreferrer">
-                        {r.txId?.slice(0, 10)}…
-                      </a>
+                      <a className="ext-link mono" style={{ fontSize: "0.78rem" }} href={explorerTxUrl(r.txHash)} target="_blank" rel="noreferrer">{r.txHash.slice(0, 10)}…</a>
                       {r.rationale?.uri ? (
-                        <a className="ext-link" style={{ fontSize: "0.74rem", display: "block", marginTop: "2px" }}
-                          href={r.rationale.uri} target="_blank" rel="noreferrer" title="Voter rationale">
-                          rationale ↗
-                        </a>
+                        <a className="ext-link" style={{ fontSize: "0.74rem", display: "block", marginTop: "2px" }} href={r.rationale.uri} target="_blank" rel="noreferrer">rationale ↗</a>
                       ) : null}
                     </td>
                   </tr>
@@ -1309,65 +486,13 @@ export default function SurveyDetailPage() {
         </section>
       ) : null}
 
-      {/* Respond tab */}
-      {tab === "respond" && walletApi ? (
-        <div className="sq-respond-shell">
-          <div className="sq-header-card">
-            <div className="sq-header-topline">
-              <span className={`sv-status-pill ${isActive ? "active" : "ended"}`}>
-                <span className="sv-status-dot" />
-                {isActive ? "Active" : "Ended"}
-              </span>
-              {roles.map((r) => {
-                const color = ROLE_COLORS[r] ?? "rgba(200,200,210,0.5)";
-                return (
-                  <span key={r} className="pill" style={{ background: `${color}22`, borderColor: `${color}88`, color }}>
-                    {r}
-                  </span>
-                );
-              })}
-            </div>
-            <h2 className="sq-header-title">{details.title || "Survey"}</h2>
-            {details.description ? <p className="sq-header-desc">{details.description}</p> : null}
-            <div className="sq-meta-grid">
-              <div className="sq-meta-cell">
-                <div className="sq-meta-cell-label">Ends epoch</div>
-                <strong style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.92rem" }}>
-                  {details.endEpoch ?? "—"}
-                </strong>
-              </div>
-              <div className="sq-meta-cell">
-                <div className="sq-meta-cell-label">Questions</div>
-                <strong style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.92rem" }}>
-                  {questions.length}
-                </strong>
-              </div>
-            </div>
-          </div>
+      {tab === "respond" ? <RespondPanel survey={survey} data={data} onSubmitted={onSubmitted} /> : null}
 
-          <ResponseForm
-            survey={survey}
-            isActive={isActive}
-            onSubmitted={() => { setTimeout(() => load(true), 3000); }}
-          />
-        </div>
-      ) : null}
-
-      {/* Respond tab — wallet not connected */}
-      {tab === "respond" && !walletApi ? (
-        <section className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
-          <h2 style={{ marginTop: 0 }}>Connect your wallet to respond</h2>
-          <p className="muted" style={{ maxWidth: "440px", margin: "0 auto 1.25rem" }}>
-            Responding records your answers on-chain as a small transaction (under ~1 ADA).
-            Your wallet must be eligible for one of this survey's roles: {roles.join(", ") || "—"}.
-            Use the Sign in button in the top bar to get started.
-          </p>
-          <div style={{ marginTop: "1rem" }}>
-            <Link to="/guide?section=tool-survey-respond" className="inline-link" style={{ fontSize: "0.8rem" }}>
-              How responding works →
-            </Link>
-          </div>
-        </section>
+      {data?.fetchedAt ? (
+        <p className="muted" style={{ fontSize: "0.76rem", marginTop: "0.8rem" }}>
+          Survey data as of {new Date(data.fetchedAt * 1000).toLocaleString()} (Tessera snapshot), cached, not live. Epoch {data.currentEpoch}.
+          {questions.length ? ` ${questions.length} ${questions.length === 1 ? "question" : "questions"}.` : ""}
+        </p>
       ) : null}
     </main>
   );
