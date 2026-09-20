@@ -189,7 +189,7 @@ function describeNodeRejection(text) {
   return `The network rejected the transaction${short ? `: ${short}` : "."}`;
 }
 
-async function submitViaKoios(signedTxHex) {
+export async function submitViaKoios(signedTxHex) {
   const res = await fetch(KOIOS_SUBMIT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/cbor" },

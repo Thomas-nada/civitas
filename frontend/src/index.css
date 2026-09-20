@@ -9817,3 +9817,52 @@ tessera-respond {
 .batch-survey-form tessera-respond {
   margin-top: 0.5rem;
 }
+
+/* Survey answer from a cardano-signer session */
+.svy-cli {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.svy-cli-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.svy-cli-facts {
+  margin: 0.25rem 0;
+}
+
+.svy-cli-facts dd.mono {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.svy-cli-pre {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.svy-cli-textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  resize: vertical;
+}

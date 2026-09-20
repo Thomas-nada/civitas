@@ -12,6 +12,7 @@ import RationaleInput from "../vote/RationaleInput";
 import { readableError } from "../../lib/wallet/walletError";
 import { lifecycleLabel } from "../../services/surveyPresentation";
 import TesseraRespond from "./TesseraRespond";
+import CliAnswer from "./CliAnswer";
 
 const ROLE_NUMBERS = { DRep: Role.DRep, SPO: Role.SPO, CC: Role.CC, Stakeholder: Role.Stakeholder, Keyholder: Role.Keyholder };
 
@@ -169,6 +170,12 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
 
   const panelClass = compact ? "svy-respond-inner" : "panel";
   const panelStyle = compact ? undefined : { padding: "1rem 1.1rem" };
+
+  // A cardano-signer session answers with its own keys: the same form, then
+  // a transaction the user builds and signs, pasted back for submission.
+  if (!walletApi && wallet?.isCliSession) {
+    return <CliAnswer survey={survey} data={data} onSubmitted={onSubmitted} />;
+  }
 
   if (!walletApi) {
     return (
