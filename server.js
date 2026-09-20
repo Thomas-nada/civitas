@@ -114,7 +114,7 @@ function parseUtcHourList(input, fallback) {
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8080);
-const CANONICAL_URL = (process.env.CANONICAL_URL || "").replace(/\/+$/, ""); // e.g. https://civitas.gov
+const CANONICAL_URL = (process.env.CANONICAL_URL || "https://www.civitasexplorer.com").replace(/\/+$/, ""); // the public origin, for canonical links, sitemap and robots
 const BLOCKFROST_BASE_URL = process.env.BLOCKFROST_BASE_URL || "https://cardano-mainnet.blockfrost.io/api/v0";
 const BLOCKFROST_API_KEY = process.env.BLOCKFROST_API_KEY || "";
 const BLOCKFROST_IPFS_KEY = process.env.BLOCKFROST_IPFS_KEY || "";
@@ -7855,6 +7855,14 @@ function serveStatic(req, res) {
   fs.readFile(filePath, (error, content) => {
     if (!error) {
       const ext = path.extname(filePath).toLowerCase();
+      // The home page is index.html itself; it gets the same server-side meta
+      // injection as every SPA route, so crawlers see the real canonical.
+      if (root === FRONTEND_DIST_PATH && path.basename(filePath).toLowerCase() === "index.html" && ext === ".html") {
+        const injected = injectSeoMeta(req.url, content.toString("utf8"));
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(injected);
+        return;
+      }
       // Vite outputs content-hashed filenames (e.g. main-Ab3xY1.js) for all
       // assets under /assets/. These can be cached indefinitely — if the content
       // changes, the hash changes and the browser fetches a fresh URL.

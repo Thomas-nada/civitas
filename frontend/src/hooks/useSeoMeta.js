@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 
 const SITE_NAME = "Civitas";
+const SITE_URL = "https://www.civitasexplorer.com";
+const SOCIAL_IMAGE = `${SITE_URL}/og-card.png`;
 const BASE_TITLE = "Civitas — Cardano Governance Dashboard";
 const BASE_DESC =
   "Track Cardano governance proposals, DRep voting records, SPO participation, " +
@@ -57,7 +59,9 @@ export function useSeoMeta({ title, description, canonical } = {}) {
     upsertMeta("property", "og:type", "website");
     upsertMeta("name", "twitter:title", fullTitle);
     upsertMeta("name", "twitter:description", desc);
-    upsertMeta("name", "twitter:card", "summary");
+    upsertMeta("property", "og:image", SOCIAL_IMAGE);
+    upsertMeta("name", "twitter:card", "summary_large_image");
+    upsertMeta("name", "twitter:image", SOCIAL_IMAGE);
     upsertCanonical(canonicalHref);
 
     return () => {
