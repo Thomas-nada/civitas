@@ -7742,7 +7742,6 @@ function resolveSeoForPath(pathname) {
     "/treasury":   { title: "Treasury | Civitas", description: "Monitor Cardano treasury withdrawal proposals, net change limit status, and enacted budget transactions." },
     "/stats":      { title: "Governance Statistics | Civitas", description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients." },
     "/constitution":{ title: "Cardano Constitution | Civitas", description: "Read and search the full Cardano Constitution, ratified on-chain. Navigate by section, verify hash integrity, and compare versions." },
-    "/budget":     { title: "Cardano Budget 2026 | Civitas", description: "Track the Cardano 2026 on-chain budget vote — proposal breakdown, DRep participation, and live voting results." },
     "/surveys":    { title: "Governance Surveys | Civitas", description: "CIP-0179 v5 on-chain surveys for Cardano governance participants." },
     "/guide":      { title: "Governance Guide | Civitas", description: "A practical guide to Cardano governance: DRep voting, proposal types, SPO roles, Constitutional Committee duties, and how to participate." },
     "/about":      { title: "About Civitas | Civitas", description: "Learn why Civitas was built — making Cardano governance transparent, accessible, and accountable." },
@@ -10985,7 +10984,6 @@ const server = http.createServer(async (req, res) => {
       { path: "/treasury", freq: "daily", priority: "0.7" },
       { path: "/stats", freq: "daily", priority: "0.7" },
       { path: "/constitution", freq: "weekly", priority: "0.7" },
-      { path: "/budget", freq: "daily", priority: "0.7" },
       { path: "/surveys", freq: "daily", priority: "0.6" },
       { path: "/guide", freq: "weekly", priority: "0.6" },
       { path: "/about", freq: "monthly", priority: "0.5" },
@@ -11034,139 +11032,6 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       res.end(JSON.stringify({ votes: {}, allVoters: [] }));
     }
-    return;
-  }
-
-  // Dedicated proxy for intersect.ekklesia.vote (v1 voting API + its own v0/session endpoint)
-  if (url.pathname.startsWith("/ekklesia-vote-proxy/")) {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": req.headers.origin || "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-      });
-      res.end();
-      return;
-    }
-    const targetPath = url.pathname.replace(/^\/ekklesia-vote-proxy/, "") + (url.search || "");
-    const https = require("https");
-    const forwardHeaders = {
-      "Accept": "application/json",
-      "User-Agent": "civitas-proxy/1.0",
-      "Host": "intersect.ekklesia.vote",
-    };
-    if (req.headers["content-type"]) forwardHeaders["Content-Type"] = req.headers["content-type"];
-    if (req.headers["cookie"]) forwardHeaders["Cookie"] = req.headers["cookie"];
-    if (req.headers["authorization"]) forwardHeaders["Authorization"] = req.headers["authorization"];
-    const chunks2 = [];
-    req.on("data", c => chunks2.push(c));
-    req.on("end", () => {
-      const body = chunks2.length ? Buffer.concat(chunks2) : null;
-      if (body && body.length) forwardHeaders["Content-Length"] = body.length;
-      const proxyReq = https.request(
-        { hostname: "intersect.ekklesia.vote", path: targetPath, method: req.method, headers: forwardHeaders },
-        (proxyRes) => {
-          const resHeaders = {
-            "Content-Type": proxyRes.headers["content-type"] || "application/json",
-            "Access-Control-Allow-Origin": req.headers.origin || "*",
-            "Access-Control-Allow-Credentials": "true",
-          };
-          if (proxyRes.headers["set-cookie"]) {
-            resHeaders["Set-Cookie"] = proxyRes.headers["set-cookie"].map(c =>
-              c.replace(/;\s*Domain=[^;]*/i, "").replace(/;\s*Secure/i, "").replace(/;\s*SameSite=[^;]*/i, "; SameSite=Lax")
-            );
-          }
-          res.writeHead(proxyRes.statusCode, resHeaders);
-          proxyRes.pipe(res);
-        }
-      );
-      proxyReq.on("error", () => { res.writeHead(502); res.end("Bad Gateway"); });
-      if (body && body.length) proxyReq.write(body);
-      proxyReq.end();
-    });
-    return;
-  }
-
-  if (url.pathname.startsWith("/ekklesia-proxy/")) {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": req.headers.origin || "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-      });
-      res.end();
-      return;
-    }
-    const targetPath = url.pathname.replace(/^\/ekklesia-proxy/, "") + (url.search || "");
-    const https = require("https");
-    const ekklesiaHost = "hydra-voting.intersectmbo.org";
-    const forwardHeaders = {
-      "Accept": "application/json",
-      "User-Agent": "civitas-proxy/1.0",
-      "Host": ekklesiaHost,
-    };
-    if (req.headers["content-type"]) forwardHeaders["Content-Type"] = req.headers["content-type"];
-    if (req.headers["cookie"]) forwardHeaders["Cookie"] = req.headers["cookie"];
-    if (req.headers["authorization"]) forwardHeaders["Authorization"] = req.headers["authorization"];
-    const chunks = [];
-    req.on("data", c => chunks.push(c));
-    req.on("end", () => {
-      const body = chunks.length ? Buffer.concat(chunks) : null;
-      if (body && body.length) forwardHeaders["Content-Length"] = body.length;
-      const proxyReq = https.request(
-        { hostname: ekklesiaHost, path: targetPath, method: req.method, headers: forwardHeaders },
-        (proxyRes) => {
-          const resHeaders = {
-            "Content-Type": proxyRes.headers["content-type"] || "application/json",
-            "Access-Control-Allow-Origin": req.headers.origin || "*",
-            "Access-Control-Allow-Credentials": "true",
-          };
-          if (proxyRes.headers["set-cookie"]) {
-            resHeaders["Set-Cookie"] = proxyRes.headers["set-cookie"].map(c =>
-              c.replace(/;\s*Domain=[^;]*/i, "").replace(/;\s*Secure/i, "").replace(/;\s*SameSite=[^;]*/i, "; SameSite=Lax")
-            );
-          }
-          // For the votes list, patch the cc-vote-2026 cycle with the updated registration end date
-          const isVotesEndpoint = /^\/api\/v0\/votes(\?|$)/.test(targetPath);
-          if (isVotesEndpoint && proxyRes.statusCode === 200) {
-            const respChunks = [];
-            proxyRes.on("data", c => respChunks.push(c));
-            proxyRes.on("end", () => {
-              try {
-                const raw = Buffer.concat(respChunks).toString("utf8");
-                const data = JSON.parse(raw);
-                const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-                for (const cycle of list) {
-                  if (cycle.slug === "cc-vote-2026") {
-                    cycle.submissionEndDate = "2026-06-21T21:45:00.000Z";
-                    cycle.feedbackStartDate = "2026-06-21T21:45:00.000Z";
-                    cycle.feedbackEndDate   = "2026-06-28T21:45:00.000Z";
-                    cycle.votingStartDate   = "2026-06-28T21:45:00.000Z";
-                    cycle.votingEndDate     = "2026-07-23T21:45:00.000Z";
-                    break;
-                  }
-                }
-                const out = Buffer.from(JSON.stringify(data), "utf8");
-                resHeaders["Content-Length"] = out.length;
-                res.writeHead(proxyRes.statusCode, resHeaders);
-                res.end(out);
-              } catch {
-                res.writeHead(proxyRes.statusCode, resHeaders);
-                res.end(Buffer.concat(respChunks));
-              }
-            });
-          } else {
-            res.writeHead(proxyRes.statusCode, resHeaders);
-            proxyRes.pipe(res);
-          }
-        }
-      );
-      proxyReq.on("error", () => { res.writeHead(502); res.end("Bad Gateway"); });
-      if (body && body.length) proxyReq.write(body);
-      proxyReq.end();
-    });
     return;
   }
 

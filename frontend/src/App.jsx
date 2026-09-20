@@ -13,7 +13,6 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 // to keep them out of the initial JS bundle and improve page load performance.
 import AppTopbar from "./components/AppTopbar";
 import SignInDialog from "./components/SignInDialog";
-import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
 import { useCardanoWallets, listCardanoWallets, rememberWallet } from "./lib/wallet/useCardanoWallets";
 import { DEFAULT_ROLE, normalizeRole, roleByKey, roleLabel, signKeyForRole, recallRole, rememberRole } from "./lib/wallet/roles";
@@ -26,13 +25,6 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
 const SubmitGovernanceActionPage = lazy(() => import("./pages/SubmitGovernanceActionPage"));
 const RationalesArchivePage = lazy(() => import("./pages/RationalesArchivePage"));
-const BudgetPage = lazy(() => import("./pages/EkklesiaPage"));
-const BudgetSubmitPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ default: m.EkklesiaSubmitPage })));
-const BudgetResultsPage = lazy(() => import("./pages/EkklesiaPage").then(m => ({ default: m.BudgetResultsPage })));
-const CcElectionPage = lazy(() => import("./pages/CcElectionPage"));
-const CcElectionSubmitPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcElectionSubmitPage })));
-const CcElectionResultsPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcElectionResultsPage })));
-const CcAdminPage = lazy(() => import("./pages/CcElectionPage").then(m => ({ default: m.CcAdminPage })));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const AboutChangelogPage = lazy(() => import("./pages/AboutChangelogPage"));
@@ -569,7 +561,6 @@ export default function App() {
       <ScrollToTopOnRouteChange />
       <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} />
       <SignInDialog />
-      <InfoBanner />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>
         <Routes>
@@ -578,18 +569,6 @@ export default function App() {
           <Route path="/actions/:proposalId" element={<ProposalDetailPage />} />
           {/* <Route path="/actions/submit" element={<SubmitGovernanceActionPage />} /> */}{/* hidden: WIP */}
           <Route path="/governance/rationales" element={<RationalesArchivePage />} />
-          <Route path="/budget/results" element={<BudgetResultsPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/budget/submit" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/budget/submit/:proposalId" element={<BudgetSubmitPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/budget" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/budget/:proposalId" element={<BudgetPage voteSlug="cardano-budget-2026" basePath="/budget" />} />
-          <Route path="/ekklesia" element={<Navigate to="/budget" replace />} />
-          <Route path="/cc-election/submit" element={<CcElectionSubmitPage />} />
-          <Route path="/cc-election/submit/:nominationId" element={<CcElectionSubmitPage />} />
-          <Route path="/cc-election/results" element={<CcElectionResultsPage />} />
-          <Route path="/cc-election" element={<CcElectionPage />} />
-          <Route path="/cc-election/:candidateId" element={<CcElectionPage />} />
-          <Route path="/ccadmin" element={<CcAdminPage />} />
           <Route path="/surveys" element={<SurveysListPage />} />
           <Route path="/surveys/create" element={<CreateSurveyPage />} />
           <Route path="/surveys/:txHash" element={<SurveyDetailPage />} />
