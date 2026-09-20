@@ -6,7 +6,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { WalletContext } from "../../context/WalletContext";
 import { explorerTxUrl } from "../../services/surveyNetwork";
-import { Role, SurveyTxError, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
+import { Role, SurveyTxError, buildVoteAnchor, responderCredentials, submitLabel17Payload } from "../../services/surveyTxService";
 import { readableError } from "../../lib/wallet/walletError";
 import { lifecycleLabel } from "../../services/surveyPresentation";
 import TesseraRespond from "./TesseraRespond";
@@ -21,9 +21,23 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
   const [record, setRecord] = useState(null);
   const [status, setStatus] = useState({ kind: "idle" }); // idle | submitting | done | error
   const [indexed, setIndexed] = useState(false);
+  // A DRep vote carried in the same transaction (CIP-179 mechanism B).
+  const [voteChoice, setVoteChoice] = useState(""); // "" | Yes | No | Abstain
+  const [voteActionId, setVoteActionId] = useState("");
+  const [voteRationaleUrl, setVoteRationaleUrl] = useState("");
+  const [pendingResult, setPendingResult] = useState(null); // the form's payload after a failed submit
+  const [voteNeeded, setVoteNeeded] = useState(false); // the wallet skipped the DRep key: a vote is the way through
 
   const eligible = survey.eligibleRoles || [];
   const isOpen = survey.lifecycle === "open";
+
+  // The linked governance actions a DRep can still vote on. The ledger only
+  // accepts votes on active actions, so an expired link cannot carry the proof.
+  const votableLinks = useMemo(() => {
+    const epoch = Number(data?.currentEpoch);
+    return (survey.govLinks || []).filter((link) => link?.actionId && (!Number.isFinite(epoch) || Number(link.endEpoch) >= epoch));
+  }, [survey.govLinks, data?.currentEpoch]);
+  const voteLink = votableLinks.find((l) => l.actionId === voteActionId) || votableLinks[0] || null;
 
   // The wallet's credentials, narrowed to the roles this survey accepts. A
   // DRep credential is offered only to a registered DRep signed in with the
@@ -89,29 +103,49 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
   const onResponse = useCallback(async (result) => {
     if (!walletApi || status.kind === "submitting") return;
     setStatus({ kind: "submitting" });
+    setPendingResult(result);
     try {
       const { bytesToHex } = await import("cip-179/domain");
       const signerHashes = (result.proveCredentials || [])
         .filter((p) => p.credential?.type === "key")
         .map((p) => bytesToHex(p.credential.keyHash));
-      const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes);
-      setStatus({ kind: "done", txHash });
+      let vote;
+      if (voteChoice && voteLink && wallet?.walletDrep?.dRepIDCip105) {
+        const anchor = await buildVoteAnchor(voteRationaleUrl);
+        vote = { drepId: wallet.walletDrep.dRepIDCip105, actionId: voteLink.actionId, choice: voteChoice, anchor };
+      }
+      const txHash = await submitLabel17Payload(walletApi, result.payload, signerHashes, { vote });
+      setStatus({ kind: "done", txHash, voted: vote ? { choice: vote.choice, title: voteLink.title || voteLink.actionId } : null });
+      setPendingResult(null);
+      setVoteNeeded(false);
     } catch (e) {
       if (e instanceof SurveyTxError && e.code === "unsigned-required-signer") {
-        // Name the role whose key the wallet skipped; the DRep key is the
-        // usual one (not every wallet signs arbitrary transactions with it).
+        // Name the role whose key the wallet skipped. For the DRep key the
+        // way through is a vote in the same transaction: wallets sign votes
+        // with the DRep key, and CIP-179 takes a vote on a linked action as
+        // proof of the credential (mechanism B).
         const roleOf = Object.fromEntries(Object.entries(credentials?.hashes || {}).map(([n, h]) => [String(h).toLowerCase(), Object.keys(ROLE_NUMBERS).find((name) => ROLE_NUMBERS[name] === Number(n)) || n]));
         const names = e.missing.map((h) => roleOf[h] || `key ${h.slice(0, 10)}…`);
         const drepSkipped = names.includes("DRep");
+        if (drepSkipped && votableLinks.length > 0) {
+          setVoteNeeded(true);
+          setStatus({
+            kind: "error",
+            message: `${wallet.walletName} signed the transaction, but not with your DRep key. It signs with the DRep key when the transaction carries a DRep vote, so cast your vote on the linked action below and submit again: the vote goes on chain with your answer and proves your DRep credential under CIP-179.`,
+          });
+          return;
+        }
         setStatus({
           kind: "error",
-          message: `${wallet.walletName} signed the transaction, but not with your ${names.join(" / ")} key, so the network would reject it. ${drepSkipped ? "This wallet does not sign survey transactions with the DRep key; answer with your stake credential instead (choose Stakeholder in the form), or use a wallet that does, such as Eternl." : "Choose another role in the form, or use a different wallet."}`,
-        });
+          message: `${wallet.walletName} signed the transaction, but not with your ${names.join(" / ")} key, so the network would reject it. ${drepSkipped ? "This wallet signs with the DRep key for votes and certificates, not for a survey answer on its own. Answer with your stake credential instead (choose Stakeholder in the form), or use a wallet that signs required signers with the DRep key, such as Eternl." : "Choose another role in the form, or use a different wallet."}`,
+          });
         return;
       }
       setStatus({ kind: "error", message: readableError(e, "The transaction could not be submitted.") });
     }
-  }, [walletApi, status.kind, credentials, wallet?.walletName]);
+  }, [walletApi, status.kind, credentials, wallet?.walletName, wallet?.walletDrep?.dRepIDCip105, voteChoice, voteLink, voteRationaleUrl, votableLinks.length]);
+
+  const canOfferVote = Boolean(isOpen && wallet?.actingAsDrep && credentials?.responder?.[Role.DRep] && votableLinks.length > 0);
 
   const panelClass = compact ? "svy-respond-inner" : "panel";
   const panelStyle = compact ? undefined : { padding: "1rem 1.1rem" };
@@ -148,6 +182,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
         <section className={`${panelClass} svy-success`} style={panelStyle}>
           <strong>Answer submitted.</strong>
           <span className="muted">
+            {status.voted ? `Your ${status.voted.choice} vote on "${status.voted.title}" went on chain in the same transaction. ` : ""}
             {indexed
               ? "The index has picked it up; the figures now include it."
               : "The figures update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
@@ -185,9 +220,47 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
               This wallet holds no credential this survey accepts ({eligible.join(", ")}). {eligible.includes("DRep") && !wallet.actingAsDrep ? "Sign in as a DRep to answer with your DRep key." : ""}
             </p>
           ) : null}
+          {canOfferVote ? (
+            <div className={`svy-vote${voteNeeded ? " svy-vote--needed" : ""}`}>
+              <div className="svy-vote-head">
+                <strong>{voteNeeded ? "Cast your DRep vote with this answer" : "Also cast your DRep vote in the same transaction"}</strong>
+                {!voteNeeded ? <span className="muted">optional</span> : null}
+              </div>
+              <p className="muted svy-respond-note">
+                {votableLinks.length === 1 ? (
+                  <>The survey is linked to <em>{voteLink?.title || voteLink?.actionId}</em>. </>
+                ) : "This survey is linked to several governance actions. "}
+                A vote on a linked action is a real governance vote, and under CIP-179 it also proves your DRep credential for this answer, which is how wallets that sign votes but not survey answers with the DRep key (VESPR, for one) answer as a DRep. A later vote replaces an earlier one.
+              </p>
+              {votableLinks.length > 1 ? (
+                <select className="svy-vote-select" value={voteLink?.actionId || ""} onChange={(e) => setVoteActionId(e.target.value)}>
+                  {votableLinks.map((link) => <option key={link.actionId} value={link.actionId}>{link.title || link.actionId}</option>)}
+                </select>
+              ) : null}
+              <div className="svy-vote-choices" role="group" aria-label="DRep vote">
+                {!voteNeeded ? (
+                  <button type="button" className={`svy-vote-btn${voteChoice === "" ? " active" : ""}`} onClick={() => setVoteChoice("")}>No vote</button>
+                ) : null}
+                {["Yes", "No", "Abstain"].map((choice) => (
+                  <button key={choice} type="button" className={`svy-vote-btn svy-vote-btn--${choice.toLowerCase()}${voteChoice === choice ? " active" : ""}`} onClick={() => setVoteChoice(choice)}>{choice}</button>
+                ))}
+              </div>
+              {voteChoice ? (
+                <label className="svy-vote-rationale">
+                  <span className="muted">Rationale URL (optional, CIP-100 document)</span>
+                  <input type="url" placeholder="https://… or ipfs://…" value={voteRationaleUrl} onChange={(e) => setVoteRationaleUrl(e.target.value)} />
+                </label>
+              ) : null}
+              {voteNeeded && pendingResult && status.kind !== "submitting" ? (
+                <button type="button" className="btn-primary" disabled={!voteChoice} onClick={() => onResponse(pendingResult)}>
+                  {voteChoice ? `Vote ${voteChoice} and submit the answer` : "Choose a vote to continue"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {status.kind === "submitting" ? <p className="muted svy-respond-note">Awaiting wallet signature…</p> : null}
           {status.kind === "error" ? (
-            <p className="vote-error">{status.message} <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>Try again</button></p>
+            <p className="vote-error">{status.message} {!voteNeeded ? <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>Try again</button> : null}</p>
           ) : null}
           {isOpen && record && credentials && Object.keys(credentials.responder).length > 0 ? (
             <TesseraRespond

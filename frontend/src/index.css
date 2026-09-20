@@ -9650,3 +9650,86 @@ tessera-respond {
     justify-content: flex-start;
   }
 }
+
+/* Answer form: a DRep vote carried in the same transaction (CIP-179 mechanism B) */
+.svy-vote {
+  margin: 0.75rem 0;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.svy-vote--needed {
+  border-color: color-mix(in srgb, var(--mint) 45%, var(--bg));
+  background: color-mix(in srgb, var(--mint) 6%, var(--bg));
+}
+
+.svy-vote-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.svy-vote-head .muted {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.svy-vote-choices {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.svy-vote-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.svy-vote-btn:hover { color: var(--text); }
+
+.svy-vote-btn.active {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.svy-vote-btn--yes.active { color: var(--mint); border-color: var(--mint); background: color-mix(in srgb, var(--mint) 12%, transparent); }
+.svy-vote-btn--no.active { color: var(--rose); border-color: var(--rose); background: color-mix(in srgb, var(--rose) 12%, transparent); }
+.svy-vote-btn--abstain.active { color: var(--amber); border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+
+.svy-vote-select,
+.svy-vote-rationale input {
+  font: inherit;
+  font-size: 0.84rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  width: 100%;
+  max-width: 560px;
+}
+
+.svy-vote-rationale {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+}
+
+.svy-vote .btn-primary {
+  align-self: flex-start;
+}

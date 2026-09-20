@@ -16,6 +16,7 @@ import { QUICKNET_CHAIN_HASH, hexToBytes } from "cip-179/domain";
 import { maxPlaintextSize } from "cip-179/tlock";
 import { Transaction, resolvePaymentKeyHash, resolveStakeKeyHash, resolveTxHash } from "@meshsdk/core";
 import { deserializeTx } from "@meshsdk/core-cst";
+import { bech32 } from "bech32";
 import blakejs from "blakejs";
 
 export { METADATA_LABEL, Role };
@@ -200,7 +201,41 @@ async function submitViaKoios(signedTxHex) {
   return /^[0-9a-f]{64}$/i.test(hash) ? hash.toLowerCase() : resolveTxHash(signedTxHex);
 }
 
-async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = []) {
+/** A CIP-129 `gov_action1…` id as the { txHash, txIndex } a vote names. */
+export function govActionRef(actionId) {
+  const { prefix, words } = bech32.decode(String(actionId || "").trim(), 1000);
+  if (prefix !== "gov_action") throw new Error("Not a governance action id.");
+  const bytes = bech32.fromWords(words);
+  if (bytes.length < 33) throw new Error("Malformed governance action id.");
+  const txHash = Array.from(bytes.slice(0, 32), (b) => b.toString(16).padStart(2, "0")).join("");
+  let txIndex = 0;
+  for (const b of bytes.slice(32)) txIndex = (txIndex << 8) | b;
+  return { txHash, txIndex };
+}
+
+function resolveIpfsUrl(url) {
+  const s = String(url || "").trim();
+  return s.startsWith("ipfs://") ? `https://ipfs.io/ipfs/${s.slice(7)}` : s;
+}
+
+/** The vote anchor for a rationale URL: the document's blake2b-256, or undefined without a URL. */
+export async function buildVoteAnchor(rawUrl) {
+  const url = String(rawUrl || "").trim();
+  if (!url) return undefined;
+  const res = await fetch(resolveIpfsUrl(url));
+  if (!res.ok) throw new Error(`The rationale URL could not be fetched (HTTP ${res.status}).`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return { anchorUrl: url, anchorDataHash: blakejs.blake2bHex(bytes, null, 32) };
+}
+
+/**
+ * One label-17 transaction, optionally carrying a DRep vote on a governance
+ * action (`vote` = { drepId, actionId, choice: "Yes" | "No" | "Abstain",
+ * anchor? }). With the vote the transaction is CIP-179's mechanism B: the
+ * ledger enforces the DRep witness for the vote, and that vote proves the
+ * response credential when the action is one the survey links.
+ */
+async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [], { vote } = {}) {
   const utxos = await walletApi.getUtxos();
   if (!utxos?.length) {
     throw new Error("No UTxOs found in wallet. Fund your wallet with ADA and try again.");
@@ -212,6 +247,14 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [])
   const required = [...new Set(signerHashes.filter(Boolean).map((h) => String(h).toLowerCase()))];
   for (const signerHash of required) {
     tx.txBuilder.requiredSignerHash(signerHash);
+  }
+  if (vote) {
+    const { txHash, txIndex } = govActionRef(vote.actionId);
+    tx.txBuilder.vote(
+      { type: "DRep", drepId: vote.drepId },
+      { txHash, txIndex },
+      { voteKind: vote.choice, ...(vote.anchor ? { anchor: vote.anchor } : {}) },
+    );
   }
   const unsignedTx = await tx.build();
   const signedTx = await walletApi.signTx(unsignedTx, true, true);
@@ -253,8 +296,8 @@ async function buildAndSubmitMetadataTx(walletApi, metadatum, signerHashes = [])
  * submits it, proving `signerHashes` via required signers. Resolves to the
  * transaction hash.
  */
-export async function submitLabel17Payload(walletApi, payload, signerHashes = []) {
-  return buildAndSubmitMetadataTx(walletApi, payload, signerHashes);
+export async function submitLabel17Payload(walletApi, payload, signerHashes = [], options = {}) {
+  return buildAndSubmitMetadataTx(walletApi, payload, signerHashes, options);
 }
 
 export async function buildAndSubmitSurveyCreation(walletApi, surveyForm) {
