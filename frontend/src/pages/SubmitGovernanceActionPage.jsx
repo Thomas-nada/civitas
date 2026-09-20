@@ -562,7 +562,7 @@ export default function SubmitGovernanceActionPage() {
   async function onSubmit(event) {
     event.preventDefault();
     if (!wallet?.walletApi) {
-      setError("Connect wallet first.");
+      setError("Sign in with your wallet first.");
       return;
     }
 

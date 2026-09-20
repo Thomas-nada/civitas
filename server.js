@@ -4,8 +4,9 @@ const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
 const cip179 = require("./lib/cip179");
-// BLAKE2b-256 — pure JS, RFC 7693, no external deps
-function blake2b256(data) {
+// BLAKE2b — pure JS, RFC 7693, no external deps. `outlen` is the digest length
+// in bytes: 32 for metadata hashes, 28 for Cardano key/credential hashes.
+function blake2b(data, outlen = 32) {
   const bytes = Buffer.isBuffer(data)
     ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
     : data instanceof Uint8Array
@@ -55,7 +56,7 @@ function blake2b256(data) {
     for (let i = 0; i < 8; i++) h[i] ^= v[i] ^ v[i + 8];
   }
   const h = [...IV];
-  h[0] ^= 0x0000000001010020n; // param: digest_len=32, key_len=0, fanout=1, depth=1
+  h[0] ^= 0x0000000001010000n ^ BigInt(outlen); // param: digest_len=outlen, key_len=0, fanout=1, depth=1
   const BLOCK = 128;
   const padLen = Math.max(BLOCK, Math.ceil(bytes.length / BLOCK) * BLOCK);
   const padded = new Uint8Array(padLen);
@@ -73,12 +74,12 @@ function blake2b256(data) {
     const count = BigInt(isLast ? bytes.length : (bi + 1) * BLOCK);
     compress(h, m, count, isLast);
   }
-  const out = Buffer.alloc(32);
-  for (let i = 0; i < 4; i++) {
-    let w = h[i];
-    for (let b = 0; b < 8; b++) { out[i * 8 + b] = Number(w & 0xffn); w >>= 8n; }
-  }
+  const out = Buffer.alloc(outlen);
+  for (let i = 0; i < outlen; i++) out[i] = Number((h[i >> 3] >> BigInt(8 * (i & 7))) & 0xffn);
   return out;
+}
+function blake2b256(data) {
+  return blake2b(data, 32);
 }
 
 function loadDotEnv() {
@@ -778,6 +779,192 @@ function enforceRateLimit(res, result, message) {
     retryAfterSec: result.retryAfterSec
   });
   return false;
+}
+
+// ── Sign in with cardano-signer (challenge / verify) ─────────────────────
+// Civitas keeps no server-side sessions: the frontend holds the signed-in
+// identity, exactly as it does after a browser-wallet connect. These
+// endpoints exist so a DRep, SPO or CC member whose keys never touch a
+// browser can still prove key control: the server issues a single-use nonce,
+// the user signs it offline with cardano-signer, and the server verifies the
+// Ed25519 signature, derives the identity from the public key and checks it
+// on-chain before telling the frontend who signed in.
+const AUTH_NONCE_PREFIX = "civitas";
+const AUTH_NONCE_TTL_SEC = 300;
+const AUTH_CHALLENGE_RATE_LIMIT_MAX = 30;
+const AUTH_VERIFY_RATE_LIMIT_MAX = 10;
+const AUTH_RATE_LIMIT_WINDOW_MS = 60_000;
+// The Host is echoed into the challenge (the user sees it in the signing
+// command), so only a plausible one gets in.
+const AUTH_HOST_RE = /^[a-zA-Z0-9.-]+(?::\d{1,5})?$/;
+const authNonces = new Map(); // nonce -> { payload, expiresAt (ms) }
+
+function issueAuthNonce(domain) {
+  const nowMs = Date.now();
+  for (const [key, row] of authNonces) {
+    if (row.expiresAt <= nowMs) authNonces.delete(key);
+  }
+  const nonce = crypto.randomBytes(32).toString("base64url");
+  const issuedAt = Math.floor(nowMs / 1000);
+  const payload = `${AUTH_NONCE_PREFIX}:${domain}:${nonce}:${issuedAt}`;
+  authNonces.set(nonce, { payload, expiresAt: nowMs + AUTH_NONCE_TTL_SEC * 1000 });
+  return payload;
+}
+
+// Consumes a challenge payload: true only for the single request that removes
+// it, and only when the stored nonce AND the full payload match (a tampered
+// payload matches no row and never burns the real nonce).
+function consumeAuthNonce(payload) {
+  const parts = String(payload || "").split(":");
+  if (parts[0] !== AUTH_NONCE_PREFIX || parts.length < 4) return false;
+  const issuedAtStr = parts[parts.length - 1];
+  const nonce = parts[parts.length - 2];
+  if (!/^\d{1,15}$/.test(issuedAtStr)) return false;
+  const issuedAt = Number(issuedAtStr);
+  const now = Math.floor(Date.now() / 1000);
+  if (issuedAt > now || now - issuedAt > AUTH_NONCE_TTL_SEC) return false;
+  const row = authNonces.get(nonce);
+  if (!row || row.payload !== payload) return false;
+  authNonces.delete(nonce);
+  return row.expiresAt > Date.now();
+}
+
+function isHexExact(value, length) {
+  return typeof value === "string" && value.length === length && /^[0-9a-fA-F]+$/.test(value);
+}
+
+// Node verifies Ed25519 from a SubjectPublicKeyInfo; this 12-byte prefix wraps
+// a raw 32-byte key into one.
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+function verifyEd25519Raw(signatureHex, publicKeyHex, message) {
+  try {
+    const key = crypto.createPublicKey({
+      key: Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(publicKeyHex, "hex")]),
+      format: "der",
+      type: "spki"
+    });
+    return crypto.verify(null, Buffer.from(message, "utf8"), key, Buffer.from(signatureHex, "hex"));
+  } catch {
+    return false;
+  }
+}
+
+// bech32 (BIP-173) encoder for governance ids, kept local so sign-in never
+// depends on the optional frontend codec loaded above.
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const top = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) {
+      if ((top >>> i) & 1) chk ^= GEN[i];
+    }
+  }
+  return chk;
+}
+function bech32Encode(prefix, bytes) {
+  const words = [];
+  let acc = 0;
+  let bits = 0;
+  for (const b of bytes) {
+    acc = ((acc << 8) | b) & 0xffff;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      words.push((acc >>> bits) & 31);
+    }
+  }
+  if (bits > 0) words.push((acc << (5 - bits)) & 31);
+  const chars = [...prefix];
+  const hrpExpanded = chars.map((c) => c.charCodeAt(0) >>> 5).concat([0], chars.map((c) => c.charCodeAt(0) & 31));
+  const polymod = bech32Polymod(hrpExpanded.concat(words, [0, 0, 0, 0, 0, 0])) ^ 1;
+  const checksum = [];
+  for (let i = 0; i < 6; i++) checksum.push((polymod >>> (5 * (5 - i))) & 31);
+  return `${prefix}1${words.concat(checksum).map((w) => BECH32_CHARSET[w]).join("")}`;
+}
+
+// CIP-129 drep1 id: header 0x22 + blake2b-224 of the DRep public key.
+function drepIdFromPubKeyHex(publicKeyHex) {
+  const hash = blake2b(Buffer.from(publicKeyHex, "hex"), 28);
+  return bech32Encode("drep", Buffer.concat([Buffer.from([0x22]), Buffer.from(hash)]));
+}
+
+// The 28-byte credential hash a key registers under (what Koios exposes as
+// cc_hot_hex for a key-based committee member).
+function keyHashHexFromPubKeyHex(publicKeyHex) {
+  return Buffer.from(blake2b(Buffer.from(publicKeyHex, "hex"), 28)).toString("hex");
+}
+
+// Resolves the on-chain role for a verified public key. Returns
+// { ok: true, identity } or { ok: false, status, error }. Throws on a Koios
+// failure so the route can answer 503 instead of a false "not a …".
+// Registration state of a drep1 id on Koios: { registered, active, hasScript }.
+// Throws when Koios is unreachable so callers fail closed instead of treating
+// "unknown" as "not registered" (or worse, as registered).
+async function lookupDrepRegistration(drepId) {
+  const rows = await koiosPost("/drep_info", { _drep_ids: [drepId] });
+  const info = Array.isArray(rows) ? rows.find((r) => r && r.drep_id === drepId) || rows[0] || null : null;
+  // Newer Koios reports drep_status ("registered" | "retired" | …); older
+  // builds a boolean `registered`.
+  const registered = info
+    ? (typeof info.drep_status === "string" ? info.drep_status === "registered" : info.registered === true)
+    : false;
+  return { registered, active: Boolean(info) && info.active !== false, hasScript: info?.has_script === true };
+}
+
+async function resolveAuthIdentity(role, publicKeyHex) {
+  if (role === "drep") {
+    const drepId = drepIdFromPubKeyHex(publicKeyHex);
+    const reg = await lookupDrepRegistration(drepId);
+    if (!reg.registered || reg.hasScript) {
+      return { ok: false, status: 401, error: "not an active DRep" };
+    }
+    return { ok: true, identity: { role, publicKeyHex, drepId, active: reg.active } };
+  }
+
+  if (role === "spo") {
+    // Koios already applies the CIP-151 highest-nonce and revocation rules and
+    // returns only the pool's currently valid key with registered: true.
+    const rows = await koiosGet(
+      `/pool_calidus_keys?calidus_pub_key=eq.${encodeURIComponent(publicKeyHex)}` +
+      "&select=pool_id_bech32,calidus_pub_key,calidus_id_bech32,registered,pool_status"
+    );
+    const row = Array.isArray(rows)
+      ? rows.find((r) => String(r?.calidus_pub_key || "").toLowerCase() === publicKeyHex)
+      : null;
+    if (!row || row.registered !== true || row.pool_status !== "registered") {
+      return { ok: false, status: 401, error: "not an active SPO" };
+    }
+    return { ok: true, identity: { role, publicKeyHex, poolId: row.pool_id_bech32, calidusId: row.calidus_id_bech32 || "" } };
+  }
+
+  // CC member: the hot key's credential hash must be an authorized, key-based
+  // member of the current committee.
+  const hotKeyHashHex = keyHashHexFromPubKeyHex(publicKeyHex);
+  const committee = await koiosGet("/committee_info")
+    .then((rows) => (Array.isArray(rows) && rows.length > 0 ? rows[0] : null));
+  const members = Array.isArray(committee?.members) ? committee.members : [];
+  const member = members.find((m) =>
+    m &&
+    m.status === "authorized" &&
+    m.cc_hot_has_script !== true &&
+    String(m.cc_hot_hex || "").toLowerCase() === hotKeyHashHex
+  );
+  if (!member || (!member.cc_hot_id && !member.cc_cold_id)) {
+    return { ok: false, status: 401, error: "not an authorized CC member" };
+  }
+  return {
+    ok: true,
+    identity: {
+      role,
+      publicKeyHex,
+      ccHotId: member.cc_hot_id || "",
+      ccColdId: member.cc_cold_id || "",
+      expirationEpoch: member.expiration_epoch ?? null
+    }
+  };
 }
 
 function isBugReportsAuthorized(req, url) {
@@ -8651,6 +8838,96 @@ const server = http.createServer(async (req, res) => {
       periods: Object.values(NCL_PERIODS),
       ...summary
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/challenge") {
+    const challengeLimit = consumeRateLimit({
+      scope: "auth-challenge",
+      key: getClientIp(req),
+      maxRequests: AUTH_CHALLENGE_RATE_LIMIT_MAX,
+      windowMs: AUTH_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, challengeLimit, "Too many sign-in attempts. Please try again shortly.")) {
+      return;
+    }
+    const rawHost = String(req.headers.host || "").trim();
+    const domain = AUTH_HOST_RE.test(rawHost) ? rawHost : "unknown";
+    json(res, 200, { ok: true, payload: issueAuthNonce(domain) });
+    return;
+  }
+
+  // Registration check for the wallet sign-in: the frontend derives the drep1
+  // id from the wallet's CIP-95 key and asks whether it is a registered DRep.
+  // Answers 503 when Koios is unreachable so the client can fail closed.
+  if (req.method === "GET" && url.pathname === "/api/auth/drep-status") {
+    const drepId = String(url.searchParams.get("id") || "").trim();
+    if (!/^drep1[0-9a-z]{20,80}$/.test(drepId)) {
+      json(res, 400, { ok: false, error: "invalid request" });
+      return;
+    }
+    try {
+      const reg = await lookupDrepRegistration(drepId);
+      json(res, 200, { ok: true, drepId, ...reg });
+    } catch (error) {
+      console.error("[auth] drep-status lookup failed:", error?.message || error);
+      json(res, 503, { ok: false, error: "lookup failed" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/verify") {
+    const verifyLimit = consumeRateLimit({
+      scope: "auth-verify",
+      key: getClientIp(req),
+      maxRequests: AUTH_VERIFY_RATE_LIMIT_MAX,
+      windowMs: AUTH_RATE_LIMIT_WINDOW_MS
+    });
+    if (!enforceRateLimit(res, verifyLimit, "Too many sign-in attempts. Please try again shortly.")) {
+      return;
+    }
+    let body;
+    try {
+      body = await readJsonBody(req, 16 * 1024);
+    } catch {
+      json(res, 400, { ok: false, error: "invalid request" });
+      return;
+    }
+    const role = String(body?.role || "");
+    const payload = typeof body?.payload === "string" ? body.payload : "";
+    const signatureHex = String(body?.signatureHex || "").toLowerCase();
+    const publicKeyHex = String(body?.publicKeyHex || "").toLowerCase();
+    if (
+      !["drep", "spo", "cc"].includes(role) ||
+      !payload || payload.length > 512 ||
+      !isHexExact(signatureHex, 128) ||
+      !isHexExact(publicKeyHex, 64)
+    ) {
+      json(res, 400, { ok: false, error: "invalid request" });
+      return;
+    }
+    // Single use: the nonce is burned before the signature check, so a replay
+    // of a valid signature fails just like a forged one.
+    if (!consumeAuthNonce(payload)) {
+      json(res, 401, { ok: false, error: "invalid or expired nonce" });
+      return;
+    }
+    if (!verifyEd25519Raw(signatureHex, publicKeyHex, payload)) {
+      json(res, 401, { ok: false, error: "signature verification failed" });
+      return;
+    }
+    // Identity comes only from the verified key, never from the client's claim.
+    try {
+      const resolved = await resolveAuthIdentity(role, publicKeyHex);
+      if (!resolved.ok) {
+        json(res, resolved.status, { ok: false, error: resolved.error });
+        return;
+      }
+      json(res, 200, { ok: true, identity: resolved.identity });
+    } catch (error) {
+      console.error("[auth] on-chain lookup failed:", error?.message || error);
+      json(res, 503, { ok: false, error: "lookup failed" });
+    }
     return;
   }
 

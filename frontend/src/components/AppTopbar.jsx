@@ -3,6 +3,10 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { WalletContext } from "../context/WalletContext";
 import { getSoftCoercedDrepMatch } from "../constants/softCoercedDreps";
 import { SHOW_DELEGATION_AWARENESS_UI } from "../constants/featureFlags";
+import { SIGN_KEY_LABELS, VISIBLE_ROLES } from "../lib/wallet/roles";
+import { WalletMark } from "./wallet/WalletPicker";
+import { ROLE_ICONS } from "./wallet/roleIcons";
+import { IconCheck, IconChevronDown, IconCopy, IconLogout, IconProfile, IconSwap, IconTerminal, IconUsers, IconWallet } from "./wallet/icons";
 
 const NAV_GROUPS = [
   {
@@ -81,6 +85,47 @@ function networkLabel(netId) {
   if (netId === 0) return "Testnet";
   return "Unknown";
 }
+
+/** Shortens a long id (drep1…, stake1…) for the account menu; the full value stays in the title. */
+function truncateMiddle(id, head = 12, tail = 6) {
+  const s = String(id || "");
+  return s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
+}
+
+/** The session's mark: the wallet's logo, or a terminal glyph for a cardano-signer session. */
+function SessionMark({ wallet, size }) {
+  if (!wallet.isCliSession) return <WalletMark name={wallet.walletName} icon={wallet.walletIcon} size={size} />;
+  return (
+    <span className="wallet-mark wallet-mark--mono wallet-mark--signer" aria-hidden="true" style={{ width: size, height: size }}>
+      <IconTerminal size={Math.round(size * 0.55)} />
+    </span>
+  );
+}
+
+function CopyIdButton({ value }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked in an insecure context; the id stays selectable.
+    }
+  }
+  return (
+    <button
+      type="button"
+      className={`copy-id-btn${copied ? " is-copied" : ""}`}
+      onClick={copy}
+      aria-label={copied ? "Copied" : "Copy your id"}
+      title={copied ? "Copied" : "Copy your id"}
+    >
+      {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+    </button>
+  );
+}
+
 
 function BrandMark({ theme, alertActive }) {
   const dark = theme !== "light";
@@ -162,6 +207,47 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const headerRef = useRef(null);
   const wallet = useContext(WalletContext);
+  // Signed-out role shortcuts (the chevron next to "Sign in") and the signed-in
+  // account menu share one anchor so an outside click or Escape closes either.
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const walletMenuRef = useRef(null);
+  const accountMenuOpen = Boolean(wallet?.walletMenuOpen && wallet?.loggedIn);
+  useEffect(() => {
+    if (!accountMenuOpen && !roleMenuOpen) return;
+    function closeMenus() {
+      setRoleMenuOpen(false);
+      if (accountMenuOpen) wallet.setWalletMenuOpen(false);
+    }
+    function handleOutside(e) {
+      if (walletMenuRef.current && !walletMenuRef.current.contains(e.target)) closeMenus();
+    }
+    function handleKey(e) {
+      if (e.key === "Escape") closeMenus();
+    }
+    document.addEventListener("pointerdown", handleOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [accountMenuOpen, roleMenuOpen, wallet]);
+
+  // The id shown (and copied) in the account menu: the credential the session
+  // proved (DRep id, pool id or CC hot id) for a cardano-signer session, the
+  // DRep id when acting as a DRep, else the reward address.
+  const signerIdentity = wallet?.signerIdentity;
+  const accountId = wallet?.isCliSession
+    ? String(signerIdentity?.drepId || signerIdentity?.poolId || signerIdentity?.ccHotId || signerIdentity?.ccColdId || "")
+    : wallet?.actingAsDrep
+      ? String(wallet.walletDrep?.dRepIDCip105 || "")
+      : String(wallet?.walletRewardAddress || "");
+
+  // Re-enters the sign-in dialog on the DRep role; the current session ends
+  // because the DRep key is a different signer.
+  function switchToDrepRole() {
+    wallet.disconnectWallet();
+    wallet.openSignIn("drep");
+  }
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [bugSubmitting, setBugSubmitting] = useState(false);
   const [bugNotice, setBugNotice] = useState("");
@@ -466,95 +552,186 @@ export default function AppTopbar({ theme = "dark", onToggleTheme, isEaster = fa
               Report Bug
             </button>
 
-            {/* Global Wallet Button */}
+            {/* Sign-in / account control (DRepTalk-style: role shortcuts when
+                signed out, an identity pill with an account menu when signed in) */}
             {wallet ? (
-              <div className="wallet-menu-wrap topbar-wallet">
-                <button
-                  type="button"
-                  className="wallet-trigger"
-                  onClick={() => wallet.setWalletMenuOpen((v) => !v)}
-                  aria-label={wallet.walletApi ? `Wallet: ${wallet.walletName}` : "Connect wallet"}
-                >
-                  {wallet.loggedIn
-                    ? `${wallet.walletName}${actingAsDrep ? " · DRep" : ""}`
-                    : "Connect Wallet"}
-                </button>
-
-                {wallet.walletApi && actingAsDrep ? (
-                  <Link
-                    to={`/dreps/${encodeURIComponent(wallet.walletDrep.dRepIDCip105)}`}
-                    className="my-drep-btn"
-                    onClick={() => wallet.setWalletMenuOpen(false)}
+              <div className="wallet-menu-wrap topbar-wallet" ref={walletMenuRef}>
+                {wallet.loggedIn ? (
+                  <button
+                    type="button"
+                    className={`wallet-pill${wallet.walletMenuOpen ? " is-open" : ""}`}
+                    onClick={() => wallet.setWalletMenuOpen((v) => !v)}
+                    aria-haspopup="dialog"
+                    aria-expanded={wallet.walletMenuOpen}
+                    aria-label={`Account: ${wallet.walletName}, signed in as ${wallet.roleLabel}`}
                   >
-                    My DRep Profile
-                  </Link>
+                    <SessionMark wallet={wallet} size={20} />
+                    <span className="wallet-pill-name">{wallet.walletName}</span>
+                    <span className={`role-badge role-badge--${wallet.role}`}>{wallet.roleLabel}</span>
+                    <IconChevronDown size={14} />
+                  </button>
+                ) : (
+                  <div className="signin-entry">
+                    <button
+                      type="button"
+                      className="wallet-trigger signin-entry-main"
+                      onClick={() => { setRoleMenuOpen(false); wallet.openSignIn(); }}
+                    >
+                      <IconWallet size={15} />
+                      <span>Sign in</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="wallet-trigger signin-entry-more"
+                      aria-label="Sign-in options"
+                      aria-haspopup="menu"
+                      aria-expanded={roleMenuOpen}
+                      onClick={() => setRoleMenuOpen((v) => !v)}
+                    >
+                      <IconChevronDown size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {!wallet.loggedIn && roleMenuOpen ? (
+                  <div className="wallet-popover panel account-menu role-menu" role="menu" aria-label="Sign in as">
+                    {VISIBLE_ROLES.map((r) => (
+                      <button
+                        key={r.key}
+                        type="button"
+                        role="menuitem"
+                        className="account-menu-item"
+                        onClick={() => { setRoleMenuOpen(false); wallet.openSignIn(r.key); }}
+                      >
+                        {ROLE_ICONS[r.key]}
+                        Enter as {r.label}
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
 
                 {wallet.walletMenuOpen && wallet.loggedIn ? (
-                  <div className="wallet-popover panel">
-                    {(
-                      <div className="wallet-connected">
-                        <p>
-                          Connected: <strong>{wallet.walletName}</strong>
-                          {wallet.signerMode === "cardano-signer" ? <span className="muted"> (read-only)</span> : null}
-                        </p>
-                        <p>
-                          Network: <strong>{networkLabel(wallet.walletNetworkId)}</strong>
-                        </p>
+                  <div className="wallet-popover panel account-menu" role="dialog" aria-label="Account">
+                    <div className="account-menu-head">
+                      <SessionMark wallet={wallet} size={36} />
+                      <div className="account-menu-head-text">
+                        <span className="account-menu-name">
+                          {wallet.walletName}
+                          <span className={`role-badge role-badge--${wallet.role}`}>{wallet.roleLabel}</span>
+                        </span>
+                        <span className="account-menu-id mono" title={accountId}>
+                          {accountId ? truncateMiddle(accountId) : "No reward address exposed by wallet."}
+                        </span>
+                      </div>
+                      {accountId ? <CopyIdButton value={accountId} /> : null}
+                    </div>
+
+                    {wallet.role === "drep" && wallet.walletDrep ? (
+                      <Link
+                        to={`/dreps/${encodeURIComponent(wallet.walletDrep.dRepIDCip105)}`}
+                        className="account-menu-item"
+                        onClick={() => wallet.setWalletMenuOpen(false)}
+                      >
+                        <IconProfile size={16} />
+                        My DRep profile
+                      </Link>
+                    ) : null}
+                    {wallet.actingAsSpo ? (
+                      <Link
+                        to={`/spos/${encodeURIComponent(wallet.signerIdentity.poolId)}`}
+                        className="account-menu-item"
+                        onClick={() => wallet.setWalletMenuOpen(false)}
+                      >
+                        <IconProfile size={16} />
+                        My pool profile
+                      </Link>
+                    ) : null}
+                    {wallet.actingAsCc && wallet.signerIdentity.ccHotId ? (
+                      <Link
+                        to={`/committee/${encodeURIComponent(wallet.signerIdentity.ccHotId)}`}
+                        className="account-menu-item"
+                        onClick={() => wallet.setWalletMenuOpen(false)}
+                      >
+                        <IconProfile size={16} />
+                        My committee profile
+                      </Link>
+                    ) : null}
+                    {!wallet.isCliSession && isRegisteredDrep && !actingAsDrep ? (
+                      <button type="button" className="account-menu-item" onClick={switchToDrepRole}>
+                        <IconSwap size={16} />
+                        Switch to your DRep key
+                      </button>
+                    ) : null}
+                    {!wallet.isCliSession && !isRegisteredDrep ? (
+                      <Link to="/dreps" className="account-menu-item" onClick={() => wallet.setWalletMenuOpen(false)}>
+                        <IconUsers size={16} />
+                        Find a DRep to delegate to
+                      </Link>
+                    ) : null}
+
+                    <div className="account-menu-meta">
+                      <dl>
+                        <div>
+                          <dt>Network</dt>
+                          <dd>{networkLabel(wallet.walletNetworkId)}</dd>
+                        </div>
                         {wallet.walletApi ? (
-                          <p>
-                            Balance: <strong>{formatAda(wallet.walletLovelace)}</strong>
-                          </p>
-                        ) : null}
-                        <p className="muted" style={{ fontSize: "0.78rem" }}>
-                          Signing with: <strong>{({ drep: "DRep key", stake: "Stake key", calidus: "Calidus key" })[wallet.preferredSignKey] || wallet.preferredSignKey}</strong>
-                          {wallet.multiSigDRepId ? <> · MultiSig <span className="mono">{wallet.multiSigDRepId.slice(0, 14)}…</span></> : null}
-                        </p>
-                        {SHOW_DELEGATION_AWARENESS_UI && matchedSoftCoercedDrep && !softCoercedDismissed ? (
-                          <div className="wallet-antitrust-alert" role="alert">
-                            <p>
-                              This wallet is delegated to a DRep in the local delegation-awareness list. This does not judge
-                              the DRep, but helps surface cases where users may have delegated via default flows.
-                            </p>
-                            {matchedSoftCoercedDrep.reason ? (
-                              <p className="muted">
-                                Reason: {matchedSoftCoercedDrep.reason}
-                              </p>
-                            ) : null}
-                            <p className="muted">
-                              If this was intentional, you can ignore this. If not, you can re-delegate at any time.
-                            </p>
-                            <div className="wallet-antitrust-actions">
-                              <button type="button" className="mode-btn active" onClick={openDrepListForRedelegation}>
-                                Review DRep options
-                              </button>
-                              <button type="button" className="mode-btn" onClick={dismissSoftCoercedPrompt}>
-                                Dismiss
-                              </button>
-                            </div>
+                          <div>
+                            <dt>Balance</dt>
+                            <dd>{formatAda(wallet.walletLovelace)}</dd>
                           </div>
                         ) : null}
-                        {actingAsDrep ? (
-                          <p className="muted">DRep credential detected — you can vote on governance actions.</p>
-                        ) : isRegisteredDrep ? (
-                          <p className="muted">Signed in with your stake key. Switch to the DRep key at login to act as your DRep.</p>
-                        ) : (
-                          <p className="muted">No DRep credential — you can delegate to a DRep.</p>
-                        )}
-                        {walletDelegationLoading ? <p className="muted">Checking delegation...</p> : null}
-                        {walletDelegationError ? <p className="muted">Delegation check: {walletDelegationError}</p> : null}
-                        <p className="mono">{wallet.walletRewardAddress || "No reward address exposed by wallet."}</p>
-                        <button type="button" className="mode-btn" onClick={wallet.disconnectWallet}>
-                          Disconnect
-                        </button>
-                      </div>
-                    )}
+                        <div>
+                          <dt>Signing with</dt>
+                          <dd>{SIGN_KEY_LABELS[wallet.preferredSignKey] || wallet.preferredSignKey}</dd>
+                        </div>
+                      </dl>
+                      <p className="muted account-menu-note">
+                        {wallet.isCliSession
+                          ? "Signed in with cardano-signer. Civitas shows your profile and tools; voting and delegation happen from your CLI."
+                          : actingAsDrep
+                            ? "DRep credential detected — you can vote on governance actions."
+                            : isRegisteredDrep
+                              ? "Signed in with your stake key. Switch to the DRep key to vote as your DRep."
+                              : "No DRep credential — you can delegate to a DRep."}
+                      </p>
+                      {walletDelegationLoading ? <p className="muted account-menu-note">Checking delegation…</p> : null}
+                      {walletDelegationError ? <p className="muted account-menu-note">Delegation check: {walletDelegationError}</p> : null}
+                      {SHOW_DELEGATION_AWARENESS_UI && matchedSoftCoercedDrep && !softCoercedDismissed ? (
+                        <div className="wallet-antitrust-alert" role="alert">
+                          <p>
+                            This wallet is delegated to a DRep in the local delegation-awareness list. This does not judge
+                            the DRep, but helps surface cases where users may have delegated via default flows.
+                          </p>
+                          {matchedSoftCoercedDrep.reason ? (
+                            <p className="muted">
+                              Reason: {matchedSoftCoercedDrep.reason}
+                            </p>
+                          ) : null}
+                          <p className="muted">
+                            If this was intentional, you can ignore this. If not, you can re-delegate at any time.
+                          </p>
+                          <div className="wallet-antitrust-actions">
+                            <button type="button" className="mode-btn active" onClick={openDrepListForRedelegation}>
+                              Review DRep options
+                            </button>
+                            <button type="button" className="mode-btn" onClick={dismissSoftCoercedPrompt}>
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <button type="button" className="account-menu-item account-menu-logout" onClick={wallet.disconnectWallet}>
+                      <IconLogout size={16} />
+                      {wallet.isCliSession ? "Sign out" : "Disconnect"}
+                    </button>
                     {wallet.walletError ? <p className="vote-error">{wallet.walletError}</p> : null}
                   </div>
                 ) : null}
               </div>
             ) : null}
-
             <a
               className="social-x-link"
               href="https://x.com/CivitasExplorer"

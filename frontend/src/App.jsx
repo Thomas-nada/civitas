@@ -12,9 +12,15 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 // MeshSDK, bech32, and blakejs are loaded lazily on first wallet interaction
 // to keep them out of the initial JS bundle and improve page load performance.
 import AppTopbar from "./components/AppTopbar";
-import LoginModal from "./components/LoginModal";
+import SignInDialog from "./components/SignInDialog";
 import InfoBanner from "./components/InfoBanner";
 import { WalletContext } from "./context/WalletContext";
+import { useCardanoWallets, listCardanoWallets, rememberWallet } from "./lib/wallet/useCardanoWallets";
+import { DEFAULT_ROLE, normalizeRole, roleByKey, roleLabel, signKeyForRole, recallRole, rememberRole } from "./lib/wallet/roles";
+import { WalletFlowError, isUserDecline, readableError, walletErrorDetail } from "./lib/wallet/walletError";
+import { APP_NETWORK_LABEL, expectedNetworkId, isExpectedNetwork, networkMismatchMessage } from "./lib/wallet/networkGuard";
+import { readSession, writeWalletSession, writeSignerSession, clearSession } from "./lib/wallet/session";
+import { loginOffline } from "./lib/wallet/offlineLogin";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const GovernanceActionsPage = lazy(() => import("./pages/GovernanceActionsPage"));
@@ -222,167 +228,273 @@ export default function App() {
   };
 
   // ── Global Wallet State ──────────────────────────────────────────────────
-  // Wallet list is populated lazily after MeshSDK loads, keeping it out of
-  // the initial JS bundle for better page-load performance.
-  const [wallets, setWallets] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    import("@meshsdk/core").then(({ BrowserWallet }) => {
-      if (cancelled) return;
-      try {
-        setWallets(BrowserWallet.getInstalledWallets().map((w) => ({
-          key: w.id,
-          displayName: w.name || w.id
-        })));
-      } catch { /* no wallet extensions installed */ }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  // Two ways in, one session shape. A browser wallet (CIP-30/95) is found by
+  // a polling scan of window.cardano (extensions inject late, often after
+  // React mounts). cardano-signer sign-in proves a key offline through
+  // /api/auth/challenge + verify; it carries no walletApi, so it can identify
+  // (DRep, SPO, CC member) but not build transactions. MeshSDK, bech32 and
+  // blakejs still load lazily on the first wallet connect so they stay out of
+  // the initial JS bundle.
+  const {
+    wallets,
+    selected: selectedWallet,
+    setSelected: selectWallet,
+    scanning: walletScanning
+  } = useCardanoWallets();
+  // A cardano-signer session is restored synchronously from storage (the
+  // proof was verified when it was made and is kept for a bounded time), so
+  // the first render already shows the signed-in state. Wallet sessions need
+  // the wallet to re-approve and are restored in the effect below.
+  const [restoredSigner] = useState(() => {
+    const session = readSession();
+    return session?.kind === "signer" ? session : null;
+  });
+  const restoredDrep = restoredSigner && restoredSigner.role === "drep" && restoredSigner.identity?.drepId
+    ? { pubDRepKey: restoredSigner.identity.publicKeyHex || "", dRepIDCip105: restoredSigner.identity.drepId }
+    : null;
   const [walletApi, setWalletApi] = useState(null);
-  const [walletName, setWalletName] = useState("");
+  const [walletKey, setWalletKey] = useState("");
+  const [walletName, setWalletName] = useState(restoredSigner ? "cardano-signer" : "");
+  const [walletIcon, setWalletIcon] = useState("");
+  const [walletSupportsCip95, setWalletSupportsCip95] = useState(false);
   const [walletRewardAddress, setWalletRewardAddress] = useState("");
-  const [walletNetworkId, setWalletNetworkId] = useState(null);
+  const [walletNetworkId, setWalletNetworkId] = useState(restoredSigner ? expectedNetworkId() : null);
   const [walletLovelace, setWalletLovelace] = useState("");
-  const [walletDrep, setWalletDrep] = useState(null); // { dRepIDCip105, ... } or null if not a DRep
-  const [walletDrepId, setWalletDrepId] = useState(""); // drep1... bech32, set whenever CIP-95 key is available (regardless of registration)
+  const [walletDrep, setWalletDrep] = useState(restoredDrep); // { pubDRepKey, dRepIDCip105 } when the session is a registered DRep, else null
+  const [walletDrepId, setWalletDrepId] = useState(restoredDrep ? restoredDrep.dRepIDCip105 : ""); // drep1... bech32, set whenever a DRep key is known (regardless of registration)
   const rawCip95Ref = useRef(null); // raw CIP-95 wallet API for DRep signing
   const [walletError, setWalletError] = useState("");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
-  // Login chooser preferences (richer sign-in UI)
-  const [preferredSignKey, setPreferredSignKey] = useState("stake"); // 'drep' | 'stake' | 'calidus'
-  const [signerMode, setSignerMode] = useState("wallet");            // 'wallet' | 'cardano-signer'
-  const [multiSigDRepId, setMultiSigDRepId] = useState("");          // optional MultiSig DRep-ID
+  // Role the active session signed in as; decides which key signs (see lib/wallet/roles).
+  const [role, setRole] = useState(restoredSigner ? restoredSigner.role : DEFAULT_ROLE);
+  // Role the sign-in dialog opens with: the last one used, or one requested via openSignIn().
+  const [signInRole, setSignInRole] = useState(() => recallRole());
+  const [signerMode, setSignerMode] = useState(restoredSigner ? "cardano-signer" : "wallet"); // 'wallet' | 'cardano-signer'
+  // Identity proven with cardano-signer: { role, publicKeyHex, drepId | poolId, calidusId | ccHotId, ccColdId }.
+  const [signerIdentity, setSignerIdentity] = useState(restoredSigner ? restoredSigner.identity : null);
 
-  const connectWallet = useCallback(async (walletKey, opts = {}) => {
+  const resetWalletState = useCallback(() => {
+    setWalletApi(null);
+    setWalletKey("");
+    setWalletName("");
+    setWalletIcon("");
+    setWalletSupportsCip95(false);
+    setWalletRewardAddress("");
+    setWalletNetworkId(null);
+    setWalletLovelace("");
+    setWalletDrep(null);
+    setWalletDrepId("");
+    rawCip95Ref.current = null;
+    setRole(DEFAULT_ROLE);
+    setSignerMode("wallet");
+    setSignerIdentity(null);
+  }, []);
+
+  // Connects a CIP-30 wallet and signs the session in as `opts.role`.
+  // Resolves to { ok: true } or { ok: false, error, code }; never throws.
+  // `code` lets the dialog offer a next step ("not-a-drep" → sign in as a
+  // delegator instead). `opts.silent` (session restore) keeps a failure out
+  // of the visible error slot.
+  const connectWallet = useCallback(async (key, opts = {}) => {
+    const nextRole = normalizeRole(opts.role);
+    const roleMeta = roleByKey(nextRole);
+    setWalletError("");
     try {
-      setWalletError("");
-      if (opts.signKey) setPreferredSignKey(opts.signKey);
-      setMultiSigDRepId(opts.multiSigDRepId || "");
-      setSignerMode("wallet");
-      // Lazy-load MeshSDK, bech32, and blakejs only when the user connects a wallet.
+      const info = wallets.find((w) => w.key === key)
+        || listCardanoWallets(window.cardano).find((w) => w.key === key);
+      if (!info) throw new WalletFlowError("That wallet extension is no longer available. Pick another wallet.", "missing");
+
+      // Ask for the CIP-95 extension whenever the wallet advertises it or the
+      // role needs it; the raw API is what exposes the DRep key and signData.
+      // A wallet that doesn't know the extension may reject the request
+      // outright, so fall back to a plain enable() unless the user declined.
+      let rawApi = null;
+      try {
+        const wantCip95 = info.supportsCip95 || Boolean(roleMeta?.requiresCip95);
+        try {
+          rawApi = await info.raw.enable(wantCip95 ? { extensions: [{ cip: 95 }] } : undefined);
+        } catch (e) {
+          if (!wantCip95 || isUserDecline(e)) throw e;
+          rawApi = await info.raw.enable();
+        }
+      } catch (e) {
+        throw new WalletFlowError(
+          isUserDecline(e) || !walletErrorDetail(e)
+            ? `Wallet connection was rejected. Approve the request in ${info.name} and try again.`
+            : readableError(e),
+          "rejected"
+        );
+      }
+
+      // Lazy-load MeshSDK, bech32 and blakejs only once a user connects.
       const [{ BrowserWallet }, { bech32 }, blakejs] = await Promise.all([
         import("@meshsdk/core"),
         import("bech32"),
         import("blakejs")
       ]);
-      const api = await BrowserWallet.enable(walletKey);
-      const found = wallets.find((w) => w.key === walletKey);
-      setWalletName(found?.displayName || walletKey);
-      setWalletMenuOpen(false);
-
-      const [rewardAddresses, netId, lovelace] = await Promise.all([
+      const api = await BrowserWallet.enable(key);
+      const netId = await api.getNetworkId();
+      if (!isExpectedNetwork(netId)) throw new WalletFlowError(networkMismatchMessage(netId), "network");
+      const [rewardAddresses, lovelace] = await Promise.all([
         api.getRewardAddresses(),
-        api.getNetworkId(),
-        api.getLovelace(),
+        api.getLovelace()
       ]);
 
-      // CIP-95: request DRep extension via raw wallet API (MeshSDK doesn't expose this)
+      // CIP-95: derive the DRep id from the wallet's DRep key. Every CIP-95
+      // wallet exposes one even if the user never registered, so the wallet
+      // only counts as a DRep when /api/auth/drep-status (Koios) confirms the
+      // credential is registered. When that lookup is unavailable the answer
+      // is "unknown", which never grants the DRep role: a DRep sign-in fails
+      // closed and a delegator sign-in simply carries no DRep credential.
       let drep = null;
-      try {
-        const rawWallet = window.cardano?.[walletKey];
-        const rawApi = rawWallet
-          ? await rawWallet.enable({ extensions: [{ cip: 95 }] }).catch(() => null)
-          : null;
-        if (rawApi?.cip95) {
-          rawCip95Ref.current = rawApi;
-          const pubDRepKey = await rawApi.cip95.getPubDRepKey().catch(() => null);
-          if (pubDRepKey) {
-            // Derive CIP-105 dRepIDCip105: bech32("drep", blake2b-224(pubKey))
-            const keyBytes = Uint8Array.from(
-              pubDRepKey.match(/.{1,2}/g).map((b) => parseInt(b, 16))
-            );
-            const keyHash = blakejs.blake2b(keyBytes, null, 28);
-            // CIP-129: prepend 0x22 (key-hash credential type byte) before bech32 encoding
-            const credBytes = new Uint8Array(29);
-            credBytes[0] = 0x22;
-            credBytes.set(keyHash, 1);
-            const dRepIDCip105 = bech32.encode("drep", bech32.toWords(credBytes), 1000);
-            setWalletDrepId(dRepIDCip105);
-            // Every CIP-95 wallet exposes a DRep key even if the user never
-            // registered as a DRep. Only treat the wallet as a DRep when the
-            // credential is actually registered on-chain.
-            let registered = false;
-            try {
-              const reg = await fetch(`/api/drep-live?id=${encodeURIComponent(dRepIDCip105)}`);
-              registered = reg.ok;
-            } catch { registered = false; }
-            if (registered) {
-              drep = { pubDRepKey, dRepIDCip105 };
+      let drepId = "";
+      let registration = null; // { registered, active } | null when the lookup failed
+      if (rawApi?.cip95) {
+        const pubDRepKey = await rawApi.cip95.getPubDRepKey().catch(() => null);
+        if (pubDRepKey) {
+          const keyBytes = Uint8Array.from(
+            pubDRepKey.match(/.{1,2}/g).map((b) => parseInt(b, 16))
+          );
+          const keyHash = blakejs.blake2b(keyBytes, null, 28);
+          // CIP-129: prepend 0x22 (key-hash credential type byte) before bech32 encoding
+          const credBytes = new Uint8Array(29);
+          credBytes[0] = 0x22;
+          credBytes.set(keyHash, 1);
+          drepId = bech32.encode("drep", bech32.toWords(credBytes), 1000);
+          try {
+            const reg = await fetch(`/api/auth/drep-status?id=${encodeURIComponent(drepId)}`);
+            const data = reg.ok ? await reg.json() : null;
+            if (data?.ok) {
+              registration = { registered: data.registered === true && data.hasScript !== true, active: data.active !== false };
             }
+          } catch {
+            registration = null;
+          }
+          if (registration?.registered) {
+            drep = { pubDRepKey, dRepIDCip105: drepId };
           }
         }
-      } catch {
-        // wallet doesn't support CIP-95 — drep stays null
+      }
+      if (roleMeta?.requiresCip95) {
+        if (!rawApi?.cip95) {
+          throw new WalletFlowError(
+            `${info.name} does not support CIP-95, which signing in as a DRep requires. Use a DRep-capable wallet such as Eternl, Lace or Typhon, sign in with cardano-signer, or sign in as a delegator.`,
+            "no-cip95"
+          );
+        }
+        if (!drep) {
+          if (!registration) {
+            throw new WalletFlowError(
+              "Civitas could not check this DRep credential on-chain right now, so the DRep sign-in was not completed. Try again in a moment, or sign in as a delegator.",
+              "lookup-failed"
+            );
+          }
+          throw new WalletFlowError(
+            `This wallet's DRep key is not a registered, active DRep on ${APP_NETWORK_LABEL}. Register as a DRep first, or sign in as a delegator.`,
+            "not-a-drep"
+          );
+        }
       }
 
+      rawCip95Ref.current = rawApi;
       setWalletApi(api);
+      setWalletKey(key);
+      setWalletName(info.name);
+      setWalletIcon(info.icon);
+      setWalletSupportsCip95(Boolean(rawApi?.cip95) || info.supportsCip95);
       setWalletRewardAddress(rewardAddresses?.[0] || "");
       setWalletNetworkId(netId);
       setWalletLovelace(lovelace);
       setWalletDrep(drep);
-      localStorage.setItem("civitas.wallet", walletKey);
-    } catch (e) {
-      setWalletApi(null);
-      setWalletName("");
-      setWalletRewardAddress("");
-      setWalletNetworkId(null);
-      setWalletLovelace("");
-      setWalletDrep(null);
-      setWalletDrepId("");
-      setWalletError(e?.message || "Failed to connect wallet.");
-      localStorage.removeItem("civitas.wallet");
-    }
-  }, [wallets]);
-
-  // CardanoSigner: a read-only identity from a manually entered stake address.
-  // No walletApi, so it can browse/identify but not submit transactions.
-  const connectCardanoSigner = useCallback(async (stakeAddress, opts = {}) => {
-    setWalletError("");
-    const addr = String(stakeAddress || "").trim();
-    try {
-      const { bech32 } = await import("bech32");
-      const decoded = bech32.decode(addr, 200);
-      if (decoded.prefix !== "stake" && decoded.prefix !== "stake_test") {
-        throw new Error("Enter a valid stake address (stake1… or stake_test1…).");
-      }
-      setWalletApi(null);
-      setSignerMode("cardano-signer");
-      setWalletName("CardanoSigner");
-      setWalletRewardAddress(addr);
-      setWalletNetworkId(decoded.prefix === "stake_test" ? 0 : 1);
-      setWalletLovelace("");
-      setWalletDrep(null);
-      setWalletDrepId("");
-      if (opts.signKey) setPreferredSignKey(opts.signKey);
-      setMultiSigDRepId(opts.multiSigDRepId || "");
+      setWalletDrepId(drepId);
+      setRole(nextRole);
+      setSignInRole(nextRole);
+      setSignerMode("wallet");
+      setSignerIdentity(null);
       setWalletMenuOpen(false);
-      return true;
+      rememberWallet(key);
+      rememberRole(nextRole);
+      writeWalletSession({ walletKey: key, role: nextRole });
+      return { ok: true };
     } catch (e) {
-      setWalletError(e?.message?.includes("valid") ? e.message : "Invalid stake address.");
-      return false;
+      resetWalletState();
+      clearSession();
+      const error = readableError(e, "Failed to connect wallet.");
+      const code = e instanceof WalletFlowError ? e.code : "";
+      if (!opts.silent) setWalletError(error);
+      return { ok: false, error, code };
     }
-  }, []);
+  }, [wallets, resetWalletState]);
+
+  // Signs the session in from an identity the server verified from a
+  // cardano-signer proof (see lib/wallet/offlineLogin). No walletApi: the
+  // keys stay on the user's machine, so Civitas can identify them but any
+  // transaction still happens from their CLI.
+  const applySignerIdentity = useCallback((identity, nextRole) => {
+    resetWalletState();
+    setSignerMode("cardano-signer");
+    setWalletName("cardano-signer");
+    setWalletNetworkId(expectedNetworkId());
+    setRole(nextRole);
+    setSignInRole(nextRole);
+    setSignerIdentity(identity);
+    if (nextRole === "drep" && identity?.drepId) {
+      setWalletDrepId(identity.drepId);
+      setWalletDrep({ pubDRepKey: identity.publicKeyHex || "", dRepIDCip105: identity.drepId });
+    }
+    setWalletMenuOpen(false);
+  }, [resetWalletState]);
+
+  // Completes a cardano-signer sign-in from the pasted signer output.
+  // Resolves to { ok: true } or { ok: false, error }; never throws.
+  const signInWithSigner = useCallback(async ({ role: requestedRole, payload, pastedText }) => {
+    const nextRole = normalizeRole(requestedRole);
+    setWalletError("");
+    const result = await loginOffline({ role: nextRole, payload, pastedText });
+    if (!result.ok) {
+      setWalletError(result.error);
+      return { ok: false, error: result.error, code: "" };
+    }
+    applySignerIdentity(result.identity, nextRole);
+    rememberRole(nextRole);
+    writeSignerSession({ role: nextRole, identity: result.identity });
+    return { ok: true };
+  }, [applySignerIdentity]);
 
   const disconnectWallet = useCallback(() => {
-    setWalletApi(null);
-    setWalletName("");
-    setWalletRewardAddress("");
-    setWalletNetworkId(null);
-    setWalletLovelace("");
-    setWalletDrep(null);
-    rawCip95Ref.current = null;
+    resetWalletState();
     setWalletError("");
     setWalletMenuOpen(false);
-    setSignerMode("wallet");
-    setMultiSigDRepId("");
-    setPreferredSignKey("stake");
-    localStorage.removeItem("civitas.wallet");
+    // The session is gone, but the wallet stays remembered so the picker
+    // preselects it next time.
+    clearSession();
+  }, [resetWalletState]);
+
+  // Opens the sign-in dialog, optionally on a specific role (topbar shortcuts).
+  const openSignIn = useCallback((requestedRole) => {
+    setSignInRole(normalizeRole(requestedRole || recallRole()));
+    setWalletError("");
+    setWalletMenuOpen(true);
   }, []);
 
+  // Restore a wallet session once its wallet shows up in the scan (or give
+  // up quietly once the scan closes without it). Runs at most once; a
+  // cardano-signer session was already restored in the state initialisers.
+  const restoreAttemptedRef = useRef(false);
   useEffect(() => {
-    const saved = localStorage.getItem("civitas.wallet");
-    if (saved) connectWallet(saved).catch(() => localStorage.removeItem("civitas.wallet"));
-  }, [connectWallet]);
+    if (restoreAttemptedRef.current) return;
+    const session = readSession();
+    if (!session || session.kind !== "wallet") {
+      restoreAttemptedRef.current = true;
+      return;
+    }
+    if (!wallets.some((w) => w.key === session.walletKey)) {
+      if (!walletScanning) restoreAttemptedRef.current = true;
+      return;
+    }
+    restoreAttemptedRef.current = true;
+    connectWallet(session.walletKey, { role: session.role, silent: true }).catch(() => clearSession());
+  }, [wallets, walletScanning, connectWallet]);
 
   // Signs payload with the DRep key via CIP-95 if available, otherwise falls back to stake key signData.
   // Returns { signature, key } (CIP-30 DataSignature shape).
@@ -395,10 +507,20 @@ export default function App() {
     return walletApi?.signData(payload, drepId, false);
   }, [walletApi]);
 
+  const preferredSignKey = signKeyForRole(role);
+  const isCliSession = signerMode === "cardano-signer";
   const walletContextValue = useMemo(() => ({
+    // discovery
     wallets,
+    selectedWallet,
+    selectWallet,
+    walletScanning,
+    // session
     walletApi,
+    walletKey,
     walletName,
+    walletIcon,
+    walletSupportsCip95,
     walletRewardAddress,
     walletNetworkId,
     walletLovelace,
@@ -407,24 +529,34 @@ export default function App() {
     walletError,
     walletMenuOpen,
     setWalletMenuOpen,
+    openSignIn,
+    signInRole,
     connectWallet,
+    signInWithSigner,
     disconnectWallet,
     signDRepData,
-    // richer login chooser
+    // role the session signed in as, and the key it therefore signs with
+    role,
+    roleLabel: roleLabel(role),
     preferredSignKey,
-    setPreferredSignKey,
     signerMode,
-    multiSigDRepId,
-    connectCardanoSigner,
+    isCliSession,
+    signerIdentity,
     loggedIn: Boolean(walletName),
     // Acting as a DRep = a real connected wallet that is a registered DRep
-    // on-chain AND signed in with the DRep key. Gates DRep-only actions (voting).
-    actingAsDrep: Boolean(walletApi) && Boolean(walletDrep) && preferredSignKey === "drep",
+    // on-chain AND signed in with the DRep key. Gates DRep-only actions that
+    // build transactions in the browser (voting); a cardano-signer DRep has
+    // the identity (walletDrep, role) but votes from the CLI.
+    actingAsDrep: Boolean(walletApi) && Boolean(walletDrep) && role === "drep",
+    actingAsSpo: isCliSession && role === "spo" && Boolean(signerIdentity?.poolId),
+    actingAsCc: isCliSession && role === "cc" && Boolean(signerIdentity?.ccHotId || signerIdentity?.ccColdId),
   }), [
-    wallets, walletApi, walletName, walletRewardAddress, walletNetworkId,
-    walletLovelace, walletDrep, walletDrepId, walletError, walletMenuOpen,
-    connectWallet, disconnectWallet, signDRepData,
-    preferredSignKey, signerMode, multiSigDRepId, connectCardanoSigner
+    wallets, selectedWallet, selectWallet, walletScanning,
+    walletApi, walletKey, walletName, walletIcon, walletSupportsCip95,
+    walletRewardAddress, walletNetworkId, walletLovelace, walletDrep, walletDrepId,
+    walletError, walletMenuOpen, openSignIn, signInRole,
+    connectWallet, signInWithSigner, disconnectWallet, signDRepData,
+    role, preferredSignKey, signerMode, isCliSession, signerIdentity
   ]);
 
   return (
@@ -436,7 +568,7 @@ export default function App() {
       </div>
       <ScrollToTopOnRouteChange />
       <AppTopbar theme={theme} onToggleTheme={toggleTheme} isEaster={isEaster} />
-      <LoginModal />
+      <SignInDialog />
       <InfoBanner />
       {routeTransitionEnabled ? <RouteTransitionFade /> : null}
       <Suspense fallback={null}>

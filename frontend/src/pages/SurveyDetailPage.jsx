@@ -1360,7 +1360,7 @@ export default function SurveyDetailPage() {
           <p className="muted" style={{ maxWidth: "440px", margin: "0 auto 1.25rem" }}>
             Responding records your answers on-chain as a small transaction (under ~1 ADA).
             Your wallet must be eligible for one of this survey's roles: {roles.join(", ") || "—"}.
-            Use the Connect Wallet button in the top bar to get started.
+            Use the Sign in button in the top bar to get started.
           </p>
           <div style={{ marginTop: "1rem" }}>
             <Link to="/guide?section=tool-survey-respond" className="inline-link" style={{ fontSize: "0.8rem" }}>

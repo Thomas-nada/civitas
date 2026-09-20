@@ -2750,7 +2750,7 @@ export function CcAdminPage() {
       {!walletApi ? (
         <div style={{ border: `1px solid ${amber.border}`, borderRadius: 12, background: amber.bg, padding: "3rem 2rem", textAlign: "center" }}>
           <p style={{ margin: "0 0 0.35rem", fontWeight: 700 }}>Connect your wallet</p>
-          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Use the Connect Wallet button in the top bar, then sign in below.</p>
+          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Use the Sign in button in the top bar, then continue below.</p>
         </div>
       ) : !authed ? (
         <div style={{ border: `1px solid ${amber.border}`, borderRadius: 12, background: amber.bg, padding: "2rem", display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "flex-start" }}>

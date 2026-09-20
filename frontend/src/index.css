@@ -1684,6 +1684,7 @@ a {
   }
 }
 
+/* ── Sign-in & account menu (DRepTalk-style wallet flow) ──────────── */
 .wallet-menu-wrap {
   position: relative;
   display: flex;
@@ -1692,28 +1693,127 @@ a {
   gap: 0.25rem;
 }
 
-.my-drep-btn {
-  display: block;
-  text-align: center;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: var(--radius-sm);
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Signed out: a split control, "Sign in" plus a chevron listing each role. */
+.signin-entry {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.signin-entry .wallet-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--mint) 55%, transparent);
+  background: color-mix(in srgb, var(--mint) 16%, transparent);
   color: var(--mint);
-  text-decoration: none;
-  opacity: 0.85;
-  transition: opacity 0.15s;
-}
-
-.my-drep-btn:hover {
-  opacity: 1;
-  text-decoration: underline;
-}
-
-.wallet-trigger {
-  min-width: 110px;
-  padding: 0.3rem 0.6rem;
+  font: inherit;
   font-size: 0.84rem;
+  font-weight: 700;
   line-height: 1.2;
+  padding: 0.32rem 0.7rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.signin-entry .wallet-trigger:hover {
+  background: color-mix(in srgb, var(--mint) 24%, transparent);
+  filter: none;
+}
+
+.signin-entry-main {
+  border-radius: 999px 0 0 999px;
+}
+
+.signin-entry .signin-entry-more {
+  border-left-width: 0;
+  border-radius: 0 999px 999px 0;
+  padding: 0.32rem 0.5rem 0.32rem 0.38rem;
+}
+
+/* Signed in: identity pill (wallet logo, name, role) that opens the account menu. */
+.wallet-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 260px;
+  padding: 0.22rem 0.55rem 0.22rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.wallet-pill:hover,
+.wallet-pill.is-open {
+  border-color: var(--mint);
+  background: var(--surface-soft-2);
+  filter: none;
+}
+
+.wallet-pill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-pill > svg:last-child {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.role-badge {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  background: var(--chip-bg);
+}
+
+.role-badge--drep {
+  color: var(--mint);
+  border-color: var(--chip-active-border);
+  background: var(--chip-active-soft-bg);
+}
+
+.wallet-mark {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 0.4rem;
+  object-fit: contain;
+}
+
+.wallet-mark--mono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-soft-2);
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 .wallet-popover {
@@ -1725,105 +1825,318 @@ a {
   padding: 0.7rem;
 }
 
-/* ── Login modal (richer sign-in chooser) ───────────────────────── */
-.login-overlay {
+/* Account menu: identity header above rows divided by hairlines. */
+.account-menu {
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-menu > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.account-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.5rem 0.65rem;
+}
+
+.account-menu-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.account-menu-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.account-menu-id {
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.account-menu-item svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.account-menu-item:hover {
+  background: var(--surface-soft-2);
+  color: var(--mint);
+  filter: none;
+}
+
+.account-menu-item:hover svg {
+  color: var(--mint);
+}
+
+.account-menu-logout,
+.account-menu-logout svg {
+  color: var(--rose);
+}
+
+.account-menu-logout:hover {
+  background: color-mix(in srgb, var(--rose) 10%, transparent);
+  color: var(--rose);
+}
+
+.account-menu-logout:hover svg {
+  color: var(--rose);
+}
+
+.account-menu-meta {
+  padding: 0.55rem 0.65rem;
+}
+
+.account-menu-meta dl {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.account-menu-meta dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.account-menu-meta dt {
+  color: var(--text-muted);
+}
+
+.account-menu-meta dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.account-menu-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.account-menu .vote-error {
+  margin: 0.4rem 0.5rem 0.2rem;
+}
+
+.role-menu {
+  width: min(240px, 80vw);
+}
+
+.copy-id-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.copy-id-btn:hover,
+.copy-id-btn.is-copied {
+  border-color: var(--mint);
+  color: var(--mint);
+  filter: none;
+}
+
+/* Sign-in dialog */
+.signin-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(4, 8, 12, 0.62);
+  background: var(--modal-backdrop-bg);
   backdrop-filter: blur(3px);
   padding: 1rem;
 }
-.login-modal {
-  width: min(380px, 94vw);
-  padding: 1.25rem 1.3rem 1.1rem;
+
+.signin-dialog {
+  width: min(440px, 94vw);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.3rem 1.2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.9rem;
   border: 1px solid var(--line);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  background: var(--modal-panel-bg);
+  box-shadow: var(--shadow-lg);
 }
-.login-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.login-head h3 { margin: 0; font-size: 1.15rem; }
-.login-sub { margin: 0; font-size: 0.82rem; line-height: 1.4; }
 
-/* MultiSig toggle */
-.login-multisig {
+.signin-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.signin-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.signin-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.signin-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-.login-multisig input { position: absolute; opacity: 0; width: 0; height: 0; }
-.login-switch {
-  width: 36px;
-  height: 20px;
+  justify-content: center;
   border-radius: 999px;
-  background: var(--surface-soft);
   border: 1px solid var(--line);
-  position: relative;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  flex: 0 0 auto;
-}
-.login-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-.login-multisig input:checked + .login-switch {
-  background: color-mix(in srgb, var(--mint) 32%, transparent);
-  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
-}
-.login-multisig input:checked + .login-switch::after {
-  transform: translateX(16px);
-  background: var(--mint);
-}
-
-/* Tabs */
-.login-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
   background: var(--surface-soft);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.25rem;
-}
-.login-tabs button {
-  padding: 0.4rem 0.5rem;
-  border: 0;
-  background: transparent;
   color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  border-radius: 7px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.login-tabs button.active {
-  background: color-mix(in srgb, var(--mint) 14%, transparent);
-  color: var(--mint);
 }
 
-/* Inputs / select */
-.login-input,
-.login-select {
+.signin-close:hover {
+  color: var(--text);
+  border-color: var(--mint);
+  filter: none;
+}
+
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.signin-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.signin-step-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.signin-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.signin-empty {
+  margin: 0.25rem 0;
+  text-align: center;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.signin-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--mint) 55%, transparent);
+  background: color-mix(in srgb, var(--mint) 18%, transparent);
+  color: var(--mint);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.signin-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--mint) 26%, transparent);
+  filter: none;
+}
+
+.signin-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.signin-trust {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.signin-trust svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.signin-status {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.signin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.signin-field-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.signin-input {
   width: 100%;
   padding: 0.55rem 0.7rem;
   border-radius: 9px;
@@ -1832,75 +2145,393 @@ a {
   color: inherit;
   font-size: 0.86rem;
   font-family: inherit;
-}
-.login-select-wrap { position: relative; }
-.login-select { appearance: none; cursor: pointer; color-scheme: dark; }
-.login-select-wrap::after {
-  content: "▾";
-  position: absolute;
-  right: 0.7rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: var(--text-muted);
-  font-size: 0.7rem;
+  box-sizing: border-box;
 }
 
-/* Wallet list */
-.login-wallet-list {
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--mint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  filter: none;
+}
+
+/* Segmented control (role / method choice) */
+.segmented {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0;
+  min-width: 0;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.segmented--wrap {
+  flex-wrap: wrap;
+}
+
+.segmented-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.segmented--wrap .segmented-btn {
+  flex-basis: 10rem;
+}
+
+.segmented-btn:hover {
+  filter: none;
+  color: var(--text);
+}
+
+.segmented-btn.is-active {
+  background: color-mix(in srgb, var(--mint) 14%, transparent);
+  color: var(--mint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mint) 35%, transparent);
+}
+
+.segmented:disabled .segmented-btn {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Wallet picker: radio rows with the extension's logo and a CIP-95 badge */
+.wallet-picker {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  max-height: 220px;
+}
+
+.wallet-picker-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.wallet-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
   overflow-y: auto;
 }
-.login-wallet-btn {
-  padding: 0.6rem 0.7rem;
+
+.wallet-picker-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
   border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--bg-soft);
-  color: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
   cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 120ms ease, background 120ms ease;
 }
-.login-wallet-btn:hover { border-color: color-mix(in srgb, var(--mint) 40%, transparent); }
-.login-wallet-btn.selected {
+
+.wallet-picker-row:hover {
+  border-color: color-mix(in srgb, var(--mint) 40%, transparent);
+}
+
+.wallet-picker-row.is-selected {
   border-color: var(--mint);
-  background: color-mix(in srgb, var(--mint) 12%, transparent);
+  box-shadow: 0 0 0 1px var(--mint);
+  background: color-mix(in srgb, var(--mint) 8%, transparent);
+}
+
+.wallet-picker-row.is-focused {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+
+.wallet-picker-row.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.wallet-picker-row > svg {
+  flex-shrink: 0;
   color: var(--mint);
 }
 
-/* Primary / cancel */
-.login-primary {
-  padding: 0.6rem;
-  border-radius: 9px;
+.wallet-picker-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wallet-picker-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-badge {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+/* Compact wallet card: one row for the common single-wallet case */
+.wallet-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-soft);
+}
+
+.wallet-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.wallet-card-text {
+  min-width: 0;
+  flex: 1 1 8rem;
+}
+
+.wallet-card-label {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.wallet-card-name {
+  margin: 0.1rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.wallet-card-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-card-change {
+  flex-shrink: 0;
+  background: transparent;
+  color: var(--mint);
+  border: 1px solid color-mix(in srgb, var(--mint) 55%, transparent);
+  border-radius: 7px;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wallet-card-change:hover {
+  background: color-mix(in srgb, var(--mint) 12%, transparent);
+  filter: none;
+}
+
+.wallet-card-change:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wallet-card-picker {
+  margin-top: 0.8rem;
+}
+
+.wallet-card-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Callouts */
+.callout {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
-  color: var(--text-muted);
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.callout-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.callout-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.callout-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.callout--error {
+  border-color: color-mix(in srgb, var(--rose) 45%, transparent);
+  background: color-mix(in srgb, var(--rose) 10%, transparent);
+}
+
+.callout--error .callout-icon {
+  color: var(--rose);
+}
+
+.callout--warning {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.callout--warning .callout-icon {
+  color: var(--amber);
+}
+
+/* Multisig / script DRep toggle (advanced sign-in only) */
+.signin-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.signin-switch {
+  appearance: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.signin-switch[aria-checked="true"] {
+  background: var(--mint);
+}
+
+.signin-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 120ms ease;
+}
+
+.signin-switch[aria-checked="true"]::after {
+  left: calc(100% - 1.125rem);
+}
+
+/* cardano-signer method: command block, paste box, secondary actions */
+.signin-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.signin-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text);
+}
+
+.signin-code {
+  display: block;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+  user-select: all;
+}
+
+.signin-textarea {
+  resize: vertical;
+  min-height: 6.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.signin-secondary {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--mint);
+  border: 1px solid color-mix(in srgb, var(--mint) 55%, transparent);
+  border-radius: 7px;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
 }
-.login-primary:not(:disabled) {
-  background: color-mix(in srgb, var(--mint) 18%, transparent);
-  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
+
+.signin-secondary:hover {
+  background: color-mix(in srgb, var(--mint) 12%, transparent);
+  filter: none;
+}
+
+.signin-center {
+  text-align: center;
+}
+
+.wallet-mark--signer {
   color: var(--mint);
 }
-.login-primary:disabled { opacity: 0.55; cursor: not-allowed; }
-.login-cancel {
-  padding: 0.55rem;
-  border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--rose) 45%, transparent);
-  background: color-mix(in srgb, var(--rose) 14%, transparent);
-  color: var(--rose);
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.login-error { margin: 0; color: var(--rose); font-size: 0.8rem; }
 
 .wallet-connect-list {
   display: flex;

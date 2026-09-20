@@ -27,6 +27,7 @@ Civitas is built to make on-chain governance legible, verifiable, and decision-u
 - Supports historical "time travel" reads by snapshot file key.
 - Exposes sync status, backfill control, proposal metadata, and vote rationale APIs.
 - Frontend includes wallet-assisted on-chain vote delegation to selected DRep (via Mesh/CIP-30 wallet extension).
+- Sign in with a CIP-30/CIP-95 browser wallet (as DRep or delegator) or, for keys that never touch a browser, with `cardano-signer` on the command line (as DRep, SPO or CC member): the server issues a challenge, verifies the pasted signature and checks the identity on-chain.
 
 ## Runtime model
 
@@ -83,6 +84,8 @@ npm run test:e2e
   - optional query: `force=true`
 - `GET /api/proposal-metadata?proposalId=<id>`
 - `GET /api/vote-rationale?proposalId=<id>&voterId=<id>&voterRole=<drep|constitutional_committee>[&url=<anchor>]`
+- `POST /api/auth/challenge` — single-use challenge for cardano-signer sign-in
+- `POST /api/auth/verify` — verifies a cardano-signer Ed25519 signature and resolves the DRep / SPO / CC identity on-chain
 
 ## Frontend routes
 
