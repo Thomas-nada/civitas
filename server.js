@@ -191,6 +191,16 @@ const SPECIAL_DREP_IDS = {
   alwaysNoConfidence: "drep_always_no_confidence"
 };
 const CC_NAME_OVERRIDES_BY_HOT = {
+  // Seated by "Update Constitutional Committee 2026" (enacted epoch 654,
+  // terms to epoch 799); names and cold credentials from that action's
+  // rationale table, hot keys from the Koios roster.
+  cc_hot1q2ccqmm64956nc65aw65gcn9354c3ldlfqp03qh2v2y5ueqhzw8g4: "Marek Mahut",
+  cc_hot1qgsl88anw66s9yg9hqzux6yujm3wwgcd8mjdt92pp7qn7nqcsc3nq: "Leandros BSP",
+  cc_hot1qf5tkz6zwcpplq3kgpt2486d8za943vmymqkdjl249qgw3s2y5r9y: "Phil_uplc",
+  // Seated to epoch 726.
+  cc_hot1qdjx6xe6e9zk3fpzk6rakmz84n0cf8ckwjvz4e8e5j2tuscr7ckq4: "Tingvard",
+  cc_hot1qvh20fuwhy2dnz9e6d5wmzysduaunlz5y9n8m6n2xen3pmqqvyw8v: "Eastern Cardano Council",
+  cc_hot1qdc65ke6jfq2q25fcn3g89tea30tvrzpptc2tw6g8cdc7pqtmus0y: "Ace Alliance",
   // Resolved from on-chain vote metadata anchors.
   cc_hot1qwz0aw5583t56fvcg96ulqjhjk0xkwsuvs2rmp0xflhkh4g5e22ce: "Cardano Curia",
   cc_hot1qde96n2yfxvx2pc4xm25va9ssqezh5mxhc2n8rdjyxq8kvgwwujd9: "Cardano Japan Council",
@@ -1507,7 +1517,7 @@ function buildCalendarActionRows(snapshotObj, proposalInfo) {
   const fallbackVoteStats = buildCalendarFallbackVoteStats(snapshotObj);
   const drepPowerStats = buildCalendarDrepPowerStats(snapshotObj, proposalInfo);
   const spoPowerStats = buildCalendarSpoPowerStats(snapshotObj, proposalInfo);
-  const committeeMembers = Array.isArray(snapshotObj?.committeeMembers) ? snapshotObj.committeeMembers : [];
+  const committeeMembers = normalizeCommitteeMembersForApi(snapshotObj?.committeeMembers || [], snapshotObj?.latestEpoch);
   const committeeMinSize = Number(snapshotObj?.thresholdContext?.committeeMinSize || 0);
   const rows = new Map();
   for (const [proposalId, info] of Object.entries(proposalInfo || {})) {
@@ -5057,10 +5067,114 @@ function pickBestSnapshotForApi(primary) {
   return primaryLooksGood ? primary : latestHistory;
 }
 
-function normalizeCommitteeMembersForApi(rows) {
-  const input = Array.isArray(rows) ? rows : [];
+// One id per committee member: the 28-byte hot key hash. Vote sources name
+// the same member as bare hex or as a CIP-129 cc_hot1… id (29 bytes with a
+// leading credential-type byte); both collapse to the hash.
+function ccCanonicalId(value) {
+  const raw = String(value || "").trim();
+  if (/^[0-9a-f]{56}$/i.test(raw)) return raw.toLowerCase();
+  if (raw.toLowerCase().startsWith("cc_hot")) {
+    const hex = bech32IdToHex(raw);
+    if (hex.length === 58) return hex.slice(2);
+    if (hex.length === 56) return hex;
+  }
+  return raw;
+}
+
+// Rows that name the same member (by canonical id) become one row: the
+// votes are joined (one per transaction), and the row with more fields
+// filled wins each field.
+function mergeCommitteeRows(rows) {
+  const byId = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row) continue;
+    const id = ccCanonicalId(row.id);
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, { ...row, id, votes: [...(row.votes || [])] });
+      continue;
+    }
+    for (const [key, value] of Object.entries(row)) {
+      if (key === "id" || key === "votes") continue;
+      const current = existing[key];
+      const empty = current === undefined || current === null || current === "" || (typeof current === "number" && Number.isNaN(current));
+      if (empty && value !== undefined && value !== null && value !== "") existing[key] = value;
+    }
+    const seen = new Set(existing.votes.map((v) => `${v?.proposalId}|${String(v?.voteTxHash || "").toLowerCase()}`));
+    for (const vote of row.votes || []) {
+      const k = `${vote?.proposalId}|${String(vote?.voteTxHash || "").toLowerCase()}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      existing.votes.push(vote);
+    }
+    if (Number.isFinite(row.firstVoteBlockTime) && (!Number.isFinite(existing.firstVoteBlockTime) || row.firstVoteBlockTime < existing.firstVoteBlockTime)) {
+      existing.firstVoteBlockTime = row.firstVoteBlockTime;
+    }
+  }
+  return Array.from(byId.values());
+}
+
+// The committee roster as Koios reports it (committee_info), refreshed in
+// the background so every served row carries the live credentials, expiry
+// and authorization, whatever the snapshot's sync last saw.
+const COMMITTEE_ROSTER_TTL_MS = Number(process.env.COMMITTEE_ROSTER_TTL_MS || 30 * 60 * 1000);
+const committeeRoster = { at: 0, byHotHex: new Map(), promise: null };
+function refreshCommitteeRoster() {
+  if (committeeRoster.promise) return committeeRoster.promise;
+  committeeRoster.promise = koiosGet("/committee_info")
+    .then((rows) => {
+      const info = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+      if (!info || !Array.isArray(info.members)) return;
+      const byHotHex = new Map();
+      for (const member of info.members) {
+        const hotHex = String(member?.cc_hot_hex || "").toLowerCase() || ccCanonicalId(member?.cc_hot_id);
+        if (/^[0-9a-f]{56}$/.test(hotHex)) byHotHex.set(hotHex, member);
+      }
+      committeeRoster.byHotHex = byHotHex;
+      committeeRoster.at = Date.now();
+    })
+    .catch((error) => {
+      console.warn(`[committee] roster refresh failed: ${error?.message || error}`);
+    })
+    .finally(() => { committeeRoster.promise = null; });
+  return committeeRoster.promise;
+}
+function committeeRosterIsStale() {
+  return Date.now() - committeeRoster.at > COMMITTEE_ROSTER_TTL_MS;
+}
+
+// Applies the live roster to a row: credentials, expiry, and whether the
+// seat is active now. A member the roster no longer lists, or whose term
+// has ended, is expired; a status the overrides fix (retired) is kept.
+function applyCommitteeRoster(row, latestEpoch) {
+  const out = { ...row };
+  const hotHex = /^[0-9a-f]{56}$/.test(String(out.id || "")) ? String(out.id).toLowerCase() : String(out.hotHex || "").toLowerCase();
+  const member = hotHex ? committeeRoster.byHotHex.get(hotHex) : null;
+  const epoch = Number(latestEpoch || 0);
+  if (member) {
+    out.hotCredential = member.cc_hot_id || out.hotCredential || null;
+    out.coldCredential = member.cc_cold_id || out.coldCredential || null;
+    out.hotHex = String(member.cc_hot_hex || hotHex).toLowerCase();
+    out.coldHex = String(member.cc_cold_hex || out.coldHex || "").toLowerCase() || null;
+    const expiration = Number(member.expiration_epoch);
+    if (Number.isFinite(expiration)) out.expirationEpoch = expiration;
+    const authorized = String(member.status || "").toLowerCase() === "authorized";
+    if (epoch > 0 && out.status !== "retired") {
+      out.status = authorized && Number.isFinite(expiration) && expiration > epoch ? "active" : "expired";
+    }
+  } else if (committeeRoster.at > 0 && epoch > 0 && out.status === "active") {
+    // Not on the roster any more: the seat ended.
+    out.status = "expired";
+  } else if (epoch > 0 && out.status === "active" && Number(out.expirationEpoch) > 0 && Number(out.expirationEpoch) <= epoch) {
+    out.status = "expired";
+  }
+  return out;
+}
+
+function normalizeCommitteeMembersForApi(rows, latestEpoch = 0) {
+  const input = mergeCommitteeRows(rows);
   return input.map((row) => {
-    const out = { ...row };
+    const out = applyCommitteeRoster(row, latestEpoch);
     if (!out.hotCredential) {
       const rowIdHex = String(out.id || "").trim().toLowerCase();
       const rowHotHex = String(out.hotHex || "").trim().toLowerCase();
@@ -5762,7 +5876,7 @@ async function buildDeltaSnapshot(base) {
   // Build mutable maps of actors keyed by id for fast in-place updates.
   const drepById = new Map((base.dreps || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
   const spoById = new Map((base.spos || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
-  const ccById = new Map((base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
+  const ccById = new Map(mergeCommitteeRows(base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
   const proposalInfo = { ...(base.proposalInfo || {}) };
 
   // Canonicalize to the currently indexed proposal set. This prevents stale
@@ -5931,7 +6045,7 @@ async function buildDeltaSnapshot(base) {
       }
 
       for (const vote of committeeVotes) {
-        const memberId = vote.voter;
+        const memberId = ccCanonicalId(vote.voter);
         if (!ccById.has(memberId)) {
           ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
         }
@@ -6118,7 +6232,7 @@ async function buildDeltaSnapshot(base) {
 
       const seenCcProposalFirst = new Set();
       for (const vote of committeeVotes) {
-        const memberId = vote.voter;
+        const memberId = ccCanonicalId(vote.voter);
         const ccKey = `${memberId}:${proposal.id}`;
         const isFirstCc = !seenCcProposalFirst.has(ccKey);
         if (isFirstCc) seenCcProposalFirst.add(ccKey);
@@ -6577,7 +6691,7 @@ async function buildFullSnapshot() {
       }
 
       for (const vote of committeeVotes) {
-        const memberId = vote.voter;
+        const memberId = ccCanonicalId(vote.voter);
         if (!committeeAggregate.has(memberId)) {
           committeeAggregate.set(memberId, {
             id: memberId,
@@ -7901,6 +8015,8 @@ function serveStatic(req, res) {
 }
 
 async function runStartupInitialization() {
+  refreshCommitteeRoster();
+  setInterval(() => { if (committeeRosterIsStale()) refreshCommitteeRoster(); }, 5 * 60 * 1000).unref?.();
   if (SKIP_BOOT_HYDRATION) {
     console.log("Boot hydration skipped (SKIP_BOOT_HYDRATION=true).");
     if (SNAPSHOT_REMOTE_URL) {
@@ -8181,10 +8297,12 @@ const server = http.createServer(async (req, res) => {
     const compactActionsView = view === "actions";
     const historical = requestedSnapshot ? readSnapshotFromHistory(requestedSnapshot) : null;
     const sourceSnapshot = historical || snapshot;
+    if (committeeRoster.at === 0) await refreshCommitteeRoster();
+    else if (committeeRosterIsStale()) refreshCommitteeRoster();
     if (view === "actions") {
       const proposalInfo = compactProposalInfoForDashboard(sourceSnapshot?.proposalInfo || {});
       const drepsRaw = Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : [];
-      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || []);
+      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch);
       const sposRaw = Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : [];
       if (focusedProposalId) {
         await enrichProposalRationaleSignalsForActors({
@@ -8232,7 +8350,7 @@ const server = http.createServer(async (req, res) => {
     ].join(":");
     const isActionsView = view === "actions";
     let committeeMembersRaw = includeCommittee
-      ? normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [])
+      ? normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch)
       : [];
     if ((view === "committee" || view === "all") && !isActionsView && committeeMembersRaw.length > 0) {
       const enrichTask = getCommitteeRowsWithCgovRationaleCached(
@@ -9612,11 +9730,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/export-snapshot") {
-    const served = pickBestSnapshotForApi(snapshot);
-    if (!snapshotIsComplete(served)) {
+    const picked = pickBestSnapshotForApi(snapshot);
+    if (!snapshotIsComplete(picked)) {
       json(res, 503, { error: "Snapshot not ready — sync still in progress." });
       return;
     }
+    if (committeeRoster.at === 0) await refreshCommitteeRoster();
+    const served = {
+      ...picked,
+      committeeMembers: normalizeCommitteeMembersForApi(picked?.committeeMembers || [], picked?.latestEpoch),
+    };
     const body = JSON.stringify(served);
     res.writeHead(200, {
       "Content-Type": "application/json",
