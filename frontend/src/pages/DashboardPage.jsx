@@ -857,10 +857,13 @@ export default function DashboardPage({ actorType }) {
           if (selectedTypeSet.size > 0 && !selectedTypeSet.has(governanceTypeForProposal(vote.proposalId))) return false;
           if (isCommittee && (hasStartEpoch || hasEffectiveEndEpoch)) {
             const proposalEpoch = Number(proposalInfo[vote.proposalId]?.submittedEpoch || 0);
-            if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
-              if (hasStartEpoch && proposalEpoch < startEpoch) return false;
-              if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) return false;
+            // An action still open when the seat began is the member's to
+            // vote on; only one that had already closed is outside the seat.
+            if (hasStartEpoch) {
+              const closeEpoch = committeeProposalTerminalEpoch(vote.proposalId);
+              if (closeEpoch && closeEpoch < startEpoch) return false;
             }
+            if (hasEffectiveEndEpoch && Number.isFinite(proposalEpoch) && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) return false;
           }
           return true;
         });
@@ -889,10 +892,11 @@ export default function DashboardPage({ actorType }) {
             let eligible = 0;
             for (const proposalId of committeeEligibleProposalIds) {
               const proposalEpoch = Number(filteredProposalEpochs.get(proposalId) || 0);
-              if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
-                if (hasStartEpoch && proposalEpoch < startEpoch) continue;
-                if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) continue;
+              if (hasStartEpoch) {
+                const closeEpoch = committeeProposalTerminalEpoch(proposalId);
+                if (closeEpoch && closeEpoch < startEpoch) continue;
               }
+              if (hasEffectiveEndEpoch && Number.isFinite(proposalEpoch) && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) continue;
               if (hasEffectiveEndEpoch && !actorVoteByProposal.has(proposalId)) {
                 const terminalEpoch = committeeProposalTerminalEpoch(proposalId);
                 if (!terminalEpoch || terminalEpoch > effectiveEndEpoch) continue;

@@ -1517,7 +1517,7 @@ function buildCalendarActionRows(snapshotObj, proposalInfo) {
   const fallbackVoteStats = buildCalendarFallbackVoteStats(snapshotObj);
   const drepPowerStats = buildCalendarDrepPowerStats(snapshotObj, proposalInfo);
   const spoPowerStats = buildCalendarSpoPowerStats(snapshotObj, proposalInfo);
-  const committeeMembers = normalizeCommitteeMembersForApi(snapshotObj?.committeeMembers || [], snapshotObj?.latestEpoch);
+  const committeeMembers = normalizeCommitteeMembersForApi(snapshotObj?.committeeMembers || [], snapshotObj?.latestEpoch, snapshotObj?.proposalInfo);
   const committeeMinSize = Number(snapshotObj?.thresholdContext?.committeeMinSize || 0);
   const rows = new Map();
   for (const [proposalId, info] of Object.entries(proposalInfo || {})) {
@@ -5171,10 +5171,80 @@ function applyCommitteeRoster(row, latestEpoch) {
   return out;
 }
 
-function normalizeCommitteeMembersForApi(rows, latestEpoch = 0) {
+// Seat start per cold credential, from the enacted "New committee" actions
+// in the snapshot: the members an action ADDS (its member map, not its
+// removal list) are seated at its enactment epoch, or the epoch after its
+// ratification when enactment is not recorded yet. A credential seated by
+// several actions (a re-election) keeps its earliest seat.
+function committeeSeatStartsByColdHex(proposalInfo) {
+  const starts = new Map();
+  for (const info of Object.values(proposalInfo || {})) {
+    if (!String(info?.governanceType || "").toLowerCase().includes("new committee")) continue;
+    const enacted = Number(info?.enactedEpoch || 0);
+    const ratified = Number(info?.ratifiedEpoch || 0);
+    const start = enacted > 0 ? enacted : ratified > 0 ? ratified + 1 : 0;
+    if (!(start > 0)) continue;
+    const description = info?.governanceDescription;
+    let added;
+    if (description && String(description.tag || "") === "UpdateCommittee" && Array.isArray(description.contents) && description.contents[2] && typeof description.contents[2] === "object") {
+      added = collectHexHashes(Object.keys(description.contents[2]));
+    } else {
+      added = collectHexHashes(description || {});
+    }
+    for (const hex of added) {
+      const current = starts.get(hex);
+      if (!Number.isFinite(current) || start < current) starts.set(hex, start);
+    }
+  }
+  return starts;
+}
+
+// The epoch an action stopped taking votes: enacted, ratified, dropped or
+// expired, else its expiry; null while it is still open.
+function committeeProposalCloseEpoch(info) {
+  const terminal = [info?.enactedEpoch, info?.ratifiedEpoch, info?.droppedEpoch, info?.expiredEpoch, info?.expirationEpoch]
+    .map(Number).filter((x) => Number.isFinite(x) && x > 0);
+  return terminal.length ? Math.min(...terminal) : null;
+}
+
+// The actions a committee member could vote on during the seat, the rule
+// the dashboard applies too: CC votes count on every action but a motion of
+// no confidence or a committee update; an action dropped before its expiry
+// is not held against anyone; the action's voting window (submission to
+// close) must overlap the seat, so an action still open when the member was
+// seated counts and one that closed before the seat does not; and past the
+// seat's end an action the member did not vote on counts only if it closed
+// within the seat.
+function committeeEligibleVoteCount(row, proposalInfo) {
+  const start = Number(row?.seatStartEpoch || 0);
+  const end = Number(row?.expirationEpoch || 0);
+  const votedOn = new Set((row?.votes || []).map((v) => String(v?.proposalId || "")));
+  let eligible = 0;
+  for (const [proposalId, info] of Object.entries(proposalInfo || {})) {
+    const type = String(info?.governanceType || "").toLowerCase();
+    if (type.includes("no confidence") || type.includes("new committee")) continue;
+    const dropped = Number(info?.droppedEpoch || 0);
+    const expiration = Number(info?.expirationEpoch || 0);
+    if (dropped > 0 && expiration > 0 && dropped < expiration) continue;
+    const submitted = Number(info?.submittedEpoch || 0);
+    const closeEpoch = committeeProposalCloseEpoch(info);
+    if (start > 0 && closeEpoch && closeEpoch < start) continue;
+    if (end > 0 && submitted > 0 && submitted > end) continue;
+    if (end > 0 && !votedOn.has(proposalId) && (!closeEpoch || closeEpoch > end)) continue;
+    eligible += 1;
+  }
+  return Math.max(eligible, votedOn.size);
+}
+
+function normalizeCommitteeMembersForApi(rows, latestEpoch = 0, proposalInfo = null) {
   const input = mergeCommitteeRows(rows);
+  const seatStarts = proposalInfo ? committeeSeatStartsByColdHex(proposalInfo) : null;
   return input.map((row) => {
     const out = applyCommitteeRoster(row, latestEpoch);
+    if (!(Number(out.seatStartEpoch) > 0) && seatStarts && out.coldHex) {
+      const start = seatStarts.get(String(out.coldHex).toLowerCase());
+      if (Number.isFinite(start) && start > 0) out.seatStartEpoch = start;
+    }
     if (!out.hotCredential) {
       const rowIdHex = String(out.id || "").trim().toLowerCase();
       const rowHotHex = String(out.hotHex || "").trim().toLowerCase();
@@ -5200,6 +5270,9 @@ function normalizeCommitteeMembersForApi(rows, latestEpoch = 0) {
       if (!out.status && typeof epochOverride.status === "string" && epochOverride.status.trim()) {
         out.status = String(epochOverride.status).trim().toLowerCase();
       }
+    }
+    if (proposalInfo && Number(out.seatStartEpoch) > 0) {
+      out.totalEligibleVotes = committeeEligibleVoteCount(out, proposalInfo);
     }
     return out;
   });
@@ -8302,7 +8375,7 @@ const server = http.createServer(async (req, res) => {
     if (view === "actions") {
       const proposalInfo = compactProposalInfoForDashboard(sourceSnapshot?.proposalInfo || {});
       const drepsRaw = Array.isArray(sourceSnapshot?.dreps) ? sourceSnapshot.dreps : [];
-      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch);
+      const committeeRaw = normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch, sourceSnapshot?.proposalInfo);
       const sposRaw = Array.isArray(sourceSnapshot?.spos) ? sourceSnapshot.spos : [];
       if (focusedProposalId) {
         await enrichProposalRationaleSignalsForActors({
@@ -8350,7 +8423,7 @@ const server = http.createServer(async (req, res) => {
     ].join(":");
     const isActionsView = view === "actions";
     let committeeMembersRaw = includeCommittee
-      ? normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch)
+      ? normalizeCommitteeMembersForApi(sourceSnapshot?.committeeMembers || [], sourceSnapshot?.latestEpoch, sourceSnapshot?.proposalInfo)
       : [];
     if ((view === "committee" || view === "all") && !isActionsView && committeeMembersRaw.length > 0) {
       const enrichTask = getCommitteeRowsWithCgovRationaleCached(
@@ -9738,7 +9811,7 @@ const server = http.createServer(async (req, res) => {
     if (committeeRoster.at === 0) await refreshCommitteeRoster();
     const served = {
       ...picked,
-      committeeMembers: normalizeCommitteeMembersForApi(picked?.committeeMembers || [], picked?.latestEpoch),
+      committeeMembers: normalizeCommitteeMembersForApi(picked?.committeeMembers || [], picked?.latestEpoch, picked?.proposalInfo),
     };
     const body = JSON.stringify(served);
     res.writeHead(200, {
