@@ -2,9 +2,11 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { URL } = require("url");
 const surveys = require("./lib/surveys");
 const { createKoiosGovernanceSource } = require("./lib/governanceSource");
+const { createApiV1 } = require("./lib/apiV1");
 // BLAKE2b — pure JS, RFC 7693, no external deps. `outlen` is the digest length
 // in bytes: 32 for metadata hashes, 28 for Cardano key/credential hashes.
 function blake2b(data, outlen = 32) {
@@ -638,15 +640,69 @@ function resetOpsMetrics() {
   opsRequestMetrics.koios = { total: 0, ok: 0, failed: 0, byEndpoint: {} };
 }
 
-function json(res, status, data) {
-  res.writeHead(status, {
+// Compressed JSON bodies, cached by content hash so a burst of identical
+// responses (every page load between two syncs) is compressed once.
+const JSON_GZIP_MIN_BYTES = 1024;
+const gzipBodyCache = new Map(); // etag -> Buffer
+let gzipBodyCacheBytes = 0;
+const GZIP_BODY_CACHE_MAX_BYTES = Number(process.env.GZIP_BODY_CACHE_MAX_BYTES || 48 * 1024 * 1024);
+function gzipCached(etag, raw) {
+  const hit = gzipBodyCache.get(etag);
+  if (hit) return hit;
+  // Big payloads (the legacy full-snapshot views) get the fast level.
+  const level = raw.length > 2 * 1024 * 1024 ? 1 : 6;
+  const gz = zlib.gzipSync(raw, { level });
+  gzipBodyCache.set(etag, gz);
+  gzipBodyCacheBytes += gz.length;
+  while (gzipBodyCacheBytes > GZIP_BODY_CACHE_MAX_BYTES && gzipBodyCache.size > 1) {
+    const oldest = gzipBodyCache.keys().next().value;
+    gzipBodyCacheBytes -= gzipBodyCache.get(oldest).length;
+    gzipBodyCache.delete(oldest);
+  }
+  return gz;
+}
+
+/**
+ * Send a JSON response. GET responses carry an ETag (a 304 answers a matching
+ * If-None-Match), are gzip-compressed when the client accepts it, and default
+ * to Cache-Control: no-cache (revalidate) unless opts.cache says otherwise.
+ */
+function json(res, status, data, opts = {}) {
+  const req = res.req || null;
+  const raw = Buffer.from(JSON.stringify(data));
+  const method = String(req?.method || "GET").toUpperCase();
+  const cacheable = method === "GET" && status === 200 && opts.etag !== false;
+  const headers = {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
+    "Cache-Control": opts.cache || (cacheable ? "no-cache" : "no-store"),
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
-  });
-  res.end(JSON.stringify(data));
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Accept-Encoding"
+  };
+  let etag = "";
+  if (cacheable) {
+    etag = `"${crypto.createHash("md5").update(raw).digest("hex")}"`;
+    headers.ETag = etag;
+    const inm = String(req?.headers?.["if-none-match"] || "");
+    if (inm && inm.split(",").map((v) => v.trim()).includes(etag)) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+  }
+  const acceptEncoding = String(req?.headers?.["accept-encoding"] || "");
+  if (raw.length >= JSON_GZIP_MIN_BYTES && /\bgzip\b/.test(acceptEncoding)) {
+    const gz = cacheable ? gzipCached(etag, raw) : zlib.gzipSync(raw, { level: raw.length > 2 * 1024 * 1024 ? 1 : 6 });
+    headers["Content-Encoding"] = "gzip";
+    headers["Content-Length"] = gz.length;
+    res.writeHead(status, headers);
+    res.end(gz);
+    return;
+  }
+  headers["Content-Length"] = raw.length;
+  res.writeHead(status, headers);
+  res.end(raw);
 }
 
 function trimTo(input, maxLen) {
@@ -5888,6 +5944,17 @@ const govSource = createKoiosGovernanceSource({
   log: (message) => console.log(message)
 });
 
+const apiV1 = createApiV1({
+  getSnapshot: () => snapshot,
+  readSnapshotFromHistory,
+  normalizeCommitteeMembersForApi,
+  getSyncState: () => syncState,
+  getSpecialDrepsFallback: () => specialDrepsCache.value || {},
+  schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+  configuredNetwork: CONFIGURED_BLOCKFROST_NETWORK,
+  provider: govSource.name
+});
+
 // Seconds of overlap re-read on every delta so a vote that Koios indexed late,
 // or that sits in a rolled-back block, is still picked up (dedup by tx hash).
 const DELTA_VOTE_OVERLAP_SECONDS = Number(process.env.DELTA_VOTE_OVERLAP_SECONDS || 2 * 60 * 60);
@@ -7923,6 +7990,18 @@ function injectSeoMeta(requestUrl, html) {
   }
 }
 
+// Pre-compressed static assets, keyed by path and content hash.
+const staticGzipCache = new Map();
+function gzipStaticCached(filePath, content) {
+  const key = `${filePath}:${crypto.createHash("md5").update(content).digest("hex")}`;
+  const hit = staticGzipCache.get(key);
+  if (hit) return hit;
+  const gz = zlib.gzipSync(content, { level: 6 });
+  if (staticGzipCache.size > 200) staticGzipCache.delete(staticGzipCache.keys().next().value);
+  staticGzipCache.set(key, gz);
+  return gz;
+}
+
 function serveStatic(req, res) {
   const root = fs.existsSync(path.join(FRONTEND_DIST_PATH, "index.html")) ? FRONTEND_DIST_PATH : __dirname;
   let requestPath = req.url === "/" ? "/index.html" : req.url;
@@ -7947,14 +8026,30 @@ function serveStatic(req, res) {
       // Vite outputs content-hashed filenames (e.g. main-Ab3xY1.js) for all
       // assets under /assets/. These can be cached indefinitely — if the content
       // changes, the hash changes and the browser fetches a fresh URL.
-      const isHashedAsset = /\/assets\/[^/]+\.[a-f0-9]{8,}\.(js|css|svg|png|woff2?)$/i.test(filePath);
+      // Vite names hashed assets "<name>-<base64url hash>.<ext>" (e.g.
+      // index-C3fKx9pQ.js); the previous pattern expected ".<hex>." and
+      // never matched, so nothing was ever browser-cached.
+      const isHashedAsset = /\/assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(js|css|svg|png|woff2?|ttf|json|map)$/i.test(filePath);
       const cacheControl = isHashedAsset
         ? "public, max-age=31536000, immutable"
         : "no-cache";
-      res.writeHead(200, {
+      const headers = {
         "Content-Type": contentTypes[ext] || "application/octet-stream",
         "Cache-Control": cacheControl,
-      });
+        "Vary": "Accept-Encoding"
+      };
+      const compressible = [".js", ".css", ".svg", ".json", ".map", ".html", ".txt", ".xml"].includes(ext);
+      const acceptEncoding = String(req.headers?.["accept-encoding"] || "");
+      if (compressible && content.length >= 1024 && /\bgzip\b/.test(acceptEncoding)) {
+        const gz = gzipStaticCached(filePath, content);
+        headers["Content-Encoding"] = "gzip";
+        headers["Content-Length"] = gz.length;
+        res.writeHead(200, headers);
+        res.end(gz);
+        return;
+      }
+      headers["Content-Length"] = content.length;
+      res.writeHead(200, headers);
       res.end(content);
       return;
     }
@@ -8143,6 +8238,21 @@ const server = http.createServer(async (req, res) => {
     });
     res.end();
     return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/v1/")) {
+    if (committeeRoster.at === 0) await refreshCommitteeRoster();
+    else if (committeeRosterIsStale()) refreshCommitteeRoster();
+    try {
+      const out = apiV1.handle(url);
+      if (out) {
+        json(res, out.status, out.body, { cache: out.cache });
+        return;
+      }
+    } catch (error) {
+      json(res, 500, { error: error?.message || "API error." });
+      return;
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -10912,7 +11022,10 @@ if (process.env.CIVITAS_NO_LISTEN === "1") {
       setSnapshot: (next) => { snapshot = next; },
       publishSnapshot,
       snapshotIsComplete,
-      computeVoteWatermark
+      computeVoteWatermark,
+      apiV1,
+      httpServer: server,
+      hydrateFromSeed: () => { loadSeedSnapshot(); return snapshot; }
     }
   };
 } else {
