@@ -1,108 +1,60 @@
-import { useContext, useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { Transaction } from "@meshsdk/core";
-import { useSeoMeta } from "../hooks/useSeoMeta";
-import { WalletContext } from "../context/WalletContext";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-
 // One-click delegate landing page, meant to be shared as a link in social
-// posts/replies. Loads just enough DRep info to show a name + delegate
-// button; the wallet popup happens here on Civitas, never inside the post.
+// posts. Loads just enough about the DRep to show who you are delegating to;
+// the wallet prompt happens here on Civitas, never inside the post.
+import { Link, useParams } from "react-router-dom";
+import { useSeoMeta } from "../hooks/useSeoMeta";
+import { useActor, useDrepLive } from "../api/queries";
+import DelegateButton from "../components/delegation/DelegateButton";
+import MetaVerifyPill from "../components/MetaVerifyPill";
+import { Alert, Avatar, Card, PageHeader, Skeleton, StatusPill } from "../ui";
+import { formatAdaCompact, truncateMiddle } from "../lib/governance/format";
+
 export default function DelegatePage() {
   const { drepId } = useParams();
-  const decodedId = decodeURIComponent(String(drepId || "")).trim();
-  const wallet = useContext(WalletContext);
-  const [drep, setDrep] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [delegating, setDelegating] = useState(false);
-  const [notice, setNotice] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    fetch(`${API_BASE}/api/drep-live?id=${encodeURIComponent(decodedId)}`)
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (cancelled) return;
-        if (!ok) throw new Error(data?.error || "Failed to load DRep.");
-        setDrep(data);
-      })
-      .catch((e) => { if (!cancelled) setError(e.message || "Failed to load DRep."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [decodedId]);
-
+  const id = decodeURIComponent(String(drepId || "")).trim();
+  const snapshot = useActor("drep", id);
+  const liveQuery = useDrepLive(id);
+  const live = liveQuery.data?.id ? liveQuery.data : null;
+  const drep = live || snapshot.data?.actor || null;
+  const name = drep?.name || drep?.profile?.name || "";
   useSeoMeta({
-    title: drep?.name ? `Delegate to ${drep.name}` : "Delegate to a DRep",
-    description: drep?.name
-      ? `One-click delegate your Cardano governance voting power to ${drep.name} on Civitas.`
-      : "One-click delegate your Cardano governance voting power on Civitas."
+    title: name ? `Delegate to ${name}` : "Delegate to a DRep",
+    description: name ? `One-click delegate your Cardano governance voting power to ${name} on Civitas.` : "One-click delegate your Cardano governance voting power on Civitas."
   });
-
-  async function handleDelegate() {
-    if (!decodedId) return;
-    if (!wallet?.walletApi) {
-      setNotice("Connect your wallet in the top bar, then click Delegate again.");
-      return;
-    }
-    if (!wallet.walletRewardAddress) {
-      setNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
-      return;
-    }
-    try {
-      setDelegating(true);
-      setNotice("");
-      const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
-      tx.setNetwork("mainnet");
-      tx.txBuilder.voteDelegationCertificate({ dRepId: decodedId }, wallet.walletRewardAddress);
-      const unsignedTx = await tx.build();
-      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
-      const txHash = await wallet.walletApi.submitTx(signedTx);
-      setNotice(`Delegation submitted on-chain. Tx: ${txHash}`);
-    } catch (e) {
-      setNotice(`Delegation failed: ${e?.message || "Delegation transaction failed."}`);
-    } finally {
-      setDelegating(false);
-    }
-  }
+  const loading = liveQuery.isLoading && snapshot.isLoading;
+  const notFound = !loading && !drep;
+  const imageUrl = drep?.profile?.imageUrl || "";
+  const bio = String(drep?.profile?.bio || "").trim();
 
   return (
-    <main className="page shell delegate-page">
-      <section className="page-head">
-        <p className="eyebrow">Delegate</p>
-        {loading ? (
-          <h1>Loading DRep…</h1>
-        ) : error ? (
-          <h1>DRep not found</h1>
-        ) : (
-          <h1>Delegate to {drep?.name || decodedId}</h1>
-        )}
-        <p className="muted mono">{decodedId}</p>
-      </section>
-
-      {error ? (
-        <section className="status-row">
-          <p className="muted">{error}</p>
-        </section>
+    <main className="shell page p-delegate">
+      <PageHeader eyebrow="Delegate" title={loading ? "Loading DRep…" : notFound ? "DRep not found" : `Delegate to ${name || truncateMiddle(id, 14, 6)}`}>
+        <p className="c-hash break" style={{ marginTop: 8 }}>{id}</p>
+      </PageHeader>
+      {loading ? <Skeleton kind="card" /> : notFound ? (
+        <Alert tone="warning" title="This DRep could not be found on chain.">{liveQuery.error?.message || snapshot.error?.message || "Check the link and try again."}</Alert>
       ) : (
-        <section className="stats-section stats-section--wide">
-          <div className="stats-section-body">
-            {drep?.profile?.imageUrl ? (
-              <img className="profile-image" src={drep.profile.imageUrl} alt={`${drep.name || decodedId} profile`} />
-            ) : null}
-            <div className="meta drep-profile">
-              <button type="button" className="delegate-cta" onClick={handleDelegate} disabled={loading || delegating}>
-                {delegating ? "Submitting Delegation..." : "Delegate Voting Power To This DRep"}
-              </button>
-              {!wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
-              {notice ? <p className="muted">{notice}</p> : null}
-              <p><Link className="inline-link" to={`/dreps/${encodeURIComponent(decodedId)}`}>View full DRep profile</Link></p>
+        <Card accent className="p-delegate__card">
+          <div className="p-delegate__who">
+            <Avatar src={imageUrl} name={name} size="lg" />
+            <div className="stack--2">
+              <div className="row">
+                <strong style={{ fontSize: "1.15rem" }}>{name || "Unnamed DRep"}</strong>
+                {drep?.status ? <StatusPill status={drep.status} size="sm" /> : null}
+                <MetaVerifyPill verification={live?.metadataVerification} />
+              </div>
+              {Number(drep?.votingPowerAda || 0) > 0 ? <span className="small muted">Current voting power {formatAdaCompact(drep.votingPowerAda)}</span> : null}
+              {bio ? <p className="small muted" style={{ margin: 0 }}>{bio.length > 280 ? `${bio.slice(0, 280)}…` : bio}</p> : null}
             </div>
           </div>
-        </section>
+          <div style={{ marginTop: 20 }}>
+            <DelegateButton drepId={id} block />
+          </div>
+          <p className="tiny muted" style={{ marginTop: 14 }}>
+            Delegating your voting power is a certificate signed by your wallet; only the network fee is paid and your ADA never leaves your wallet. You can change your DRep at any time.
+            {" "}<Link to={`/dreps/${encodeURIComponent(id)}`}>View the full profile</Link>
+          </p>
+        </Card>
       )}
     </main>
   );

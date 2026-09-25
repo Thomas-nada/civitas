@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { IconAlert, IconCheck, IconChevronDown, IconInfo } from "./icons";
+import { IconAlert, IconCheck, IconChevronDown, IconCopy, IconInfo } from "./icons";
 
 import { cx } from "./cx";
 
@@ -78,10 +78,19 @@ export function Card({ pad = true, soft, elevated, accent, className, children, 
           {actions ? <div className="row">{actions}</div> : null}
         </header>
       ) : null}
-      {hasHead ? <div className="c-card__body">{children}</div> : children}
+      {hasHead ? (children === null || children === undefined || children === false ? null : <div className="c-card__body">{children}</div>) : children}
       {footer ? <footer className="c-card__foot">{footer}</footer> : null}
     </section>
   );
+}
+
+/* Avatar with initials fallback ------------------------------------------ */
+export function Avatar({ src, name, size, className }) {
+  const [failed, setFailed] = useState(false);
+  const cls = cx("c-avatar", size === "lg" && "c-avatar--lg", className);
+  if (src && !failed) return <img className={cls} src={src} alt="" onError={() => setFailed(true)} />;
+  const text = String(name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "?";
+  return <span className={cx(cls, "c-avatar--placeholder")} aria-hidden="true">{text}</span>;
 }
 
 /* Stat tile --------------------------------------------------------------- */
@@ -327,3 +336,16 @@ export function KeyValue({ items }) {
   );
 }
 
+
+/* Copy to clipboard ------------------------------------------------------- */
+export function CopyButton({ value, label = "Copy", size = "sm", variant = "ghost", children }) {
+  const [ok, setOk] = useState(false);
+  async function copy() {
+    try { await navigator.clipboard.writeText(String(value ?? "")); setOk(true); setTimeout(() => setOk(false), 1500); } catch { /* clipboard unavailable */ }
+  }
+  return (
+    <Button size={size} variant={variant} icon={ok ? <IconCheck size={14} /> : <IconCopy size={14} />} aria-label={ok ? "Copied" : label} title={label} onClick={copy}>
+      {children ? (ok ? "Copied" : children) : null}
+    </Button>
+  );
+}

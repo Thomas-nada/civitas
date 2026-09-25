@@ -107,6 +107,7 @@
 .c-card__foot { padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-line); color: var(--color-text-muted); font-size: var(--text-sm); }
 @media (max-width: 560px) {
   .c-card--pad, .c-card__body, .c-card__head { padding: var(--space-4); }
+  .c-card__head { flex-wrap: wrap; }
 }
 
 /* Stat tiles -------------------------------------------------------------- */

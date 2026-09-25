@@ -1,144 +1,58 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+// One DRep, stake pool or committee member: identity and profile, scores,
+// voting record (voted / missed / every action), delegation and delegators.
+// Data: /api/v1/actors/:type/:id for the actor and its full votes, the packed
+// /api/v1/actors/:type list (shared with the dashboard) for the scoring
+// context, and the live DRep lookup for power and metadata verification.
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useSeoMeta } from "../hooks/useSeoMeta";
-import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Transaction } from "@meshsdk/core";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
-import { WalletContext } from "../context/WalletContext";
+import { useSnapshotKey, withSnapshotParam } from "../hooks/useSnapshotKey";
+import { useActor, useActors, useDrepDelegators, useDrepLive } from "../api/queries";
+import { proposalInfoFromIndex } from "../api/unpack";
+import { LivePill, SnapshotBanner } from "../components/LiveStatus";
 import MetaVerifyPill from "../components/MetaVerifyPill";
+import RationaleModal from "../components/RationaleModal";
+import DelegateButton from "../components/delegation/DelegateButton";
+import {
+  Alert, Avatar, Button, Card, CopyButton, DataTable, EmptyState, KeyValue, Menu, MenuItem, Modal, PageHeader, Pill, RolePill, Segmented, Skeleton, StatGrid, StatTile, StatusPill, Tooltip, VotePill
+} from "../ui";
+import { IconArrowLeft, IconChevronDown, IconExternal } from "../ui/icons";
+import { copyText, currentEpochFromNow, formatAda, formatAdaCompact, formatDate, formatNumber, formatPct, truncateMiddle } from "../lib/governance/format";
+import {
+  actorActionRows, formatResponseHours, isSpoAlwaysAbstainStatus, mergeSpecialDreps, metricHelp, resolveVoteResponseHours, scoreActors,
+  scoreCommitteeRationaleQuality, voteLabelForActor, votingPowerTotals
+} from "../lib/governance/scoring";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const ROLE_BY_TYPE = { drep: "drep", spo: "stake_pool", committee: "constitutional_committee" };
+const LIST_PATH = { drep: "/dreps", spo: "/spos", committee: "/committee" };
+const LABEL = { drep: "DRep", spo: "Stake pool", committee: "Committee member" };
+const VOTE_COLORS = { yes: "#3ee6b8", no: "#ff6b7a", abstain: "#9fb3c8", noConfidence: "#b794f6" };
 
-// When true, the DRep profile always does the live lookup so the metadata
-// verification badge can render for every DRep (not just those missing from the
-// snapshot). Paired with the backend GOV_META_VERIFY_SHADOW flag — when that
-// flag is off, the live lookup simply returns no verification and no badge shows.
-const PREVIEW_METADATA_VERIFICATION = true;
-const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
-const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
-const DREP_DELEGATION_RISK_HIGH_CUTOFF = 75;
-
-function shortAddress(address) {
-  const s = String(address || "");
-  return s.length > 24 ? `${s.slice(0, 14)}…${s.slice(-8)}` : s;
+function epochFromUnix(unix) {
+  const t = Number(unix || 0);
+  if (t <= 0) return null;
+  return currentEpochFromNow(t * 1000);
 }
 
-function round(v) {
-  return Math.round(Number(v || 0) * 10) / 10;
-}
-
-function delegationConcentrationRiskScore(sharePctActive) {
-  const share = Number(sharePctActive || 0);
-  if (!Number.isFinite(share) || share <= 0) return 0;
-  return Math.max(0, Math.min(100, round((share / DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT) * 100)));
-}
-
-function delegationConcentrationRiskLabel(score) {
-  const value = Number(score || 0);
-  if (value >= DREP_DELEGATION_RISK_HIGH_CUTOFF) return "High";
-  if (value >= DREP_DELEGATION_RISK_MEDIUM_CUTOFF) return "Medium";
-  return "Low";
-}
-
-function fmt(n, dec = 0) {
-  if (!Number.isFinite(Number(n))) return "-";
-  return Number(n).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-
-function formatResponseHours(hours) {
-  if (hours === null || hours === undefined || Number.isNaN(hours)) return "N/A";
-  if (hours < 24) return `${round(hours)}h`;
-  return `${round(hours / 24)}d`;
-}
-
-function formatVoteLabelForActor(voteValue, actorType) {
-  const normalized = String(voteValue || "").trim().toLowerCase();
-  if (!normalized) return "No vote";
-  if (actorType === "committee") {
-    if (normalized === "yes") return "Constitutional";
-    if (normalized === "no") return "Unconstitutional";
-  }
-  if (normalized === "yes") return "Yes";
-  if (normalized === "no") return "No";
-  if (normalized === "abstain") return "Abstain";
-  if (normalized === "no_confidence") return "No confidence";
-  return normalized.replace(/_/g, " ");
-}
-
-function epochFromUnix(unixSeconds) {
-  const unix = Number(unixSeconds || 0);
-  if (!Number.isFinite(unix) || unix <= 0) return null;
-  // Shelley era reference:
-  // epoch 208 started at 2020-07-29T21:44:51Z and epoch length is 5 days.
-  const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
-  const EPOCH_SECONDS = 5 * 24 * 60 * 60;
-  if (unix < SHELLEY_EPOCH_208_START_UNIX) return null;
-  return 208 + Math.floor((unix - SHELLEY_EPOCH_208_START_UNIX) / EPOCH_SECONDS);
-}
-
-function resolveVoteResponseHours(vote, proposalInfo) {
-  if (typeof vote?.responseHours === "number") return vote.responseHours;
-  const votedAtUnix = Number(vote?.votedAtUnix || 0);
-  const submittedAtUnix = Number(proposalInfo?.[vote?.proposalId]?.submittedAtUnix || 0);
-  if (!Number.isFinite(votedAtUnix) || !Number.isFinite(submittedAtUnix)) return null;
-  if (votedAtUnix <= 0 || submittedAtUnix <= 0 || votedAtUnix < submittedAtUnix) return null;
-  return (votedAtUnix - submittedAtUnix) / 3600;
-}
-
-function scoreRationaleQuality(vote) {
-  const precomputed = Number(vote?.rationaleQualityScore);
-  if (Number.isFinite(precomputed) && precomputed >= 0) {
-    return Math.max(0, Math.min(100, precomputed));
-  }
-  const hasSignal = Boolean(vote?.hasRationale) || Boolean(String(vote?.rationaleUrl || "").trim());
-  const url = String(vote?.rationaleUrl || "").trim();
-  const bodyLength = Math.max(0, Number(vote?.rationaleBodyLength || 0));
-  const sectionCount = Math.max(0, Number(vote?.rationaleSectionCount || 0));
-  const bodyLengthBand = bodyLength >= 5900 ? 4 : bodyLength >= 4500 ? 3 : bodyLength >= 3300 ? 2 : bodyLength >= 2000 ? 1 : 0;
-  let score = 0;
-  if (hasSignal) score += 35;
-  if (url) {
-    const looksLikeReference = /^https?:\/\//i.test(url) || /^ipfs:\/\//i.test(url) || /\/ipfs\//i.test(url);
-    if (looksLikeReference) score += 15;
-    const hasCid = /\b(bafy[a-z0-9]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{20,})\b/i.test(url);
-    if (hasCid) score += 10;
-  }
-  score += bodyLengthBand * 8.75;
-  if (sectionCount > 0) score += Math.min(5, sectionCount);
-  return Math.max(0, Math.min(100, score));
-}
-
-function linkTypeFromRef(ref) {
+function linkKind(ref) {
   const text = `${ref?.label || ""} ${ref?.uri || ""}`.toLowerCase();
-  if (text.includes("x.com") || text.includes("twitter")) return "x";
-  if (text.includes("linktr.ee") || text.includes("linktree")) return "linktree";
-  if (text.includes("github.com")) return "github";
-  if (text.includes("linkedin.com")) return "linkedin";
-  if (text.includes("t.me") || text.includes("telegram")) return "telegram";
-  if (text.includes("discord")) return "discord";
-  if (text.includes("youtube.com") || text.includes("youtu.be")) return "youtube";
-  if (text.includes("medium.com")) return "medium";
-  return "web";
+  if (text.includes("x.com") || text.includes("twitter")) return "X";
+  if (text.includes("linktr.ee") || text.includes("linktree")) return "Linktree";
+  if (text.includes("github.com")) return "GitHub";
+  if (text.includes("linkedin.com")) return "LinkedIn";
+  if (text.includes("t.me") || text.includes("telegram")) return "Telegram";
+  if (text.includes("discord")) return "Discord";
+  if (text.includes("youtube.com") || text.includes("youtu.be")) return "YouTube";
+  if (text.includes("medium.com")) return "Medium";
+  return "Web";
 }
 
-function linkIcon(type) {
-  if (type === "x") return "X";
-  if (type === "linktree") return "LT";
-  if (type === "github") return "GH";
-  if (type === "linkedin") return "IN";
-  if (type === "telegram") return "TG";
-  if (type === "discord") return "DS";
-  if (type === "youtube") return "YT";
-  if (type === "medium") return "M";
-  return "WWW";
-}
-
-function splitProfileText(input) {
+function paragraphs(input) {
   const raw = String(input || "").trim();
   if (!raw) return [];
-  const fromLines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  if (fromLines.length > 1) return fromLines;
+  const lines = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 1) return lines;
   const sentences = raw.split(/(?<=[.!?])\s+(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
   if (sentences.length <= 2) return [raw];
   const chunks = [];
@@ -146,817 +60,320 @@ function splitProfileText(input) {
   return chunks;
 }
 
-function cardanoscanSearchLink(query) {
-  return `https://cardanoscan.io/search?query=${encodeURIComponent(query)}`;
+function cardanoscanLink(actorType, actor) {
+  if (actorType === "drep") return `https://cardanoscan.io/drep/${encodeURIComponent(actor.id)}`;
+  if (actorType === "spo") return `https://cardanoscan.io/pool/${encodeURIComponent(actor.id)}`;
+  if (actor.coldCredential) return `https://cardanoscan.io/ccmember/${encodeURIComponent(actor.coldCredential)}`;
+  if (actor.hotCredential) return `https://cardanoscan.io/cchot/${encodeURIComponent(actor.hotCredential)}`;
+  return `https://cardanoscan.io/search?query=${encodeURIComponent(actor.id)}`;
 }
 
-function cardanoscanCredentialLink(credential) {
-  const value = String(credential || "").trim();
-  if (!value) return cardanoscanSearchLink("");
-  if (value.startsWith("cc_cold1")) return `https://cardanoscan.io/ccmember/${encodeURIComponent(value)}`;
-  if (value.startsWith("cc_hot1")) return `https://cardanoscan.io/cchot/${encodeURIComponent(value)}`;
-  return cardanoscanSearchLink(value);
+function titleCase(value, fallback) {
+  return String(value || fallback || "").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-function actorList(payload, actorType) {
-  if (actorType === "drep") {
-    const rows = Array.isArray(payload?.dreps) ? payload.dreps : [];
-    const byId = new Map(rows.map((row) => [String(row?.id || "").trim().toLowerCase(), row]).filter(([id]) => Boolean(id)));
-    const inject = (specialKey, drepId, fallbackName) => {
-      const special = payload?.specialDreps?.[specialKey];
-      const specialPower = Number(special?.votingPowerAda || 0);
-      const key = String(drepId || "").trim().toLowerCase();
-      if (!key) return;
-      const existing = byId.get(key) || { id: drepId, name: fallbackName, votes: [], votingPowerAda: 0 };
-      if (!existing.name) existing.name = fallbackName;
-      if (specialPower > 0) existing.votingPowerAda = specialPower;
-      byId.set(key, existing);
-    };
-    inject("alwaysAbstain", "drep_always_abstain", "Always Abstain");
-    inject("alwaysNoConfidence", "drep_always_no_confidence", "Always No Confidence");
-    return Array.from(byId.values());
-  }
-  if (actorType === "spo") return Array.isArray(payload?.spos) ? payload.spos : [];
-  return Array.isArray(payload?.committeeMembers) ? payload.committeeMembers : [];
+function ScoreTile({ label, value, hint, help }) {
+  return (
+    <div className="c-stat">
+      <span className="c-stat__label">{label}</span>
+      <span className="c-stat__value row" style={{ gap: 8 }}>{value}{help ? <Tooltip label={`How ${label.toLowerCase()} is calculated`}>{help.map((line, i) => <span key={i} style={{ display: "block", marginTop: i ? 4 : 0 }}>{line}</span>)}</Tooltip> : null}</span>
+      {hint ? <span className="c-stat__hint">{hint}</span> : null}
+    </div>
+  );
 }
 
-const tooltipStyle = {
-  contentStyle: { background: "#1a2530", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: "#e8f0f4" },
-  itemStyle: { color: "#e8f0f4" }
-};
+function DelegatorsCard({ drepId }) {
+  const query = useDrepDelegators(drepId);
+  const [shown, setShown] = useState(25);
+  const data = query.data;
+  return (
+    <Card title="Delegators" subtitle={data ? `${formatNumber(data.delegatorCount)} stake key${data.delegatorCount === 1 ? "" : "s"} · ${formatAda(data.totalAda)} delegated${data.truncated ? " (top 5,000 by stake)" : ""}` : "Stake keys currently delegating to this DRep."}>
+      {query.isLoading ? <Skeleton kind="row" count={4} /> : query.error ? <Alert tone="warning">{query.error.message}</Alert> : !data || data.delegatorCount === 0 ? <p className="muted">No current delegators found for this DRep.</p> : (
+        <>
+          <DataTable
+            dense cards={false}
+            columns={[
+              { key: "address", label: "Stake address", render: (d) => <a className="mono small" href={`https://cardanoscan.io/stakeKey/${encodeURIComponent(d.address)}`} target="_blank" rel="noreferrer">{truncateMiddle(d.address, 16, 8)}</a> },
+              { key: "amountAda", label: "Delegated", align: "right", render: (d) => <span className="num">{formatAda(d.amountAda)}</span> }
+            ]}
+            rows={data.delegators.slice(0, shown)}
+            getRowKey={(d) => d.address}
+            caption="Delegators"
+          />
+          {data.delegators.length > shown ? <div className="row" style={{ marginTop: 10 }}><Button size="sm" onClick={() => setShown((n) => n + 50)}>Show more</Button><span className="tiny muted">{shown} of {data.delegators.length}</span></div> : null}
+        </>
+      )}
+    </Card>
+  );
+}
 
 export default function VoterProfilePage({ actorType }) {
   const { actorId } = useParams();
-  const [searchParams] = useSearchParams();
-  const snapshot = String(searchParams.get("snapshot") || "").trim();
-  const decodedId = decodeURIComponent(String(actorId || "")).trim();
-  const [payload, setPayload] = useState(null);
-  const [liveActor, setLiveActor] = useState(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  const [error, setError] = useState("");
+  const id = decodeURIComponent(String(actorId || "")).trim();
+  const snapshotKey = useSnapshotKey();
+  const isDrep = actorType === "drep";
+  const isSpo = actorType === "spo";
+  const isCommittee = actorType === "committee";
+
+  const detail = useActor(actorType, id, snapshotKey);
+  const list = useActors(actorType, snapshotKey);
+  // Live DRep lookup: current power for DReps missing from the snapshot (or
+  // registered mid-epoch with 0 power) and the metadata verification badge.
+  const liveQuery = useDrepLive(id, { enabled: isDrep && !snapshotKey });
+  const live = liveQuery.data?.id ? liveQuery.data : null;
+  const liveLoading = liveQuery.isLoading;
+  const [view, setView] = useState("voted");
+  const [rationale, setRationale] = useState(null);
   const [imageOpen, setImageOpen] = useState(false);
-  const [rationaleModal, setRationaleModal] = useState({ open: false, key: "", title: "", proposalId: "" });
-  const [voteRationaleText, setVoteRationaleText] = useState({});
-  const [voteRationaleLoading, setVoteRationaleLoading] = useState({});
-  const [voteRationaleError, setVoteRationaleError] = useState({});
-  const wallet = useContext(WalletContext);
-  const [delegateNotice, setDelegateNotice] = useState("");
-  const [delegating, setDelegating] = useState(false);
-  const [highRiskDelegationModalOpen, setHighRiskDelegationModalOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState("");
-  const [delegators, setDelegators] = useState(null);
-  const [delegatorsLoading, setDelegatorsLoading] = useState(false);
-  const [delegatorsError, setDelegatorsError] = useState("");
-  const [delegatorsShowCount, setDelegatorsShowCount] = useState(25);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        setError("");
-        const params = new URLSearchParams();
-        if (snapshot) params.set("snapshot", snapshot);
-        params.set("view", actorType);
-        const res = await fetch(`${API_BASE}/api/accountability?${params.toString()}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load profile data.");
-        if (!cancelled) setPayload(data);
-      } catch (e) {
-        if (!cancelled) setError(e.message || "Failed to load profile data.");
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [actorType, snapshot]);
 
-  const proposalInfo = payload?.proposalInfo || {};
-  const actors = useMemo(() => actorList(payload, actorType), [payload, actorType]);
-  const actorFromSnapshot = useMemo(() => {
-    const target = decodedId.toLowerCase();
-    return actors.find((row) => String(row?.id || "").trim().toLowerCase() === target) || null;
-  }, [actors, decodedId]);
+  const meta = detail.data?.meta || list.meta || null;
+  const proposalInfo = useMemo(() => proposalInfoFromIndex(list.unpacked?.proposals || []), [list.unpacked]);
+  const listActors = useMemo(() => {
+    const rows = list.unpacked?.actors || [];
+    return isDrep ? mergeSpecialDreps(rows, meta?.specialDreps) : rows;
+  }, [list.unpacked, isDrep, meta]);
+  const power = useMemo(() => votingPowerTotals(listActors, actorType), [listActors, actorType]);
 
-  // For DReps not yet in the snapshot, or in snapshot but with 0 voting power (newly registered mid-epoch),
-  // fall back to a live Blockfrost lookup to get their current voting power.
-  const snapshotHasZeroPower = actorFromSnapshot !== null && Number(actorFromSnapshot?.votingPowerAda || 0) === 0;
-  useEffect(() => {
-    if (actorType !== "drep" || !payload) return;
-    // Skip when snapshot already has a non-zero power — no live fetch needed.
-    // (Preview: always fetch so the metadata-verification badge can render.)
-    if (!PREVIEW_METADATA_VERIFICATION && actorFromSnapshot && Number(actorFromSnapshot.votingPowerAda || 0) > 0) return;
-    let cancelled = false;
-    setLiveLoading(true);
-    fetch(`${API_BASE}/api/drep-live?id=${encodeURIComponent(decodedId)}`)
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled && data?.id) setLiveActor(data); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLiveLoading(false); });
-    return () => { cancelled = true; };
-  }, [actorType, payload, actorFromSnapshot, decodedId]);
-
-  useEffect(() => {
-    if (actorType !== "drep" || !decodedId) return undefined;
-    let cancelled = false;
-    setDelegatorsLoading(true);
-    setDelegatorsError("");
-    fetch(`${API_BASE}/api/drep-delegators?id=${encodeURIComponent(decodedId)}`)
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (cancelled) return;
-        if (!ok) throw new Error(data?.error || "Failed to load delegators.");
-        setDelegators(data);
-      })
-      .catch((e) => { if (!cancelled) setDelegatorsError(e.message || "Failed to load delegators."); })
-      .finally(() => { if (!cancelled) setDelegatorsLoading(false); });
-    return () => { cancelled = true; };
-  }, [actorType, decodedId]);
-
-  // When snapshot has 0 power but live data has non-zero, merge the live power in.
   const actor = useMemo(() => {
-    if (!actorFromSnapshot) return liveActor;
-    if (liveActor && Number(liveActor.votingPowerAda || 0) > 0 && snapshotHasZeroPower) {
-      return { ...actorFromSnapshot, votingPowerAda: liveActor.votingPowerAda };
-    }
-    return actorFromSnapshot;
-  }, [actorFromSnapshot, liveActor, snapshotHasZeroPower]);
+    const fromSnapshot = detail.data?.actor || null;
+    if (!fromSnapshot) return live ? { ...live, votes: [] } : null;
+    if (live && Number(fromSnapshot.votingPowerAda || 0) === 0 && Number(live.votingPowerAda || 0) > 0) return { ...fromSnapshot, votingPowerAda: live.votingPowerAda };
+    return fromSnapshot;
+  }, [detail.data, live]);
 
-  const actorLabel = actorType === "drep" ? "DRep" : actorType === "spo" ? "SPO" : "Committee Member";
-  const actorDisplayName = actor?.name || (actor?.id ? `${String(actor.id).slice(0, 14)}…` : null);
+  const scored = useMemo(() => {
+    if (!actor) return null;
+    const [row] = scoreActors([actor], {
+      actorType, proposalInfo, include: { attendance: true, transparency: !isCommittee, alignment: true, responsiveness: !isCommittee, delegationRisk: isDrep },
+      drepParticipationStartEpoch: meta?.drepParticipationStartEpoch, powerTotals: power
+    });
+    return row;
+  }, [actor, actorType, proposalInfo, isCommittee, isDrep, meta, power]);
+
+  const name = actor?.name || actor?.profile?.name || "";
+  const displayName = name || (actor?.id ? truncateMiddle(actor.id, 14, 6) : "");
   useSeoMeta({
-    title: actorDisplayName ? `${actorDisplayName} — ${actorLabel} Profile` : `${actorLabel} Profile`,
-    description: actorDisplayName
-      ? `Voting history, participation rate, accountability score, and rationale coverage for ${actorLabel} ${actorDisplayName} on Cardano.`
-      : `Cardano ${actorLabel} voting history, accountability score, and rationale coverage.`
+    title: displayName ? `${displayName} — ${LABEL[actorType]} profile` : `${LABEL[actorType]} profile`,
+    description: displayName ? `Voting history, participation rate, accountability score, and rationale coverage for ${LABEL[actorType]} ${displayName} on Cardano.` : `Cardano ${LABEL[actorType]} voting history, accountability score, and rationale coverage.`
   });
 
-  const voteRows = useMemo(() => {
-    if (!actor) return [];
-    return (Array.isArray(actor.votes) ? actor.votes : [])
-      .map((vote) => {
-        const info = proposalInfo?.[vote.proposalId] || {};
-        const submittedEpoch = Number(info?.submittedEpoch || 0);
-        const submittedAtUnix = Number(info?.submittedAtUnix || 0);
-        const votedAtUnix = Number(vote?.votedAtUnix || 0);
-        const votedEpoch = epochFromUnix(votedAtUnix) ?? (submittedEpoch > 0 ? submittedEpoch : null);
-        const responseHours = resolveVoteResponseHours(vote, proposalInfo);
-        return {
-          proposalId: String(vote?.proposalId || ""),
-          governanceType: String(info?.governanceType || "Unknown"),
-          actionName: String(info?.actionName || vote?.proposalId || "Unknown"),
-          submittedEpoch,
-          votedEpoch,
-          votedAtUnix,
-          submittedAtUnix,
-          submittedAt: info?.submittedAt || null,
-          voteLabel: formatVoteLabelForActor(vote?.vote, actorType),
-          outcome: String(vote?.outcome || info?.outcome || "Unknown"),
-          voteTxHash: String(vote?.voteTxHash || ""),
-          responseHours,
-          rationaleScore: actorType === "committee" ? scoreRationaleQuality(vote) : null,
-          hasRationale: Boolean(vote?.hasRationale) || Boolean(String(vote?.rationaleUrl || "").trim()),
-          rationaleUrl: String(vote?.rationaleUrl || "").trim()
-        };
-      })
-      .sort((a, b) => {
-        const epochDelta = (a.votedEpoch || 0) - (b.votedEpoch || 0);
-        if (epochDelta !== 0) return epochDelta;
-        return (a.votedAtUnix || 0) - (b.votedAtUnix || 0);
-      });
-  }, [actor, proposalInfo, actorType]);
+  const voteRows = useMemo(() => (actor?.votes || []).map((vote) => {
+    const info = proposalInfo[vote.proposalId] || {};
+    const votedEpoch = epochFromUnix(vote.votedAtUnix) ?? (info.submittedEpoch || null);
+    return {
+      ...vote,
+      actionName: info.actionName || vote.proposalId,
+      governanceType: info.governanceType || "Unknown",
+      outcome: vote.outcome || info.outcome || "Unknown",
+      votedEpoch,
+      responseHours: resolveVoteResponseHours(vote, proposalInfo),
+      rationaleScore: isCommittee ? scoreCommitteeRationaleQuality(vote) : null,
+      hasRationale: Boolean(vote.hasRationale) || Boolean(vote.rationaleUrl)
+    };
+  }), [actor, proposalInfo, isCommittee]);
 
   const byEpoch = useMemo(() => {
     const map = new Map();
     for (const row of voteRows) {
       const epoch = Number(row.votedEpoch || 0);
-      if (!Number.isFinite(epoch) || epoch <= 0) continue;
-      if (!map.has(epoch)) {
-        map.set(epoch, { epoch, totalCast: 0, yes: 0, no: 0, abstain: 0, noConfidence: 0, responseCount: 0, responseSum: 0, rationaleCount: 0, rationaleSum: 0 });
-      }
-      const bucket = map.get(epoch);
-      bucket.totalCast += 1;
-      const vote = String(row.voteLabel || "").toLowerCase();
-      if (vote.includes("yes") || vote.includes("constitutional")) bucket.yes += 1;
-      else if (vote.includes("no") || vote.includes("unconstitutional")) bucket.no += 1;
-      else if (vote.includes("abstain")) bucket.abstain += 1;
-      else if (vote.includes("confidence")) bucket.noConfidence += 1;
-      if (Number.isFinite(row.responseHours)) {
-        bucket.responseCount += 1;
-        bucket.responseSum += Number(row.responseHours);
-      }
-      if (actorType === "committee" && Number.isFinite(row.rationaleScore)) {
-        bucket.rationaleCount += 1;
-        bucket.rationaleSum += Number(row.rationaleScore);
-      }
+      if (epoch <= 0) continue;
+      if (!map.has(epoch)) map.set(epoch, { epoch, yes: 0, no: 0, abstain: 0, noConfidence: 0 });
+      const b = map.get(epoch);
+      const v = String(row.vote || "").toLowerCase();
+      if (v === "yes") b.yes += 1; else if (v === "no") b.no += 1; else if (v === "abstain") b.abstain += 1; else if (v.includes("confidence")) b.noConfidence += 1;
     }
-    const sorted = Array.from(map.values()).sort((a, b) => a.epoch - b.epoch).map((row) => ({
-      ...row,
-      responseHours: row.responseCount > 0 ? round(row.responseSum / row.responseCount) : null,
-      rationaleQuality: row.rationaleCount > 0 ? round(row.rationaleSum / row.rationaleCount) : null
-    }));
-    let runningTotal = 0;
-    return sorted.map((row) => {
-      runningTotal += Number(row.totalCast || 0);
-      return {
-        ...row,
-        cumulativeCast: runningTotal
-      };
-    });
-  }, [voteRows, actorType]);
+    return Array.from(map.values()).sort((a, b) => a.epoch - b.epoch);
+  }, [voteRows]);
 
-  const headline = useMemo(() => {
-    if (!actor) return null;
-    const responseRows = voteRows.filter((row) => Number.isFinite(row.responseHours));
-    const rationaleRows = voteRows.filter((row) => Number.isFinite(row.rationaleScore));
-    const avgResponse = responseRows.length > 0 ? round(responseRows.reduce((sum, row) => sum + row.responseHours, 0) / responseRows.length) : null;
-    const rationaleQuality = rationaleRows.length > 0 ? round(rationaleRows.reduce((sum, row) => sum + row.rationaleScore, 0) / rationaleRows.length) : 0;
-    return {
-      totalVotes: voteRows.length,
-      avgResponse,
-      rationaleQuality,
-      votingPowerAda: Number(actor?.votingPowerAda || 0)
-    };
-  }, [actor, voteRows]);
+  const actionRows = useMemo(() => {
+    if (!actor) return [];
+    const all = actorActionRows(actor, { actorType, proposalInfo, drepParticipationStartEpoch: meta?.drepParticipationStartEpoch });
+    if (view === "missed") return all.filter((r) => !r.vote && r.eligible);
+    if (view === "all") return all;
+    return all.filter((r) => r.vote);
+  }, [actor, actorType, proposalInfo, meta, view]);
+  const voteByProposal = useMemo(() => new Map(voteRows.map((v) => [v.proposalId, v])), [voteRows]);
 
-  const listPath = actorType === "drep" ? "/dreps" : actorType === "spo" ? "/spos" : "/committee";
-  const isCommittee = actorType === "committee";
-  const isDrep = actorType === "drep";
-
-  const drepDelegationRisk = useMemo(() => {
-    if (!isDrep || !actor) return { score: 0, label: "Low", activeSharePct: 0 };
-    const drepRows = Array.isArray(actors) ? actors : [];
-    const totalPower = drepRows.reduce((sum, row) => sum + Number(row?.votingPowerAda || 0), 0);
-    const abstainPower = Number(
-      drepRows.find((row) => String(row?.id || "").trim().toLowerCase() === "drep_always_abstain")?.votingPowerAda || 0
-    );
-    const activePower = Math.max(0, totalPower - abstainPower);
-    const isAlwaysAbstain = String(actor?.id || "").trim().toLowerCase() === "drep_always_abstain";
-    const activeSharePct = isAlwaysAbstain ? 0 : (activePower > 0 ? (Number(actor?.votingPowerAda || 0) / activePower) * 100 : 0);
-    const score = delegationConcentrationRiskScore(activeSharePct);
-    return {
-      score,
-      label: delegationConcentrationRiskLabel(score),
-      activeSharePct
-    };
-  }, [isDrep, actor, actors]);
-
-  async function submitDelegationTransaction() {
-    if (!isDrep || !actor) return;
-    if (!wallet?.walletApi) {
-      setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
-      return;
-    }
-    if (!wallet.walletRewardAddress) {
-      setDelegateNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
-      return;
-    }
-    try {
-      setDelegating(true);
-      setDelegateNotice("");
-      const tx = new Transaction({ initiator: wallet.walletApi, verbose: false });
-      tx.setNetwork("mainnet");
-      tx.txBuilder.voteDelegationCertificate({ dRepId: actor.id }, wallet.walletRewardAddress);
-      const unsignedTx = await tx.build();
-      const signedTx = await wallet.walletApi.signTx(unsignedTx, true, true);
-      const txHash = await wallet.walletApi.submitTx(signedTx);
-      setDelegateNotice(`Delegation submitted on-chain. Tx: ${txHash}`);
-    } catch (e) {
-      setDelegateNotice(`Delegation failed: ${e?.message || "Delegation transaction failed."}`);
-    } finally {
-      setDelegating(false);
-    }
+  const listPath = withSnapshotParam(LIST_PATH[actorType], snapshotKey);
+  const loading = detail.isLoading || list.isLoading || (!detail.data?.actor && liveLoading);
+  const shareUrl = () => `${window.location.origin}/delegate/${encodeURIComponent(actor?.id || id)}`;
+  async function share(kind) {
+    const ok = await copyText(kind === "link" ? shareUrl() : `I delegate my Cardano governance voting power to ${name || id} on Civitas: ${shareUrl()}`);
+    if (ok) { setShareCopied(kind); setTimeout(() => setShareCopied(""), 2000); }
   }
 
-  async function prepareDelegation() {
-    if (!isDrep || !actor) return;
-    if (!wallet?.walletApi) {
-      setDelegateNotice("Connect your wallet in the top bar to submit delegation on-chain.");
-      return;
-    }
-    if (!wallet.walletRewardAddress) {
-      setDelegateNotice("No reward address found in connected wallet. Delegation requires a stake/reward address.");
-      return;
-    }
-    if (drepDelegationRisk.label === "High") {
-      setHighRiskDelegationModalOpen(true);
-      return;
-    }
-    await submitDelegationTransaction();
-  }
-
-  function delegateShareUrl() {
-    return `${window.location.origin}/delegate/${encodeURIComponent(actor?.id || decodedId)}`;
-  }
-
-  async function copyDelegateLink() {
-    try {
-      await navigator.clipboard.writeText(delegateShareUrl());
-      setShareCopied("link");
-      setTimeout(() => setShareCopied(""), 2000);
-    } catch {
-      setDelegateNotice("Could not copy link. Copy it from the address bar instead.");
-    }
-  }
-
-  async function copyDelegateText() {
-    const name = actor?.name || decodedId;
-    const text = `I delegate my Cardano governance voting power to ${name} on Civitas: ${delegateShareUrl()}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      setShareCopied("text");
-      setTimeout(() => setShareCopied(""), 2000);
-    } catch {
-      setDelegateNotice("Could not copy share text.");
-    }
-  }
-
-  async function loadVoteRationale(item) {
-    if (!item) return;
-    const key = `${actor?.id || ""}-${item.proposalId}`;
-    if (voteRationaleLoading[key] || voteRationaleText[key]) return;
-    try {
-      setVoteRationaleLoading((prev) => ({ ...prev, [key]: true }));
-      setVoteRationaleError((prev) => ({ ...prev, [key]: "" }));
-      const params = new URLSearchParams();
-      if (item.rationaleUrl) params.set("url", item.rationaleUrl);
-      if (item.voteTxHash) params.set("voteTxHash", item.voteTxHash);
-      params.set("proposalId", item.proposalId);
-      params.set("voterId", actor?.id || "");
-      params.set("voterRole", isDrep ? "drep" : isCommittee ? "constitutional_committee" : "stake_pool");
-      const res = await fetch(`${API_BASE}/api/vote-rationale?${params.toString()}`);
-      const raw = await res.text();
-      let data = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error("Vote rationale endpoint returned non-JSON response.");
-      }
-      if (!res.ok) throw new Error(data.error || "Failed to load vote rationale.");
-      const markdownBody = String(data?.rationaleText || "").trim();
-      setVoteRationaleText((prev) => ({
-        ...prev,
-        [key]: markdownBody || "No rationale body text available."
-      }));
-    } catch (e) {
-      setVoteRationaleError((prev) => ({ ...prev, [key]: e.message || "Failed to load rationale." }));
-    } finally {
-      setVoteRationaleLoading((prev) => ({ ...prev, [key]: false }));
-    }
-  }
-
-  function openVoteRationaleModal(item) {
-    if (!item) return;
-    const key = `${actor?.id || ""}-${item.proposalId}`;
-    setRationaleModal({
-      open: true,
-      key,
-      title: item.actionName || item.proposalId,
-      proposalId: item.proposalId
-    });
-    loadVoteRationale(item);
-  }
-
-  useEffect(() => {
-    const shouldLock = imageOpen || rationaleModal.open || highRiskDelegationModalOpen;
-    if (!shouldLock) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [imageOpen, rationaleModal.open, highRiskDelegationModalOpen]);
-
-  if (error) {
+  if (loading) {
     return (
-      <main className="page shell">
-        <section className="status-row"><p className="muted">Error: {error}</p></section>
+      <main className="shell page p-profile" aria-busy="true">
+        <Skeleton kind="text" width={160} /><div style={{ height: 12 }} /><Skeleton kind="title" width="50%" /><div style={{ height: 24 }} />
+        <div className="c-stats"><Skeleton kind="card" count={4} /></div>
       </main>
     );
   }
-
-  if (!payload) {
-    return (
-      <main className="page shell">
-        <section className="status-row"><p className="muted">Loading voter profile...</p></section>
-      </main>
-    );
-  }
-
   if (!actor) {
-    if (liveLoading) {
-      return (
-        <main className="page shell">
-          <section className="status-row"><p className="muted">Loading voter profile...</p></section>
-        </main>
-      );
-    }
     return (
-      <main className="page shell">
-        <section className="status-row">
-          <p className="muted">Profile not found for ID: <span className="mono">{decodedId}</span></p>
-          <p className="muted">This DRep has not voted on any tracked governance actions yet.</p>
-          <p><Link className="inline-link" to={listPath}>Back to DRep list</Link></p>
-        </section>
+      <main className="shell page p-profile">
+        <Link to={listPath} className="c-btn c-btn--ghost c-btn--sm"><IconArrowLeft size={16} /> All {LABEL[actorType].toLowerCase()}s</Link>
+        <div style={{ height: 16 }} />
+        <EmptyState title={`No ${LABEL[actorType].toLowerCase()} found for this ID.`} action={<Button to={listPath}>Back to the list</Button>}>
+          <span className="mono break">{id}</span>{isDrep ? <><br />This DRep has not voted on any tracked governance action yet, or is not registered.</> : null}
+        </EmptyState>
       </main>
     );
   }
+
+  const columns = [
+    {
+      key: "action", label: "Action", span: true,
+      render: (r) => (
+        <div className="p-profile__action">
+          <Link to={withSnapshotParam(`/actions/${encodeURIComponent(r.proposalId)}`, snapshotKey)} className="c-table__primary">{r.actionName}</Link>
+          <span className="c-table__sub">{r.governanceType} · submitted {r.submittedEpoch ? `epoch ${r.submittedEpoch}` : "—"}{r.submittedAtUnix ? ` · ${formatDate(r.submittedAtUnix)}` : ""}</span>
+        </div>
+      )
+    },
+    { key: "vote", label: "Vote", compact: true, render: (r) => r.vote ? <VotePill vote={voteLabelForActor(r.vote.vote, actorType)} status={r.vote.vote} size="sm" /> : <span className="muted small">{r.eligible ? "Not voted" : "Not eligible"}</span> },
+    { key: "outcome", label: "Outcome", compact: true, render: (r) => <StatusPill status={r.status || r.outcome} size="sm" /> },
+    { key: "epoch", label: "Voted", align: "right", render: (r) => { const v = r.vote ? voteByProposal.get(r.proposalId) : null; return <span className="num small">{v?.votedEpoch ? `E${v.votedEpoch}` : "—"}</span>; } },
+    ...(!isCommittee ? [{ key: "response", label: "Response", align: "right", render: (r) => { const v = r.vote ? voteByProposal.get(r.proposalId) : null; return <span className="num small">{v ? formatResponseHours(v.responseHours) : "—"}</span>; } }] : []),
+    ...(isCommittee ? [{ key: "quality", label: "Rationale quality", align: "right", render: (r) => { const v = r.vote ? voteByProposal.get(r.proposalId) : null; return <span className="num small">{v && Number.isFinite(v.rationaleScore) ? `${Math.round(v.rationaleScore)}` : "—"}</span>; } }] : []),
+    {
+      key: "rationale", label: "Rationale", compact: true,
+      render: (r) => {
+        const v = r.vote ? voteByProposal.get(r.proposalId) : null;
+        const has = v && (v.hasRationale || v.rationaleUrl);
+        const canOpen = has || (v && !isSpo);
+        return canOpen ? <Button size="sm" onClick={() => setRationale({ proposalId: r.proposalId, voterId: actor.id, voterRole: ROLE_BY_TYPE[actorType], voteTxHash: v.voteTxHash, rationaleUrl: v.rationaleUrl, title: r.actionName, subtitle: r.proposalId })}>View</Button> : <span className="muted">—</span>;
+      }
+    }
+  ];
+
+  const status = isCommittee ? titleCase(actor.status, "expired") : isSpo ? titleCase(actor.status, "registered") : titleCase(actor.status, "unknown");
+  const profile = actor.profile || {};
+  const imageUrl = profile.imageUrl || "";
+  const references = Array.isArray(profile.references) ? profile.references.slice(0, 12) : [];
 
   return (
-    <main className="page shell stats-page">
-      <section className="page-head">
-        <p className="eyebrow">Voter Profile</p>
-        <h1>{actor.name || actor.id}</h1>
-        <p className="muted mono">{actor.id}</p>
-        {isDrep ? <MetaVerifyPill verification={liveActor?.metadataVerification} /> : null}
-        <p><Link className="inline-link" to={`${listPath}${snapshot ? `?snapshot=${encodeURIComponent(snapshot)}` : ""}`}>Back to dashboard</Link></p>
-      </section>
+    <main className="shell page p-profile">
+      <Link to={listPath} className="c-btn c-btn--ghost c-btn--sm" style={{ marginBottom: 12 }}><IconArrowLeft size={16} /> All {isDrep ? "DReps" : isSpo ? "stake pools" : "committee members"}</Link>
+      <SnapshotBanner snapshotKey={snapshotKey} latestEpoch={meta?.latestEpoch} backTo={`${LIST_PATH[actorType]}/${encodeURIComponent(id)}`} />
+      <PageHeader
+        eyebrow={<><RolePill role={ROLE_BY_TYPE[actorType]} size="sm" />{status ? <StatusPill status={status} size="sm" /> : null}{isSpo && isSpoAlwaysAbstainStatus(actor.delegationStatus) ? <Pill tone="success" size="sm">{actor.delegationStatus}</Pill> : null}{isDrep ? <MetaVerifyPill verification={live?.metadataVerification} /> : null}</>}
+        title={<span className="p-profile__title">{imageUrl ? <button type="button" className="p-profile__avatar-btn" onClick={() => setImageOpen(true)} aria-label="Open profile image"><Avatar src={imageUrl} name={name} size="lg" /></button> : <Avatar name={name} size="lg" />}<span>{name || (isDrep ? "Unnamed DRep" : isSpo ? "Unnamed pool" : actor.id)}</span></span>}
+        actions={<LivePill enabled={!snapshotKey} generatedAt={meta?.generatedAt} />}
+      >
+        <div className="row" style={{ marginTop: 10 }}>
+          <span className="c-hash break">{actor.id}</span>
+          <CopyButton value={actor.id} label={`Copy ${LABEL[actorType]} id`} />
+          <a className="small p-profile__ext" href={cardanoscanLink(actorType, actor)} target="_blank" rel="noreferrer">Cardanoscan <IconExternal size={12} /></a>
+        </div>
+      </PageHeader>
 
-      <section className="stats-kpis">
-        <article className="stats-kpi"><p className="stats-kpi-label">Votes Cast</p><strong className="stats-kpi-value">{fmt(headline.totalVotes)}</strong></article>
-        <article className="stats-kpi"><p className="stats-kpi-label">Avg Response</p><strong className="stats-kpi-value">{formatResponseHours(headline.avgResponse)}</strong></article>
-        {isCommittee ? (
-          <article className="stats-kpi"><p className="stats-kpi-label">Rationale Quality</p><strong className="stats-kpi-value">{fmt(headline.rationaleQuality)}%</strong></article>
-        ) : null}
-      </section>
+      <div className="stack--6">
+        <StatGrid>
+          <ScoreTile label="Votes cast" value={formatNumber(scored?.cast ?? voteRows.length)} hint={scored ? `of ${scored.totalEligibleVotes} eligible actions` : null} />
+          <ScoreTile label="Attendance" value={formatPct(scored?.attendance, 1)} help={scored ? metricHelp.attendance(scored) : null} />
+          <ScoreTile label="Score" value={scored ? scored.accountability : "—"} hint="accountability" help={scored ? metricHelp.accountability(scored, actorType, { attendance: true, transparency: !isCommittee, alignment: true, responsiveness: !isCommittee, delegationRisk: isDrep }) : null} />
+          {!isCommittee ? <ScoreTile label="Transparency" value={formatPct(scored?.transparencyScore, 1)} help={scored ? metricHelp.transparency(scored, false) : null} /> : null}
+          {!isCommittee ? <ScoreTile label="Alignment" value={formatPct(scored?.consistency, 1)} help={scored ? metricHelp.consistency(scored) : null} /> : <ScoreTile label="Rationale quality" value={formatPct(scored?.consistency, 0)} help={scored ? metricHelp.rationaleQuality(scored) : null} />}
+          {!isCommittee ? <ScoreTile label="Avg response" value={formatResponseHours(scored?.avgResponseHours)} help={scored ? metricHelp.responsiveness(scored) : null} /> : null}
+          {!isCommittee ? <ScoreTile label="Voting power" value={formatAdaCompact(actor.votingPowerAda)} hint={scored ? `${formatPct(scored.votingPowerPctTotal, 2)} of total · ${formatPct(scored.votingPowerPctActive, 2)} of active` : null} /> : null}
+          {isDrep && scored ? <ScoreTile label="Delegation risk" value={<Pill tone={scored.delegationRiskLabel === "High" ? "danger" : scored.delegationRiskLabel === "Medium" ? "warning" : "success"}>{scored.delegationRiskLabel} · {scored.delegationRiskScore}%</Pill>} help={metricHelp.delegationRisk(scored)} /> : null}
+        </StatGrid>
 
-      {isDrep ? (
-        <section className="stats-section stats-section--wide">
-          <h2 className="stats-section-title">DRep Profile</h2>
-          <div className="stats-section-body">
-            {actor?.profile?.imageUrl ? (
-              <button type="button" className="profile-image-inline-btn" onClick={() => setImageOpen(true)}>
-                <img className="profile-image" src={actor.profile.imageUrl} alt={`${actor.name || actor.id} profile`} />
-              </button>
-            ) : null}
-            <div className="meta drep-profile">
-              <button type="button" className="delegate-cta" onClick={prepareDelegation} disabled={delegating}>
-                {delegating ? "Submitting Delegation..." : "Delegate Voting Power To This DRep"}
-              </button>
-              {!wallet?.walletApi ? <p className="muted">Connect your wallet in the top bar to enable delegation.</p> : null}
-              {delegateNotice ? <p className="muted">{delegateNotice}</p> : null}
-              {isDrep ? (
-                <div className="delegate-share">
-                  <button type="button" className="delegate-share-btn" onClick={copyDelegateLink}>
-                    {shareCopied === "link" ? "Link Copied!" : "Copy Delegate Link"}
-                  </button>
-                  <button type="button" className="delegate-share-btn" onClick={copyDelegateText}>
-                    {shareCopied === "text" ? "Copied!" : "Copy Share Post"}
-                  </button>
-                  <p className="muted delegate-share-hint">
-                    Drop the link into a social post or reply — anyone who clicks it lands on a one-click delegate page for this DRep.
-                  </p>
-                </div>
-              ) : null}
-              {actor.profile?.email ? (
-                <p className="profile-row">
-                  <span className="profile-label">Email</span>
-                  <a className="ext-link" href={`mailto:${actor.profile.email}`}>{actor.profile.email}</a>
-                </p>
-              ) : null}
-              {actor.profile?.bio ? (
-                <div className="profile-block">
-                  <h4>Bio</h4>
-                  {splitProfileText(actor.profile.bio).map((line, idx) => <p key={`bio-${actor.id}-${idx}`}>{line}</p>)}
-                </div>
-              ) : null}
-              {actor.profile?.motivations ? (
-                <div className="profile-block">
-                  <h4>Motivations</h4>
-                  {splitProfileText(actor.profile.motivations).map((line, idx) => <p key={`mot-${actor.id}-${idx}`}>{line}</p>)}
-                </div>
-              ) : null}
-              {actor.profile?.objectives ? (
-                <div className="profile-block">
-                  <h4>Objectives</h4>
-                  {splitProfileText(actor.profile.objectives).map((line, idx) => <p key={`obj-${actor.id}-${idx}`}>{line}</p>)}
-                </div>
-              ) : null}
-              {actor.profile?.qualifications ? (
-                <div className="profile-block">
-                  <h4>Qualifications</h4>
-                  {splitProfileText(actor.profile.qualifications).map((line, idx) => <p key={`qual-${actor.id}-${idx}`}>{line}</p>)}
-                </div>
-              ) : null}
-              {Array.isArray(actor.profile?.references) && actor.profile.references.length > 0 ? (
-                <>
-                  <h4 className="profile-links-title">Links</h4>
-                  <div className="vote-list profile-links">
-                    {actor.profile.references.slice(0, 12).map((ref) => {
-                      const type = linkTypeFromRef(ref);
-                      return (
-                        <article className="vote-item profile-link-item" key={`${actor.id}-${ref.uri}`}>
-                          <a className="ext-link profile-link-anchor" href={ref.uri} target="_blank" rel="noreferrer">
-                            <span className={`link-chip link-chip-${type}`}>{linkIcon(type)}</span>
-                            <span>{ref.label || ref.uri}</span>
-                          </a>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {isDrep ? (
-        <section className="stats-section stats-section--wide">
-          <h2 className="stats-section-title">Delegators</h2>
-          <div className="stats-section-body">
-            {delegatorsLoading ? (
-              <p className="muted">Loading delegators…</p>
-            ) : delegatorsError ? (
-              <p className="muted">{delegatorsError}</p>
-            ) : delegators && delegators.delegatorCount > 0 ? (
-              <>
-                <p className="muted">
-                  <strong>{fmt(delegators.delegatorCount)}</strong> current delegator{delegators.delegatorCount === 1 ? "" : "s"} ·{" "}
-                  <strong>{fmt(delegators.totalAda)} ada</strong> delegated
-                  {delegators.truncated ? " (showing top 5,000 by stake)" : ""}
-                </p>
-                <table className="delegators-table">
-                  <thead>
-                    <tr><th>Stake Address</th><th>Delegated</th></tr>
-                  </thead>
-                  <tbody>
-                    {delegators.delegators.slice(0, delegatorsShowCount).map((d) => (
-                      <tr key={d.address}>
-                        <td className="mono">
-                          <a className="ext-link" href={`https://cardanoscan.io/stakeKey/${encodeURIComponent(d.address)}`} target="_blank" rel="noreferrer">
-                            {shortAddress(d.address)}
-                          </a>
-                        </td>
-                        <td>{fmt(d.amountAda)} ada</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {delegators.delegators.length > delegatorsShowCount ? (
-                  <button type="button" className="delegate-share-btn" onClick={() => setDelegatorsShowCount((n) => n + 25)}>
-                    Show more
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <p className="muted">No current delegators found for this DRep.</p>
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Profile Details</h2>
-        <div className="stats-section-body">
-          <div className="meta">
+        <div className="p-profile__columns">
+          <div className="stack">
             {isDrep ? (
-              <>
-                <p>
-                  DRep ID:{" "}
-                  <a className="ext-link mono" href={`https://cardanoscan.io/drep/${encodeURIComponent(actor.id)}`} target="_blank" rel="noreferrer">
-                    {actor.id}
-                  </a>
-                </p>
-                <p>
-                  Voting power: <strong>{fmt(Number(actor?.votingPowerAda || 0))} ada</strong>
-                </p>
-              </>
+              <Card accent title="Delegate" subtitle="Delegate your voting power to this DRep from the connected wallet, or share a one-click delegate link." actions={
+                <Menu align="right" label="Share" trigger={({ props }) => <Button size="sm" {...props}>{shareCopied ? "Copied!" : "Share"} <IconChevronDown size={14} /></Button>}>
+                  {({ close }) => (<>
+                    <MenuItem close={close} onClick={() => share("link")}>Copy delegate link</MenuItem>
+                    <MenuItem close={close} onClick={() => share("text")}>Copy a share post</MenuItem>
+                    <MenuItem close={close} to={`/delegate/${encodeURIComponent(actor.id)}`}>Open the delegate page</MenuItem>
+                  </>)}
+                </Menu>
+              }>
+                <DelegateButton drepId={actor.id} riskLabel={scored?.delegationRiskLabel} activeSharePct={scored?.votingPowerPctActive} />
+              </Card>
             ) : null}
-            {actorType === "spo" ? (
-              <>
-                <p>
-                  Pool ID:{" "}
-                  <a className="ext-link mono" href={`https://cardanoscan.io/pool/${encodeURIComponent(actor.id)}`} target="_blank" rel="noreferrer">
-                    {actor.id}
-                  </a>
-                </p>
-                <p>
-                  Pool status: <strong>{String(actor?.status || "registered").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
-                </p>
-                <p>
-                  Voting power: <strong>{fmt(Number(actor?.votingPowerAda || 0))} ada</strong>
-                </p>
-                {actor?.delegationStatus ? (
-                  <p>
-                    Delegation posture: <strong>{actor.delegationStatus}</strong>
-                  </p>
-                ) : null}
-                {actor?.delegatedDrepLiteralRaw ? (
-                  <p>
-                    Delegated DRep literal: <strong className="mono">{actor.delegatedDrepLiteralRaw}</strong>
-                  </p>
-                ) : null}
-                {actor?.homepage ? (
-                  <p>
-                    Homepage:{" "}
-                    <a className="ext-link" href={actor.homepage} target="_blank" rel="noreferrer">
-                      {actor.homepage}
-                    </a>
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-            {isCommittee ? (
-              <>
-                <p>
-                  Committee status:{" "}
-                  <strong>{String(actor?.status || "expired").replace(/\b\w/g, (m) => m.toUpperCase())}</strong>
-                </p>
-                <p>
-                  Term started: <strong>{actor?.seatStartEpoch ? `Epoch ${actor.seatStartEpoch}` : "Unknown"}</strong>
-                </p>
-                <p>
-                  Term expiry: <strong>{actor?.expirationEpoch ? `Epoch ${actor.expirationEpoch}` : "Unknown"}</strong>
-                </p>
-                {actor?.hotCredential ? (
-                  <p>
-                    Hot credential:{" "}
-                    <a className="ext-link mono" href={cardanoscanCredentialLink(actor.hotCredential)} target="_blank" rel="noreferrer">
-                      {actor.hotCredential}
-                    </a>
-                  </p>
-                ) : null}
-                {actor?.coldCredential ? (
-                  <p>
-                    Cold credential:{" "}
-                    <a className="ext-link mono" href={cardanoscanCredentialLink(actor.coldCredential)} target="_blank" rel="noreferrer">
-                      {actor.coldCredential}
-                    </a>
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-          {Array.isArray(actor?.profile?.references) && actor.profile.references.length > 0 ? (
-            <>
-              <h4 className="profile-links-title">Links</h4>
-              <div className="vote-list profile-links">
-                {actor.profile.references.slice(0, 12).map((ref) => {
-                  const type = linkTypeFromRef(ref);
-                  return (
-                    <article className="vote-item profile-link-item" key={`${actor.id}-detail-${ref.uri}`}>
-                      <a className="ext-link profile-link-anchor" href={ref.uri} target="_blank" rel="noreferrer">
-                        <span className={`link-chip link-chip-${type}`}>{linkIcon(type)}</span>
-                        <span>{ref.label || ref.uri}</span>
-                      </a>
-                    </article>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
-      </section>
 
-      <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Voting History</h2>
-        <div className="stats-section-body">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={byEpoch} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
-              <XAxis dataKey="epoch" />
-              <YAxis allowDecimals={false} />
-              <Tooltip {...tooltipStyle} />
-              <Legend />
-              <Bar dataKey="yes" stackId="a" fill="#54e4bc" name="Yes/Constitutional" />
-              <Bar dataKey="no" stackId="a" fill="#ff6f7d" name="No/Unconstitutional" />
-              <Bar dataKey="abstain" stackId="a" fill="#ffc766" name="Abstain" />
-              <Bar dataKey="noConfidence" stackId="a" fill="#7eb8ff" name="No Confidence" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="stats-section stats-section--wide">
-        <h2 className="stats-section-title">Recent Votes</h2>
-        <div className="stats-section-body">
-          <div className="table-panel">
-            <table className="mobile-cards-table">
-              <thead>
-                <tr>
-                  <th>Action</th>
-                  <th>Epoch</th>
-                  <th>Vote</th>
-                  <th>Outcome</th>
-                  <th>Response</th>
-                  <th>Rationale</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...voteRows].reverse().slice(0, 200).map((row) => (
-                  <tr key={`${row.proposalId}-${row.votedEpoch || row.submittedEpoch || 0}-${row.votedAtUnix || 0}`}>
-                    <td data-label="Action">
-                      <div>{row.actionName}</div>
-                      <div className="muted mono">{row.proposalId}</div>
-                    </td>
-                    <td data-label="Epoch">{row.votedEpoch || "-"}</td>
-                    <td data-label="Vote">{row.voteLabel}</td>
-                    <td data-label="Outcome">{row.outcome}</td>
-                    <td data-label="Response">{formatResponseHours(row.responseHours)}</td>
-                    <td data-label="Rationale">
-                      {row.rationaleUrl || row.hasRationale ? (
-                        <button type="button" className="mode-btn" onClick={() => openVoteRationaleModal(row)}>
-                          Open rationale
-                        </button>
-                      ) : "None"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {actorType === "drep" && actor?.profile?.imageUrl && imageOpen ? (
-        <div className="image-modal-backdrop" role="presentation" onClick={() => setImageOpen(false)}>
-          <div className="image-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="image-modal-close" onClick={() => setImageOpen(false)}>Close</button>
-            <img className="image-modal-img" src={actor.profile.imageUrl} alt={`${actor.name || actor.id} profile`} />
-          </div>
-        </div>
-      ) : null}
-      {highRiskDelegationModalOpen && isDrep ? (
-        <div className="image-modal-backdrop" role="presentation" onClick={() => setHighRiskDelegationModalOpen(false)}>
-          <div className="image-modal vote-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="image-modal-close"
-              onClick={() => setHighRiskDelegationModalOpen(false)}
-            >
-              Close
-            </button>
-            <h3 className="rationale-modal-title">Delegation Concentration Awareness</h3>
-            <div className="vote-confirm-body">
-              <p>
-                This DRep currently has a high delegated share (
-                <strong>{round(Number(drepDelegationRisk.activeSharePct || 0))}%</strong> of active voting power).
-              </p>
-              <p className="muted">
-                For decentralization, please consider delegating to a DRep with lower delegation concentration.
-              </p>
-              <p className="muted">
-                You can still continue if this is your intentional choice.
-              </p>
-              <div className="vote-confirm-actions">
-                <button
-                  type="button"
-                  className="mode-btn"
-                  onClick={() => {
-                    setHighRiskDelegationModalOpen(false);
-                    setDelegateNotice("Delegation canceled. Consider reviewing DReps with lower delegated concentration.");
-                  }}
-                  disabled={delegating}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="mode-btn active"
-                  onClick={async () => {
-                    setHighRiskDelegationModalOpen(false);
-                    await submitDelegationTransaction();
-                  }}
-                  disabled={delegating}
-                >
-                  Continue Delegation
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {rationaleModal.open ? (
-        <div className="image-modal-backdrop" role="presentation" onClick={() => setRationaleModal({ open: false, key: "", title: "", proposalId: "" })}>
-          <div className="image-modal rationale-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="image-modal-close"
-              onClick={() => setRationaleModal({ open: false, key: "", title: "", proposalId: "" })}
-            >
-              Close
-            </button>
-            <h3 className="rationale-modal-title">{rationaleModal.title}</h3>
-            <p className="mono">{rationaleModal.proposalId}</p>
-            <div className="rationale-modal-content">
-              {voteRationaleLoading[rationaleModal.key] ? (
-                <p className="muted">Loading rationale...</p>
-              ) : voteRationaleError[rationaleModal.key] ? (
-                <p className="muted">Rationale error: {voteRationaleError[rationaleModal.key]}</p>
-              ) : (
-                <div className="payload-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {voteRationaleText[rationaleModal.key] || "No rationale body text available."}
-                  </ReactMarkdown>
+            <Card title="Details">
+              <KeyValue items={[
+                [isDrep ? "DRep ID" : isSpo ? "Pool ID" : "Member ID", <a key="id" className="mono break" href={cardanoscanLink(actorType, actor)} target="_blank" rel="noreferrer">{actor.id}</a>],
+                ["Status", status],
+                !isCommittee && ["Voting power", `${formatAda(actor.votingPowerAda)}`],
+                isDrep && actor.activeEpoch && ["Registered", `Epoch ${actor.activeEpoch}`],
+                isDrep && actor.lastActiveEpoch && ["Last active", `Epoch ${actor.lastActiveEpoch}`],
+                isDrep && actor.hasScript && ["Credential", "Script"],
+                isSpo && actor.delegationStatus && ["Delegation posture", actor.delegationStatus],
+                isSpo && actor.delegatedDrepLiteralRaw && ["Delegated DRep", <span key="d" className="mono break">{actor.delegatedDrepLiteralRaw}</span>],
+                isSpo && actor.homepage && ["Homepage", <a key="h" className="break" href={actor.homepage} target="_blank" rel="noreferrer">{actor.homepage}</a>],
+                isCommittee && ["Term", `${scored?.seatStartEpoch ? `Epoch ${scored.seatStartEpoch}` : "Unknown"} → ${scored?.expirationEpoch ? `Epoch ${scored.expirationEpoch}` : "Unknown"}`],
+                isCommittee && actor.hotCredential && ["Hot credential", <a key="hot" className="mono break" href={`https://cardanoscan.io/cchot/${encodeURIComponent(actor.hotCredential)}`} target="_blank" rel="noreferrer">{actor.hotCredential}</a>],
+                isCommittee && actor.coldCredential && ["Cold credential", <a key="cold" className="mono break" href={`https://cardanoscan.io/ccmember/${encodeURIComponent(actor.coldCredential)}`} target="_blank" rel="noreferrer">{actor.coldCredential}</a>],
+                profile.email && ["Email", <a key="e" href={`mailto:${profile.email}`}>{profile.email}</a>]
+              ]} />
+              {references.length > 0 ? (
+                <div className="p-profile__links">
+                  {references.map((ref) => <a key={ref.uri} className="c-chip" href={ref.uri} target="_blank" rel="noreferrer"><span className="muted">{linkKind(ref)}</span> {ref.label && ref.label !== ref.uri ? ref.label : truncateMiddle(ref.uri.replace(/^https?:\/\//, ""), 18, 8)}</a>)}
                 </div>
-              )}
-            </div>
+              ) : null}
+            </Card>
+
+            {isDrep && !snapshotKey ? <DelegatorsCard drepId={actor.id} /> : null}
+          </div>
+
+          <div className="stack">
+            {isDrep && (profile.bio || profile.motivations || profile.objectives || profile.qualifications) ? (
+              <Card title="Profile" subtitle="From the DRep's CIP-119 metadata.">
+                <div className="c-prose">
+                  {[["Bio", profile.bio], ["Motivations", profile.motivations], ["Objectives", profile.objectives], ["Qualifications", profile.qualifications]].filter(([, text]) => text).map(([heading, text], i) => (
+                    <section key={heading}>
+                      <h3 style={{ marginTop: i ? 16 : 0 }}>{heading}</h3>
+                      {paragraphs(text).map((p, j) => <p key={j}>{p}</p>)}
+                    </section>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
+
+            {byEpoch.length > 0 ? (
+              <Card title="Votes by epoch">
+                <div className="p-profile__chart">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={byEpoch} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <CartesianGrid stroke="var(--color-line)" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="epoch" tick={{ fill: "var(--color-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: "var(--color-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <ChartTooltip cursor={{ fill: "var(--color-surface-2)" }} contentStyle={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-line-strong)", borderRadius: 8, color: "var(--color-text)", fontSize: 12 }} itemStyle={{ color: "var(--color-text)" }} labelFormatter={(e) => `Epoch ${e}`} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="yes" stackId="a" fill={VOTE_COLORS.yes} name={isCommittee ? "Constitutional" : "Yes"} />
+                      <Bar dataKey="no" stackId="a" fill={VOTE_COLORS.no} name={isCommittee ? "Unconstitutional" : "No"} />
+                      <Bar dataKey="abstain" stackId="a" fill={VOTE_COLORS.abstain} name="Abstain" />
+                      {!isCommittee ? <Bar dataKey="noConfidence" stackId="a" fill={VOTE_COLORS.noConfidence} name="No confidence" /> : null}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            ) : null}
           </div>
         </div>
-      ) : null}
 
+        <section>
+          <div className="c-section-title">
+            <h2>Voting record</h2>
+            <Segmented ariaLabel="Voting record view" value={view} onChange={setView} options={[{ value: "voted", label: `Voted (${voteRows.length})` }, { value: "missed", label: "Missed" }, { value: "all", label: "All actions" }]} />
+          </div>
+          <DataTable columns={columns} rows={actionRows} getRowKey={(r) => r.proposalId} emptyMessage={view === "missed" ? "No missed actions in scope." : view === "voted" ? "No votes recorded yet." : "No governance actions."} caption="Voting record" />
+        </section>
+      </div>
+
+      <RationaleModal item={rationale} onClose={() => setRationale(null)} />
+      <Modal open={Boolean(imageOpen && imageUrl)} onClose={() => setImageOpen(false)} title={name || "Profile image"}>
+        <img src={imageUrl} alt={`${name || actor.id} profile`} style={{ maxWidth: "100%", maxHeight: "70vh", display: "block", margin: "0 auto", borderRadius: 12 }} />
+      </Modal>
     </main>
   );
 }

@@ -38,3 +38,44 @@
 .p-detail__body-row--sub dt::before { content: "↳ "; color: var(--color-text-faint); }
 .p-detail__delivery { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--color-line); }
 .p-detail__delivery:first-child { border-top: 0; padding-top: 0; }
+
+/* Participant dashboards (DReps / SPOs / CC) ------------------------------ */
+.p-dash__register .c-card__head { align-items: center; }
+.p-dash__filters { padding: var(--space-4); }
+.p-dash__action-select { max-width: 320px; }
+.p-dash__type-menu { display: grid; gap: 6px; padding: 6px 8px; min-width: 260px; max-height: 60vh; overflow: auto; }
+.p-dash__settings { margin-top: var(--space-3); border: 0; background: none; }
+.p-dash__settings .c-disclosure__summary { padding: var(--space-2) 0; font-size: var(--text-sm); color: var(--color-text-muted); }
+.p-dash__settings .c-disclosure__body { padding: var(--space-2) 0 0; }
+.p-dash__settings-grid { display: grid; gap: var(--space-4); grid-template-columns: minmax(200px, 320px) 1fr; align-items: start; }
+.p-dash__switches { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
+.p-dash__actor { display: flex; flex-direction: column; gap: 3px; min-width: 240px; }
+.p-dash__power { font-size: var(--text-sm); }
+.p-dash__metric { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.p-dash__metric-value { display: inline-flex; align-items: center; gap: 6px; }
+.p-dash__metric-sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+.p-dash__table .c-table { min-width: 980px; }
+@media (max-width: 900px) { .p-dash__settings-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .p-dash__table .c-table { min-width: 0; }
+  .p-dash__actor { min-width: 0; }
+  .p-dash__metric { align-items: flex-end; }
+  .p-dash__action-select { max-width: none; }
+}
+
+/* Voter profile ----------------------------------------------------------- */
+.p-profile__title { display: inline-flex; align-items: center; gap: var(--space-4); }
+.p-profile__avatar-btn { padding: 0; border: 0; background: none; border-radius: 50%; cursor: zoom-in; display: inline-flex; }
+.p-profile__columns { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+.p-profile__links { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
+.p-profile__links .c-chip { text-decoration: none; }
+.p-profile__chart { width: 100%; min-width: 0; }
+.p-profile__ext { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+@media (min-width: 900px) { .p-profile .c-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.p-profile__action { display: flex; flex-direction: column; gap: 2px; min-width: 260px; }
+@media (max-width: 960px) { .p-profile__columns { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .p-profile__action { min-width: 0; } .p-profile__title { align-items: flex-start; } }
+
+/* Delegate landing -------------------------------------------------------- */
+.p-delegate__card { max-width: 640px; }
+.p-delegate__who { display: flex; gap: var(--space-4); align-items: flex-start; }

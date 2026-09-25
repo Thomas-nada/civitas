@@ -91,3 +91,25 @@ export function useSyncStatus(options = {}) {
 export function useSurveyLinks() {
   return useQuery({ queryKey: ["surveys", "links"], queryFn: ({ signal }) => fetchJson("/api/surveys/links", { signal }).catch(() => ({})), staleTime: 5 * 60_000 });
 }
+
+/** Live on-chain DRep record (current power, metadata verification). Cached 5 minutes server-side. */
+export function useDrepLive(drepId, options = {}) {
+  return useQuery({
+    queryKey: ["drep-live", drepId],
+    enabled: Boolean(drepId) && options.enabled !== false,
+    staleTime: 5 * 60_000,
+    retry: 0,
+    queryFn: ({ signal }) => fetchJson(`/api/drep-live?id=${encodeURIComponent(drepId)}`, { signal })
+  });
+}
+
+/** Stake keys delegating to a DRep. Cached 15 minutes server-side. */
+export function useDrepDelegators(drepId, options = {}) {
+  return useQuery({
+    queryKey: ["drep-delegators", drepId],
+    enabled: Boolean(drepId) && options.enabled !== false,
+    staleTime: 15 * 60_000,
+    retry: 0,
+    queryFn: ({ signal }) => fetchJson(`/api/drep-delegators?id=${encodeURIComponent(drepId)}`, { signal })
+  });
+}
