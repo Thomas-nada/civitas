@@ -12,9 +12,9 @@
     "test:cip179": "node --test test/cip179.test.mjs",
     "test:e2e": "playwright test",
     "ci": "npm run lint && npm run build && npm run test:unit && npm run test:sync && npm run test:api && npm run test",
-    "test:sync": "CIVITAS_NO_LISTEN=1 node --test test/sync.test.mjs",
+    "test:sync": "node --test test/sync.test.mjs",
     "test:unit": "node --test test/cip179.test.mjs test/surveys.test.mjs",
-    "test:api": "CIVITAS_NO_LISTEN=1 node --test test/apiV1.test.mjs"
+    "test:api": "node --test test/apiV1.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.2"

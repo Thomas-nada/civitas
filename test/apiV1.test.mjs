@@ -1,5 +1,5 @@
 // /api/v1 contract and payload-size test, run against the committed seed.
-// Run: CIVITAS_NO_LISTEN=1 node --test test/apiV1.test.mjs
+// Run: node --test test/apiV1.test.mjs
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,9 +8,10 @@ import path from "node:path";
 import os from "node:os";
 import zlib from "node:zlib";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = path.join(repoRoot, "snapshot.seed.json");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "civitas-api-test-"));
 process.env.CIVITAS_NO_LISTEN = "1";

@@ -6,7 +6,7 @@
 // of Koios requests. A delta sync must then pick up a new vote and a new
 // proposal with a handful of requests.
 //
-// Run: CIVITAS_NO_LISTEN=1 node --test test/sync.test.mjs
+// Run: node --test test/sync.test.mjs
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,10 +14,11 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { buildKoiosFixture, installFakeFetch, countRequests } from "./helpers/koiosFixture.mjs";
 
 const require = createRequire(import.meta.url);
-const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = path.join(repoRoot, "snapshot.seed.json");
 
 // Isolate every runtime file the server writes (caches, snapshot, history).
