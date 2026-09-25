@@ -146,11 +146,18 @@ test("rationales index and stats bundle", () => {
   console.log(`rationales index: ${kb(gzSize(idx.body))} gzipped`);
   const stats = call("/api/v1/stats");
   assert.equal(stats.status, 200);
-  assert.equal(stats.body.dreps.length, seed.dreps.length);
-  assert.equal(stats.body.actions.length, Object.keys(seed.proposalInfo).length);
+  const s = stats.body.stats;
+  assert.equal(s.counts.proposals, Object.keys(seed.proposalInfo).length);
+  assert.equal(s.counts.dreps, seed.dreps.filter((d) => !/always_/.test(d.id)).length);
+  assert.ok(s.byType.length > 0 && s.byEpoch.length > 0 && s.ccAttendance.length > 0 && s.timeline.length > 0);
+  assert.ok(s.drepAttendance.reduce((a, b) => a + b.value, 0) === s.counts.dreps);
+  assert.ok(s.power.drepNakamoto > 0);
   const size = gzSize(stats.body);
-  console.log(`stats bundle: ${kb(size)} gzipped`);
-  assert.ok(size < 700 * 1024, `stats bundle ${kb(size)}`);
+  console.log(`stats: ${kb(size)} gzipped`);
+  assert.ok(size < 40 * 1024, `stats ${kb(size)}`);
+  const search = call("/api/v1/search/dreps?q=" + encodeURIComponent(seed.dreps.find((d) => d.name)?.name.slice(0, 4) || "drep"));
+  assert.equal(search.status, 200);
+  assert.ok(search.body.results.length > 0);
 });
 
 test("HTTP: gzip, ETag and 304", async () => {

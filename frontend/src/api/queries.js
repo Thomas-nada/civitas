@@ -65,23 +65,35 @@ export function useRationalesIndex(snapshotKey = "") {
   return { ...query, unpacked };
 }
 
-export function useStatsBundle(snapshotKey = "") {
-  const query = useQuery({ queryKey: key("stats", snapshotKey), queryFn: ({ signal }) => fetchJson(withSnapshot("/api/v1/stats", snapshotKey), { signal }) });
-  const unpacked = useMemo(() => {
-    if (!query.data) return null;
-    const d = query.data;
-    const packing = d.packing;
-    const unpack = (actors) => unpackActors({ proposals: d.proposals, actors, packing }).actors;
-    return {
-      meta: d.meta,
-      proposals: d.proposals,
-      actions: d.actions,
-      dreps: unpack(d.dreps),
-      spos: unpack(d.spos),
-      committee: unpack(d.committee)
-    };
-  }, [query.data]);
-  return { ...query, unpacked };
+export function useStats(snapshotKey = "") {
+  return useQuery({ queryKey: key("stats", snapshotKey), queryFn: ({ signal }) => fetchJson(withSnapshot("/api/v1/stats", snapshotKey), { signal }) });
+}
+
+export function useDrepSearch(q) {
+  const term = String(q || "").trim();
+  return useQuery({
+    queryKey: ["drep-search", term.toLowerCase()],
+    enabled: term.length >= 2,
+    staleTime: 5 * 60_000,
+    queryFn: ({ signal }) => fetchJson(`/api/v1/search/dreps?q=${encodeURIComponent(term)}`, { signal })
+  });
+}
+
+export function useDelegationTrend(epochs) {
+  return useQuery({
+    queryKey: ["delegation-trend", epochs],
+    staleTime: 10 * 60_000,
+    queryFn: ({ signal }) => fetchJson(`/api/drep-delegation-trend?epochs=${encodeURIComponent(epochs)}`, { signal })
+  });
+}
+
+export function useDelegationHistory(drepId) {
+  return useQuery({
+    queryKey: ["delegation-history", drepId],
+    enabled: Boolean(drepId),
+    staleTime: 10 * 60_000,
+    queryFn: ({ signal }) => fetchJson(`/api/drep-delegation-history?id=${encodeURIComponent(drepId)}`, { signal })
+  });
 }
 
 export function useSyncStatus(options = {}) {

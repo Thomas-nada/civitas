@@ -1,1555 +1,466 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSeoMeta } from "../hooks/useSeoMeta";
+// Governance statistics: proposals, participation, concentration, DRep
+// distributions, delegation movement and the committee's history. Every
+// chart reads from the aggregated /api/v1/stats model (a few KB); the
+// delegation trend and history come from their own endpoints on demand.
+import { useDeferredValue, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line,
-  PieChart, Pie, Cell, Sector,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis
 } from "recharts";
+import { useSeoMeta } from "../hooks/useSeoMeta";
+import { useSnapshotKey } from "../hooks/useSnapshotKey";
+import { useDelegationHistory, useDelegationTrend, useDrepSearch, useStats } from "../api/queries";
+import { LivePill, SnapshotBanner } from "../components/LiveStatus";
+import { Alert, Button, Card, Chip, Input, PageHeader, Segmented, Skeleton, StatGrid, StatTile, Switch } from "../ui";
+import { IconSearch } from "../ui/icons";
+import { formatAdaCompact, formatNumber, shortType, truncateMiddle } from "../lib/governance/format";
+import { CHART, TYPE_PALETTE, axisTick, axisTickSmall, categoryTick, legendProps, outcomeColor, tooltipProps } from "../lib/charts";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-
-// ── Design tokens (match Civitas CSS vars via JS) ─────────────────────────────
-const C = {
-  yes:     "#54e4bc",
-  no:      "#ff6f7d",
-  abstain: "#ffc766",
-  muted:   "#7c8fa8",
-  line:    "rgba(255,255,255,0.10)",
-  text:    "#e8f0f4",
-  panel:   "#131c24",
-  surface: "#1a2530",
-  active:  "#54e4bc",
-  retired: "#ffc766",
-  expired: "#7c8fa8",
-};
-
-const TYPE_PALETTE = ["#54e4bc","#ffc766","#ff6f7d","#7eb8ff","#c084fc","#fb923c","#34d399","#f472b6"];
-
-const S = {
-  axis: 11,
-  axisSmall: 10,
-  legend: 12,
-  tooltip: 12,
-  title: 12,
-  label: 10,
-  filter: 11,
-  filterLabel: 10,
-  timelineTick: 10,
-  timelineChip: 10,
-  timelineInline: 9,
-  timelinePill: 8
-};
-
-const CC_TERM_OVERRIDES_BY_HOT = {
-  cc_hot1qvr7p6ms588athsgfd0uez5m9rlhwu3g9dt7wcxkjtr4hhsq6ytv2: { seatStartEpoch: 507, expirationEpoch: 596 },
-  cc_hot1qv7fa08xua5s7qscy9zct3asaa5a3hvtdc8sxexetcv3unq7cfkq5: { seatStartEpoch: 507, expirationEpoch: 580 },
-  cc_hot1qwzuglw5hx3wwr5gjewerhtfhcvz64s9kgam2fgtrj2t7eqs00fzv: { seatStartEpoch: 507, expirationEpoch: 580 },
-  cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9: { seatStartEpoch: 507, expirationEpoch: 580 },
-  cc_hot1q0wzkpcxzzfs4mf4yk6yx7d075vqtyx2tnxsr256he6gnwq6yfy5w: { seatStartEpoch: 507, expirationEpoch: 580 },
-  cc_hot1qdqp9j44qfnwlkx9h78kts8hvee4ycc7czrw0xl4lqhsw4gcxgkpt: { seatStartEpoch: 507, expirationEpoch: 580 },
-};
-
-const CC_TERM_OVERRIDES_BY_NAME = {
-  "cardano atlantic council": { seatStartEpoch: 507, expirationEpoch: 596 },
-  "intersect constitutional council": { seatStartEpoch: 507, expirationEpoch: 580 },
-  emurgo: { seatStartEpoch: 507, expirationEpoch: 580 },
-  "cardano foundation": { seatStartEpoch: 507, expirationEpoch: 580 },
-  "cardano japan": { seatStartEpoch: 507, expirationEpoch: 580 },
-  "input | output": { seatStartEpoch: 507, expirationEpoch: 580 },
-  "input output": { seatStartEpoch: 507, expirationEpoch: 580 },
-};
-
-// Governance type → short label
-const TYPE_SHORT = {
-  "Hard Fork Initiation": "Hard Fork",
-  "Protocol Param Change": "Param Chg",
-  "Treasury Withdrawal":  "Treasury",
-  "New Committee":        "Committee",
-  "No Confidence":        "No Conf",
-  "Info Action":          "Info",
-  "Update Constitution":  "Const.",
-};
-function shortType(t) { return TYPE_SHORT[t] || t || "?"; }
-
-// Outcome → colour
-function outcomeColor(outcome) {
-  const lo = (outcome || "").toLowerCase();
-  if (lo === "yes" || lo === "enacted" || lo === "ratified") return C.yes;
-  if (lo === "no"  || lo === "dropped" || lo === "expired")  return C.no;
-  if (lo === "pending" || lo === "active")                   return C.abstain;
-  return C.muted;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(n, dec = 0) {
-  if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString(undefined, { maximumFractionDigits: dec, minimumFractionDigits: dec });
-}
-function fmtAda(ada) {
-  if (ada >= 1_000_000_000) return `${fmt(ada / 1_000_000_000, 1)}B ₳`;
-  if (ada >= 1_000_000)     return `${fmt(ada / 1_000_000,     1)}M ₳`;
-  if (ada >= 1_000)         return `${fmt(ada / 1_000,         1)}K ₳`;
-  return `${fmt(ada)} ₳`;
-}
-function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
-
-function getCommitteeTermOverride(actor) {
-  const hot = String(actor?.hotCredential || "").trim().toLowerCase();
-  const name = String(actor?.name || "").trim().toLowerCase();
-  return CC_TERM_OVERRIDES_BY_HOT[hot] || CC_TERM_OVERRIDES_BY_NAME[name] || null;
-}
-
-function getCommitteeEligibilityWindow(actor, proposalInfo) {
-  const termOverride = getCommitteeTermOverride(actor);
-  const startEpoch = Number(termOverride?.seatStartEpoch || actor?.seatStartEpoch || 0);
-  const endEpoch = Number(termOverride?.expirationEpoch || actor?.expirationEpoch || 0);
-  const hasStartEpoch = Number.isFinite(startEpoch) && startEpoch > 0;
-  const hasEndEpoch = Number.isFinite(endEpoch) && endEpoch > 0;
-  const actorStatus = String(actor?.status || "").toLowerCase();
-  const allVoteEpochs = (actor?.votes || [])
-    .map((vote) => Number(proposalInfo?.[vote.proposalId]?.submittedEpoch || 0))
-    .filter((epoch) => Number.isFinite(epoch) && epoch > 0);
-  const lastVoteEpoch = allVoteEpochs.length > 0 ? Math.max(...allVoteEpochs) : 0;
-  const inferredRetiredEndEpoch = actorStatus === "retired" && !hasEndEpoch && lastVoteEpoch > 0 ? lastVoteEpoch : 0;
-  const inferredExpiredEndEpoch = actorStatus === "expired" && !hasEndEpoch && lastVoteEpoch > 0 ? lastVoteEpoch : 0;
-  const inferredEndEpoch = inferredRetiredEndEpoch || inferredExpiredEndEpoch || 0;
-  const effectiveEndEpoch =
-    hasEndEpoch && inferredEndEpoch > 0
-      ? Math.min(endEpoch, inferredEndEpoch)
-      : hasEndEpoch
-        ? endEpoch
-        : inferredEndEpoch;
-  const hasEffectiveEndEpoch = Number.isFinite(effectiveEndEpoch) && effectiveEndEpoch > 0;
-  return { startEpoch, hasStartEpoch, effectiveEndEpoch, hasEffectiveEndEpoch };
-}
-
-// ── Tooltip skin ──────────────────────────────────────────────────────────────
-const TooltipStyle = {
-  contentStyle: { background: "#1a2530", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: S.tooltip, color: "#e8f0f4" },
-  itemStyle:    { color: "#e8f0f4" },
-  cursor:       { fill: "rgba(84,228,188,0.07)" },
-};
-
-// ── Active donut slice renderer ───────────────────────────────────────────────
-function renderActiveShape(props) {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+function ChartCard({ title, subtitle, note, actions, children, className }) {
   return (
-    <g>
-      <text x={cx} y={cy - 12} textAnchor="middle" fill={C.text} fontSize={S.title} fontWeight={600}>{payload.name}</text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill={C.muted} fontSize={S.legend}>{fmt(value)}</text>
-      <text x={cx} y={cy + 28} textAnchor="middle" fill={C.muted} fontSize={S.axis}>{(percent * 100).toFixed(1)}%</text>
-      <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-      <Sector cx={cx} cy={cy} innerRadius={outerRadius + 12} outerRadius={outerRadius + 16} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-    </g>
+    <Card title={title} subtitle={subtitle} actions={actions} className={className} footer={note}>
+      {children}
+    </Card>
   );
 }
 
-// ── Layout primitives ─────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, accent = C.yes }) {
-  return (
-    <article className="stats-kpi" style={{ borderTopColor: accent }}>
-      <p className="stats-kpi-label">{label}</p>
-      <strong className="stats-kpi-value">{value}</strong>
-      {sub && <p className="stats-kpi-sub">{sub}</p>}
-    </article>
-  );
+function hoursLabel(h) {
+  if (h === null || h === undefined) return "—";
+  return h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`;
 }
 
-function Section({ title, children, wide, half }) {
+/* Donut with a legend list ------------------------------------------------ */
+function Donut({ data, colorFor, total }) {
+  const [active, setActive] = useState(0);
+  const current = data[active] || data[0];
   return (
-    <section className={`stats-section${wide ? " stats-section--wide" : ""}${half ? " stats-section--half" : ""}`}>
-      <h2 className="stats-section-title">{title}</h2>
-      <div className="stats-section-body">{children}</div>
-    </section>
-  );
-}
-
-// ── CC Membership Gantt (epoch-based) ─────────────────────────────────────────
-function CcMembershipTimeline({ cc, epochMin, epochMax, currentEpoch }) {
-  const [tooltip, setTooltip] = useState(null);
-  const svgRef = useRef(null);
-
-  const PAD_LEFT  = 160;
-  const PAD_RIGHT = 32;
-  const ROW_H     = 24;
-  const BAR_H     = 12;
-  const TICK_STEP = 20; // epoch ticks every N epochs
-
-  // Sort: active first, then by seatStartEpoch
-  const sorted = [...cc].sort((a, b) => {
-    const aActive = a.status === "active" ? 0 : 1;
-    const bActive = b.status === "active" ? 0 : 1;
-    if (aActive !== bActive) return aActive - bActive;
-    return (a.seatStartEpoch || 0) - (b.seatStartEpoch || 0);
-  });
-
-  const totalRows = sorted.length;
-  const svgH = totalRows * ROW_H + 40; // +40 for axis at bottom
-
-  function epochToX(ep, w) {
-    const span = epochMax - epochMin || 1;
-    return PAD_LEFT + ((ep - epochMin) / span) * (w - PAD_LEFT - PAD_RIGHT);
-  }
-
-  // Build tick marks
-  const ticks = [];
-  const firstTick = Math.ceil(epochMin / TICK_STEP) * TICK_STEP;
-  for (let ep = firstTick; ep <= epochMax; ep += TICK_STEP) ticks.push(ep);
-
-  // Status colours
-  function barColor(m) {
-    if (m.status === "active")  return C.active;
-    if (m.status === "retired") return C.retired;
-    return C.expired; // expired
-  }
-
-  return (
-    <div style={{ position: "relative", overflowX: "auto" }}>
-      <svg
-        ref={svgRef}
-        width={800}
-        height={svgH}
-        viewBox={`0 0 800 ${svgH}`}
-        style={{ display: "block", minWidth: 800, maxWidth: "none" }}
-      >
-        {/* Background rows */}
-        {sorted.map((m, i) => (
-          <rect
-            key={m.id || i}
-            x={0} y={i * ROW_H}
-            width={800} height={ROW_H}
-            fill={i % 2 === 0 ? "rgba(255,255,255,0.025)" : "transparent"}
-          />
+    <div className="p-stats__donut">
+      <div className="p-stats__donut-chart">
+        <ResponsiveContainer width="100%" height={200}>
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={80} paddingAngle={2} stroke="none" onMouseEnter={(_, i) => setActive(i)}>
+              {data.map((d, i) => <Cell key={d.name} fill={colorFor(d, i)} opacity={i === active ? 1 : 0.55} />)}
+            </Pie>
+            <ChartTooltip {...tooltipProps} />
+          </PieChart>
+        </ResponsiveContainer>
+        {current ? (
+          <div className="p-stats__donut-center" aria-hidden="true">
+            <strong className="num">{formatNumber(current.value)}</strong>
+            <span>{total ? `${((current.value / total) * 100).toFixed(1)}%` : ""}</span>
+          </div>
+        ) : null}
+      </div>
+      <ul className="p-stats__legend">
+        {data.map((d, i) => (
+          <li key={d.name} className={i === active ? "is-active" : ""} onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)} tabIndex={0}>
+            <span className="p-stats__swatch" style={{ background: colorFor(d, i) }} />
+            <span className="p-stats__legend-name">{d.name}</span>
+            <b className="num">{formatNumber(d.value)}</b>
+          </li>
         ))}
+      </ul>
+    </div>
+  );
+}
 
-        {/* Vertical tick lines */}
-        {ticks.map(ep => {
-          const x = epochToX(ep, 800);
+/* Epoch axis helpers for the SVG timelines -------------------------------- */
+function useEpochScale(min, max, width, padLeft, padRight) {
+  const span = Math.max(1, max - min);
+  return (epoch) => padLeft + ((epoch - min) / span) * (width - padLeft - padRight);
+}
+function ticksBetween(min, max, step) {
+  const out = [];
+  for (let e = Math.ceil(min / step) * step; e <= max; e += step) out.push(e);
+  return out;
+}
+
+/* Committee seat timeline ------------------------------------------------- */
+function CommitteeTimeline({ members, epochMin, epochMax, currentEpoch }) {
+  const [hover, setHover] = useState(null);
+  const W = 860; const PAD_L = 170; const PAD_R = 24; const ROW = 26; const BAR = 12;
+  const rows = [...members].sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) || (a.seatStartEpoch || 0) - (b.seatStartEpoch || 0));
+  const H = rows.length * ROW + 44;
+  const x = useEpochScale(epochMin, epochMax, W, PAD_L, PAD_R);
+  const now = Math.min(Math.max(currentEpoch || epochMax, epochMin), epochMax);
+  const color = (m) => (m.status === "active" ? CHART.yes : m.status === "retired" ? CHART.warning : CHART.muted);
+  return (
+    <div className="p-stats__timeline">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Committee seats by epoch">
+        {ticksBetween(epochMin, epochMax, 20).map((e) => (
+          <g key={e}>
+            <line x1={x(e)} x2={x(e)} y1={0} y2={rows.length * ROW} stroke={CHART.line} />
+            <text x={x(e)} y={rows.length * ROW + 16} textAnchor="middle" fill={CHART.muted} fontSize={10}>{e}</text>
+          </g>
+        ))}
+        <line x1={x(now)} x2={x(now)} y1={0} y2={rows.length * ROW} stroke={CHART.accent} strokeDasharray="4 3" opacity={0.7} />
+        <text x={Math.min(x(now) + 4, W - 90)} y={rows.length * ROW + 32} fill={CHART.accent} fontSize={10}>Epoch {now} (now)</text>
+        {rows.map((m, i) => {
+          const start = m.seatStartEpoch || epochMin;
+          const end = m.expirationEpoch || epochMax;
+          const x1 = x(start); const x2 = Math.max(x(Math.min(end, epochMax)), x1 + 4);
+          const y = i * ROW + (ROW - BAR) / 2;
+          const name = m.name || `${String(m.id || "").slice(0, 12)}…`;
           return (
-            <g key={ep}>
-              <line x1={x} y1={0} x2={x} y2={totalRows * ROW_H} stroke={C.line} strokeWidth={1} />
-              <text x={x} y={totalRows * ROW_H + 16} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>{ep}</text>
-            </g>
-          );
-        })}
-
-        {/* "Now" marker */}
-        {(() => {
-          const baseCurrentEpoch = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
-            ? Number(currentEpoch)
-            : epochMax;
-          const nowEpoch = Math.min(Math.max(baseCurrentEpoch, epochMin), epochMax);
-          const x = epochToX(nowEpoch, 800);
-          const label = `Current epoch ${nowEpoch}`;
-          const labelW = Math.max(84, Math.round(label.length * 5.4) + 10);
-          const labelX = Math.min(Math.max(x - labelW / 2, 2), 800 - labelW - 2);
-          const labelY = totalRows * ROW_H + 30;
-          return (
-            <g>
-              <line x1={x} y1={0} x2={x} y2={totalRows * ROW_H} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
-              <rect
-                x={labelX}
-                y={labelY - 9}
-                width={labelW}
-                height={12}
-                rx={3}
-                fill="rgba(9, 14, 16, 0.9)"
-                stroke={C.yes}
-                strokeOpacity={0.45}
-              />
-              <text x={labelX + 5} y={labelY} fill={C.yes} fontSize={S.timelineInline} opacity={0.9}>{label}</text>
-            </g>
-          );
-        })()}
-
-        {/* Member rows */}
-        {sorted.map((m, i) => {
-          const startEp = m.seatStartEpoch || epochMin;
-          const endEp   = m.expirationEpoch || epochMax;
-          const x1 = epochToX(startEp, 800);
-          const x2 = Math.max(epochToX(Math.min(endEp, epochMax), 800), x1 + 4);
-          const y  = i * ROW_H + (ROW_H - BAR_H) / 2;
-          const color = barColor(m);
-          const name  = m.name || (m.id || "").slice(0, 14) + "…";
-
-          return (
-            <g
-              key={m.id || i}
-              onMouseEnter={e => {
-                const rect = svgRef.current?.getBoundingClientRect();
-                setTooltip({
-                  name, status: m.status,
-                  start: startEp, end: endEp,
-                  x: e.clientX - (rect?.left || 0),
-                  y: e.clientY - (rect?.top  || 0),
-                });
-              }}
-              onMouseLeave={() => setTooltip(null)}
-              style={{ cursor: "default" }}
-            >
-              {/* Member name */}
-              <text
-                x={PAD_LEFT - 8} y={i * ROW_H + ROW_H / 2 + 4}
-                textAnchor="end" fill={m.status === "active" ? C.text : C.muted}
-                fontSize={S.timelineTick} fontWeight={m.status === "active" ? 600 : 400}
-              >
-                {name.length > 22 ? name.slice(0, 21) + "…" : name}
+            <g key={m.id || i} onMouseEnter={() => setHover({ i, name, ...m, start, end })} onMouseLeave={() => setHover(null)}>
+              <rect x={0} y={i * ROW} width={W} height={ROW} fill={i % 2 ? "transparent" : CHART.line} opacity={0.35} />
+              <text x={PAD_L - 10} y={i * ROW + ROW / 2 + 4} textAnchor="end" fill={m.status === "active" ? CHART.text : CHART.muted} fontSize={11} fontWeight={m.status === "active" ? 600 : 400}>
+                {name.length > 24 ? `${name.slice(0, 23)}…` : name}
               </text>
-
-              {/* Bar */}
-              <rect
-                x={x1} y={y}
-                width={x2 - x1} height={BAR_H}
-                fill={color}
-                opacity={m.status === "active" ? 0.85 : 0.45}
-                rx={3}
-              />
-
-              {/* Status pill on bar if wide enough */}
-              {x2 - x1 > 40 && (
-                <text
-                  x={(x1 + x2) / 2} y={y + BAR_H / 2 + 4}
-                  textAnchor="middle" fill="#000" fontSize={S.timelinePill} fontWeight={700}
-                  opacity={0.7}
-                >
-                  {m.status}
-                </text>
-              )}
+              <rect x={x1} y={y} width={x2 - x1} height={BAR} rx={4} fill={color(m)} opacity={m.status === "active" ? 0.9 : 0.45}>
+                <title>{`${name} · ${m.status} · epoch ${start} → ${end}`}</title>
+              </rect>
             </g>
           );
         })}
-
-        {/* X-axis label */}
-        <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>Epoch</text>
       </svg>
-
-      {/* Tooltip */}
-      {tooltip && (
-        <div
-          style={{
-            position: "absolute",
-            left: tooltip.x + 12,
-            top:  tooltip.y - 8,
-            background: "#1a2530",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 8,
-            padding: "6px 10px",
-            fontSize: S.tooltip,
-            color: C.text,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 10,
-          }}
-        >
-          <strong>{tooltip.name}</strong><br />
-          Status: <span style={{ color: tooltip.status === "active" ? C.yes : tooltip.status === "retired" ? C.retired : C.muted }}>{tooltip.status}</span><br />
-          Epoch {tooltip.start} → {tooltip.end}
-        </div>
-      )}
-
-      {/* Legend */}
-      <div style={{ display: "flex", gap: "1.2rem", marginTop: "0.75rem", fontSize: S.legend, color: C.muted }}>
-        {[["active", C.active], ["retired", C.retired], ["expired", C.expired]].map(([label, color]) => (
-          <span key={label} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span style={{ display: "inline-block", width: 12, height: 10, background: color, borderRadius: 2, opacity: label === "active" ? 0.85 : 0.45 }} />
-            {label}
-          </span>
-        ))}
+      {hover ? <div className="p-stats__tip" style={{ top: hover.i * ROW + ROW + 4, left: PAD_L }}><strong>{hover.name}</strong><br /><span className="muted">{hover.status} · epoch {hover.start} → {hover.end}</span></div> : null}
+      <div className="c-legend" style={{ marginTop: 8 }}>
+        {[["Active", CHART.yes, 0.9], ["Retired", CHART.warning, 0.45], ["Expired", CHART.muted, 0.45]].map(([label, c, o]) => <span key={label} className="c-legend__item"><span className="c-legend__swatch" style={{ background: c, opacity: o }} />{label}</span>)}
       </div>
     </div>
   );
 }
 
-// ── Governance Actions Timeline ────────────────────────────────────────────────
-function GovernanceActionsTimeline({ proposals, epochMin, epochMax, currentEpoch }) {
-  const DEFAULT_VISIBLE = 10;
-  const [tooltip, setTooltip] = useState(null);
-  const [filterType, setFilterType] = useState(null);
-  const [filterOutcome, setFilterOutcome] = useState(null);
+/* Governance actions timeline --------------------------------------------- */
+function ActionsTimeline({ rows, epochMin, epochMax, currentEpoch }) {
+  const DEFAULT = 12;
+  const [type, setType] = useState("");
+  const [outcome, setOutcome] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const svgRef = useRef(null);
-
-  const PAD_LEFT  = 20;
-  const PAD_RIGHT = 20;
-  const ROW_H     = 10;
-  const GAP       = 2;
-  const TICK_STEP = 5;
-
-  // Filter + sort proposals by submittedEpoch
-  const filtered = useMemo(() => {
-    let list = [...proposals]
-      .filter(p => p.submittedEpoch)
-      .sort((a, b) => (a.submittedEpoch || 0) - (b.submittedEpoch || 0));
-    if (filterType)    list = list.filter(p => p.governanceType === filterType);
-    if (filterOutcome) list = list.filter(p => (p.outcome || "Pending") === filterOutcome);
-    return list;
-  }, [proposals, filterType, filterOutcome]);
-
-  // Default view is newest 10 governance actions, expandable to all
-  const visible = useMemo(
-    () => (showAll && filtered.length > DEFAULT_VISIBLE ? filtered : filtered.slice(-DEFAULT_VISIBLE)),
-    [filtered, showAll]
-  );
-
-  // Build type list for legend/filter
-  const allTypes    = [...new Set(proposals.map(p => p.governanceType || "Unknown"))].sort();
-  const allOutcomes = [...new Set(proposals.map(p => p.outcome || "Pending"))].sort();
-
-  // Stable type-to-colour map, avoids render glitches while filtering
-  const typeColorMap = useMemo(() => {
-    const map = {};
-    allTypes.forEach((t, i) => {
-      map[t] = TYPE_PALETTE[i % TYPE_PALETTE.length];
-    });
-    return map;
-  }, [allTypes]);
-  const getTypeColor = (type) => typeColorMap[type] || C.muted;
-
-  // Filter-scoped domain prevents the timeline from looking broken when filters change
-  const [timelineMin, timelineMax] = useMemo(() => {
+  const [hover, setHover] = useState(null);
+  const types = useMemo(() => [...new Set(rows.map((r) => r.governanceType))].sort(), [rows]);
+  const outcomes = useMemo(() => [...new Set(rows.map((r) => r.outcome))].sort(), [rows]);
+  const typeColor = (t) => TYPE_PALETTE[Math.max(0, types.indexOf(t)) % TYPE_PALETTE.length];
+  const filtered = rows.filter((r) => (!type || r.governanceType === type) && (!outcome || r.outcome === outcome));
+  const visible = showAll || filtered.length <= DEFAULT ? filtered : filtered.slice(-DEFAULT);
+  const [min, max] = useMemo(() => {
     if (!visible.length) return [epochMin, epochMax];
-    const starts = visible.map(p => Number(p.submittedEpoch || 0)).filter(v => Number.isFinite(v) && v > 0);
-    const ends = visible.map(p => {
-      const term = Number(
-        p.enactedEpoch ||
-        p.ratifiedEpoch ||
-        p.droppedEpoch ||
-        p.expiredEpoch ||
-        p.expirationEpoch ||
-        epochMax
-      );
-      return Number.isFinite(term) && term > 0 ? term : epochMax;
-    });
-    const current = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
-      ? Number(currentEpoch)
-      : epochMax;
-    const min = starts.length ? Math.min(...starts) : epochMin;
-    const max = Math.max(ends.length ? Math.max(...ends) : epochMax, current);
-    return [Math.min(min, max), Math.max(min, max)];
+    const starts = visible.map((r) => r.submittedEpoch);
+    const ends = visible.map((r) => r.endEpoch || epochMax);
+    const lo = Math.min(...starts); const hi = Math.max(...ends, currentEpoch || epochMax);
+    return [Math.min(lo, hi), Math.max(lo, hi)];
   }, [visible, epochMin, epochMax, currentEpoch]);
-
-  const svgH = visible.length * (ROW_H + GAP) + 48;
-
-  function epochToX(ep, w) {
-    const span = timelineMax - timelineMin || 1;
-    return PAD_LEFT + ((ep - timelineMin) / span) * (w - PAD_LEFT - PAD_RIGHT);
-  }
-
-  const ticks = [];
-  const firstTick = Math.ceil(timelineMin / TICK_STEP) * TICK_STEP;
-  for (let ep = firstTick; ep <= timelineMax; ep += TICK_STEP) ticks.push(ep);
+  const W = 860; const PAD_L = 16; const PAD_R = 16; const ROW = 12; const GAP = 3;
+  const H = visible.length * (ROW + GAP) + 44;
+  const x = useEpochScale(min, max, W, PAD_L, PAD_R);
+  const now = Math.min(Math.max(currentEpoch || max, min), max);
+  const step = max - min > 60 ? 10 : 5;
 
   return (
     <div>
-      {/* Filters */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginBottom: "0.8rem", fontSize: S.legend }}>
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ color: C.muted, fontSize: S.filter, textTransform: "uppercase", letterSpacing: "0.05em" }}>Type:</span>
-          <button
-            className={`stats-filter-btn${!filterType ? " active" : ""}`}
-            onClick={() => setFilterType(null)}
-          >All</button>
-          {allTypes.map(t => (
-            <button
-              key={t}
-              className={`stats-filter-btn${filterType === t ? " active" : ""}`}
-              style={{ borderColor: getTypeColor(t) }}
-              onClick={() => setFilterType(v => v === t ? null : t)}
-            >
-              <span style={{ display: "inline-block", width: 8, height: 8, background: getTypeColor(t), borderRadius: 2, marginRight: 4 }} />
-              {shortType(t)}
-            </button>
-          ))}
+      <div className="p-stats__filters">
+        <div className="c-chips"><Chip active={!type} onClick={() => setType("")}>All types</Chip>{types.map((t) => <Chip key={t} active={type === t} onClick={() => setType(type === t ? "" : t)}><span className="p-stats__swatch" style={{ background: typeColor(t) }} />{shortType(t)}</Chip>)}</div>
+        <div className="c-chips"><Chip active={!outcome} onClick={() => setOutcome("")}>All outcomes</Chip>{outcomes.map((o) => <Chip key={o} active={outcome === o} onClick={() => setOutcome(outcome === o ? "" : o)}><span className="p-stats__swatch" style={{ background: outcomeColor(o) }} />{o}</Chip>)}</div>
+        <div className="row" style={{ marginLeft: "auto" }}>
+          <span className="tiny muted">Showing {visible.length} of {filtered.length}</span>
+          {filtered.length > DEFAULT ? <Button size="sm" onClick={() => setShowAll((v) => !v)}>{showAll ? `Newest ${DEFAULT}` : "Show all"}</Button> : null}
         </div>
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ color: C.muted, fontSize: S.filter, textTransform: "uppercase", letterSpacing: "0.05em" }}>Outcome:</span>
-          <button
-            className={`stats-filter-btn${!filterOutcome ? " active" : ""}`}
-            onClick={() => setFilterOutcome(null)}
-          >All</button>
-          {allOutcomes.map(o => (
-            <button
-              key={o}
-              className={`stats-filter-btn${filterOutcome === o ? " active" : ""}`}
-              style={{ borderColor: outcomeColor(o) }}
-              onClick={() => setFilterOutcome(v => v === o ? null : o)}
-            >
-              <span style={{ display: "inline-block", width: 8, height: 8, background: outcomeColor(o), borderRadius: 2, marginRight: 4 }} />
-              {o}
-            </button>
-          ))}
-        </div>
-        <span style={{ color: C.muted, fontSize: S.filter, marginLeft: "auto", alignSelf: "center" }}>
-          showing {visible.length} / {filtered.length} filtered · {filtered.length} / {proposals.filter(p=>p.submittedEpoch).length} total
-        </span>
-        {filtered.length > DEFAULT_VISIBLE && (
-          <button
-            className="stats-filter-btn active"
-            onClick={() => setShowAll(v => !v)}
-            style={{ marginLeft: "0.2rem" }}
-          >
-            {showAll ? "Show newest 10" : "Show all"}
-          </button>
-        )}
       </div>
-
-      {/* Timeline SVG */}
-      <div style={{ position: "relative", overflowX: "auto" }}>
-        <svg
-          ref={svgRef}
-          width={800}
-          height={svgH}
-          viewBox={`0 0 800 ${svgH}`}
-          style={{ display: "block", minWidth: 800, maxWidth: "none" }}
-        >
-          {/* Tick lines */}
-          {ticks.map(ep => {
-            const x = epochToX(ep, 800);
+      <div className="p-stats__timeline">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Governance actions by epoch">
+          {ticksBetween(min, max, step).map((e) => (
+            <g key={e}>
+              <line x1={x(e)} x2={x(e)} y1={0} y2={visible.length * (ROW + GAP)} stroke={CHART.line} />
+              <text x={x(e)} y={visible.length * (ROW + GAP) + 14} textAnchor="middle" fill={CHART.muted} fontSize={10}>{e}</text>
+            </g>
+          ))}
+          <line x1={x(now)} x2={x(now)} y1={0} y2={visible.length * (ROW + GAP)} stroke={CHART.accent} strokeDasharray="4 3" opacity={0.7} />
+          <text x={Math.min(x(now) + 4, W - 90)} y={visible.length * (ROW + GAP) + 30} fill={CHART.accent} fontSize={10}>Epoch {now} (now)</text>
+          {visible.map((r, i) => {
+            const x1 = x(r.submittedEpoch); const x2 = Math.max(x(Math.min(r.endEpoch || max, max)), x1 + 3);
+            const y = i * (ROW + GAP);
             return (
-              <g key={ep}>
-                <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.line} strokeWidth={1} />
-                <text x={x} y={visible.length * (ROW_H + GAP) + 14} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>{ep}</text>
+              <g key={r.proposalId} onMouseEnter={() => setHover({ ...r, y })} onMouseLeave={() => setHover(null)}>
+                <rect x={x1} y={y} width={x2 - x1} height={ROW} rx={3} fill={typeColor(r.governanceType)} opacity={0.35}><title>{`${r.actionName} · ${r.governanceType} · ${r.outcome} · epoch ${r.submittedEpoch} → ${r.endEpoch || "open"}`}</title></rect>
+                <rect x={x1} y={y} width={Math.min(4, x2 - x1)} height={ROW} rx={2} fill={outcomeColor(r.outcome)} />
               </g>
             );
           })}
-
-          {/* "Now" marker */}
-          {(() => {
-            const baseCurrentEpoch = Number.isFinite(Number(currentEpoch)) && Number(currentEpoch) > 0
-              ? Number(currentEpoch)
-              : epochMax;
-            const nowEpoch = Math.min(Math.max(baseCurrentEpoch, timelineMin), timelineMax);
-            const x = epochToX(nowEpoch, 800);
-            const label = `Current epoch ${nowEpoch}`;
-            const labelW = Math.max(84, Math.round(label.length * 5.4) + 10);
-            const labelX = Math.min(Math.max(x - labelW / 2, 2), 800 - labelW - 2);
-            const labelY = visible.length * (ROW_H + GAP) + 28;
-            return (
-              <g>
-                <line x1={x} y1={0} x2={x} y2={visible.length * (ROW_H + GAP)} stroke={C.yes} strokeWidth={1} strokeDasharray="4 3" opacity={0.5} />
-                <rect
-                  x={labelX}
-                  y={labelY - 9}
-                  width={labelW}
-                  height={12}
-                  rx={3}
-                  fill="rgba(9, 14, 16, 0.9)"
-                  stroke={C.yes}
-                  strokeOpacity={0.45}
-                />
-                <text x={labelX + 5} y={labelY} fill={C.yes} fontSize={S.timelineInline} opacity={0.9}>{label}</text>
-              </g>
-            );
-          })()}
-
-          {/* Proposal bars */}
-          {visible.map((p, i) => {
-            const startEp  = p.submittedEpoch || epochMin;
-            const termEp   = p.enactedEpoch || p.ratifiedEpoch || p.droppedEpoch || p.expiredEpoch || p.expirationEpoch || epochMax;
-            const x1 = epochToX(startEp, 800);
-            const x2 = Math.max(epochToX(Math.min(termEp, timelineMax), 800), x1 + 3);
-            const y  = i * (ROW_H + GAP);
-            const typeColor = getTypeColor(p.governanceType || "Unknown");
-            const outColor  = outcomeColor(p.outcome);
-
-            return (
-              <g
-                key={`${p.txHash || "tx"}:${p.certIndex ?? "na"}:${p.actionName || p.governanceType || "row"}:${startEp}:${i}`}
-                onMouseEnter={e => {
-                  const rect = svgRef.current?.getBoundingClientRect();
-                  setTooltip({
-                    name: p.actionName || p.governanceType || "Unknown",
-                    type: p.governanceType,
-                    outcome: p.outcome || "Pending",
-                    start: startEp, end: termEp,
-                    x: e.clientX - (rect?.left || 0),
-                    y: e.clientY - (rect?.top  || 0),
-                  });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                style={{ cursor: "default" }}
-              >
-                {/* Type-coloured track */}
-                <rect x={x1} y={y} width={x2 - x1} height={ROW_H} fill={typeColor} opacity={0.3} rx={2} />
-                {/* Outcome-coloured left notch */}
-                <rect x={x1} y={y} width={Math.min(4, x2 - x1)} height={ROW_H} fill={outColor} opacity={0.9} rx={2} />
-              </g>
-            );
-          })}
-
-          {/* X-axis label */}
-          <text x={400} y={svgH - 2} textAnchor="middle" fill={C.muted} fontSize={S.timelineTick}>Epoch</text>
         </svg>
-
-        {/* Tooltip */}
-        {tooltip && (
-          <div
-            style={{
-              position: "absolute",
-              left: Math.min(tooltip.x + 12, 580),
-              top:  Math.max(tooltip.y - 60, 0),
-              background: "#1a2530",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 8,
-              padding: "6px 10px",
-              fontSize: S.tooltip,
-              color: C.text,
-              pointerEvents: "none",
-              whiteSpace: "nowrap",
-              zIndex: 10,
-              maxWidth: 280,
-            }}
-          >
-            <strong style={{ display: "block", whiteSpace: "normal", wordBreak: "break-word", maxWidth: 260, marginBottom: 2 }}>
-              {tooltip.name}
-            </strong>
-            <span style={{ color: C.muted }}>{tooltip.type}</span>
-            <br />
-            <span style={{ color: outcomeColor(tooltip.outcome) }}>{tooltip.outcome}</span>
-            {" · "}
-            <span style={{ color: C.muted }}>Ep {tooltip.start} → {tooltip.end}</span>
+        {hover ? (
+          <div className="p-stats__tip" style={{ top: hover.y + ROW + 4, left: 16 }}>
+            <Link to={`/actions/${encodeURIComponent(hover.proposalId)}`}><strong>{hover.actionName}</strong></Link><br />
+            <span className="muted">{hover.governanceType} · </span><span style={{ color: outcomeColor(hover.outcome) }}>{hover.outcome}</span><span className="muted"> · epoch {hover.submittedEpoch} → {hover.endEpoch || "open"}</span>
           </div>
-        )}
+        ) : null}
       </div>
-
-      {/* Type legend */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", marginTop: "0.75rem", fontSize: S.filter, color: C.muted }}>
-        <span style={{ alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: S.filterLabel }}>Type:</span>
-        {allTypes.map(t => (
-          <span key={t} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{ display: "inline-block", width: 24, height: 8, background: getTypeColor(t), borderRadius: 2, opacity: 0.7 }} />
-            {shortType(t)}
-          </span>
-        ))}
-        <span style={{ marginLeft: "1rem", alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: S.filterLabel }}>Outcome notch:</span>
-        {[["Enacted/Ratified", C.yes], ["Dropped/Expired", C.no], ["Pending", C.abstain]].map(([label, color]) => (
-          <span key={label} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{ display: "inline-block", width: 4, height: 8, background: color, borderRadius: 2 }} />
-            {label}
-          </span>
-        ))}
-      </div>
+      <p className="tiny muted" style={{ marginTop: 8 }}>Bar colour is the action type; the notch at the start is the outcome (green passed, red failed, amber pending). Hover a bar for the action.</p>
     </div>
   );
 }
 
-// ── CC Vote Types by Seat ───────────────────────────────────────────────────────
-function CcVoteTypesBySeatBar({ rows }) {
-  const data = [...rows]
-    .sort((a, b) => b.cast - a.cast)
-    .map((m) => ({
-      name: m.name,
-      Constitutional: m.constitutionalVotes || 0,
-      Unconstitutional: m.unconstitutionalVotes || 0,
-      Abstain: m.abstainVotes || 0,
-      cast: m.cast || 0,
-    }));
-
+/* Delegation movers ------------------------------------------------------- */
+function DelegationMovers() {
+  const [epochs, setEpochs] = useState(5);
+  const trend = useDelegationTrend(epochs);
+  const list = (rows, tone) => (
+    <ol className="p-stats__movers">
+      {rows.map((d) => (
+        <li key={d.id}>
+          <Link to={`/dreps/${encodeURIComponent(d.id)}`} className="p-stats__mover-name" title={d.name}>{d.name}</Link>
+          <span className={`num ${tone}`}>{d.deltaPct > 0 ? "+" : ""}{d.deltaPct.toFixed(1)}%</span>
+          <span className="num tiny muted">{formatAdaCompact(d.currentAda)}</span>
+        </li>
+      ))}
+    </ol>
+  );
   return (
-    <ResponsiveContainer width="100%" height={Math.max(320, data.length * 30 + 56)}>
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ top: 4, right: 22, bottom: 4, left: 8 }}
-        barCategoryGap="24%"
-        barGap={3}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-        <XAxis type="number" tick={{ fill: C.muted, fontSize: S.axis }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: S.axisSmall }} width={150} />
-        <Tooltip {...TooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
-        <Bar dataKey="Constitutional" fill={C.yes} radius={[0, 3, 3, 0]} />
-        <Bar dataKey="Unconstitutional" fill={C.no} radius={[0, 3, 3, 0]} />
-        <Bar dataKey="Abstain" fill={C.abstain} radius={[0, 3, 3, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <ChartCard title="Delegation movers" subtitle="Change in delegated voting power per DRep, versus the snapshot from N epochs ago." note={trend.data?.comparedEpoch != null ? `Epoch ${trend.data.comparedEpoch} → ${trend.data.currentEpoch}. Only DReps present in both snapshots are compared.` : null}
+      actions={<Segmented ariaLabel="Compare against" value={epochs} onChange={setEpochs} options={[1, 3, 5, 10].map((n) => ({ value: n, label: `${n} ep` }))} />}>
+      {trend.isLoading ? <Skeleton kind="row" count={5} /> : trend.error ? <Alert tone="warning">{trend.error.message}</Alert> : (trend.data?.gainers?.length || trend.data?.losers?.length) ? (
+        <div className="grid grid--2">
+          <div><h4 className="caps" style={{ color: "var(--color-vote-yes)", marginBottom: 8 }}>Top gainers</h4>{list(trend.data.gainers || [], "yes")}</div>
+          <div><h4 className="caps" style={{ color: "var(--color-vote-no)", marginBottom: 8 }}>Top losers</h4>{list(trend.data.losers || [], "no")}</div>
+        </div>
+      ) : <p className="muted">No significant delegation changes found for this period.</p>}
+    </ChartCard>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-export default function StatsPage() {
-  useSeoMeta({
-    title: "Governance Statistics",
-    description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients."
-  });
-  const [raw, setRaw]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
-  const [showAllCcMembers, setShowAllCcMembers] = useState(false);
-
-  // Active slice index for interactive donuts
-  const [activePropType, setActivePropType]       = useState(0);
-  const [activePropOutcome, setActivePropOutcome] = useState(0);
-
-  // Delegation trend
-  const [trendEpochs, setTrendEpochs] = useState(5);
-  const [trend, setTrend]             = useState(null);
-  const [trendLoading, setTrendLoading] = useState(false);
-
-  // Delegation history (per-DRep search)
-  const [histQuery, setHistQuery]       = useState("");
-  const [histSelected, setHistSelected] = useState(null); // { id, name }
-  const [histData, setHistData]         = useState(null);
-  const [histLoading, setHistLoading]   = useState(false);
-  const [histDropdown, setHistDropdown] = useState(false);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/accountability?view=stats`)
-      .then(r => r.json())
-      .then(d => { setRaw(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
-  }, []);
-
-  useEffect(() => {
-    setTrendLoading(true);
-    fetch(`${API_BASE}/api/drep-delegation-trend?epochs=${trendEpochs}`)
-      .then(r => r.json())
-      .then(d => { setTrend(d); setTrendLoading(false); })
-      .catch(() => setTrendLoading(false));
-  }, [trendEpochs]);
-
-  useEffect(() => {
-    if (!histSelected) return;
-    setHistLoading(true);
-    setHistData(null);
-    fetch(`${API_BASE}/api/drep-delegation-history?id=${encodeURIComponent(histSelected.id)}`)
-      .then(r => r.json())
-      .then(d => { setHistData(d); setHistLoading(false); })
-      .catch(() => setHistLoading(false));
-  }, [histSelected]);
-
-  const s = useMemo(() => {
-    if (!raw) return null;
-    const proposalInfo = raw.proposalInfo || {};
-    const proposals = Object.values(proposalInfo);
-    const dreps     = raw.dreps || [];
-    const cc        = raw.committeeMembers || [];
-    const spos      = raw.spos || [];
-    const special   = raw.specialDreps || {};
-
-    // Exclude virtual "Always Abstain" and "Always No Confidence" DReps from all
-    // statistics except the dedicated voting-power KPI cards (which read from `special`).
-    const realDreps = dreps.filter(d => {
-      const id = String(d.id || "").toLowerCase();
-      return !id.includes("always_abstain") && !id.includes("always_no_confidence");
-    });
-
-    // ── Proposals ─────────────────────────────────────────────────────────────
-    const typeMap = {}, outcomeMap = {};
-    proposals.forEach(p => {
-      typeMap[p.governanceType || "Unknown"] = (typeMap[p.governanceType || "Unknown"] || 0) + 1;
-      outcomeMap[p.outcome || "Unknown"]     = (outcomeMap[p.outcome || "Unknown"]     || 0) + 1;
-    });
-    const byType    = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({ name, value, color: TYPE_PALETTE[i%TYPE_PALETTE.length] }));
-    const byOutcome = Object.entries(outcomeMap).sort((a,b)=>b[1]-a[1]).map(([name,value])=>{
-      const lo = name.toLowerCase();
-      const color = lo==="yes"||lo==="enacted"||lo==="ratified" ? C.yes : lo==="no"||lo==="dropped"||lo==="expired" ? C.no : lo==="pending"||lo==="active" ? C.abstain : C.muted;
-      return { name, value, color };
-    });
-
-    // ── Votes ──────────────────────────────────────────────────────────────────
-    const voteRoles = { drep:{yes:0,no:0,abstain:0}, cc:{yes:0,no:0,abstain:0}, spo:{yes:0,no:0,abstain:0} };
-    proposals.forEach(p => {
-      const vs = p.voteStats || {};
-      const dr = vs.drep || {};
-      const cv = vs.constitutional_committee || {};
-      const sv = vs.stake_pool || {};
-      voteRoles.drep.yes    += dr.yes||0; voteRoles.drep.no    += dr.no||0; voteRoles.drep.abstain    += dr.abstain||0;
-      voteRoles.cc.yes      += cv.yes||0; voteRoles.cc.no      += cv.no||0; voteRoles.cc.abstain      += cv.abstain||0;
-      voteRoles.spo.yes     += sv.yes||0; voteRoles.spo.no     += sv.no||0; voteRoles.spo.abstain     += sv.abstain||0;
-    });
-    const votesByRole = [
-      { role: "DReps",     ...voteRoles.drep },
-      { role: "Committee", ...voteRoles.cc   },
-      { role: "SPOs",      ...voteRoles.spo  },
-    ];
-    const totalYes     = voteRoles.drep.yes    + voteRoles.cc.yes    + voteRoles.spo.yes;
-    const totalNo      = voteRoles.drep.no     + voteRoles.cc.no     + voteRoles.spo.no;
-    const totalAbstain = voteRoles.drep.abstain + voteRoles.cc.abstain + voteRoles.spo.abstain;
-
-    // ── Proposals over time (by submitted epoch) ───────────────────────────────
-    const epochMap = {};
-    proposals.forEach(p => {
-      const ep = p.submittedEpoch || 0;
-      if (!ep) return;
-      if (!epochMap[ep]) epochMap[ep] = { epoch: ep, total: 0, yes: 0, no: 0, pending: 0 };
-      epochMap[ep].total++;
-      const lo = (p.outcome||"").toLowerCase();
-      if (lo === "yes" || lo === "enacted" || lo === "ratified") epochMap[ep].yes++;
-      else if (lo === "no" || lo === "dropped" || lo === "expired") epochMap[ep].no++;
-      else epochMap[ep].pending++;
-    });
-    const byEpoch = Object.values(epochMap).sort((a,b)=>a.epoch-b.epoch);
-
-    // ── Epoch range (for timelines) ───────────────────────────────────────────
-    // CC epoch range: earliest seat start to latest expiration
-    const ccEpochs = cc.map(m => m.seatStartEpoch || 0).filter(Boolean);
-    const ccExpEpochs = cc.map(m => m.expirationEpoch || 0).filter(Boolean);
-    const ccEpochMin = Math.min(...ccEpochs, ...proposals.map(p=>p.submittedEpoch||9999).filter(v=>v<9999));
-    const ccEpochMax = Math.max(...ccExpEpochs, ...proposals.map(p=>p.expirationEpoch||0), ...proposals.map(p=>p.enactedEpoch||0), ...proposals.map(p=>p.ratifiedEpoch||0));
-    const epochMin = Math.max(ccEpochMin, 500);
-    const currentEpoch = Number(raw.latestEpoch || 0) || null;
-    const epochMax = Math.max(ccEpochMax, Number(currentEpoch || 0), epochMin + 10);
-
-    // ── DReps ─────────────────────────────────────────────────────────────────
-    const activeDreps   = realDreps.filter(d => d.active === true);
-    const retiredDreps  = realDreps.filter(d => d.retired === true);
-    const totalDrepAda  = realDreps.reduce((s,d) => s+(d.votingPowerAda||0), 0);
-    const abstainAda    = Number(special.alwaysAbstain?.votingPowerAda || 0);
-    const noConfAda     = Number(special.alwaysNoConfidence?.votingPowerAda || 0);
-
-    // Attendance buckets
-    const attBuckets = [
-      { name: "100%",  value: 0, color: C.yes     },
-      { name: "75–99%",value: 0, color: "#34d399"  },
-      { name: "50–74%",value: 0, color: C.abstain  },
-      { name: "25–49%",value: 0, color: "#fb923c"  },
-      { name: "<25%",  value: 0, color: C.no       },
-    ];
-    realDreps.forEach(d => {
-      const a = pct((d.votes||[]).length, d.totalEligibleVotes||1);
-      if (a === 100) attBuckets[0].value++;
-      else if (a >= 75) attBuckets[1].value++;
-      else if (a >= 50) attBuckets[2].value++;
-      else if (a >= 25) attBuckets[3].value++;
-      else attBuckets[4].value++;
-    });
-
-    // Transparency buckets
-    const tsBuckets = [
-      { name: "High (70+)",  value: 0, color: C.yes     },
-      { name: "Mid (40–69)", value: 0, color: C.abstain  },
-      { name: "Low (21–39)", value: 0, color: "#fb923c"  },
-      { name: "None (≤20)",  value: 0, color: C.muted    },
-    ];
-    realDreps.forEach(d => {
-      const sc = d.transparencyScore || 0;
-      if (sc >= 70) tsBuckets[0].value++;
-      else if (sc >= 40) tsBuckets[1].value++;
-      else if (sc > 20)  tsBuckets[2].value++;
-      else               tsBuckets[3].value++;
-    });
-
-    // Response time buckets
-    const rtBuckets = [
-      { name: "< 24h", value: 0, color: C.yes    },
-      { name: "1–3d",  value: 0, color: "#34d399" },
-      { name: "3–7d",  value: 0, color: C.abstain },
-      { name: "> 7d",  value: 0, color: C.no      },
-    ];
-    const allRTs = [];
-    realDreps.forEach(d => (d.votes||[]).forEach(v => {
-      if (v.responseHours != null && v.responseHours >= 0) {
-        allRTs.push(v.responseHours);
-        const h = v.responseHours;
-        if (h < 24) rtBuckets[0].value++;
-        else if (h < 72) rtBuckets[1].value++;
-        else if (h < 168) rtBuckets[2].value++;
-        else rtBuckets[3].value++;
-      }
-    }));
-    allRTs.sort((a,b)=>a-b);
-    const medianRT = allRTs.length ? allRTs[Math.floor(allRTs.length/2)] : null;
-
-    // Top 10 DReps by voting power
-    const top10Dreps = [...realDreps].sort((a,b)=>(b.votingPowerAda||0)-(a.votingPowerAda||0)).slice(0,10)
-      .map(d => ({ name: d.name || d.id.slice(0,14)+"…", size: d.votingPowerAda||0 }));
-
-    // ── CC ────────────────────────────────────────────────────────────────────
-    const activeCc = cc.filter(m => m.status === "active");
-
-    const isEarlyDroppedAction = (proposalId) => {
-      const info = proposalInfo[proposalId] || {};
-      const droppedEpoch = Number(info?.droppedEpoch || 0);
-      const expirationEpoch = Number(info?.expirationEpoch || 0);
-      if (!Number.isFinite(droppedEpoch) || droppedEpoch <= 0) return false;
-      if (!Number.isFinite(expirationEpoch) || expirationEpoch <= 0) return false;
-      return droppedEpoch < expirationEpoch;
-    };
-    const requiresCommitteeParticipation = (proposalId) => {
-      const info = proposalInfo[proposalId] || {};
-      const type = String(info?.governanceType || "").toLowerCase();
-      if (type.includes("no confidence")) return false;
-      if (type.includes("new committee")) return false;
-      if (isEarlyDroppedAction(proposalId)) return false;
-      return true;
-    };
-    const committeeProposalTerminalEpoch = (proposalId) => {
-      const info = proposalInfo[proposalId] || {};
-      const candidates = [
-        Number(info.enactedEpoch || 0),
-        Number(info.ratifiedEpoch || 0),
-        Number(info.droppedEpoch || 0),
-        Number(info.expiredEpoch || 0),
-        Number(info.expirationEpoch || 0),
-      ].filter((x) => Number.isFinite(x) && x > 0);
-      if (candidates.length === 0) return null;
-      return Math.min(...candidates);
-    };
-    const proposalIds = Object.keys(proposalInfo);
-    const proposalEpochs = new Map(
-      proposalIds.map((proposalId) => [proposalId, Number(proposalInfo[proposalId]?.submittedEpoch || 0)])
-    );
-
-    // ── Participation over time (cast / eligible per epoch) ─────────────────
-    const participationEpochMap = {};
-    const drepEligibleCountAtEpoch = (epoch) =>
-      realDreps.reduce((count, actor) => {
-        const activeEpoch = Number(actor?.activeEpoch || 0);
-        if (Number.isFinite(activeEpoch) && activeEpoch > 0 && epoch > 0 && epoch < activeEpoch) return count;
-        return count + 1;
-      }, 0);
-
-    const ccEligibleCountAtProposal = (proposalId, proposalEpoch) =>
-      cc.reduce((count, actor) => {
-        const eligibility = getCommitteeEligibilityWindow(actor, proposalInfo);
-        const startEpoch = Number(eligibility?.startEpoch || 0);
-        const hasStartEpoch = Boolean(eligibility?.hasStartEpoch);
-        const effectiveEndEpoch = Number(eligibility?.effectiveEndEpoch || 0);
-        const hasEffectiveEndEpoch = Boolean(eligibility?.hasEffectiveEndEpoch);
-        if (hasStartEpoch && proposalEpoch > 0 && proposalEpoch < startEpoch) return count;
-        if (hasEffectiveEndEpoch && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) return count;
-        if (hasEffectiveEndEpoch) {
-          const terminalEpoch = committeeProposalTerminalEpoch(proposalId);
-          if (terminalEpoch && terminalEpoch > effectiveEndEpoch) return count;
-        }
-        return count + 1;
-      }, 0);
-
-    proposals.forEach((proposal) => {
-      const proposalId = String(proposal?.proposalId || "");
-      const epoch = Number(proposal?.submittedEpoch || 0);
-      if (!Number.isFinite(epoch) || epoch <= 0) return;
-
-      if (!participationEpochMap[epoch]) {
-        participationEpochMap[epoch] = {
-          epoch,
-          drepCast: 0,
-          drepEligible: 0,
-          ccCast: 0,
-          ccEligible: 0,
-          spoCast: 0,
-          spoEligible: 0
-        };
-      }
-      const row = participationEpochMap[epoch];
-      const voteStats = proposal?.voteStats || {};
-      const drepEligible =
-        Number(proposal?.drepRequiredPct || 0) > 0 || Number(voteStats?.drep?.total || 0) > 0;
-      const spoEligible =
-        proposal?.thresholdInfo?.poolRequiredPct != null || Number(voteStats?.stake_pool?.total || 0) > 0;
-      const ccEligible = requiresCommitteeParticipation(proposalId);
-
-      if (drepEligible) {
-        row.drepCast += Number(voteStats?.drep?.total || 0);
-        row.drepEligible += drepEligibleCountAtEpoch(epoch);
-      }
-      if (ccEligible) {
-        row.ccCast += Number(voteStats?.constitutional_committee?.total || 0);
-        row.ccEligible += ccEligibleCountAtProposal(proposalId, epoch);
-      }
-      if (spoEligible) {
-        row.spoCast += Number(voteStats?.stake_pool?.total || 0);
-        row.spoEligible += spos.length;
-      }
-    });
-
-    const participationByEpoch = Object.values(participationEpochMap)
-      .sort((a, b) => a.epoch - b.epoch)
-      .map((row) => ({
-        epoch: row.epoch,
-        drepCast: row.drepCast,
-        ccCast: row.ccCast,
-        spoCast: row.spoCast,
-      }));
-
-    const ccAttendance = cc.map((m) => {
-      const eligibility = getCommitteeEligibilityWindow(m, proposalInfo);
-      const startEpoch = Number(eligibility?.startEpoch || 0);
-      const hasStartEpoch = Boolean(eligibility?.hasStartEpoch);
-      const effectiveEndEpoch = Number(eligibility?.effectiveEndEpoch || 0);
-      const hasEffectiveEndEpoch = Boolean(eligibility?.hasEffectiveEndEpoch);
-
-      const votes = (m.votes || []).filter((vote) => {
-        if (hasStartEpoch || hasEffectiveEndEpoch) {
-          const proposalEpoch = Number(proposalInfo[vote.proposalId]?.submittedEpoch || 0);
-          if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
-            if (hasStartEpoch && proposalEpoch < startEpoch) return false;
-            if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) return false;
-          }
-        }
-        return true;
-      });
-
-      const cast = votes.length;
-      const committeeEligibleProposalIds = proposalIds.filter((proposalId) => requiresCommitteeParticipation(proposalId));
-      const actorVoteByProposal = new Set(votes.map((v) => v.proposalId));
-
-      let eligible = 0;
-      if (hasStartEpoch || hasEffectiveEndEpoch) {
-        for (const proposalId of committeeEligibleProposalIds) {
-          const proposalEpoch = Number(proposalEpochs.get(proposalId) || 0);
-          if (Number.isFinite(proposalEpoch) && proposalEpoch > 0) {
-            if (hasStartEpoch && proposalEpoch < startEpoch) continue;
-            if (hasEffectiveEndEpoch && proposalEpoch > effectiveEndEpoch) continue;
-          }
-          if (hasEffectiveEndEpoch && !actorVoteByProposal.has(proposalId)) {
-            const terminalEpoch = committeeProposalTerminalEpoch(proposalId);
-            if (!terminalEpoch || terminalEpoch > effectiveEndEpoch) continue;
-          }
-          eligible += 1;
-        }
-      } else {
-        eligible = committeeEligibleProposalIds.length;
-      }
-      const totalEligibleVotes = Math.max(eligible, cast, 0);
-
-      return {
-        name: m.name || m.id.slice(0,12),
-        cast,
-        eligible: totalEligibleVotes,
-        pct: pct(cast, totalEligibleVotes || 1),
-        withRationale: votes.filter(v => v.hasRationale).length,
-        constitutionalVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "yes").length,
-        unconstitutionalVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "no").length,
-        abstainVotes: votes.filter(v => String(v.vote || "").toLowerCase() === "abstain").length,
-        active: m.status === "active",
-      };
-    }).sort((a,b)=>b.pct-a.pct);
-
-    // ── SPOs ──────────────────────────────────────────────────────────────────
-    const delMap = {};
-    spos.forEach(s => { delMap[s.delegationStatus||"Unknown"] = (delMap[s.delegationStatus||"Unknown"]||0)+1; });
-    const byDelegation = Object.entries(delMap).sort((a,b)=>b[1]-a[1])
-      .map(([name,value],i)=>({ name, value, color: TYPE_PALETTE[i%TYPE_PALETTE.length] }));
-
-    const totalSpoAda = spos.reduce((s,p)=>s+(p.votingPowerAda||0), 0);
-
-    const toSortedPower = (rows) => [...rows]
-      .map((r) => Number(r?.votingPowerAda || 0))
-      .filter((n) => Number.isFinite(n) && n > 0)
-      .sort((a, b) => b - a);
-    const minEntitiesForThresholdPct = (sortedPowers, thresholdPct) => {
-      if (!sortedPowers.length) return null;
-      const total = sortedPowers.reduce((sum, n) => sum + n, 0);
-      if (!(total > 0) || !(thresholdPct > 0)) return null;
-      const target = total * (thresholdPct / 100);
-      let acc = 0;
-      for (let i = 0; i < sortedPowers.length; i += 1) {
-        acc += sortedPowers[i];
-        if (acc >= target) return i + 1;
-      }
-      return sortedPowers.length;
-    };
-    const nakamotoCoefficient = (sortedPowers) => {
-      if (!sortedPowers.length) return null;
-      const total = sortedPowers.reduce((sum, n) => sum + n, 0);
-      if (!(total > 0)) return null;
-      const target = total / 2;
-      let acc = 0;
-      for (let i = 0; i < sortedPowers.length; i += 1) {
-        acc += sortedPowers[i];
-        if (acc > target) return i + 1;
-      }
-      return sortedPowers.length;
-    };
-
-    const drepPowers = toSortedPower(realDreps);
-    const spoPowers = toSortedPower(spos);
-
-    const tc = raw.thresholdContext || {};
-    const thresholdRowsRaw = [
-      ["Motion No Confidence", Number(tc?.drep?.motionNoConfidence || 0)],
-      ["Committee Normal", Number(tc?.drep?.committeeNormal || 0)],
-      ["Constitution Update", Number(tc?.drep?.updateToConstitution || 0)],
-      ["Hard Fork Initiation", Number(tc?.drep?.hardForkInitiation || 0)],
-      ["Network Group", Number(tc?.drep?.networkGroup || 0)],
-      ["Economic Group", Number(tc?.drep?.economicGroup || 0)],
-      ["Technical Group", Number(tc?.drep?.technicalGroup || 0)],
-      ["Governance Group", Number(tc?.drep?.govGroup || 0)],
-      ["Treasury Withdrawal", Number(tc?.drep?.treasuryWithdrawal || 0)],
-    ].filter(([, pct]) => Number.isFinite(pct) && pct > 0);
-
-    const drepThresholdReachRows = (thresholdRowsRaw.length > 0
-      ? thresholdRowsRaw
-      : [["50% Majority", 50], ["66.7% Supermajority", 66.7]]
-    )
-      .sort((a, b) => a[1] - b[1])
-      .map(([threshold, pct]) => ({
-        threshold,
-        requiredPct: pct,
-        topDrepsNeeded: minEntitiesForThresholdPct(drepPowers, pct) || 0,
-      }));
-
-    const drepNakamoto = nakamotoCoefficient(drepPowers);
-    const spoNakamoto = nakamotoCoefficient(spoPowers);
-
-    return {
-      proposals, byType, byOutcome, byEpoch, participationByEpoch,
-      totalYes, totalNo, totalAbstain, votesByRole,
-      dreps: realDreps, activeDreps, retiredDreps, totalDrepAda, abstainAda, noConfAda,
-      attBuckets, tsBuckets, rtBuckets, medianRT, top10Dreps,
-      cc, activeCc, ccAttendance,
-      spos, byDelegation, totalSpoAda, drepThresholdReachRows, drepNakamoto, spoNakamoto,
-      epochMin, epochMax, currentEpoch,
-    };
-  }, [raw]);
-
-  const histMatches = useMemo(() => {
-    const q = histQuery.trim().toLowerCase();
-    if (!q || !raw) return [];
-    const dreps = (raw.dreps || []).filter(d => {
-      const id = String(d.id || "").toLowerCase();
-      const name = String(d.name || "").toLowerCase();
-      return !id.includes("always_") && (name.includes(q) || id.includes(q));
-    });
-    return dreps.slice(0, 8).map(d => ({ id: d.id, name: (d.name || "").trim() || d.id }));
-  }, [histQuery, raw]);
-
-  if (loading) return <main className="shell stats-page"><p className="muted" style={{paddingTop:"3rem"}}>Loading statistics…</p></main>;
-  if (error)   return <main className="shell stats-page"><p className="vote-error" style={{paddingTop:"3rem"}}>Error: {error}</p></main>;
-  if (!s)      return null;
-
-  const totalVotes = s.totalYes + s.totalNo + s.totalAbstain;
-  const ccChartRows = showAllCcMembers ? s.ccAttendance : s.ccAttendance.filter((row) => row.active);
-  const hasInactiveCcMembers = s.ccAttendance.some((row) => !row.active);
+/* Delegation history for one DRep ----------------------------------------- */
+function DelegationHistory() {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [open, setOpen] = useState(false);
+  const deferred = useDeferredValue(query);
+  const search = useDrepSearch(deferred);
+  const history = useDelegationHistory(selected?.id);
+  const results = search.data?.results || [];
+  const data = history.data?.epochs || [];
+  const yMax = data.length ? Math.max(...data.map((d) => d.ada)) : 0;
 
   return (
-    <main className="shell stats-page">
-      {/* Header */}
-      <div className="stats-header">
-        <h1 className="stats-title">Governance Statistics</h1>
-      </div>
-
-      {/* ── KPI Row ───────────────────────────────────────────────────────────── */}
-      <div className="stats-kpi-grid">
-        <KpiCard label="Total Proposals"   value={fmt(s.proposals.length)}       sub={`${Object.keys(s.byType||{}).length} action types`}           accent={C.yes} />
-        <KpiCard label="Total Votes Cast"  value={fmt(totalVotes)}               sub="across all groups & proposals"                                  accent="#7eb8ff" />
-        <KpiCard label="Active DReps"      value={fmt(s.activeDreps.length)}     sub={`of ${fmt(s.dreps.length)} registered`}                        accent={C.yes} />
-        <KpiCard label="DRep Voting Power" value={fmtAda(s.totalDrepAda)}        sub="delegated active stake"                                         accent={C.abstain} />
-        <KpiCard label="CC Members"        value={fmt(s.activeCc.length)}        sub={`${s.cc.length} historical`} accent={C.no} />
-        <KpiCard label="SPOs Voting"       value={fmt(s.spos.length)}            sub={fmtAda(s.totalSpoAda) + " combined"}                            accent="#c084fc" />
-        <KpiCard label="Always Abstain"    value={fmtAda(s.abstainAda)}          sub="delegated to abstain pool"                                      accent={C.muted} />
-        <KpiCard label="No Confidence"     value={fmtAda(s.noConfAda)}           sub="delegated to no-confidence"                                     accent={C.no} />
-      </div>
-
-      {/* ── Proposals over time ───────────────────────────────────────────────── */}
-      <Section title="Proposals Submitted per Epoch" wide>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={s.byEpoch} margin={{top:4,right:16,bottom:4,left:8}}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis dataKey="epoch" tick={{fill:C.muted,fontSize:S.axis}} />
-            <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
-            <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
-            <Bar dataKey="yes"     name="Passed"  stackId="a" fill={C.yes}     radius={[0,0,0,0]} />
-            <Bar dataKey="no"      name="Failed"  stackId="a" fill={C.no}      radius={[0,0,0,0]} />
-            <Bar dataKey="pending" name="Pending" stackId="a" fill={C.abstain} radius={[4,4,0,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Section>
-
-      <Section title="Participation Over Time" wide>
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={s.participationByEpoch} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis dataKey="epoch" tick={{ fill: C.muted, fontSize: S.axis }} />
-            <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: S.axis }} />
-            <Tooltip {...TooltipStyle} formatter={(value, name) => [fmt(Number(value || 0)), name || "Votes Cast"]} />
-            <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
-            <Line type="monotone" dataKey="drepCast" name="DRep Votes Cast" stroke={C.yes} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="ccCast" name="CC Votes Cast" stroke={C.no} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="spoCast" name="SPO Votes Cast" stroke="#7eb8ff" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </Section>
-
-      {/* ── Governance Actions Timeline ──────────────────────────────────────── */}
-      <Section title="Governance Actions Timeline" wide>
-        <GovernanceActionsTimeline
-          proposals={s.proposals}
-          epochMin={s.epochMin}
-          epochMax={s.epochMax}
-          currentEpoch={s.currentEpoch}
-        />
-      </Section>
-
-      {/* ── Proposal type + outcome donuts ─────────────────────────────────────── */}
-      <div className="stats-row">
-        <Section title="Proposals by Governance Type" half>
-          <div className="stats-donut-row">
-            <ResponsiveContainer width={220} height={220}>
-              <PieChart>
-                <Pie
-                  activeIndex={activePropType}
-                  activeShape={renderActiveShape}
-                  data={s.byType}
-                  cx="50%" cy="50%"
-                  innerRadius={58} outerRadius={82}
-                  dataKey="value"
-                  onMouseEnter={(_,i) => setActivePropType(i)}
-                >
-                  {s.byType.map((entry,i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip {...TooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
-            <ul className="stats-donut-legend">
-              {s.byType.map((t,i) => (
-                <li key={i} className={`stats-legend-row${i===activePropType?" active":""}`} onMouseEnter={()=>setActivePropType(i)}>
-                  <span className="stats-legend-dot" style={{background:t.color}} />
-                  <span className="stats-legend-name">{t.name}</span>
-                  <strong>{t.value}</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Section>
-
-        <Section title="Proposals by Outcome" half>
-          <div className="stats-donut-row">
-            <ResponsiveContainer width={220} height={220}>
-              <PieChart>
-                <Pie
-                  activeIndex={activePropOutcome}
-                  activeShape={renderActiveShape}
-                  data={s.byOutcome}
-                  cx="50%" cy="50%"
-                  innerRadius={58} outerRadius={82}
-                  dataKey="value"
-                  onMouseEnter={(_,i) => setActivePropOutcome(i)}
-                >
-                  {s.byOutcome.map((entry,i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip {...TooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
-            <ul className="stats-donut-legend">
-              {s.byOutcome.map((t,i) => (
-                <li key={i} className={`stats-legend-row${i===activePropOutcome?" active":""}`} onMouseEnter={()=>setActivePropOutcome(i)}>
-                  <span className="stats-legend-dot" style={{background:t.color}} />
-                  <span className="stats-legend-name">{t.name}</span>
-                  <strong>{t.value}</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Section>
-      </div>
-
-      {/* ── Votes by group ────────────────────────────────────────────────────── */}
-      <Section title="Vote Breakdown by Group" wide>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={s.votesByRole} layout="vertical" margin={{top:4,right:32,bottom:4,left:80}}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-            <XAxis type="number" tick={{fill:C.muted,fontSize:S.axis}} />
-            <YAxis type="category" dataKey="role" tick={{fill:C.text,fontSize:S.axis}} width={75} />
-            <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
-            <Bar dataKey="yes"     name="Yes"     fill={C.yes}     radius={[0,2,2,0]} />
-            <Bar dataKey="no"      name="No"      fill={C.no}      radius={[0,2,2,0]} />
-            <Bar dataKey="abstain" name="Abstain" fill={C.abstain} radius={[0,2,2,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Section>
-
-      <Section title="Top DReps Needed per Threshold" wide>
-        <ResponsiveContainer width="100%" height={Math.max(240, s.drepThresholdReachRows.length * 34 + 44)}>
-          <BarChart data={s.drepThresholdReachRows} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-            <XAxis type="number" tick={{ fill: C.muted, fontSize: S.axis }} allowDecimals={false} />
-            <YAxis type="category" dataKey="threshold" tick={{ fill: C.text, fontSize: S.axisSmall }} width={170} />
-            <Tooltip
-              {...TooltipStyle}
-              formatter={(v, _name, item) => [`${v}`, `Top DReps needed (${Number(item?.payload?.requiredPct || 0).toFixed(1)}%)`]}
-            />
-            <Legend wrapperStyle={{ fontSize: S.legend, color: C.muted }} />
-            <Bar dataKey="topDrepsNeeded" name="Top DReps Needed" fill="#7eb8ff" radius={[0, 3, 3, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="stats-kpi-grid" style={{ marginTop: "0.8rem" }}>
-          <KpiCard label="DRep Nakamoto" value={s.drepNakamoto ?? "—"} sub="entities to exceed 50% voting power" accent="#7eb8ff" />
-          <KpiCard label="SPO Nakamoto" value={s.spoNakamoto ?? "—"} sub="entities to exceed 50% voting power" accent="#c084fc" />
+    <ChartCard title="Delegation history" subtitle="How one DRep's delegated power moved epoch by epoch.">
+      <div className="p-stats__search">
+        <div className="c-search">
+          <span className="c-search__icon"><IconSearch size={16} /></span>
+          <Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder="Search a DRep by name or ID…" aria-label="Search DReps" />
         </div>
-      </Section>
-
-      {/* ── DRep section ──────────────────────────────────────────────────────── */}
-      <div className="stats-row">
-        <Section title="DRep Attendance Distribution" half>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={s.attBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axis}} />
-              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
-              <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} DReps`,"Count"]} />
-              <Bar dataKey="value" name="DReps" radius={[4,4,0,0]}>
-                {s.attBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="muted stats-note">Share of eligible proposals each DRep voted on.</p>
-        </Section>
-
-        <Section title="DRep Transparency Score Distribution" half>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={s.tsBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axisSmall}} />
-              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
-              <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} DReps`,"Count"]} />
-              <Bar dataKey="value" name="DReps" radius={[4,4,0,0]}>
-                {s.tsBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="muted stats-note">Rationale coverage score — higher means more votes documented.</p>
-        </Section>
+        {open && results.length > 0 ? (
+          <ul className="c-menu p-stats__results" role="listbox">
+            {results.map((d) => (
+              <li key={d.id}>
+                <button type="button" className="c-menu__item" role="option" aria-selected={selected?.id === d.id} onMouseDown={() => { setSelected(d); setQuery(d.name || d.id); setOpen(false); }}>
+                  <span style={{ display: "grid" }}>
+                    <span>{d.name || <span className="mono">{truncateMiddle(d.id, 12, 6)}</span>}</span>
+                    {d.name ? <span className="tiny muted mono">{truncateMiddle(d.id, 14, 6)}</span> : null}
+                  </span>
+                  <span className="tiny muted num" style={{ marginLeft: "auto" }}>{formatAdaCompact(d.votingPowerAda)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
-
-      <div className="stats-row">
-        <Section title="DRep Response Time Distribution" half>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={s.rtBuckets} margin={{top:4,right:8,bottom:4,left:8}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:S.axis}} />
-              <YAxis tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
-              <Tooltip {...TooltipStyle} formatter={(v)=>[`${fmt(v)} votes`,"Count"]} />
-              <Bar dataKey="value" name="Votes" radius={[4,4,0,0]}>
-                {s.rtBuckets.map((b,i) => <Cell key={i} fill={b.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="muted stats-note">
-            How quickly DReps vote after a proposal is submitted.
-            {s.medianRT != null && <> Median: <strong>{s.medianRT < 48 ? `${Math.round(s.medianRT)}h` : `${Math.round(s.medianRT/24)}d`}</strong>.</>}
-          </p>
-        </Section>
-
-        <Section title="Top 10 DReps by Voting Power" half>
+      {!selected ? <p className="muted small" style={{ marginTop: 12 }}>Pick a DRep to chart its delegated ADA per epoch.</p> : history.isLoading ? <Skeleton kind="card" /> : history.error ? <Alert tone="warning">{history.error.message}</Alert> : data.length === 0 ? <p className="muted small" style={{ marginTop: 12 }}>No delegation history found for this DRep.</p> : (
+        <div style={{ marginTop: 12 }}>
+          <p className="small" style={{ marginBottom: 8 }}><Link to={`/dreps/${encodeURIComponent(selected.id)}`} className="strong">{history.data.name}</Link> <span className="muted">· {data.length} epochs · now {formatAdaCompact(data[data.length - 1].ada)}</span></p>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={s.top10Dreps} layout="vertical" margin={{top:4,right:60,bottom:4,left:8}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} horizontal={false} />
-              <XAxis type="number" tick={{fill:C.muted,fontSize:S.axisSmall}} tickFormatter={v=>fmtAda(v)} />
-              <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:S.axisSmall}} width={90} />
-              <Tooltip {...TooltipStyle} formatter={(v)=>[fmtAda(v),"Voting Power"]} />
-              <Bar dataKey="size" name="Voting Power" fill={C.yes} radius={[0,4,4,0]} />
-            </BarChart>
+            <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="epoch" tick={axisTickSmall} axisLine={false} tickLine={false} />
+              <YAxis tick={axisTickSmall} tickFormatter={(v) => formatAdaCompact(v)} domain={[0, yMax * 1.05]} width={64} axisLine={false} tickLine={false} />
+              <ChartTooltip {...tooltipProps} labelFormatter={(e) => `Epoch ${e}`} formatter={(v, _n, item) => [`${formatAdaCompact(v)}${item?.payload?.deltaPct != null ? ` (${item.payload.deltaPct > 0 ? "+" : ""}${item.payload.deltaPct.toFixed(2)}%)` : ""}`, "Delegated"]} />
+              <Line type="monotone" dataKey="ada" stroke={CHART.accent} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+            </LineChart>
           </ResponsiveContainer>
-        </Section>
+        </div>
+      )}
+    </ChartCard>
+  );
+}
+
+/* Page -------------------------------------------------------------------- */
+export default function StatsPage() {
+  useSeoMeta({ title: "Governance Statistics", description: "Epoch-by-epoch Cardano governance analytics: DRep participation rates, SPO voting trends, proposal outcomes, and Nakamoto coefficients." });
+  const snapshotKey = useSnapshotKey();
+  const query = useStats(snapshotKey);
+  const s = query.data?.stats || null;
+  const meta = query.data?.meta || null;
+  const [allCc, setAllCc] = useState(false);
+
+  if (query.isLoading) {
+    return <main className="shell page p-stats" aria-busy="true"><Skeleton kind="title" width="40%" /><div style={{ height: 24 }} /><div className="c-stats"><Skeleton kind="card" count={4} /></div><div style={{ height: 24 }} /><Skeleton kind="card" count={2} /></main>;
+  }
+  if (query.error || !s) {
+    return <main className="shell page p-stats"><Alert tone="danger" title="Could not load statistics.">{query.error?.message}</Alert></main>;
+  }
+
+  const ccRows = allCc ? s.ccAttendance : s.ccAttendance.filter((r) => r.status === "active");
+  const hasInactiveCc = s.ccAttendance.some((r) => r.status !== "active");
+  const typeColor = (d, i) => TYPE_PALETTE[i % TYPE_PALETTE.length];
+  const ccToggle = hasInactiveCc ? <Switch checked={allCc} onChange={setAllCc} label="Include past members" /> : null;
+
+  return (
+    <main className="shell page p-stats">
+      <SnapshotBanner snapshotKey={snapshotKey} latestEpoch={meta?.latestEpoch} />
+      <PageHeader eyebrow="Insights" title="Governance statistics" lead="How Cardano's governance bodies are participating, deciding and concentrating over time." actions={<LivePill enabled={!snapshotKey} generatedAt={meta?.generatedAt} />} />
+
+      <div className="stack--6">
+        <StatGrid>
+          <StatTile label="Proposals" value={formatNumber(s.counts.proposals)} hint={`${s.counts.actionTypes} action types`} />
+          <StatTile label="Votes cast" value={formatNumber(s.counts.totalVotes)} hint="all bodies, all proposals" />
+          <StatTile label="Active DReps" value={formatNumber(s.counts.activeDreps)} hint={`of ${formatNumber(s.counts.dreps)} registered`} />
+          <StatTile label="DRep voting power" value={formatAdaCompact(s.power.drepAda)} hint="delegated to DReps" tone="accent" />
+          <StatTile label="Committee" value={formatNumber(s.counts.activeCommittee)} hint={`${s.counts.committee} seats over time`} />
+          <StatTile label="SPOs voting" value={formatNumber(s.counts.spos)} hint={`${formatAdaCompact(s.power.spoAda)} combined`} />
+          <StatTile label="Always abstain" value={formatAdaCompact(s.power.alwaysAbstainAda)} hint="delegated to the abstain option" />
+          <StatTile label="No confidence" value={formatAdaCompact(s.power.alwaysNoConfidenceAda)} hint="delegated to no-confidence" tone="danger" />
+        </StatGrid>
+
+        <div className="grid grid--2 p-stats__grid">
+          <ChartCard title="Proposals per epoch" subtitle="Submitted actions by outcome.">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={s.byEpoch} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="epoch" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} labelFormatter={(e) => `Epoch ${e}`} />
+                <Legend {...legendProps} />
+                <Bar dataKey="passed" name="Passed" stackId="a" fill={CHART.yes} />
+                <Bar dataKey="failed" name="Failed" stackId="a" fill={CHART.no} />
+                <Bar dataKey="pending" name="Pending" stackId="a" fill={CHART.warning} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Participation over time" subtitle="Votes cast per submitted epoch, by body.">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={s.participationByEpoch} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="epoch" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} labelFormatter={(e) => `Epoch ${e}`} />
+                <Legend {...legendProps} />
+                <Line type="monotone" dataKey="drepCast" name="DRep votes" stroke={CHART.yes} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="ccCast" name="CC votes" stroke={CHART.no} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="spoCast" name="SPO votes" stroke={CHART.info} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
+        <ChartCard title="Governance actions timeline" subtitle="Each bar is one action from submission to its close.">
+          <ActionsTimeline rows={s.timeline} epochMin={s.epochMin} epochMax={s.epochMax} currentEpoch={s.currentEpoch} />
+        </ChartCard>
+
+        <div className="grid grid--2 p-stats__grid">
+          <ChartCard title="Proposals by type"><Donut data={s.byType} colorFor={typeColor} total={s.counts.proposals} /></ChartCard>
+          <ChartCard title="Proposals by outcome"><Donut data={s.byOutcome} colorFor={(d) => outcomeColor(d.name)} total={s.counts.proposals} /></ChartCard>
+        </div>
+
+        <div className="grid grid--2 p-stats__grid">
+          <ChartCard title="Votes by body" subtitle="Yes, no and abstain across all proposals.">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={s.votesByRole} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="role" tick={categoryTick} width={80} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} />
+                <Legend {...legendProps} />
+                <Bar dataKey="yes" name="Yes" fill={CHART.yes} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="no" name="No" fill={CHART.no} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="abstain" name="Abstain" fill={CHART.abstain} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Top DReps needed per threshold" subtitle="How few of the largest DReps could carry each vote." note={<span>Nakamoto coefficient (entities to pass 50% of power): DReps <b className="num">{s.power.drepNakamoto ?? "—"}</b> · SPOs <b className="num">{s.power.spoNakamoto ?? "—"}</b></span>}>
+            <ResponsiveContainer width="100%" height={Math.max(200, s.drepThresholdReach.length * 30 + 30)}>
+              <BarChart data={s.drepThresholdReach} layout="vertical" margin={{ top: 4, right: 24, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="threshold" tick={axisTickSmall} width={150} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} formatter={(v, _n, item) => [v, `Top DReps needed for ${Number(item?.payload?.requiredPct || 0).toFixed(1)}%`]} />
+                <Bar dataKey="topDrepsNeeded" name="Top DReps needed" fill={CHART.info} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
+        <div className="grid grid--2 p-stats__grid">
+          <ChartCard title="DRep attendance" subtitle="Share of eligible proposals each DRep voted on." note="Distribution of registered DReps.">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={s.drepAttendance} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} formatter={(v) => [`${formatNumber(v)} DReps`, "Count"]} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>{s.drepAttendance.map((b, i) => <Cell key={b.name} fill={[CHART.yes, "#34d399", CHART.warning, "#fb923c", CHART.no][i]} />)}</Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="DRep transparency" subtitle="Rationale coverage score; higher means more votes explained.">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={s.drepTransparency} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" tick={axisTickSmall} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} formatter={(v) => [`${formatNumber(v)} DReps`, "Count"]} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>{s.drepTransparency.map((b, i) => <Cell key={b.name} fill={[CHART.yes, CHART.warning, "#fb923c", CHART.muted][i]} />)}</Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="DRep response time" subtitle="How quickly DReps vote after a proposal is submitted." note={s.medianResponseHours != null ? <span>Median: <b>{hoursLabel(s.medianResponseHours)}</b></span> : null}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={s.drepResponse} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <ChartTooltip {...tooltipProps} formatter={(v) => [`${formatNumber(v)} votes`, "Count"]} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>{s.drepResponse.map((b, i) => <Cell key={b.name} fill={[CHART.yes, "#34d399", CHART.warning, CHART.no][i]} />)}</Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Top 10 DReps by voting power">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={s.topDreps} layout="vertical" margin={{ top: 4, right: 48, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={axisTickSmall} tickFormatter={(v) => formatAdaCompact(v)} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={axisTickSmall} width={110} axisLine={false} tickLine={false} tickFormatter={(v) => (String(v).length > 16 ? `${String(v).slice(0, 15)}…` : v)} />
+                <ChartTooltip {...tooltipProps} formatter={(v) => [formatAdaCompact(v), "Voting power"]} />
+                <Bar dataKey="votingPowerAda" name="Voting power" fill={CHART.yes} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
+        {!snapshotKey ? <DelegationMovers /> : null}
+        {!snapshotKey ? <DelegationHistory /> : null}
+
+        <ChartCard title="Constitutional Committee timeline" subtitle="Seat terms by epoch.">
+          <CommitteeTimeline members={s.committee} epochMin={s.epochMin} epochMax={s.epochMax} currentEpoch={s.currentEpoch} />
+        </ChartCard>
+
+        <div className="grid grid--2 p-stats__grid">
+          <ChartCard title="Committee votes by seat" subtitle="Constitutional, unconstitutional and abstain votes." actions={ccToggle}>
+            <ResponsiveContainer width="100%" height={Math.max(240, ccRows.length * 30 + 50)}>
+              <BarChart data={ccRows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="24%" barGap={3}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={axisTickSmall} width={130} axisLine={false} tickLine={false} tickFormatter={(v) => (String(v).length > 18 ? `${String(v).slice(0, 17)}…` : v)} />
+                <ChartTooltip {...tooltipProps} />
+                <Legend {...legendProps} />
+                <Bar dataKey="constitutional" name="Constitutional" fill={CHART.yes} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="unconstitutional" name="Unconstitutional" fill={CHART.no} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="abstain" name="Abstain" fill={CHART.abstain} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Committee votes cast" subtitle="Voted versus eligible actions during each seat's term." actions={ccToggle}>
+            <ResponsiveContainer width="100%" height={Math.max(240, ccRows.length * 30 + 50)}>
+              <BarChart data={ccRows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke={CHART.line} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={axisTick} allowDecimals={false} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={axisTickSmall} width={130} axisLine={false} tickLine={false} tickFormatter={(v) => (String(v).length > 18 ? `${String(v).slice(0, 17)}…` : v)} />
+                <ChartTooltip {...tooltipProps} />
+                <Legend {...legendProps} />
+                <Bar dataKey="eligible" name="Eligible" fill={CHART.muted} opacity={0.4} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="cast" name="Voted" fill={CHART.yes} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
       </div>
-
-      {/* ── Delegation Movers ─────────────────────────────────────────────────── */}
-      <Section title="DRep Delegation Movers" wide>
-        <div style={{ display:"flex", gap:"0.5rem", marginBottom:"1rem", flexWrap:"wrap" }}>
-          {[1,3,5,10].map(n => (
-            <button
-              key={n}
-              className={`stats-filter-btn${trendEpochs === n ? " active" : ""}`}
-              onClick={() => setTrendEpochs(n)}
-            >
-              {n} epoch{n > 1 ? "s" : ""}
-            </button>
-          ))}
-          {trend?.comparedEpoch != null && (
-            <span className="muted" style={{ alignSelf:"center", fontSize:11 }}>
-              Epoch {trend.comparedEpoch} → {trend.currentEpoch}
-            </span>
-          )}
-        </div>
-        {trendLoading && <p className="muted" style={{ fontSize:12 }}>Loading…</p>}
-        {!trendLoading && trend && (trend.gainers?.length > 0 || trend.losers?.length > 0) ? (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.5rem" }}>
-            {/* Gainers */}
-            <div>
-              <p style={{ fontSize:11, fontWeight:600, color:C.yes, marginBottom:"0.5rem", textTransform:"uppercase", letterSpacing:"0.05em" }}>
-                Top Gainers
-              </p>
-              {(trend.gainers || []).map((d, i) => (
-                <div key={d.id} style={{ display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem" }}>
-                  <span style={{ width:14, fontSize:10, color:C.muted, flexShrink:0 }}>{i+1}</span>
-                  <span style={{ flex:1, fontSize:11, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.name}>{d.name}</span>
-                  <span style={{ fontSize:11, color:C.yes, fontWeight:600, flexShrink:0 }}>+{d.deltaPct.toFixed(1)}%</span>
-                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{fmtAda(d.currentAda)}</span>
-                </div>
-              ))}
-            </div>
-            {/* Losers */}
-            <div>
-              <p style={{ fontSize:11, fontWeight:600, color:C.no, marginBottom:"0.5rem", textTransform:"uppercase", letterSpacing:"0.05em" }}>
-                Top Losers
-              </p>
-              {(trend.losers || []).map((d, i) => (
-                <div key={d.id} style={{ display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem" }}>
-                  <span style={{ width:14, fontSize:10, color:C.muted, flexShrink:0 }}>{i+1}</span>
-                  <span style={{ flex:1, fontSize:11, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.name}>{d.name}</span>
-                  <span style={{ fontSize:11, color:C.no, fontWeight:600, flexShrink:0 }}>{d.deltaPct.toFixed(1)}%</span>
-                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{fmtAda(d.currentAda)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (!trendLoading && (
-          <p className="muted" style={{ fontSize:12 }}>
-            No significant delegation changes found for this period.
-          </p>
-        ))}
-        <p className="muted stats-note">
-          Percentage change in delegated voting power per DRep compared to {trendEpochs} epoch{trendEpochs > 1 ? "s" : ""} ago.
-          Only DReps present in both snapshots are shown.
-        </p>
-      </Section>
-
-      {/* ── DRep Delegation History ───────────────────────────────────────────── */}
-      <Section title="DRep Delegation History" wide>
-        {/* Search */}
-        <div style={{ position:"relative", maxWidth:360, marginBottom:"1rem" }}>
-          <input
-            type="text"
-            placeholder="Search DRep by name or ID…"
-            value={histQuery}
-            onChange={e => { setHistQuery(e.target.value); setHistDropdown(true); }}
-            onFocus={() => setHistDropdown(true)}
-            onBlur={() => setTimeout(() => setHistDropdown(false), 150)}
-            style={{
-              width:"100%", boxSizing:"border-box",
-              background:"#0e1822", border:"1px solid rgba(255,255,255,0.15)",
-              borderRadius:6, padding:"0.45rem 0.75rem",
-              color:"#e8f0f4", fontSize:12, outline:"none"
-            }}
-          />
-          {histDropdown && histMatches.length > 0 && (
-            <div style={{
-              position:"absolute", top:"100%", left:0, right:0, zIndex:20,
-              background:"#1a2530", border:"1px solid rgba(255,255,255,0.15)",
-              borderRadius:6, marginTop:2, overflow:"hidden"
-            }}>
-              {histMatches.map(d => (
-                <div
-                  key={d.id}
-                  onMouseDown={() => { setHistSelected(d); setHistQuery(d.name); setHistDropdown(false); }}
-                  style={{
-                    padding:"0.4rem 0.75rem", fontSize:12, cursor:"pointer",
-                    color: histSelected?.id === d.id ? C.yes : C.text,
-                    background: histSelected?.id === d.id ? "rgba(84,228,188,0.08)" : "transparent"
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.06)"}
-                  onMouseLeave={e => e.currentTarget.style.background=histSelected?.id===d.id?"rgba(84,228,188,0.08)":"transparent"}
-                >
-                  <span style={{ fontWeight:600 }}>{d.name !== d.id ? d.name : ""}</span>
-                  {d.name !== d.id && <span style={{ color:C.muted, marginLeft:6 }}>{d.id.slice(0,22)}…</span>}
-                  {d.name === d.id && <span>{d.id}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Chart */}
-        {histLoading && <p className="muted" style={{ fontSize:12 }}>Loading…</p>}
-        {!histLoading && histData && histData.epochs?.length > 0 && (() => {
-          const chartData = histData.epochs.map(e => ({
-            epoch: e.epoch,
-            ada: e.ada,
-            deltaPct: e.deltaPct
-          }));
-          const CustomTooltip = ({ active, payload }) => {
-            if (!active || !payload?.length) return null;
-            const d = payload[0].payload;
-            const delta = d.deltaPct;
-            const deltaColor = delta > 0 ? C.yes : delta < 0 ? C.no : C.muted;
-            const deltaStr = delta === null ? "" : delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
-            return (
-              <div style={{
-                background:"#1a2530", border:"1px solid rgba(255,255,255,0.15)",
-                borderRadius:8, padding:"0.5rem 0.75rem", fontSize:12
-              }}>
-                <p style={{ color:C.muted, margin:0, marginBottom:2 }}>Epoch {d.epoch}</p>
-                <p style={{ color:C.text, margin:0, fontWeight:600 }}>{fmtAda(d.ada)}</p>
-                {deltaStr && <p style={{ color:deltaColor, margin:0, marginTop:2 }}>{deltaStr} vs prev epoch</p>}
-              </div>
-            );
-          };
-          const yMax = Math.max(...chartData.map(d => d.ada));
-          return (
-            <div>
-              <p style={{ fontSize:11, color:C.muted, marginBottom:"0.5rem" }}>
-                <span style={{ color:C.text, fontWeight:600 }}>{histData.name}</span>
-                {" · "}{chartData.length} epochs · current: <span style={{ color:C.yes }}>{fmtAda(chartData[chartData.length-1]?.ada)}</span>
-              </p>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top:4, right:16, bottom:4, left:8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-                  <XAxis dataKey="epoch" tick={{ fill:C.muted, fontSize:S.axisSmall }} />
-                  <YAxis tick={{ fill:C.muted, fontSize:S.axisSmall }} tickFormatter={v => fmtAda(v)} domain={[0, yMax * 1.05]} width={72} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="ada" stroke={C.yes} strokeWidth={2} dot={false} activeDot={{ r:4, fill:C.yes }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          );
-        })()}
-        {!histLoading && histData && histData.epochs?.length === 0 && (
-          <p className="muted" style={{ fontSize:12 }}>No delegation history found for this DRep.</p>
-        )}
-        {!histSelected && !histLoading && (
-          <p className="muted stats-note">Search for a DRep to see their delegation over time. Hover over the chart to see ADA and % change per epoch.</p>
-        )}
-      </Section>
-
-      {/* ── CC section ────────────────────────────────────────────────────────── */}
-
-      {/* CC Membership Timeline */}
-      <Section title="Constitutional Committee Timeline" wide>
-        <CcMembershipTimeline
-          cc={s.cc}
-          epochMin={s.epochMin}
-          epochMax={s.epochMax}
-          currentEpoch={s.currentEpoch}
-        />
-      </Section>
-
-      {/* CC Vote Types by Seat */}
-      <Section title="Constitutional Committee — Vote Types by Seat" wide>
-        {hasInactiveCcMembers && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.5rem" }}>
-            <button
-              className="stats-filter-btn active"
-              onClick={() => setShowAllCcMembers((v) => !v)}
-            >
-              {showAllCcMembers ? "Show active only" : "Show all members"}
-            </button>
-          </div>
-        )}
-        <CcVoteTypesBySeatBar rows={ccChartRows} />
-        <p className="muted stats-note">Constitutional / Unconstitutional / Abstain votes by committee seat.</p>
-      </Section>
-
-      {/* CC Votes Cast vs Eligible */}
-      <Section title="Constitutional Committee — Votes Cast" wide>
-        {hasInactiveCcMembers && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.5rem" }}>
-            <button
-              className="stats-filter-btn active"
-              onClick={() => setShowAllCcMembers((v) => !v)}
-            >
-              {showAllCcMembers ? "Show active only" : "Show all members"}
-            </button>
-          </div>
-        )}
-        <ResponsiveContainer width="100%" height={Math.max(320, ccChartRows.length * 30 + 56)}>
-          <BarChart data={ccChartRows} layout="vertical" margin={{top:4,right:16,bottom:4,left:8}}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-            <XAxis type="number" tick={{fill:C.muted,fontSize:S.axis}} allowDecimals={false} />
-            <YAxis type="category" dataKey="name" tick={{fill:C.text,fontSize:S.axisSmall}} width={150} />
-            <Tooltip {...TooltipStyle} />
-            <Legend wrapperStyle={{fontSize:S.legend,color:C.muted}} />
-            <Bar dataKey="eligible"      name="Eligible" fill={C.muted} opacity={0.4} radius={[0,3,3,0]} />
-            <Bar dataKey="cast"          name="Voted"    fill={C.yes} radius={[0,3,3,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Section>
-
     </main>
   );
 }
