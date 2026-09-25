@@ -73,6 +73,6 @@ jobs:
             echo "Snapshot unchanged — nothing to commit."
           else
             EPOCH=$(python3 -c "import json; d=json.load(open('snapshot.seed.json')); print(d.get('latestEpoch','?'))")
-            git commit -m "chore: update seed snapshot (epoch ${EPOCH})"
+            git commit -m "chore: update seed snapshot (epoch ${EPOCH}) [skip render]"
             git push
           fi

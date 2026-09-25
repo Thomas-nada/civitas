@@ -48,6 +48,6 @@ jobs:
             echo "No rationale changes — nothing to commit."
           else
             COUNT=$(git diff --staged --name-only | wc -l)
-            git commit -m "chore: sync rationales (${COUNT} files updated)"
+            git commit -m "chore: sync rationales (${COUNT} files updated) [skip render]"
             git push
           fi

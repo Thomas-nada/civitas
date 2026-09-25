@@ -134,7 +134,9 @@ const DREP_RATIONALE_USE_CGOV_FALLBACK = String(process.env.DREP_RATIONALE_USE_C
 const DREP_PARTICIPATION_START_EPOCH = Number(process.env.DREP_PARTICIPATION_START_EPOCH || 534);
 const GUARDRAILS_CACHE_TTL_MS = Number(process.env.GUARDRAILS_CACHE_TTL_MS || 120_000);
 const AUTO_START_SCHEDULER = String(process.env.AUTO_START_SCHEDULER || "false").toLowerCase() === "true";
-const SKIP_BOOT_HYDRATION = String(process.env.SKIP_BOOT_HYDRATION || "true").toLowerCase() === "true";
+// Hydrate from the on-disk snapshot / committed seed on boot so a restart
+// costs one delta sync instead of a cold full rebuild. Set to "true" to skip.
+const SKIP_BOOT_HYDRATION = String(process.env.SKIP_BOOT_HYDRATION || "false").toLowerCase() === "true";
 const DREP_RATIONALE_WARM_ON_PUBLISH = String(process.env.DREP_RATIONALE_WARM_ON_PUBLISH || "false").toLowerCase() === "true";
 const PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH = String(process.env.PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH || "true").toLowerCase() !== "false";
 const SNAPSHOT_REMOTE_URL = String(process.env.SNAPSHOT_REMOTE_URL || "").trim();
@@ -166,7 +168,10 @@ const NCL_SNAPSHOT_PATH = process.env.NCL_SNAPSHOT_PATH || path.join(__dirname, 
 const EPOCH_SNAPSHOT_START_EPOCH = Number(process.env.EPOCH_SNAPSHOT_START_EPOCH || 507);
 const SHELLEY_EPOCH_208_START_UNIX = 1596059091;
 const CARDANO_EPOCH_SECONDS = 432000;
-const VOTE_TX_TIME_MAX_LOOKUPS = Number(process.env.VOTE_TX_TIME_MAX_LOOKUPS || 40000);
+// Vote timestamps come from the Koios vote_list rows fetched during every
+// sync (block_time). Blockfrost /txs/{hash} is only a last resort for the few
+// votes Koios has not indexed yet, hence the small default cap.
+const VOTE_TX_TIME_MAX_LOOKUPS = Number(process.env.VOTE_TX_TIME_MAX_LOOKUPS || 200);
 const VOTE_TX_TIME_CACHE_PATH = process.env.VOTE_TX_TIME_CACHE_PATH || path.join(__dirname, "cache.voteTxTimes.json");
 const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_LOOKUPS || 2000);
 const VOTE_TX_RATIONALE_MAX_DURATION_MS = Number(process.env.VOTE_TX_RATIONALE_MAX_DURATION_MS || 6 * 60 * 1000);
@@ -509,6 +514,8 @@ const proposalMetadataCache = new Map(); // proposalId -> { payload, cachedAt }
 const proposalDeltaPollState = new Map();
 const drepProfileRefreshState = new Map();
 let lastTopDrepStatusRefreshAt = 0; // Phase 3c: periodic status/VP refresh for top DReps
+const proposalVoteRationalesResultCache = new Map(); // proposalId -> { at, payload }
+const proposalVoteRationalesCborAttemptAt = new Map(); // proposalId -> ms of last Blockfrost CBOR walk
 let drepRationaleWarmState = {
   running: false,
   lastStartedAt: null,
@@ -2224,6 +2231,12 @@ function addKoiosVoteLookupEntry(lookup, row) {
     koiosVoterId: voterId,
     koiosRole: role
   };
+  // Koios already tells us when the vote landed on-chain. Remember it so the
+  // sync never has to ask Blockfrost /txs/{hash} for a timestamp.
+  const blockTime = Number(row.block_time || 0);
+  if (voteTxHash && Number.isFinite(blockTime) && blockTime > 0 && !voteTxTimeCache[voteTxHash]) {
+    voteTxTimeCache[voteTxHash] = blockTime;
+  }
   if (voteTxHash && !lookup.has(`tx:${voteTxHash}`)) {
     lookup.set(`tx:${voteTxHash}`, rationale);
   }
@@ -2603,7 +2616,9 @@ async function fetchCgovSpoVoteRationaleLookupForProposal(txHash, certIndex) {
     lookup.set(`voter:${voterId}:tx:${txHashVote}`, entry);
     if (!lookup.has(`tx:${txHashVote}`)) lookup.set(`tx:${txHashVote}`, entry);
   }
-  cgovSpoRationaleLookupCache.set(key, lookup);
+  // A missing cgov payload (timeout, outage) must not be cached as "no rationales"
+  // for the life of the process; leave it uncached so the next call retries.
+  if (payload) cgovSpoRationaleLookupCache.set(key, lookup);
   return lookup;
 }
 
@@ -2642,7 +2657,9 @@ async function fetchCgovDrepVoteRationaleLookupForProposal(txHash, certIndex) {
     if (voterId && !lookup.has(`voter:${voterId}`)) lookup.set(`voter:${voterId}`, entry);
     if (txHashVote) lookup.set(`tx:${txHashVote}`, entry);
   }
-  cgovDrepRationaleLookupCache.set(key, lookup);
+  // A missing cgov payload (timeout, outage) must not be cached as "no rationales"
+  // for the life of the process; leave it uncached so the next call retries.
+  if (payload) cgovDrepRationaleLookupCache.set(key, lookup);
   return lookup;
 }
 
@@ -2792,7 +2809,9 @@ async function fetchCgovCommitteeVoteRationaleLookupForProposal(txHash, certInde
     if (voterId && !lookup.has(`voter:${voterId}`)) lookup.set(`voter:${voterId}`, entry);
     lookup.set(`tx:${txHashVote}`, entry);
   }
-  cgovCommitteeRationaleLookupCache.set(key, lookup);
+  // A missing cgov payload (timeout, outage) must not be cached as "no rationales"
+  // for the life of the process; leave it uncached so the next call retries.
+  if (payload) cgovCommitteeRationaleLookupCache.set(key, lookup);
   return lookup;
 }
 
@@ -4398,6 +4417,22 @@ async function blockfrostPost(endpointWithQuery, bodyBuffer, contentType = "appl
 // `opts.baseUrl` / `opts.key` override the app-wide (mainnet) endpoint — used by
 // the surveys read path so it can target preview without disturbing the rest of
 // the app. Defaults preserve every existing caller's behaviour.
+// Honour a Retry-After header (seconds or HTTP date) on 429/503, capped at
+// 60 s, otherwise fall back to the caller's backoff.
+function retryAfterMs(response, fallbackMs) {
+  try {
+    const raw = String(response?.headers?.get?.("retry-after") || "").trim();
+    if (!raw) return fallbackMs;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(60_000, Math.max(fallbackMs, seconds * 1000));
+    const at = Date.parse(raw);
+    if (Number.isFinite(at)) return Math.min(60_000, Math.max(fallbackMs, at - Date.now()));
+  } catch {
+    // fall through
+  }
+  return fallbackMs;
+}
+
 async function blockfrostGet(endpointWithQuery, opts = {}) {
   const baseUrl = opts.baseUrl || BLOCKFROST_BASE_URL;
   const projectId = opts.key || BLOCKFROST_API_KEY;
@@ -4428,7 +4463,7 @@ async function blockfrostGet(endpointWithQuery, opts = {}) {
     const status = response.status;
     const isRetryable = status === 429 || status >= 500;
     if (isRetryable && attempt < BLOCKFROST_MAX_RETRIES) {
-      const waitMs = Math.min(5000, 800 * (attempt + 1));
+      const waitMs = retryAfterMs(response, Math.min(5000, 800 * (attempt + 1)));
       await sleep(waitMs);
       continue;
     }
@@ -4469,7 +4504,7 @@ async function koiosGet(endpointWithQuery) {
     const status = response.status;
     const isRetryable = status === 429 || status >= 500;
     if (isRetryable && attempt < KOIOS_MAX_RETRIES) {
-      const waitMs = Math.min(10000, 1200 * (attempt + 1));
+      const waitMs = retryAfterMs(response, Math.min(10000, 1200 * (attempt + 1)));
       await sleep(waitMs);
       continue;
     }
@@ -4512,7 +4547,7 @@ async function koiosPost(endpointWithQuery, body = {}) {
     const status = response.status;
     const isRetryable = status === 429 || status >= 500;
     if (isRetryable && attempt < KOIOS_MAX_RETRIES) {
-      const waitMs = Math.min(10000, 1200 * (attempt + 1));
+      const waitMs = retryAfterMs(response, Math.min(10000, 1200 * (attempt + 1)));
       await sleep(waitMs);
       continue;
     }
@@ -5632,16 +5667,20 @@ function queueSpoProfileRefresh(poolIds) {
   })();
 }
 
+// Every Shelley-era mainnet epoch is exactly 432,000 seconds long, starting
+// from epoch 208 at SHELLEY_EPOCH_208_START_UNIX, so epoch boundaries are
+// arithmetic. This used to cost one Blockfrost request per epoch (150+ per
+// publish).
+function epochStartUnix(epoch) {
+  return SHELLEY_EPOCH_208_START_UNIX + (Number(epoch) - 208) * CARDANO_EPOCH_SECONDS;
+}
+function epochEndUnix(epoch) {
+  return epochStartUnix(Number(epoch) + 1);
+}
 async function fetchEpochEndTimes(startEpoch, endEpoch) {
   const map = new Map();
   for (let epoch = startEpoch; epoch <= endEpoch; epoch += 1) {
-    try {
-      const row = await blockfrostGet(`/epochs/${epoch}`);
-      const endTime = Number(row?.end_time || 0);
-      if (Number.isFinite(endTime) && endTime > 0) map.set(epoch, endTime);
-    } catch {
-      map.set(epoch, 0);
-    }
+    map.set(epoch, epoch >= 208 ? epochEndUnix(epoch) : 0);
   }
   return map;
 }
@@ -5672,8 +5711,14 @@ async function fetchLatestChainEpoch() {
   if (latestChainEpochCache.value !== null && (now - latestChainEpochCache.cachedAt) < 10 * 60 * 1000) {
     return latestChainEpochCache.value;
   }
-  const row = await blockfrostGet("/epochs/latest").catch(() => null);
-  const epoch = Number(row?.epoch || 0);
+  let epoch = 0;
+  const tip = await koiosGet("/tip").catch(() => null);
+  const tipRow = Array.isArray(tip) ? tip[0] : tip;
+  epoch = Number(tipRow?.epoch_no || 0);
+  if (!(Number.isFinite(epoch) && epoch > 0) && BLOCKFROST_API_KEY) {
+    const row = await blockfrostGet("/epochs/latest").catch(() => null);
+    epoch = Number(row?.epoch || 0);
+  }
   const result = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
   if (result !== null) latestChainEpochCache = { value: result, cachedAt: now };
   return result;
@@ -5929,6 +5974,62 @@ async function fetchSpecialDreps(force = false) {
 //   5. Recalculate scores for every actor touched.
 //   6. Return a new snapshot object that is the existing snapshot plus deltas.
 // ---------------------------------------------------------------------------
+// Refresh votingPowerAda for every DRep in the map from Koios drep_history
+// (2 requests), then registration/expiry for the top-N DReps by power from
+// bulk Koios drep_info (batches of 50 ids). Applies changes in place.
+async function refreshDrepPowerAndStatusFromKoios(drepById, latestEpoch, topCount = 500) {
+  if (!(drepById instanceof Map) || drepById.size === 0) return;
+  let powerUpdates = 0;
+  if (Number.isFinite(latestEpoch) && latestEpoch > 0) {
+    const powerMap = await fetchDrepPowerForEpoch(latestEpoch).catch(() => new Map());
+    for (const [drepId, ada] of powerMap.entries()) {
+      const row = drepById.get(drepId);
+      if (!row) continue;
+      const next = Math.floor(Number(ada) || 0);
+      if (row.votingPowerAda !== next) {
+        row.votingPowerAda = next;
+        powerUpdates += 1;
+      }
+    }
+  }
+  const topDrepIds = Array.from(drepById.values())
+    .filter((row) => !String(row.id || "").startsWith("drep_always"))
+    .sort((a, b) => Number(b.votingPowerAda || 0) - Number(a.votingPowerAda || 0))
+    .slice(0, Math.max(0, Number(topCount) || 0))
+    .map((row) => row.id);
+  let statusChanges = 0;
+  const KOIOS_DREP_INFO_BATCH = 50;
+  for (let start = 0; start < topDrepIds.length; start += KOIOS_DREP_INFO_BATCH) {
+    const batch = topDrepIds.slice(start, start + KOIOS_DREP_INFO_BATCH);
+    const rows = await koiosPost("/drep_info", { _drep_ids: batch }).catch(() => []);
+    for (const info of Array.isArray(rows) ? rows : []) {
+      const drepId = String(info?.drep_id || "").trim();
+      const row = drepById.get(drepId);
+      if (!row) continue;
+      const registered = typeof info.drep_status === "string"
+        ? info.drep_status === "registered"
+        : info.registered !== false;
+      const retired = !registered;
+      const expired = registered && info.active === false;
+      const active = registered && !expired;
+      row.active = active;
+      row.retired = retired;
+      row.expired = expired;
+      row.hasScript = info.has_script === true;
+      if (Number.isFinite(Number(info.amount))) {
+        row.votingPowerAda = Math.floor(Number(info.amount) / 1_000_000);
+      }
+      const nextStatus = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
+      if (row.status !== nextStatus) {
+        statusChanges += 1;
+        console.log(`[status-refresh] ${row.name || row.id}: ${row.status} -> ${nextStatus}`);
+      }
+      row.status = nextStatus;
+    }
+  }
+  console.log(`[status-refresh] power updates: ${powerUpdates}, top ${topDrepIds.length} dreps checked, ${statusChanges} status change(s)`);
+}
+
 async function buildDeltaSnapshot(base) {
   const latestEpoch = await fetchLatestChainEpoch().catch(() => null);
 
@@ -6402,79 +6503,19 @@ async function buildDeltaSnapshot(base) {
     });
   }
 
-  // --- Phase 3b: Refresh voting power for DReps stuck at 0 ---
-  // DReps that voted while their power was 0 (e.g. newly registered, epoch not yet snapshotted)
-  // are never picked up by Phase 3 because they have no new votes. Refresh them here so their
-  // power updates as soon as Blockfrost has it, without waiting for them to vote again.
-  const zeroPowerDrepIds = Array.from(drepById.values())
-    .filter((row) => Number(row.votingPowerAda || 0) === 0 && !newlyActiveDrepIds.has(row.id))
-    .map((row) => row.id);
-  for (let start = 0; start < zeroPowerDrepIds.length; start += SYNC_BATCH_SIZE) {
-    const batch = zeroPowerDrepIds.slice(start, start + SYNC_BATCH_SIZE);
-    await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
-      const safeId = encodeURIComponent(drepId);
-      const details = await blockfrostGet(`/governance/dreps/${safeId}`).catch(() => null);
-      if (!details) return;
-      const row = drepById.get(drepId);
-      if (!row) return;
-      const power = Math.floor(Number(details.amount || 0) / 1_000_000);
-      if (power === 0) return;
-      row.votingPowerAda = power;
-      const active = details.active === true;
-      const retired = details.retired === true;
-      const expired = details.expired === true;
-      row.active = active;
-      row.retired = retired;
-      row.expired = expired;
-      row.activeEpoch = Number(details.active_epoch || 0) || null;
-      row.lastActiveEpoch = Number(details.last_active_epoch || 0) || null;
-      row.hasScript = details.has_script === true;
-      row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
-    });
-  }
-
-  // --- Phase 3c: Periodic status/VP refresh for top DReps by voting power ---
-  // A DRep who retires (or expires) without casting new votes is never touched by
-  // Phase 3, so their stale "active" status keeps their voting power counted.
-  // Refresh the top-N DReps on a fixed interval so retirements surface quickly.
+  // --- Phase 3b/3c: Voting power and status refresh, from Koios ---
+  // Voting power for every DRep (including drep_always_*) comes from one
+  // paginated Koios drep_history call for the current epoch; registration and
+  // expiry for the top DReps come from bulk drep_info. This replaces the old
+  // per-DRep Blockfrost polling (about 800 requests every delta).
   const TOP_DREP_STATUS_REFRESH_MS = Number(process.env.TOP_DREP_STATUS_REFRESH_MS || 60 * 60 * 1000);
   const TOP_DREP_STATUS_COUNT = Number(process.env.TOP_DREP_STATUS_COUNT || 500);
   const nowMsPhase3c = Date.now();
   if (nowMsPhase3c - lastTopDrepStatusRefreshAt >= TOP_DREP_STATUS_REFRESH_MS) {
     lastTopDrepStatusRefreshAt = nowMsPhase3c;
-    const topDrepIds = Array.from(drepById.values())
-      .filter((row) => !String(row.id || "").startsWith("drep_always"))
-      .sort((a, b) => Number(b.votingPowerAda || 0) - Number(a.votingPowerAda || 0))
-      .slice(0, TOP_DREP_STATUS_COUNT)
-      .map((row) => row.id);
-    let statusChanges = 0;
-    for (let start = 0; start < topDrepIds.length; start += SYNC_BATCH_SIZE) {
-      const batch = topDrepIds.slice(start, start + SYNC_BATCH_SIZE);
-      await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
-        const safeId = encodeURIComponent(drepId);
-        const details = await blockfrostGet(`/governance/dreps/${safeId}`).catch(() => null);
-        if (!details) return;
-        const row = drepById.get(drepId);
-        if (!row) return;
-        row.votingPowerAda = Math.floor(Number(details.amount || 0) / 1_000_000);
-        const active = details.active === true;
-        const retired = details.retired === true;
-        const expired = details.expired === true;
-        row.active = active;
-        row.retired = retired;
-        row.expired = expired;
-        row.activeEpoch = Number(details.active_epoch || 0) || null;
-        row.lastActiveEpoch = Number(details.last_active_epoch || 0) || null;
-        row.hasScript = details.has_script === true;
-        const nextStatus = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
-        if (row.status !== nextStatus) {
-          statusChanges += 1;
-          console.log(`[status-refresh] ${row.name || row.id}: ${row.status} -> ${nextStatus}`);
-        }
-        row.status = nextStatus;
-      });
-    }
-    console.log(`[status-refresh] refreshed top ${topDrepIds.length} dreps, ${statusChanges} status change(s)`);
+    await refreshDrepPowerAndStatusFromKoios(drepById, latestEpoch, TOP_DREP_STATUS_COUNT).catch((error) => {
+      console.warn(`[status-refresh] failed: ${error?.message || error}`);
+    });
   }
 
   // --- Phase 4: Reassemble snapshot arrays ---
@@ -7742,11 +7783,22 @@ async function runSync(options = {}) {
     //   - We have a complete existing snapshot to build on, AND
     //   - The epoch has not advanced since the last sync (no boundary crossing)
     //   - Not explicitly forced to do a full rebuild
+    // A base is "usable" for a delta when it structurally has governance data
+    // and DRep power. A few skipped proposals or vote-page errors in the base
+    // must NOT force a full rebuild on every tick (that cascade was the main
+    // source of repeated cold syncs): the delta re-fetches whatever is missing.
+    const baseUsable = Boolean(base) && snapshotHasGovernanceData(base) && snapshotHasDrepVotingPower(base);
+    // The epoch-boundary check compares the chain tip with the base snapshot:
+    // a new epoch means new DRep power snapshots and thresholds, so rebuild.
+    const chainEpoch = await fetchLatestChainEpoch().catch(() => null);
+    const epochAdvanced = Number.isFinite(chainEpoch) && chainEpoch > 0 && baseEpoch > 0 && chainEpoch > baseEpoch;
     const canDelta =
       !options.forceFull &&
-      snapshotIsComplete(base) &&
+      baseUsable &&
       baseEpoch > 0 &&
+      !epochAdvanced &&
       (lastEpoch === 0 || baseEpoch === lastEpoch);
+    if (epochAdvanced) syncState.lastEpochBoundaryAt = new Date().toISOString();
 
     let fresh;
     if (canDelta) {
@@ -8730,13 +8782,8 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "id parameter required" });
       return;
     }
-    if (!BLOCKFROST_API_KEY) {
-      json(res, 503, { error: "Blockfrost not configured." });
-      return;
-    }
-    const CACHE_TTL_MS = 5 * 60 * 1000;
-    const MAX_PAGES = 50; // up to 5,000 delegators per DRep
-    const PAGE_SIZE = 100;
+    const CACHE_TTL_MS = 15 * 60 * 1000;
+    const MAX_ROWS = 5000;
     global._drepDelegatorsCache = global._drepDelegatorsCache || {};
     const cache = global._drepDelegatorsCache[drepId];
     if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
@@ -8744,21 +8791,22 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const safeId = encodeURIComponent(drepId);
       const delegators = [];
-      let page = 1;
       let truncated = false;
-      while (page <= MAX_PAGES) {
-        const rows = await blockfrostGet(`/governance/dreps/${safeId}/delegators?count=${PAGE_SIZE}&page=${page}`);
+      // Koios returns up to 1,000 delegators per page (Blockfrost: 100).
+      const limit = 1000;
+      let offset = 0;
+      while (offset < MAX_ROWS) {
+        const rows = await koiosGet(`/drep_delegators?_drep_id=${encodeURIComponent(drepId)}&limit=${limit}&offset=${offset}`);
         if (!Array.isArray(rows) || rows.length === 0) break;
         for (const row of rows) {
-          const address = String(row?.address || "").trim();
+          const address = String(row?.stake_address || row?.address || "").trim();
           if (!address) continue;
           delegators.push({ address, amountAda: Math.floor(Number(row?.amount || 0) / 1_000_000) });
         }
-        if (rows.length < PAGE_SIZE) break;
-        if (page === MAX_PAGES) truncated = true;
-        page += 1;
+        if (rows.length < limit) break;
+        offset += rows.length;
+        if (offset >= MAX_ROWS) truncated = true;
       }
       delegators.sort((a, b) => b.amountAda - a.amountAda);
       const totalAda = delegators.reduce((sum, d) => sum + d.amountAda, 0);
@@ -9865,10 +9913,33 @@ const server = http.createServer(async (req, res) => {
     try {
       const includeDebug = String(url.searchParams.get("debug") || "").toLowerCase() === "true";
       const debug = includeDebug ? {} : null;
+      // This route is hit on every proposal page load and every SSE refresh;
+      // serve a recent answer instead of re-walking cgov/Blockfrost/Koios.
+      const PVR_CACHE_TTL_MS = 15 * 60 * 1000;
+      const cachedResult = !includeDebug ? proposalVoteRationalesResultCache.get(proposalId) : null;
+      if (cachedResult && Date.now() - cachedResult.at < PVR_CACHE_TTL_MS) {
+        json(res, 200, cachedResult.payload);
+        return;
+      }
       const byTx = await fetchCgovVoteRationaleSignalsByTx(proposalId, debug);
       const hasCgovRationaleSignal = Array.from(byTx.values()).some((signal) =>
         Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
+      // Koios vote_list already carries every vote anchor; try it before the
+      // expensive Blockfrost path (one /txs/{hash}/cbor call per vote).
       if (!hasCgovRationaleSignal) {
+        const koiosFirst = await fetchKoiosVoteRationaleSignalsByTx(proposalId, debug);
+        for (const [tx, signal] of koiosFirst.entries()) {
+          if (!byTx.has(tx) || (!byTx.get(tx)?.rationaleUrl && signal?.rationaleUrl)) {
+            byTx.set(tx, signal);
+          }
+        }
+      }
+      const hasKoiosRationaleSignal = Array.from(byTx.values()).some((signal) =>
+        Boolean(signal?.hasRationale || signal?.rationaleUrl || signal?.rationaleHash));
+      const BLOCKFROST_CBOR_RETRY_MS = 60 * 60 * 1000;
+      const lastCborAttempt = Number(proposalVoteRationalesCborAttemptAt.get(proposalId) || 0);
+      if (!hasKoiosRationaleSignal && Date.now() - lastCborAttempt > BLOCKFROST_CBOR_RETRY_MS) {
+        proposalVoteRationalesCborAttemptAt.set(proposalId, Date.now());
         const blockfrostByTx = await fetchBlockfrostVoteRationaleSignalsByTx(proposalId, debug);
         for (const [tx, signal] of blockfrostByTx.entries()) {
           if (!byTx.has(tx) || (!byTx.get(tx)?.rationaleUrl && signal?.rationaleUrl)) {
@@ -9894,7 +9965,9 @@ const server = http.createServer(async (req, res) => {
           rationaleUrl: String(signal.rationaleUrl || ""),
           rationaleHash: String(signal.rationaleHash || "")
         }));
-      json(res, 200, { ok: true, proposalId, count: votes.length, votes, ...(includeDebug ? { debug } : {}) });
+      const payload = { ok: true, proposalId, count: votes.length, votes, ...(includeDebug ? { debug } : {}) };
+      if (!includeDebug) proposalVoteRationalesResultCache.set(proposalId, { at: Date.now(), payload });
+      json(res, 200, payload);
       return;
     } catch (error) {
       json(res, 500, { error: error.message || "Failed to fetch proposal vote rationales." });
