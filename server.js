@@ -3949,6 +3949,19 @@ function refreshAllThresholdInfo(snapshotObj) {
   }
 }
 
+// The voting-power model is derived from the stored Koios summary, so a
+// change to the derivation applies to an existing snapshot on the next boot
+// or publish instead of waiting for the next full rebuild.
+function refreshAllNomosModels(snapshotObj) {
+  const pi = snapshotObj?.proposalInfo;
+  if (!pi || typeof pi !== "object") return;
+  for (const info of Object.values(pi)) {
+    if (!info || typeof info !== "object" || !info.koiosVotingSummary) continue;
+    const model = buildNomosModelFromKoiosSummary(info.koiosVotingSummary);
+    if (model) info.nomosModel = model;
+  }
+}
+
 /**
  * Backfill votedAtUnix / votedAt / responseHours for votes that were saved
  * with null timestamps but whose voteTxHash is already present in the
@@ -4337,19 +4350,30 @@ function buildNomosModelFromKoiosSummary(summary) {
   const drepAlwaysNoConfidence = toBigInt(summary.drep_always_no_confidence_vote_power);
   const drepTotalRaw = toBigInt(summary.drep_total_vote_power);
   const drepInactive = toBigInt(summary.drep_inactive_vote_power);
+  // Koios reports drep_no_vote_power as the ledger's "No" side: active No
+  // votes plus every registered DRep that did not vote (and, outside a
+  // no-confidence action, the always-no-confidence power). The stake that
+  // did not vote is therefore the remainder once the explicit parts are
+  // removed, the same way pool_no_vote_power is read for SPOs below.
+  const drepYesPower = toBigInt(summary.drep_yes_vote_power);
+  const drepNoPower = toBigInt(summary.drep_no_vote_power);
+  const hasKoiosDrepNoVotePower = summary.drep_no_vote_power !== null && summary.drep_no_vote_power !== undefined;
   const drepDerivedTotal =
     drepTotalRaw > 0n
       ? drepTotalRaw
-      : drepActiveYes + drepActiveNo + drepActiveAbstain + drepAlwaysAbstain + drepAlwaysNoConfidence + drepInactive;
+      : hasKoiosDrepNoVotePower
+        ? (drepYesPower > drepActiveYes ? drepYesPower : drepActiveYes) + drepNoPower + drepActiveAbstain + drepAlwaysAbstain + drepInactive
+        : drepActiveYes + drepActiveNo + drepActiveAbstain + drepAlwaysAbstain + drepAlwaysNoConfidence + drepInactive;
 
-  const drepNotVotedRaw =
-    drepDerivedTotal -
-    drepActiveYes -
-    drepActiveNo -
-    drepActiveAbstain -
-    drepAlwaysAbstain -
-    drepAlwaysNoConfidence -
-    drepInactive;
+  const drepNotVotedRaw = hasKoiosDrepNoVotePower
+    ? drepNoPower - drepActiveNo - (isNoConfidence ? 0n : drepAlwaysNoConfidence)
+    : drepDerivedTotal -
+      drepActiveYes -
+      drepActiveNo -
+      drepActiveAbstain -
+      drepAlwaysAbstain -
+      drepAlwaysNoConfidence -
+      drepInactive;
   const drepNotVoted = drepNotVotedRaw > 0n ? drepNotVotedRaw : 0n;
   const drepYesTotal = isNoConfidence ? drepActiveYes + drepAlwaysNoConfidence : drepActiveYes;
   const drepNoTotal = drepActiveNo;
@@ -5020,6 +5044,7 @@ function applyRemoteSnapshot(remoteSnapshot) {
   if (!remoteSnapshot || typeof remoteSnapshot !== "object") return false;
   snapshot = remoteSnapshot;
   refreshAllThresholdInfo(snapshot);
+  refreshAllNomosModels(snapshot);
   saveSnapshotToDisk(snapshot);
   saveSeedSnapshotToDisk(snapshot);
   return true;
@@ -7647,6 +7672,7 @@ function publishSnapshot(payload) {
   // Always recompute thresholds so code changes take effect without a
   // manual snapshot wipe.
   refreshAllThresholdInfo(snapshot);
+  refreshAllNomosModels(snapshot);
   patchMissingProposalEpochs(snapshot);
   backfillMissingProposalMetadata(snapshot).catch(() => null);
   if (PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH) {
@@ -8151,6 +8177,7 @@ async function runStartupInitialization() {
   backfillVoteTimestampsFromCache(snapshot.committeeMembers, snapshot.proposalInfo);
   backfillVoteTimestampsFromCache(snapshot.spos, snapshot.proposalInfo);
   refreshAllThresholdInfo(snapshot);
+  refreshAllNomosModels(snapshot);
   // Persist normalized startup snapshot once; avoid heavy history backfill here.
   if (snapshot?.generatedAt) {
     saveSnapshotToDisk(snapshot);
