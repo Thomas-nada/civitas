@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmUWtr7t36oNkCFWBWKExWyxCrMF14qWUZRiRdcDhBT2YC -->
+<!-- url: ipfs://QmRQo7dcoxysdmdKYGAxbJVUBRHYRV97bosRxogotzPxd1 -->
 # CardanoYoda (MANDA Pool)
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,19 +7,18 @@
 
 ---
 
-As a DRep, I decided to vote YES on the proposal: Reimburse Ikigai Info Governance Action Deposit.
+A [PDF version][pdf-link] of this rationale is also made available.
 
-My rationale: 
+[pdf-link]: https://ipfs.io/ipfs/QmQwQbPo2FNvZ3WR3BiH5gf3UHgsh5SVwFqzFFfuBwHAS1
 
-I voted YES last time. See my previous rationale for reference. The reasons to vote YES are still the same. 
+The deposit loss was caused by a bug in the Cardano node. The submitter could not have predicted the deposit loss. Moreover, it was the first governance action after the Chang hard fork. No one had experience submitting governance actions.
 
-If you'd like to support my work, consider delegating to the MANDA pool and backing me as a DRep. Your support is the only way I can get time for governance.
+I considered how I would vote in a case where funds were lost due to a hack in DeFi. In such a case, I would probably vote NO, because the blame would be on the third-party team and security auditors. Treasury should not be used to cover damages in DeFi.
 
-MANDA Pool ID:
-pool1c3fjkls7d2aujud8y5xy5e0azu0ueatwn34u7jy3ql85ze3xya8
+In the case of the Ikigai Info Governance Action, there was a bug on the Cardano protocol side, so the responsibility lies with the IOG team and the community. It is legitimate for the submitter to ask DReps to consider reimbursement.
 
-My DRep ID:
-drep1y2m0g4r66pyaw3p7u454wc0p4f0ygm8ueaev0mgd3tvwm7sskqwqp
+I understand that the submitter lost staking rewards and other opportunities, but in my opinion the submitter should have only requested 100,000 ADA. Asking for an additional 3000 ADA seems a bit unreasonable to me, considering that the reimbursement could have been requested a long time ago.
 
-Buy me a beer:
-https://pay.cexplorer.io/pay/c0410d5b237b6ec0
+Nevertheless, the proposal is acceptable as submitted.
+
+From the governance action, I cannot verify whether the same entity that submitted the Ikigai Info Governance Action is requesting reimbursement. If anyone has any doubts, please contact me before submitting a withdrawal.
