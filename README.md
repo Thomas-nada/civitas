@@ -83,7 +83,7 @@ Compact, cacheable endpoints used by the interface (all accept `?snapshot=epoch-
 
 Other endpoints:
 
-- `GET /api/health`, `GET /api/sync-status`, `POST /api/sync-now`
+- `GET /api/health`, `GET /api/sync-status` (sync state plus Koios and Blockfrost request counters since boot), `POST /api/sync-now`
 - `GET /api/accountability` — the full snapshot (legacy; large)
 - `GET /api/snapshot-history`, `POST /api/backfill-epoch-snapshots`
 - `GET /api/proposal-metadata?proposalId=<id>`

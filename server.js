@@ -9164,6 +9164,11 @@ const server = http.createServer(async (req, res) => {
       provider: govSource.name,
       syncMeta: snapshot?.syncMeta || null,
       blockfrostBudget: blockfrostBudgetState(),
+      requests: {
+        since: opsRequestMetrics.startedAt,
+        koios: { total: opsRequestMetrics.koios.total, ok: opsRequestMetrics.koios.ok, failed: opsRequestMetrics.koios.failed },
+        blockfrost: { total: opsRequestMetrics.blockfrost.total, ok: opsRequestMetrics.blockfrost.ok, failed: opsRequestMetrics.blockfrost.failed }
+      },
       drepRationaleWarm: drepRationaleWarmState,
       pendingSnapshotReady: Boolean(pendingSnapshot),
       pendingSnapshotBuiltAt
