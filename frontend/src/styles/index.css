@@ -2,7 +2,6 @@
    base → shell → components → pages. Base and the kit come after legacy so
    element-level rules and c- classes win. */
 @import "./tokens.css";
-@import "./legacy.css";
 @import "./base.css";
 @import "./shell.css";
 @import "./components.css";

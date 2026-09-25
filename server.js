@@ -8003,7 +8003,13 @@ function gzipStaticCached(filePath, content) {
 }
 
 function serveStatic(req, res) {
-  const root = fs.existsSync(path.join(FRONTEND_DIST_PATH, "index.html")) ? FRONTEND_DIST_PATH : __dirname;
+  // The interface is the built frontend; without a build there is nothing to serve.
+  if (!fs.existsSync(path.join(FRONTEND_DIST_PATH, "index.html"))) {
+    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    res.end("Civitas frontend is not built. Run `npm run build` first.");
+    return;
+  }
+  const root = FRONTEND_DIST_PATH;
   let requestPath = req.url === "/" ? "/index.html" : req.url;
   requestPath = requestPath.split("?")[0];
   const filePath = path.join(root, requestPath);

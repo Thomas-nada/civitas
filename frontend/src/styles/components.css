@@ -154,6 +154,7 @@
 
 /* Segmented and chips ------------------------------------------------------ */
 .c-segmented { display: inline-flex; padding: 3px; gap: 2px; background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: var(--radius-md); max-width: 100%; overflow-x: auto; }
+@media (max-width: 560px) { .c-segmented { flex-wrap: wrap; } .c-segmented__btn { flex: 1 1 auto; } }
 .c-segmented__btn { flex: none; min-height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--color-text-muted); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; transition: background var(--dur), color var(--dur); }
 .c-segmented__btn:hover { color: var(--color-text); }
 .c-segmented__btn[aria-pressed="true"], .c-segmented__btn.is-active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
@@ -216,6 +217,7 @@
 .c-table--clickable tbody tr { cursor: pointer; }
 .c-table td.num, .c-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .c-table td.compact, .c-table th.compact { width: 1%; white-space: nowrap; }
+.c-table--dense th, .c-table--dense td { padding: 6px var(--space-3); font-size: var(--text-sm); }
 .c-table .c-table__primary { font-weight: 600; color: var(--color-text); }
 .c-table .c-table__sub { display: block; font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; }
 .c-table__sort { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
