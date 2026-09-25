@@ -2,7 +2,7 @@
   "name": "drep-accountability-dashboard",
   "version": "1.0.0",
   "private": true,
-  "description": "Live Cardano DRep accountability dashboard backed by Blockfrost governance endpoints.",
+  "description": "Civitas: Cardano governance intelligence, indexed from Koios.",
   "scripts": {
     "start": "node server.js",
     "build": "npm --prefix frontend run build",
@@ -11,7 +11,9 @@
     "test": "node scripts/smoke-check.mjs",
     "test:cip179": "node --test test/cip179.test.mjs",
     "test:e2e": "playwright test",
-    "ci": "npm run lint && npm run build && npm run test:cip179 && npm run test"
+    "ci": "npm run lint && npm run build && npm run test:unit && npm run test:sync && npm run test",
+    "test:sync": "CIVITAS_NO_LISTEN=1 node --test test/sync.test.mjs",
+    "test:unit": "node --test test/cip179.test.mjs test/surveys.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.2"

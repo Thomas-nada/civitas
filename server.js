@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
 const surveys = require("./lib/surveys");
+const { createKoiosGovernanceSource } = require("./lib/governanceSource");
 // BLAKE2b — pure JS, RFC 7693, no external deps. `outlen` is the digest length
 // in bytes: 32 for metadata hashes, 28 for Cardano key/credential hashes.
 function blake2b(data, outlen = 32) {
@@ -154,9 +155,6 @@ const SYNC_CONCURRENCY = Number(process.env.SYNC_CONCURRENCY || 1);
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 3 * 60 * 60 * 1000);
 const SYNC_STARTUP_DELAY_MS = Number(process.env.SYNC_STARTUP_DELAY_MS || 3000);
 const DELTA_POLL_MS = Number(process.env.DELTA_POLL_MS || 10 * 60 * 1000);
-const DELTA_PROPOSAL_RECENT_WINDOW_MS = Number(process.env.DELTA_PROPOSAL_RECENT_WINDOW_MS || 6 * 60 * 60 * 1000);
-const DELTA_PROPOSAL_RECENT_POLL_MS = Number(process.env.DELTA_PROPOSAL_RECENT_POLL_MS || 3 * 60 * 1000);
-const DELTA_PROPOSAL_IDLE_POLL_MS = Number(process.env.DELTA_PROPOSAL_IDLE_POLL_MS || 30 * 60 * 1000);
 const DREP_PROFILE_REFRESH_MIN_MS = Number(process.env.DREP_PROFILE_REFRESH_MIN_MS || 6 * 60 * 60 * 1000);
 const SYNC_START_UTC_HOURS = parseUtcHourList(process.env.SYNC_START_UTC_HOURS, [11, 23]);
 const SNAPSHOT_EXPOSE_UTC_HOURS = parseUtcHourList(process.env.SNAPSHOT_EXPOSE_UTC_HOURS, [0, 12]);
@@ -173,7 +171,9 @@ const CARDANO_EPOCH_SECONDS = 432000;
 // votes Koios has not indexed yet, hence the small default cap.
 const VOTE_TX_TIME_MAX_LOOKUPS = Number(process.env.VOTE_TX_TIME_MAX_LOOKUPS || 200);
 const VOTE_TX_TIME_CACHE_PATH = process.env.VOTE_TX_TIME_CACHE_PATH || path.join(__dirname, "cache.voteTxTimes.json");
-const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_LOOKUPS || 2000);
+// Blockfrost /txs/{hash}/metadata scan for SPO rationales; off by default (the
+// vote anchor from Koios is the on-chain source of truth).
+const VOTE_TX_RATIONALE_MAX_LOOKUPS = Number(process.env.VOTE_TX_RATIONALE_MAX_LOOKUPS || 0);
 const VOTE_TX_RATIONALE_MAX_DURATION_MS = Number(process.env.VOTE_TX_RATIONALE_MAX_DURATION_MS || 6 * 60 * 1000);
 const VOTE_TX_RATIONALE_CACHE_PATH = process.env.VOTE_TX_RATIONALE_CACHE_PATH || path.join(__dirname, "cache.voteTxRationales.json");
 const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(__dirname, "cache.spoProfiles.json");
@@ -511,7 +511,6 @@ const voteRationaleCache = new Map();
 const voteRationaleResultCache = new Map();
 const drepRationaleByProposalVoter = new Map();
 const proposalMetadataCache = new Map(); // proposalId -> { payload, cachedAt }
-const proposalDeltaPollState = new Map();
 const drepProfileRefreshState = new Map();
 let lastTopDrepStatusRefreshAt = 0; // Phase 3c: periodic status/VP refresh for top DReps
 const proposalVoteRationalesResultCache = new Map(); // proposalId -> { at, payload }
@@ -1923,94 +1922,73 @@ async function fetchActiveConstitutionScriptHash() {
   }
 }
 
-async function findLatestEnactedConstitutionGuardrails() {
-  const count = 100;
-  const maxPages = 8;
-  let page = 1;
+// Newest proposal of a kind whose governance description yields a policy
+// hash, preferring enacted ones. Reads the snapshot (no request); falls back
+// to the Koios proposal list when the snapshot is empty.
+async function findLatestGuardrailsProposal(typeMatcher, extractPolicyHash) {
+  let rows = Object.entries(snapshot?.proposalInfo || {}).map(([proposalId, info]) => ({
+    proposalId,
+    governanceType: String(info?.governanceType || "").toLowerCase().replace(/\s+/g, "_"),
+    governanceDescription: info?.governanceDescription || null,
+    enactedEpoch: info?.enactedEpoch ?? null,
+    ratifiedEpoch: info?.ratifiedEpoch ?? null,
+    txHash: String(info?.txHash || ""),
+    certIndex: Number(info?.certIndex ?? 0),
+    submittedAtUnix: Number(info?.submittedAtUnix || 0)
+  }));
+  if (rows.length === 0) {
+    const list = await govSource.listProposals().catch(() => []);
+    rows = list.map((p) => ({
+      proposalId: p.id,
+      governanceType: String(p.governance_type || "").toLowerCase(),
+      governanceDescription: p.detail?.governance_description || null,
+      enactedEpoch: p.detail?.enacted_epoch ?? null,
+      ratifiedEpoch: p.detail?.ratified_epoch ?? null,
+      txHash: p.tx_hash,
+      certIndex: Number(p.cert_index ?? 0),
+      submittedAtUnix: Number(p.blockTime || 0)
+    }));
+  }
+  rows.sort((x, y) => y.submittedAtUnix - x.submittedAtUnix);
   let fallbackLatestAnyStatus = null;
-  while (page <= maxPages) {
-    const list = await blockfrostGet(`/governance/proposals?count=${count}&page=${page}&order=desc`);
-    if (!Array.isArray(list) || list.length === 0) break;
-    for (const row of list) {
-      const type = String(row?.governance_type || "").toLowerCase();
-      if (!type.includes("new_constitution")) continue;
-      const proposalId = String(row?.id || "").trim();
-      if (!proposalId) continue;
-      const detail = await blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null);
-      if (!detail || typeof detail !== "object") continue;
-      const policyHash = extractConstitutionScriptHashFromGovernanceDescription(detail.governance_description);
-      if (!policyHash) continue;
-      const enactedEpoch = detail?.enacted_epoch ?? row?.enacted_epoch;
-      const ratifiedEpoch = detail?.ratified_epoch ?? row?.ratified_epoch;
-      const status = enactedEpoch !== null && enactedEpoch !== undefined
-        ? "enacted"
-        : ratifiedEpoch !== null && ratifiedEpoch !== undefined
-          ? "ratified_not_enacted"
-          : "submitted";
-      const candidate = {
-        proposalId,
-        policyHash,
-        status,
-        enactedEpoch: enactedEpoch !== null && enactedEpoch !== undefined ? Number(enactedEpoch) : null,
-        ratifiedEpoch: ratifiedEpoch !== null && ratifiedEpoch !== undefined ? Number(ratifiedEpoch) : null,
-        txHash: String(detail.tx_hash || "").trim(),
-        certIndex: Number(detail.cert_index ?? 0)
-      };
-      if (!fallbackLatestAnyStatus) fallbackLatestAnyStatus = candidate;
-      if (status !== "enacted") continue;
-      return {
-        ...candidate
-      };
-    }
-    if (list.length < count) break;
-    page += 1;
+  for (const row of rows) {
+    if (!typeMatcher(row.governanceType)) continue;
+    const policyHash = extractPolicyHash(row.governanceDescription);
+    if (!policyHash) continue;
+    const enactedEpoch = row.enactedEpoch;
+    const ratifiedEpoch = row.ratifiedEpoch;
+    const status = enactedEpoch !== null && enactedEpoch !== undefined
+      ? "enacted"
+      : ratifiedEpoch !== null && ratifiedEpoch !== undefined
+        ? "ratified_not_enacted"
+        : "submitted";
+    const candidate = {
+      proposalId: row.proposalId,
+      policyHash,
+      status,
+      enactedEpoch: enactedEpoch !== null && enactedEpoch !== undefined ? Number(enactedEpoch) : null,
+      ratifiedEpoch: ratifiedEpoch !== null && ratifiedEpoch !== undefined ? Number(ratifiedEpoch) : null,
+      txHash: row.txHash,
+      certIndex: row.certIndex
+    };
+    if (!fallbackLatestAnyStatus) fallbackLatestAnyStatus = candidate;
+    if (status === "enacted") return { ...candidate };
   }
   return fallbackLatestAnyStatus;
 }
 
+async function findLatestEnactedConstitutionGuardrails() {
+  return findLatestGuardrailsProposal(
+    (type) => type.includes("new_constitution"),
+    extractConstitutionScriptHashFromGovernanceDescription
+  );
+}
+
 async function findLatestEnactedTreasuryGuardrails() {
-  const count = 100;
-  const maxPages = 8;
-  let page = 1;
-  let fallbackLatestAnyStatus = null;
-  while (page <= maxPages) {
-    const list = await blockfrostGet(`/governance/proposals?count=${count}&page=${page}&order=desc`);
-    if (!Array.isArray(list) || list.length === 0) break;
-    for (const row of list) {
-      const type = String(row?.governance_type || "").toLowerCase();
-      if (!type.includes("treasury_withdrawals")) continue;
-      const proposalId = String(row?.id || "").trim();
-      if (!proposalId) continue;
-      const detail = await blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null);
-      if (!detail || typeof detail !== "object") continue;
-      const policyHash = extractTreasuryPolicyHashFromGovernanceDescription(detail.governance_description);
-      if (!policyHash) continue;
-      const enactedEpoch = detail?.enacted_epoch ?? row?.enacted_epoch;
-      const ratifiedEpoch = detail?.ratified_epoch ?? row?.ratified_epoch;
-      const status = enactedEpoch !== null && enactedEpoch !== undefined
-        ? "enacted"
-        : ratifiedEpoch !== null && ratifiedEpoch !== undefined
-          ? "ratified_not_enacted"
-          : "submitted";
-      const candidate = {
-        proposalId,
-        policyHash,
-        status,
-        enactedEpoch: enactedEpoch !== null && enactedEpoch !== undefined ? Number(enactedEpoch) : null,
-        ratifiedEpoch: ratifiedEpoch !== null && ratifiedEpoch !== undefined ? Number(ratifiedEpoch) : null,
-        txHash: String(detail.tx_hash || "").trim(),
-        certIndex: Number(detail.cert_index ?? 0)
-      };
-      if (!fallbackLatestAnyStatus) fallbackLatestAnyStatus = candidate;
-      if (status !== "enacted") continue;
-      return {
-        ...candidate
-      };
-    }
-    if (list.length < count) break;
-    page += 1;
-  }
-  return fallbackLatestAnyStatus;
+  return findLatestGuardrailsProposal(
+    (type) => type.includes("treasury_withdrawal"),
+    extractTreasuryPolicyHashFromGovernanceDescription
+  );
 }
 
 async function findKoiosTreasuryPolicyHash(proposalId) {
@@ -3322,12 +3300,51 @@ async function enrichCommitteeVotesWithQualitySignals(committeeMembers) {
   }
   if (tasks.length === 0) return;
   const concurrency = Math.max(1, Math.min(6, SYNC_CONCURRENCY));
+  const RECHECK_UNREACHABLE_MS = 24 * 60 * 60 * 1000;
   await mapLimit(tasks, concurrency, async ({ member, vote }) => {
     if (!vote || typeof vote !== "object") return;
+    // A vote that was already scored against a reachable anchor keeps its
+    // signals (they are persisted in the snapshot); an unreachable anchor is
+    // retried once a day. This used to refetch every CC anchor on every sync.
+    const signals = vote.rationaleScoringSignals;
+    if (signals && typeof signals === "object" && Number.isFinite(Number(vote.rationaleQualityScore))) {
+      const checkedAt = Number(vote.rationaleSignalsCheckedAt || 0);
+      const settled = signals.urlReachable === true || !signals.urlValid;
+      if (settled || (checkedAt > 0 && Date.now() - checkedAt < RECHECK_UNREACHABLE_MS)) return;
+    }
     const result = await buildCommitteeRationaleSignals(vote, member?.name || "");
     vote.rationaleQualityScore = result.rationaleQualityScore;
     vote.rationaleScoringSignals = result.rationaleScoringSignals;
+    vote.rationaleSignalsCheckedAt = Date.now();
   });
+}
+
+// Carry the persisted rationale signals of the currently served snapshot
+// over to freshly rebuilt committee rows (same member, proposal and tx), so a
+// full sync does not refetch every anchor.
+function carryOverCommitteeRationaleSignals(committeeMembers, previousSnapshot) {
+  const prevRows = Array.isArray(previousSnapshot?.committeeMembers) ? previousSnapshot.committeeMembers : [];
+  if (prevRows.length === 0) return;
+  const byKey = new Map();
+  for (const row of prevRows) {
+    for (const vote of Array.isArray(row?.votes) ? row.votes : []) {
+      if (!vote?.rationaleScoringSignals) continue;
+      byKey.set(`${row.id}|${vote.proposalId}|${String(vote.voteTxHash || "").toLowerCase()}`, vote);
+    }
+  }
+  if (byKey.size === 0) return;
+  for (const row of Array.isArray(committeeMembers) ? committeeMembers : []) {
+    for (const vote of Array.isArray(row?.votes) ? row.votes : []) {
+      const prev = byKey.get(`${row.id}|${vote.proposalId}|${String(vote.voteTxHash || "").toLowerCase()}`);
+      if (!prev) continue;
+      if (String(prev.rationaleUrl || "") !== String(vote.rationaleUrl || "")) continue;
+      vote.rationaleQualityScore = prev.rationaleQualityScore;
+      vote.rationaleScoringSignals = prev.rationaleScoringSignals;
+      if (prev.rationaleSignalsCheckedAt) vote.rationaleSignalsCheckedAt = prev.rationaleSignalsCheckedAt;
+      if (!vote.rationaleBodyLength && prev.rationaleBodyLength) vote.rationaleBodyLength = prev.rationaleBodyLength;
+      if (!vote.rationaleSectionCount && prev.rationaleSectionCount) vote.rationaleSectionCount = prev.rationaleSectionCount;
+    }
+  }
 }
 
 function extractProposalNameAndRationale(proposalId, detail, metadataEnvelope) {
@@ -4433,10 +4450,38 @@ function retryAfterMs(response, fallbackMs) {
   return fallbackMs;
 }
 
+// Hard daily ceiling on Blockfrost requests. The sync no longer needs
+// Blockfrost at all; what remains are last-resort fallbacks, and this makes
+// the bill a ceiling rather than a hope. Counts every attempt (retries too).
+const BLOCKFROST_DAILY_BUDGET = Number(process.env.BLOCKFROST_DAILY_BUDGET || 5000);
+const blockfrostBudget = { day: "", used: 0, refused: 0 };
+function blockfrostBudgetState() {
+  const day = new Date().toISOString().slice(0, 10);
+  if (blockfrostBudget.day !== day) {
+    blockfrostBudget.day = day;
+    blockfrostBudget.used = 0;
+    blockfrostBudget.refused = 0;
+  }
+  return { day, used: blockfrostBudget.used, limit: BLOCKFROST_DAILY_BUDGET, refused: blockfrostBudget.refused };
+}
+function consumeBlockfrostBudget() {
+  const state = blockfrostBudgetState();
+  if (BLOCKFROST_DAILY_BUDGET > 0 && state.used >= BLOCKFROST_DAILY_BUDGET) {
+    blockfrostBudget.refused += 1;
+    return false;
+  }
+  blockfrostBudget.used += 1;
+  return true;
+}
+
 async function blockfrostGet(endpointWithQuery, opts = {}) {
   const baseUrl = opts.baseUrl || BLOCKFROST_BASE_URL;
   const projectId = opts.key || BLOCKFROST_API_KEY;
+  if (!projectId) throw new Error(`Blockfrost disabled (no key) on ${endpointWithQuery}`);
   for (let attempt = 0; attempt <= BLOCKFROST_MAX_RETRIES; attempt += 1) {
+    if (!consumeBlockfrostBudget()) {
+      throw new Error(`Blockfrost daily budget (${BLOCKFROST_DAILY_BUDGET}) exhausted on ${endpointWithQuery}`);
+    }
     const elapsed = Date.now() - lastRequestAt;
     if (elapsed < BLOCKFROST_REQUEST_DELAY_MS) {
       await sleep(BLOCKFROST_REQUEST_DELAY_MS - elapsed);
@@ -4570,91 +4615,14 @@ async function fetchRegisteredSpoFallback(limit = 300) {
   return rows.slice(0, limit);
 }
 
-async function fetchBlockfrostPoolFallbackRows(limit = 400) {
+// SPO roster (every registered pool, with its delegated DRep) from Koios:
+// pool_list (3 pages) plus pool_info in bulk. Used to be ~30 Blockfrost
+// pages plus two Blockfrost calls per pool.
+async function fetchPoolRosterRows(limit = 400) {
   const boundedLimit = Number(limit) > 0 ? Number(limit) : 0;
-  if (!BLOCKFROST_API_KEY) return [];
-  const rows = [];
-  let page = 1;
-  const pageSize = 100;
-  while (boundedLimit <= 0 || rows.length < boundedLimit) {
-    let poolRows = [];
-    let loaded = false;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        poolRows = await blockfrostGet(`/pools/extended?page=${page}&count=${pageSize}&order=desc`);
-        loaded = true;
-        break;
-      } catch {
-        await sleep(Math.min(15000, 800 * (attempt + 1)));
-      }
-    }
-    if (!loaded) break;
-    if (!Array.isArray(poolRows) || poolRows.length === 0) break;
-    const koiosInfoById = await fetchKoiosPoolInfoByIds(
-      poolRows.map((pool) => String(pool?.pool_id || "").trim()).filter(Boolean)
-    ).catch(() => new Map());
-    for (const pool of poolRows) {
-      const id = String(pool?.pool_id || "").trim();
-      if (!id) continue;
-      const koiosPool = koiosInfoById.get(id) || null;
-      const metadata = pool?.metadata && typeof pool.metadata === "object" ? pool.metadata : {};
-      const koiosMeta = parseMaybeJsonObject(koiosPool?.meta_json);
-      const cached = spoProfileCache.byPool[id] || {};
-      const koiosDelegatedDrep = String(koiosPool?.reward_addr_delegated_drep || "").trim();
-      const drepRaw = String(koiosDelegatedDrep || cached?.delegatedDrepLiteralRaw || cached?.drepId || "").trim();
-      const drepNorm = normalizeLiteral(drepRaw);
-      const liveStakeAda = Number(pool?.live_stake || 0) / 1_000_000;
-      const activeStakeAda = Number(pool?.active_stake || 0) / 1_000_000;
-      const power = Number.isFinite(liveStakeAda) && liveStakeAda > 0 ? liveStakeAda : activeStakeAda;
-      const rewardAccount = String(koiosPool?.reward_addr || cached?.rewardAccount || "").trim();
-      const hasDelegationIdentity = Boolean(rewardAccount || drepRaw);
-      const delegationStatus = drepRaw
-        ? classifySpoDelegationStatus(drepNorm)
-        : (hasDelegationIdentity ? "Not delegated" : "Unknown");
-      const rowName = String(metadata?.ticker || metadata?.name || koiosMeta?.ticker || koiosMeta?.name || "").trim();
-      const rowHomepage = String(metadata?.homepage || metadata?.url || koiosMeta?.homepage || koiosPool?.meta_url || "").trim();
-      const nextProfile = {
-        ...cached,
-        rewardAccount,
-        drepId: drepRaw,
-        delegatedDrepLiteralRaw: drepRaw,
-        delegatedDrepLiteral: drepNorm,
-        delegationStatus,
-        fetchedAt: Date.now()
-      };
-      const profileChanged =
-        String(cached?.rewardAccount || "") !== String(nextProfile.rewardAccount || "") ||
-        String(cached?.drepId || "") !== String(nextProfile.drepId || "") ||
-        String(cached?.delegatedDrepLiteralRaw || "") !== String(nextProfile.delegatedDrepLiteralRaw || "") ||
-        String(cached?.delegatedDrepLiteral || "") !== String(nextProfile.delegatedDrepLiteral || "") ||
-        String(cached?.delegationStatus || "") !== String(nextProfile.delegationStatus || "");
-      if (profileChanged) {
-        spoProfileCache.byPool[id] = nextProfile;
-        spoProfileDirty = true;
-      }
-      rows.push({
-        id,
-        name: rowName,
-        homepage: rowHomepage,
-        status: "registered",
-        delegatedDrepLiteralRaw: drepRaw,
-        delegatedDrepLiteral: drepNorm,
-        delegationStatus,
-        transparencyScore: null,
-        consistency: 0,
-        totalEligibleVotes: 0,
-        firstVoteBlockTime: Number.MAX_SAFE_INTEGER,
-        votingPowerAda: Number.isFinite(power) ? Math.max(0, power) : 0,
-        votes: []
-      });
-      if (boundedLimit > 0 && rows.length >= boundedLimit) break;
-    }
-    if (poolRows.length < pageSize) break;
-    page += 1;
-  }
-  if (spoProfileDirty) saveSpoProfileCache();
-  queueSpoProfileRefresh(rows.map((row) => row.id));
-  return rows;
+  const pools = await govSource.listPools({ withDelegation: true });
+  const rows = spoRosterRowsFromPools(pools);
+  return boundedLimit > 0 ? rows.slice(0, boundedLimit) : rows;
 }
 
 async function fetchSpoGovernanceFallbackRows(limit = 400) {
@@ -4669,7 +4637,7 @@ async function fetchSpoGovernanceFallbackRows(limit = 400) {
       return cachedRows;
     }
   }
-  const rows = await fetchBlockfrostPoolFallbackRows(boundedLimit);
+  const rows = await fetchPoolRosterRows(boundedLimit);
   const finalRows = boundedLimit > 0 ? rows.slice(0, boundedLimit) : rows;
 
   spoFallbackCache = { fetchedAt: now, rows: finalRows };
@@ -4882,20 +4850,6 @@ async function fetchNclSummary(periodKey = "current", options = {}) {
       });
   }
   return nclRefreshPromises[period.key];
-}
-
-async function paginate(endpoint, count, maxPages) {
-  let page = 1;
-  const output = [];
-  while (page <= maxPages) {
-    const query = `${endpoint}${endpoint.includes("?") ? "&" : "?"}count=${count}&page=${page}&order=desc`;
-    const chunk = await blockfrostGet(query);
-    if (!Array.isArray(chunk) || chunk.length === 0) break;
-    output.push(...chunk);
-    if (chunk.length < count) break;
-    page += 1;
-  }
-  return output;
 }
 
 async function mapLimit(items, limit, mapper) {
@@ -5613,58 +5567,10 @@ function triggerSpoDelegationWarm(rows) {
   return spoDelegationWarmPromise;
 }
 
-async function refreshSpoProfileForPool(poolId) {
-  const id = String(poolId || "").trim();
-  if (!id) return;
-  const pool = await blockfrostGet(`/pools/${id}`).catch(() => null);
-  const rewardAccount = String(pool?.reward_account || "").trim();
-  let drepId = "";
-  if (rewardAccount) {
-    const account = await blockfrostGet(`/accounts/${rewardAccount}`).catch(() => null);
-    drepId = String(account?.drep_id || "").trim();
-  }
-  spoProfileCache.byPool[id] = {
-    ...(spoProfileCache.byPool[id] || {}),
-    rewardAccount,
-    drepId,
-    delegatedDrepLiteralRaw: drepId,
-    delegatedDrepLiteral: normalizeLiteral(drepId),
-    delegationStatus: classifySpoDelegationStatusFromDrepId(drepId),
-    fetchedAt: Date.now()
-  };
-  spoProfileDirty = true;
-}
-
-function queueSpoProfileRefresh(poolIds) {
-  const freshMs = 24 * 60 * 60 * 1000;
-  for (const raw of Array.isArray(poolIds) ? poolIds : []) {
-    const id = String(raw || "").trim();
-    if (!id) continue;
-    const cached = spoProfileCache.byPool[id];
-    const fetchedAt = Number(cached?.fetchedAt || 0);
-    if (fetchedAt > 0 && Date.now() - fetchedAt < freshMs) continue;
-    spoProfileRefreshQueue.add(id);
-  }
-  if (spoProfileRefreshPromise) return;
-  spoProfileRefreshPromise = (async () => {
-    try {
-      const maxLookupsPerRun = 120;
-      let done = 0;
-      while (spoProfileRefreshQueue.size > 0 && done < maxLookupsPerRun) {
-        const [id] = spoProfileRefreshQueue;
-        if (!id) break;
-        spoProfileRefreshQueue.delete(id);
-        await refreshSpoProfileForPool(id).catch(() => null);
-        done += 1;
-      }
-      if (spoProfileDirty) saveSpoProfileCache();
-    } finally {
-      spoProfileRefreshPromise = null;
-      if (spoProfileRefreshQueue.size > 0) {
-        setTimeout(() => queueSpoProfileRefresh([]), 500);
-      }
-    }
-  })();
+// Pool delegation now arrives with the Koios pool_info read that builds the
+// roster, so there is nothing to refresh per pool any more.
+function queueSpoProfileRefresh() {
+  return;
 }
 
 // Every Shelley-era mainnet epoch is exactly 432,000 seconds long, starting
@@ -5722,23 +5628,6 @@ async function fetchLatestChainEpoch() {
   const result = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
   if (result !== null) latestChainEpochCache = { value: result, cachedAt: now };
   return result;
-}
-
-async function fetchAllDrepIdsFromBlockfrost() {
-  const ids = new Set();
-  const pageSize = 100;
-  let page = 1;
-  while (page <= 100) {
-    const rows = await blockfrostGet(`/governance/dreps?count=${pageSize}&page=${page}`).catch(() => []);
-    if (!Array.isArray(rows) || rows.length === 0) break;
-    for (const row of rows) {
-      const id = String(row?.drep_id || "").trim();
-      if (id) ids.add(id);
-    }
-    if (rows.length < pageSize) break;
-    page += 1;
-  }
-  return ids;
 }
 
 function buildEpochScopedSnapshot(baseSnapshot, cutoffEpoch, cutoffUnix, drepPowerMap = null) {
@@ -5924,56 +5813,16 @@ async function fetchSpecialDreps(force = false) {
   if (!force && hasCachedValue && now - specialDrepsCache.fetchedAt < SPECIAL_DREP_REFRESH_MS) {
     return specialDrepsCache.value;
   }
-  if (!BLOCKFROST_API_KEY) {
+  const epoch = Number(snapshot?.latestEpoch || 0) || (await fetchLatestChainEpoch().catch(() => null));
+  try {
+    const value = await govSource.getSpecialDreps(epoch);
+    specialDrepsCache = { fetchedAt: now, value };
+    return value;
+  } catch {
     return specialDrepsCache.value || {};
   }
-
-  const entries = await Promise.all(
-    Object.entries(SPECIAL_DREP_IDS).map(async ([key, drepId]) => {
-      try {
-        const data = await blockfrostGet(`/governance/dreps/${encodeURIComponent(drepId)}`);
-        return [
-          key,
-          {
-            id: drepId,
-            active: Boolean(data?.active),
-            votingPowerAda: Math.floor(Number(data?.amount || 0) / 1_000_000)
-          }
-        ];
-      } catch (error) {
-        return [
-          key,
-          {
-            id: drepId,
-            active: false,
-            votingPowerAda: 0
-          }
-        ];
-      }
-    })
-  );
-
-  const value = Object.fromEntries(entries);
-  specialDrepsCache = { fetchedAt: now, value };
-  return value;
 }
 
-// ---------------------------------------------------------------------------
-// Incremental delta sync
-// ---------------------------------------------------------------------------
-// Merges only new data into an existing complete snapshot.  The full rebuild
-// path is preserved and used on epoch boundaries / first boot.
-//
-// Strategy:
-//   1. Fetch the current proposal list (cheap — usually 1–3 pages).
-//   2. For each proposal, fetch votes page-by-page (newest first, desc order).
-//      Stop pagination as soon as we hit a tx_hash we already stored.  For
-//      brand-new proposals we fetch all votes as usual.
-//   3. Merge new votes into the in-memory actor aggregates (drep/spo/cc).
-//   4. Refetch DRep details ONLY for DReps that cast a new vote.
-//   5. Recalculate scores for every actor touched.
-//   6. Return a new snapshot object that is the existing snapshot plus deltas.
-// ---------------------------------------------------------------------------
 // Refresh votingPowerAda for every DRep in the map from Koios drep_history
 // (2 requests), then registration/expiry for the top-N DReps by power from
 // bulk Koios drep_info (batches of 50 ids). Applies changes in place.
@@ -6030,18 +5879,272 @@ async function refreshDrepPowerAndStatusFromKoios(drepById, latestEpoch, topCoun
   console.log(`[status-refresh] power updates: ${powerUpdates}, top ${topDrepIds.length} dreps checked, ${statusChanges} status change(s)`);
 }
 
-async function buildDeltaSnapshot(base) {
-  const latestEpoch = await fetchLatestChainEpoch().catch(() => null);
+// ---------------------------------------------------------------------------
+// Governance data source (Koios). Blockfrost is no longer used by the sync.
+// ---------------------------------------------------------------------------
+const govSource = createKoiosGovernanceSource({
+  koiosGet,
+  koiosPost,
+  log: (message) => console.log(message)
+});
 
-  // Fetch current full proposal list (paginated, same as full sync).
-  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
-  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
-  const currentProposalIds = new Set(proposals.map((p) => String(p?.id || "").trim()).filter(Boolean));
-  for (const proposalId of Array.from(proposalDeltaPollState.keys())) {
-    if (!currentProposalIds.has(proposalId)) {
-      proposalDeltaPollState.delete(proposalId);
+// Seconds of overlap re-read on every delta so a vote that Koios indexed late,
+// or that sits in a rolled-back block, is still picked up (dedup by tx hash).
+const DELTA_VOTE_OVERLAP_SECONDS = Number(process.env.DELTA_VOTE_OVERLAP_SECONDS || 2 * 60 * 60);
+// Whether a full sync fetches the Koios voting summary (nomos model) for every
+// proposal ("all") or only for open ones ("pending"). A delta always refreshes
+// it for open proposals that gained votes.
+const KOIOS_VOTING_SUMMARY_SCOPE = String(process.env.KOIOS_VOTING_SUMMARY_SCOPE || "all").toLowerCase();
+
+// One proposal's detail + metadata for the on-demand routes: served from the
+// snapshot when it holds the action, otherwise from a 10-minute cached read
+// of the Koios proposal list. Never touches Blockfrost.
+let proposalListCache = { fetchedAt: 0, rows: [] };
+async function getCachedProposalList() {
+  if (Date.now() - proposalListCache.fetchedAt < 10 * 60 * 1000 && proposalListCache.rows.length > 0) return proposalListCache.rows;
+  const rows = await govSource.listProposals();
+  proposalListCache = { fetchedAt: Date.now(), rows };
+  return rows;
+}
+async function resolveProposalRecord(proposalId) {
+  const id = String(proposalId || "").trim();
+  if (!id) return null;
+  const info = snapshot?.proposalInfo?.[id];
+  if (info && (info.metadataJson || !info.metadataUrl)) {
+    return {
+      rawDetail: {
+        tx_hash: info.txHash || null,
+        cert_index: info.certIndex ?? null,
+        governance_type: String(info.governanceType || "").toLowerCase().replace(/\s+/g, "_"),
+        expiration: info.expirationEpoch ?? null,
+        enacted_epoch: info.enactedEpoch ?? null,
+        ratified_epoch: info.ratifiedEpoch ?? null,
+        dropped_epoch: info.droppedEpoch ?? null,
+        expired_epoch: info.expiredEpoch ?? null
+      },
+      metadata: { url: info.metadataUrl || "", hash: info.metadataHash || "", json_metadata: info.metadataJson || null, hashMismatch: false },
+      submittedEpoch: info.submittedEpoch ?? null,
+      txHash: info.txHash || null
+    };
+  }
+  const rows = await getCachedProposalList();
+  const row = rows.find((p) => p.id === id);
+  if (!row) return null;
+  const metadata = await enrichProposalMetadataWithIpfsFallback(row.metadata);
+  return { rawDetail: row.detail, metadata, submittedEpoch: row.blockEpoch ?? null, txHash: row.tx_hash || null };
+}
+
+// Newest vote timestamp in a snapshot: the incremental read starts after it.
+function computeVoteWatermark(snapshotObj) {
+  let max = Number(snapshotObj?.syncMeta?.voteWatermarkBlockTime || 0);
+  for (const group of [snapshotObj?.dreps, snapshotObj?.spos, snapshotObj?.committeeMembers]) {
+    for (const actor of Array.isArray(group) ? group : []) {
+      for (const vote of Array.isArray(actor?.votes) ? actor.votes : []) {
+        const t = Number(vote?.votedAtUnix || 0);
+        if (t > max) max = t;
+        for (const h of Array.isArray(vote?.voteHistory) ? vote.voteHistory : []) {
+          const ht = Number(h?.votedAtUnix || 0);
+          if (ht > max) max = ht;
+        }
+      }
     }
   }
+  return Number.isFinite(max) && max > 0 ? max : 0;
+}
+
+// The Koios vote rows already carry every vote anchor, so the rationale
+// lookup that used to cost one vote_list page per batch is built in memory.
+function buildKoiosVoteLookupFromRows(votes) {
+  const lookup = new Map();
+  for (const vote of Array.isArray(votes) ? votes : []) {
+    addKoiosVoteLookupEntry(lookup, {
+      voter_role: vote.voter_role,
+      voter_id: vote.voter,
+      vote_tx_hash: vote.tx_hash,
+      block_time: vote.block_time,
+      meta_url: vote.meta_url,
+      meta_hash: vote.meta_hash,
+      meta_json: vote.meta_json
+    });
+  }
+  return lookup;
+}
+
+// SPO roster rows in the shape the snapshot uses, from the Koios pool list.
+// Also refreshes the on-disk SPO profile cache used by the delegation views.
+function spoRosterRowsFromPools(pools) {
+  const rows = [];
+  for (const pool of Array.isArray(pools) ? pools : []) {
+    const id = String(pool?.id || "").trim();
+    if (!id) continue;
+    const cached = spoProfileCache.byPool[id] || {};
+    const drepRaw = String(pool.delegatedDrep || cached?.delegatedDrepLiteralRaw || cached?.drepId || "").trim();
+    const drepNorm = normalizeLiteral(drepRaw);
+    const rewardAccount = String(pool.rewardAccount || cached?.rewardAccount || "").trim();
+    const hasDelegationIdentity = Boolean(rewardAccount || drepRaw);
+    const delegationStatus = drepRaw
+      ? classifySpoDelegationStatus(drepNorm)
+      : (hasDelegationIdentity ? "Not delegated" : "Unknown");
+    const nextProfile = {
+      ...cached,
+      rewardAccount,
+      drepId: drepRaw,
+      delegatedDrepLiteralRaw: drepRaw,
+      delegatedDrepLiteral: drepNorm,
+      delegationStatus,
+      fetchedAt: Date.now()
+    };
+    const profileChanged =
+      String(cached?.rewardAccount || "") !== String(nextProfile.rewardAccount || "") ||
+      String(cached?.drepId || "") !== String(nextProfile.drepId || "") ||
+      String(cached?.delegationStatus || "") !== String(nextProfile.delegationStatus || "");
+    if (profileChanged) {
+      spoProfileCache.byPool[id] = nextProfile;
+      spoProfileDirty = true;
+    }
+    rows.push({
+      id,
+      name: String(pool.name || "").trim(),
+      homepage: String(pool.homepage || "").trim(),
+      status: "registered",
+      delegatedDrepLiteralRaw: drepRaw,
+      delegatedDrepLiteral: drepNorm,
+      delegationStatus,
+      transparencyScore: null,
+      consistency: 0,
+      totalEligibleVotes: 0,
+      firstVoteBlockTime: Number.MAX_SAFE_INTEGER,
+      votingPowerAda: Number.isFinite(Number(pool.votingPowerAda)) ? Math.max(0, Number(pool.votingPowerAda)) : 0,
+      votes: []
+    });
+  }
+  if (spoProfileDirty) saveSpoProfileCache();
+  return rows;
+}
+
+function applyDrepDetailsToRow(row, details) {
+  if (!row || !details) return;
+  row.votingPowerAda = Math.floor(Number(details.amount || 0) / 1_000_000);
+  const active = details.active === true;
+  const retired = details.retired === true;
+  const expired = details.expired === true;
+  row.active = active;
+  row.retired = retired;
+  row.expired = expired;
+  row.activeEpoch = Number(details.active_epoch || 0) || row.activeEpoch || null;
+  row.lastActiveEpoch = Number(details.last_active_epoch || 0) || null;
+  row.hasScript = details.has_script === true;
+  row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
+}
+
+async function applyDrepMetadataToRow(row, metadata, caches) {
+  if (!row || !metadata) return;
+  const nameCache = caches?.nameCache || new Map();
+  const payloadCache = caches?.payloadCache || new Map();
+  row.transparencyScore = computeTransparencyScore(metadata);
+  row.profile = await resolveDrepProfileFromMetadataEnvelope(metadata, payloadCache);
+  row.name = resolveName(metadata.json_metadata, row.id);
+  if (!row.name && row.profile?.name) row.name = row.profile.name;
+  if (!row.name) row.name = await resolveDrepNameFromMetadataEnvelope(metadata, nameCache, payloadCache);
+}
+
+/**
+ * Hydrate DRep rows (status, power, profile) from Koios in bulk.
+ * Details and metadata come from two batched endpoints; the resolved profile
+ * is cached on disk (drepMetaCache) keyed by the metadata hash, so a DRep
+ * whose anchor has not changed costs no anchor fetch on later syncs.
+ */
+async function hydrateDrepRowsFromKoios(rowsById, drepIds, { force = false, registrationEpochs = null, drepActivity = 20 } = {}) {
+  const ids = Array.from(new Set((Array.isArray(drepIds) ? drepIds : []).map((v) => String(v || "").trim()).filter(Boolean)));
+  if (ids.length === 0) return { detailsById: new Map(), metadataById: new Map() };
+  const nowMs = Date.now();
+  const staleIds = force
+    ? ids
+    : ids.filter((id) => {
+      const cached = drepMetaCache[id];
+      return !(cached && (nowMs - Number(cached.fetchedAt || 0)) < DREP_META_CACHE_TTL_MS && cached.details);
+    });
+  const detailsById = staleIds.length > 0 ? await govSource.getDrepDetails(staleIds, { registrationEpochs, drepActivity }).catch(() => new Map()) : new Map();
+  const metadataById = staleIds.length > 0 ? await govSource.getDrepMetadata(staleIds).catch(() => new Map()) : new Map();
+  const nameCache = new Map();
+  const payloadCache = new Map();
+  for (const id of ids) {
+    const row = rowsById.get(id);
+    const cached = drepMetaCache[id] || null;
+    const fresh = staleIds.includes(id);
+    const details = fresh ? (detailsById.get(id) || cached?.details || null) : (cached?.details || null);
+    const metadata = fresh ? (metadataById.get(id) || cached?.metadata || null) : (cached?.metadata || null);
+    if (row && details) applyDrepDetailsToRow(row, details);
+    const metaHash = String(metadata?.hash || "").toLowerCase();
+    const profileReusable = cached && cached.profile && metaHash && cached.metaHash === metaHash;
+    if (row && metadata) {
+      if (profileReusable) {
+        row.transparencyScore = Number.isFinite(Number(cached.transparencyScore)) ? Number(cached.transparencyScore) : computeTransparencyScore(metadata);
+        row.profile = cached.profile;
+        row.name = cached.name || row.name || "";
+      } else {
+        await applyDrepMetadataToRow(row, metadata, { nameCache, payloadCache });
+      }
+    }
+    if (fresh || !cached) {
+      drepMetaCache[id] = {
+        fetchedAt: nowMs,
+        details,
+        metadata,
+        metaHash,
+        profile: row?.profile || cached?.profile || null,
+        name: row?.name || cached?.name || "",
+        transparencyScore: row?.transparencyScore ?? cached?.transparencyScore ?? null
+      };
+    }
+  }
+  return { detailsById, metadataById };
+}
+
+// Share of an actor's Yes/No votes that matched the final Yes/No outcome.
+function computeActorConsistency(votes) {
+  const comparable = (Array.isArray(votes) ? votes : []).filter((vote) => {
+    const o = String(vote?.outcome || "").toLowerCase();
+    return o === "yes" || o === "no";
+  });
+  if (comparable.length === 0) return 0;
+  const hits = comparable.filter((vote) => String(vote.vote).toLowerCase() === String(vote.outcome).toLowerCase()).length;
+  return (hits / comparable.length) * 100;
+}
+
+// Outcome/lifecycle fields of a known proposal, refreshed from the list row.
+function applyProposalLifecycle(info, detail) {
+  if (!info || !detail) return info;
+  return {
+    ...info,
+    outcome: titleCase(outcomeFromProposal(detail)),
+    expirationEpoch: detail.expiration !== undefined ? detail.expiration : info.expirationEpoch,
+    ratifiedEpoch: detail.ratified_epoch !== undefined ? detail.ratified_epoch : info.ratifiedEpoch,
+    enactedEpoch: detail.enacted_epoch !== undefined ? detail.enacted_epoch : info.enactedEpoch,
+    droppedEpoch: detail.dropped_epoch !== undefined ? detail.dropped_epoch : info.droppedEpoch,
+    expiredEpoch: detail.expired_epoch !== undefined ? detail.expired_epoch : info.expiredEpoch
+  };
+}
+
+function proposalIsOpen(info) {
+  const outcome = String(info?.outcome || "").toLowerCase();
+  return outcome === "" || outcome === "open" || outcome === "unknown" || outcome === "pending";
+}
+
+// ---------------------------------------------------------------------------
+// Incremental delta sync
+// ---------------------------------------------------------------------------
+// Reads only what changed since the base snapshot: the proposal list (status
+// changes and new actions), the votes newer than the watermark, and the
+// DReps that cast them. Three to five Koios requests in the common case.
+async function buildDeltaSnapshot(base) {
+  const tip = await govSource.getTip().catch(() => null);
+  const latestEpoch = Number(tip?.epoch || 0) || Number(base?.latestEpoch || 0) || null;
+
+  const proposalsAll = await govSource.listProposals();
+  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
+  const proposalById = new Map(proposals.map((p) => [p.id, p]));
+  const currentProposalIds = new Set(proposals.map((p) => p.id));
 
   syncState.totalProposals = proposalsAll.length;
   syncState.scannedProposals = proposals.length;
@@ -6053,454 +6156,246 @@ async function buildDeltaSnapshot(base) {
   const ccById = new Map(mergeCommitteeRows(base.committeeMembers || []).map((r) => [r.id, { ...r, votes: [...(r.votes || [])] }]));
   const proposalInfo = { ...(base.proposalInfo || {}) };
 
-  // Canonicalize to the currently indexed proposal set. This prevents stale
-  // proposal IDs from older snapshots from persisting forever in delta mode.
+  // Canonicalize to the currently indexed proposal set.
   for (const pid of Object.keys(proposalInfo)) {
     if (!currentProposalIds.has(String(pid || "").trim())) delete proposalInfo[pid];
   }
   const pruneVotes = (mapObj) => {
     for (const actor of mapObj.values()) {
-      actor.votes = (actor.votes || []).filter((vote) =>
-        currentProposalIds.has(String(vote?.proposalId || "").trim())
-      );
+      actor.votes = (actor.votes || []).filter((vote) => currentProposalIds.has(String(vote?.proposalId || "").trim()));
     }
   };
   pruneVotes(drepById);
   pruneVotes(spoById);
   pruneVotes(ccById);
 
-  // Build lookup structures from the pruned snapshot so we can do O(1) checks.
-  const existingProposalIds = new Set(Object.keys(proposalInfo));
-
-  // Per-proposal: set of vote tx hashes we already know about (watermark).
-  const knownVoteTxHashByProposal = new Map(); // proposalId -> Set<txHash>
-  for (const actor of [...drepById.values(), ...spoById.values(), ...ccById.values()]) {
-    for (const vote of (actor.votes || [])) {
-      const pid = String(vote.proposalId || "");
-      const txh = String(vote.voteTxHash || "").toLowerCase();
-      if (!pid || !txh) continue;
-      if (!knownVoteTxHashByProposal.has(pid)) knownVoteTxHashByProposal.set(pid, new Set());
-      knownVoteTxHashByProposal.get(pid).add(txh);
+  // Lifecycle of every known proposal (ratified/enacted/dropped/expired) is
+  // refreshed from the list row on every delta: no per-proposal request.
+  // A resolved proposal also updates the outcome stored on each vote, which
+  // the consistency metric compares against.
+  const outcomeChangedProposalIds = new Set();
+  for (const p of proposals) {
+    if (!proposalInfo[p.id]) continue;
+    const before = String(proposalInfo[p.id].outcome || "");
+    proposalInfo[p.id] = applyProposalLifecycle(proposalInfo[p.id], p.detail);
+    if (String(proposalInfo[p.id].outcome || "") !== before) outcomeChangedProposalIds.add(p.id);
+  }
+  if (outcomeChangedProposalIds.size > 0) {
+    for (const actor of [...drepById.values(), ...spoById.values(), ...ccById.values()]) {
+      for (const vote of actor.votes || []) {
+        if (outcomeChangedProposalIds.has(vote.proposalId)) {
+          vote.outcome = proposalInfo[vote.proposalId].outcome;
+          actor._dirty = true;
+        }
+      }
     }
   }
 
-  // Backfill any votes that were persisted with null votedAtUnix but whose
-  // tx hash is now in the cache.  This is a no-op once all votes are patched.
+  // Per-proposal set of vote tx hashes we already know (dedups the overlap).
+  const knownVoteTxHashByProposal = new Map();
+  for (const actor of [...drepById.values(), ...spoById.values(), ...ccById.values()]) {
+    for (const vote of (actor.votes || [])) {
+      const pid = String(vote.proposalId || "");
+      const hashes = [vote.voteTxHash, ...(Array.isArray(vote.voteHistory) ? vote.voteHistory.map((h) => h?.voteTxHash) : [])];
+      for (const raw of hashes) {
+        const txh = String(raw || "").toLowerCase();
+        if (!pid || !txh) continue;
+        if (!knownVoteTxHashByProposal.has(pid)) knownVoteTxHashByProposal.set(pid, new Set());
+        knownVoteTxHashByProposal.get(pid).add(txh);
+      }
+    }
+  }
+
   backfillVoteTimestampsFromCache(drepById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(spoById.values(), proposalInfo);
   backfillVoteTimestampsFromCache(ccById.values(), proposalInfo);
 
-  // Identify new proposals (not in existing snapshot) and known ones.
+  const existingProposalIds = new Set(Object.keys(proposalInfo));
   const newProposals = proposals.filter((p) => !existingProposalIds.has(p.id));
-  const knownProposals = proposals.filter((p) => existingProposalIds.has(p.id));
 
-  // We only need to check for new votes on known proposals that are still
-  // "open" (not expired/dropped/ratified). Use proposalInfo outcome for this.
-  // NOTE: outcomeFromProposal() returns "pending" for open proposals, which
-  // titleCase() stores as "Pending" — so we must include "pending" here too.
-  const activeKnownProposals = knownProposals.filter((p) => {
-    const info = proposalInfo[p.id];
-    if (!info) return true; // unknown state — check anyway
-    const outcome = String(info.outcome || "").toLowerCase();
-    return outcome === "" || outcome === "open" || outcome === "unknown" || outcome === "pending";
-  });
-
-  // --- Phase 1: Handle new proposals (full treatment, same as buildFullSnapshot) ---
+  // --- Phase 1: New proposals (metadata from the list row, votes read once) ---
   let newProposalSkips = 0;
-  const newProposalMeta = new Map(); // proposalId -> { blockTime, hasXVotes }
+  const newlyActiveDrepIds = new Set();
+  const touchedProposalIds = new Set();
+  let voteWatermark = computeVoteWatermark(base);
 
-  for (let start = 0; start < newProposals.length; start += SYNC_BATCH_SIZE) {
-    const batch = newProposals.slice(start, start + SYNC_BATCH_SIZE);
-    const batchIds = batch.map((p) => p.id);
-    const [koiosSummaryByProposal, koiosVoteLookupByProposal, koiosSpoVoteLookupByProposal] = await Promise.all([
-      fetchKoiosVotingSummariesByProposalIds(batchIds).catch(() => new Map()),
-      fetchKoiosVoteRationaleLookupsForProposals(batchIds).catch(() => new Map()),
-      fetchKoiosSpoVoteRationaleLookupsForProposals(batchIds).catch(() => new Map())
-    ]);
-
-    const detailRows = await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
-      const safeId = encodeURIComponent(proposal.id);
-      try {
-        const [detail, rawMetadata, txInfo] = await Promise.all([
-          blockfrostGet(`/governance/proposals/${safeId}`),
-          blockfrostGet(`/governance/proposals/${safeId}/metadata`).catch(() => null),
-          blockfrostGet(`/txs/${proposal.tx_hash}`).catch(() => null)
-        ]);
-        const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-        const koiosVotingSummary = koiosSummaryByProposal.get(proposal.id) || null;
-        const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
-        const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
-        if (spoKoiosLookup instanceof Map) {
-          for (const [key, value] of spoKoiosLookup.entries()) {
-            if (!koiosVoteLookup.has(key)) koiosVoteLookup.set(key, value);
-          }
-          if (spoKoiosLookup.__unresolved && !koiosVoteLookup.__unresolved) {
-            koiosVoteLookup.__unresolved = true;
-          }
-        }
-        const votes = await paginate(`/governance/proposals/${safeId}/votes`, PROPOSAL_VOTES_PAGE_SIZE, PROPOSAL_VOTES_MAX_PAGES).catch(() => []);
-        return { proposalId: proposal.id, detail, metadata, txInfo, koiosVotingSummary, koiosVoteLookup, votes };
-      } catch {
-        newProposalSkips += 1;
-        return null;
+  // Merge one Koios vote row into the actor maps (shared by phases 1 and 2).
+  // Rows must be handed over newest-first per proposal so the first occurrence
+  // per voter is the active vote.
+  function mergeVoteRow(vote, proposalId, koiosVoteLookup, seen) {
+    const role = normalizeVoteRole(vote.voter_role);
+    const currentOutcome = titleCase(String(proposalInfo[proposalId]?.outcome || ""));
+    const proposalBlockTime = Number(proposalInfo[proposalId]?.submittedAtUnix || 0);
+    const votedAt = Number(vote.block_time || voteTxTimeCache[vote.tx_hash] || 0);
+    if (votedAt > voteWatermark) voteWatermark = votedAt;
+    const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
+    const responseHours = proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null;
+    const entryBase = {
+      proposalId,
+      vote: titleCase(vote.vote),
+      outcome: currentOutcome,
+      voteTxHash: vote.tx_hash || "",
+      hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup),
+      rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "",
+      voterRole: role,
+      responseHours,
+      votedAtUnix: votedAt || null,
+      votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null
+    };
+    if (role === "drep") {
+      const drepId = vote.voter;
+      const key = `drep:${drepId}:${proposalId}`;
+      const isFirst = !seen.has(key);
+      seen.add(key);
+      if (!drepById.has(drepId)) {
+        drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
       }
-    });
-
-    const epochParams = null; // thresholds already in existing snapshot; skip for delta
-    for (const row of detailRows.filter(Boolean)) {
-      const outcome = outcomeFromProposal(row.detail);
-      const governanceType = row.detail?.governance_type || "unknown";
-      const text = extractProposalNameAndRationale(row.proposalId, row.detail, row.metadata);
-      const blockTime = Number(row.txInfo?.block_time || 0);
-      const drepVotes = row.votes.filter((v) => normalizeVoteRole(v.voter_role) === "drep");
-      const committeeVotes = row.votes.filter((v) => normalizeVoteRole(v.voter_role) === "constitutional_committee");
-      const spoVotes = row.votes.filter((v) => normalizeVoteRole(v.voter_role) === "stake_pool");
-
-      let cgovCommitteeLookup = null;
-      if (CC_RATIONALE_USE_CGOV_FALLBACK && committeeVotes.length > 0) {
-        cgovCommitteeLookup = await fetchCgovCommitteeVoteRationaleLookupForProposal(row.detail?.tx_hash, row.detail?.cert_index).catch(() => null);
+      const drep = drepById.get(drepId);
+      drep._dirty = true;
+      drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
+      newlyActiveDrepIds.add(drepId);
+      upsertActorVoteByProposal(drep.votes, entryBase, isFirst);
+      return;
+    }
+    if (role === "constitutional_committee") {
+      const memberId = ccCanonicalId(vote.voter);
+      const key = `cc:${memberId}:${proposalId}`;
+      const isFirst = !seen.has(key);
+      seen.add(key);
+      if (!ccById.has(memberId)) {
+        ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
       }
-      let cgovDrepLookup = null;
-      if (DREP_RATIONALE_USE_CGOV_FALLBACK && drepVotes.length > 0) {
-        cgovDrepLookup = await fetchCgovDrepVoteRationaleLookupForProposal(row.detail?.tx_hash, row.detail?.cert_index).catch(() => null);
+      const member = ccById.get(memberId);
+      member._dirty = true;
+      member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
+      if (!member.koiosVoterId && String(vote.voter || "").startsWith("cc_hot1")) member.koiosVoterId = String(vote.voter).trim();
+      upsertActorVoteByProposal(member.votes, { ...entryBase, rationaleBodyLength: 0, rationaleSectionCount: 0 }, isFirst);
+      return;
+    }
+    if (role === "stake_pool") {
+      const poolId = vote.voter;
+      const key = `spo:${poolId}:${proposalId}`;
+      const isFirst = !seen.has(key);
+      seen.add(key);
+      if (!spoById.has(poolId)) {
+        spoById.set(poolId, { id: poolId, name: "", homepage: "", status: "registered", delegatedDrepLiteralRaw: "", delegatedDrepLiteral: "", delegationStatus: "Not delegated", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: null, votes: [], _dirty: true });
       }
-      let cgovSpoLookup = null;
-      if (SPO_RATIONALE_USE_CGOV_FALLBACK && spoVotes.length > 0) {
-        cgovSpoLookup = await fetchCgovSpoVoteRationaleLookupForProposal(row.detail?.tx_hash, row.detail?.cert_index).catch(() => null);
-      }
+      const pool = spoById.get(poolId);
+      pool._dirty = true;
+      pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
+      const txHash = String(vote.tx_hash || "").toLowerCase();
+      const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
+      const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
+      const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
+      upsertActorVoteByProposal(pool.votes, {
+        ...entryBase,
+        hasRationale: entryBase.hasRationale || cachedHasRationale,
+        rationaleUrl: entryBase.rationaleUrl || cachedRationaleUrl || ""
+      }, isFirst);
+    }
+  }
 
-      const nomosModel = buildNomosModelFromKoiosSummary(row.koiosVotingSummary);
-      const voteStatsByRole = tallyVotesByRole(row.votes);
-
-      proposalInfo[row.proposalId] = {
+  for (const proposal of newProposals) {
+    try {
+      const metadata = await enrichProposalMetadataWithIpfsFallback(proposal.metadata);
+      const votes = await govSource.listVotes({ proposalId: proposal.id }).catch(() => []);
+      for (const v of votes) if (v.tx_hash && v.block_time && !voteTxTimeCache[v.tx_hash]) voteTxTimeCache[v.tx_hash] = v.block_time;
+      const detail = proposal.detail;
+      const outcome = outcomeFromProposal(detail);
+      const governanceType = detail?.governance_type || "unknown";
+      const text = extractProposalNameAndRationale(proposal.id, detail, metadata);
+      const blockTime = Number(proposal.blockTime || 0);
+      const koiosVotingSummary = await govSource.getProposalVotingSummary(proposal.id).catch(() => null);
+      proposalInfo[proposal.id] = {
         actionName: text.actionName,
         rationale: text.rationaleText,
-        metadataJson: row.metadata?.json_metadata || null,
-        metadataUrl: row.metadata?.url || null,
-        metadataHash: row.metadata?.hash || null,
+        metadataJson: metadata?.json_metadata || null,
+        metadataUrl: metadata?.url || null,
+        metadataHash: metadata?.hash || null,
         governanceType: titleCase(governanceType),
         outcome: titleCase(outcome),
         submittedAtUnix: blockTime || null,
         submittedAt: blockTime ? new Date(blockTime * 1000).toISOString() : null,
-        submittedEpoch: row.detail?.block_epoch || Number(row.koiosVotingSummary?.epoch_no || 0) || (blockTime > 0 ? 208 + Math.floor((blockTime - 1596059091) / 432000) : null),
-        txHash: row.detail?.tx_hash || null,
-        certIndex: row.detail?.cert_index ?? null,
-        depositAda: row.detail?.deposit ? Math.floor(Number(row.detail.deposit) / 1_000_000) : 0,
-        returnAddress: row.detail?.return_address || "",
-        expirationEpoch: row.detail?.expiration ?? null,
-        ratifiedEpoch: row.detail?.ratified_epoch ?? null,
-        enactedEpoch: row.detail?.enacted_epoch ?? null,
-        droppedEpoch: row.detail?.dropped_epoch ?? null,
-        expiredEpoch: row.detail?.expired_epoch ?? null,
-        governanceDescription: row.detail?.governance_description || null,
-        koiosVotingSummary: row.koiosVotingSummary || null,
-        nomosModel,
-        thresholdInfo: null, // omit for delta; full rebuild computes this
-        voteStats: voteStatsByRole
+        submittedEpoch: proposal.blockEpoch || Number(koiosVotingSummary?.epoch_no || 0) || (blockTime > 0 ? 208 + Math.floor((blockTime - 1596059091) / 432000) : null),
+        txHash: detail?.tx_hash || null,
+        certIndex: detail?.cert_index ?? null,
+        depositAda: detail?.deposit ? Math.floor(Number(detail.deposit) / 1_000_000) : 0,
+        returnAddress: detail?.return_address || "",
+        expirationEpoch: detail?.expiration ?? null,
+        ratifiedEpoch: detail?.ratified_epoch ?? null,
+        enactedEpoch: detail?.enacted_epoch ?? null,
+        droppedEpoch: detail?.dropped_epoch ?? null,
+        expiredEpoch: detail?.expired_epoch ?? null,
+        governanceDescription: detail?.governance_description || null,
+        koiosVotingSummary: koiosVotingSummary || null,
+        nomosModel: buildNomosModelFromKoiosSummary(koiosVotingSummary),
+        thresholdInfo: resolveThresholdInfo(detail?.governance_type, detail?.governance_description, base?.thresholdContext || {}),
+        voteStats: tallyVotesByRole(votes)
       };
-
-      newProposalMeta.set(row.proposalId, { blockTime, hasDrepVotes: drepVotes.length > 0, hasCommitteeVotes: committeeVotes.length > 0, hasSpoVotes: spoVotes.length > 0 });
-
-      // Merge votes for new proposals into actor maps
-      for (const vote of drepVotes) {
-        const drepId = vote.voter;
-        if (!drepById.has(drepId)) {
-          drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
-        }
-        const drep = drepById.get(drepId);
-        drep._dirty = true;
-        drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-        const cgovVote = lookupCgovDrepVoteRationale(cgovDrepLookup, drepId, vote.tx_hash);
-        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        upsertActorVoteByProposal(drep.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-      }
-
-      for (const vote of committeeVotes) {
-        const memberId = ccCanonicalId(vote.voter);
-        if (!ccById.has(memberId)) {
-          ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
-        }
-        const member = ccById.get(memberId);
-        member._dirty = true;
-        member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-        const cgovVote = lookupCgovCommitteeVoteRationale(cgovCommitteeLookup, vote);
-        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
-        upsertActorVoteByProposal(member.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cgovRationaleUrl || "", rationaleBodyLength: Number(cgovVote?.rationaleBodyLength || 0), rationaleSectionCount: Number(cgovVote?.rationaleSectionCount || 0), voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-      }
-
-      for (const vote of spoVotes) {
-        const poolId = vote.voter;
-        if (!spoById.has(poolId)) {
-          spoById.set(poolId, { id: poolId, name: "", homepage: "", status: "registered", delegatedDrepLiteralRaw: "", delegatedDrepLiteral: "", delegationStatus: "Not delegated", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: Number.MAX_SAFE_INTEGER, votingPowerAda: null, votes: [], _dirty: true });
-        }
-        const pool = spoById.get(poolId);
-        pool._dirty = true;
-        pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, blockTime || Number.MAX_SAFE_INTEGER);
-        const koiosVote = lookupKoiosVoteRationale(row.koiosVoteLookup, vote);
-        const txHash = String(vote.tx_hash || "").toLowerCase();
-        const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
-        const cgovVote = lookupCgovSpoVoteRationale(cgovSpoLookup, vote);
-        const cgovHasRationale = Boolean(cgovVote?.hasRationale);
-        const cgovRationaleUrl = String(cgovVote?.rationaleUrl || "").trim();
-        const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
-        const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        upsertActorVoteByProposal(pool.votes, { proposalId: row.proposalId, vote: titleCase(vote.vote), outcome: titleCase(outcome), voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, row.koiosVoteLookup) || cachedHasRationale || cgovHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || cgovRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: blockTime > 0 && votedAt >= blockTime ? (votedAt - blockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null });
-      }
-
+      const koiosVoteLookup = buildKoiosVoteLookupFromRows(votes);
+      const seen = new Set();
+      const ordered = [...votes].sort((a, b) => Number(b.block_time || 0) - Number(a.block_time || 0));
+      for (const vote of ordered) mergeVoteRow(vote, proposal.id, koiosVoteLookup, seen);
+      touchedProposalIds.add(proposal.id);
       syncState.processedProposals += 1;
+    } catch (error) {
+      newProposalSkips += 1;
+      console.warn(`[delta] new proposal ${proposal.id} skipped: ${error?.message || error}`);
     }
   }
 
-  // --- Phase 2: Check active known proposals for new votes (watermark-based) ---
-  const newlyActiveDrepIds = new Set();
+  // --- Phase 2: Votes newer than the watermark, in one incremental read ---
+  const since = Math.max(0, voteWatermark - DELTA_VOTE_OVERLAP_SECONDS);
+  const deltaVotes = await govSource.listVotes({ sinceBlockTime: since });
+  const deltaByProposal = new Map();
+  for (const vote of deltaVotes) {
+    const pid = vote.proposal_id;
+    if (!currentProposalIds.has(pid)) continue;
+    if (vote.tx_hash && vote.block_time && !voteTxTimeCache[vote.tx_hash]) voteTxTimeCache[vote.tx_hash] = vote.block_time;
+    const known = knownVoteTxHashByProposal.get(pid);
+    if (known && known.has(vote.tx_hash)) continue;
+    if (!proposalInfo[pid] || touchedProposalIds.has(pid)) continue; // new proposals were read in full above
+    if (!deltaByProposal.has(pid)) deltaByProposal.set(pid, []);
+    deltaByProposal.get(pid).push(vote);
+  }
+  for (const [pid, votes] of deltaByProposal.entries()) {
+    const koiosVoteLookup = buildKoiosVoteLookupFromRows(votes);
+    const seen = new Set();
+    const ordered = [...votes].sort((a, b) => Number(b.block_time || 0) - Number(a.block_time || 0));
+    for (const vote of ordered) mergeVoteRow(vote, pid, koiosVoteLookup, seen);
+    touchedProposalIds.add(pid);
+    syncState.processedProposals += 1;
+  }
+  syncState.processedProposals += Math.max(0, proposals.length - newProposals.length - deltaByProposal.size);
 
-  // Pre-filter: skip proposals still within their poll interval BEFORE firing Koios calls,
-  // so we never pay for a Koios batch fetch for proposals we'd immediately skip anyway.
-  const nowMsPhase2 = Date.now();
-  const proposalsNeedingCheck = [];
-  for (const p of activeKnownProposals) {
-    const proposalId = String(p?.id || "").trim();
-    const pollState = proposalDeltaPollState.get(proposalId) || null;
-    if (pollState && Number.isFinite(pollState.lastCheckedAt) && pollState.lastCheckedAt > 0) {
-      const hasRecentActivity =
-        Number.isFinite(pollState.lastNewVotesAt) &&
-        pollState.lastNewVotesAt > 0 &&
-        (nowMsPhase2 - pollState.lastNewVotesAt) <= DELTA_PROPOSAL_RECENT_WINDOW_MS;
-      const minInterval = hasRecentActivity ? DELTA_PROPOSAL_RECENT_POLL_MS : DELTA_PROPOSAL_IDLE_POLL_MS;
-      if (nowMsPhase2 - pollState.lastCheckedAt < minInterval) {
-        syncState.processedProposals += 1;
-        continue;
+  // Tallies and the Koios voting summary for every proposal that changed.
+  for (const pid of touchedProposalIds) {
+    if (!proposalInfo[pid]) continue;
+    proposalInfo[pid] = {
+      ...proposalInfo[pid],
+      voteStats: buildProposalVoteStatsFromActorMaps(pid, drepById, ccById, spoById)
+    };
+    if (proposalIsOpen(proposalInfo[pid]) && !newProposals.some((p) => p.id === pid)) {
+      const summary = await govSource.getProposalVotingSummary(pid).catch(() => null);
+      if (summary) {
+        proposalInfo[pid] = { ...proposalInfo[pid], koiosVotingSummary: summary, nomosModel: buildNomosModelFromKoiosSummary(summary) };
       }
     }
-    proposalsNeedingCheck.push(p);
   }
-
-  for (let start = 0; start < proposalsNeedingCheck.length; start += SYNC_BATCH_SIZE) {
-    const batch = proposalsNeedingCheck.slice(start, start + SYNC_BATCH_SIZE);
-    const batchIds = batch.map((p) => p.id);
-
-    const [koiosVoteLookupByProposal, koiosSpoVoteLookupByProposal] = await Promise.all([
-      fetchKoiosVoteRationaleLookupsForProposals(batchIds).catch(() => new Map()),
-      fetchKoiosSpoVoteRationaleLookupsForProposals(batchIds).catch(() => new Map())
-    ]);
-
-    await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
-      const proposalId = String(proposal?.id || "").trim();
-      const nowMs = Date.now();
-      const pollState = proposalDeltaPollState.get(proposalId) || null;
-
-      const safeId = encodeURIComponent(proposal.id);
-      const watermark = knownVoteTxHashByProposal.get(proposal.id) || new Set();
-      const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
-      const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
-      if (spoKoiosLookup instanceof Map) {
-        for (const [key, value] of spoKoiosLookup.entries()) {
-          if (!koiosVoteLookup.has(key)) koiosVoteLookup.set(key, value);
-        }
-      }
-
-      const currentOutcome = titleCase(String(proposalInfo[proposal.id]?.outcome || ""));
-      const proposalBlockTime = Number(proposalInfo[proposal.id]?.submittedAtUnix || 0);
-
-      // Paginate ALL votes, skipping tx hashes we already know.
-      // Do NOT stop at the first known hash: a re-vote can sit BELOW newer
-      // votes from other actors that are already in the watermark, so an
-      // early stop would skip it forever.
-      const newVotes = [];
-      let page = 1;
-      while (page <= PROPOSAL_VOTES_MAX_PAGES) {
-        const query = `/governance/proposals/${safeId}/votes?count=${PROPOSAL_VOTES_PAGE_SIZE}&page=${page}&order=desc`;
-        const chunk = await blockfrostGet(query).catch(() => []);
-        if (!Array.isArray(chunk) || chunk.length === 0) break;
-        for (const vote of chunk) {
-          const txh = String(vote.tx_hash || "").toLowerCase();
-          if (watermark.has(txh)) continue;
-          newVotes.push(vote);
-        }
-        if (chunk.length < PROPOSAL_VOTES_PAGE_SIZE) break;
-        page += 1;
-      }
-
-      if (newVotes.length === 0) {
-        proposalDeltaPollState.set(proposalId, {
-          lastCheckedAt: nowMs,
-          lastNewVotesAt: Number(pollState?.lastNewVotesAt || 0)
-        });
-        syncState.processedProposals += 1;
-        return;
-      }
-
-      // Fetch tx timestamps for new vote hashes we don't have yet.
-      const newTxHashes = newVotes.map((v) => String(v.tx_hash || "").toLowerCase()).filter((h) => h && !voteTxTimeCache[h]);
-      for (const txHash of newTxHashes) {
-        try {
-          const tx = await blockfrostGet(`/txs/${txHash}`);
-          voteTxTimeCache[txHash] = Number(tx.block_time || 0);
-        } catch {
-          voteTxTimeCache[txHash] = 0;
-        }
-      }
-      if (newTxHashes.length > 0) saveVoteTxTimeCache();
-
-      // Also fetch proposal detail to update outcome if it changed.
-      const freshDetail = await blockfrostGet(`/governance/proposals/${safeId}`).catch(() => null);
-      if (freshDetail) {
-        const freshOutcome = titleCase(outcomeFromProposal(freshDetail));
-        if (proposalInfo[proposal.id]) {
-          const current = proposalInfo[proposal.id] || {};
-          const nextExpirationEpoch =
-            freshDetail.expiration !== undefined ? freshDetail.expiration : current.expirationEpoch;
-          const nextRatifiedEpoch =
-            freshDetail.ratified_epoch !== undefined ? freshDetail.ratified_epoch : current.ratifiedEpoch;
-          const nextEnactedEpoch =
-            freshDetail.enacted_epoch !== undefined ? freshDetail.enacted_epoch : current.enactedEpoch;
-          const nextDroppedEpoch =
-            freshDetail.dropped_epoch !== undefined ? freshDetail.dropped_epoch : current.droppedEpoch;
-          const nextExpiredEpoch =
-            freshDetail.expired_epoch !== undefined ? freshDetail.expired_epoch : current.expiredEpoch;
-          proposalInfo[proposal.id] = {
-            ...current,
-            outcome: freshOutcome,
-            expirationEpoch: nextExpirationEpoch,
-            ratifiedEpoch: nextRatifiedEpoch,
-            enactedEpoch: nextEnactedEpoch,
-            droppedEpoch: nextDroppedEpoch,
-            expiredEpoch: nextExpiredEpoch
-          };
-        }
-      }
-
-      // Merge new votes into actor maps.
-      const drepVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "drep");
-      const committeeVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "constitutional_committee");
-      const spoVotes = newVotes.filter((v) => normalizeVoteRole(v.voter_role) === "stake_pool");
-
-      // Track which voter+proposal combos we've seen first in this desc-order batch.
-      // The first occurrence per voter is the most recently cast vote.
-      const seenDrepProposalFirst = new Set();
-
-      for (const vote of drepVotes) {
-        const drepId = vote.voter;
-        const voterProposalKey = `${drepId}:${proposal.id}`;
-        const isFirst = !seenDrepProposalFirst.has(voterProposalKey);
-        if (isFirst) seenDrepProposalFirst.add(voterProposalKey);
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        if (!drepById.has(drepId)) {
-          drepById.set(drepId, { id: drepId, name: "", status: "unknown", active: null, retired: null, expired: null, activeEpoch: null, lastActiveEpoch: null, hasScript: null, transparencyScore: 20, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, profile: { name: "", bio: "", motivations: "", objectives: "", qualifications: "", email: "", imageUrl: "", references: [] }, votes: [], _dirty: true });
-        }
-        const drep = drepById.get(drepId);
-        drep._dirty = true;
-        drep.firstVoteBlockTime = Math.min(drep.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
-        newlyActiveDrepIds.add(drepId);
-        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-        upsertActorVoteByProposal(drep.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirst);
-      }
-
-      const seenCcProposalFirst = new Set();
-      for (const vote of committeeVotes) {
-        const memberId = ccCanonicalId(vote.voter);
-        const ccKey = `${memberId}:${proposal.id}`;
-        const isFirstCc = !seenCcProposalFirst.has(ccKey);
-        if (isFirstCc) seenCcProposalFirst.add(ccKey);
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        if (!ccById.has(memberId)) {
-          ccById.set(memberId, { id: memberId, name: "", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: 0, koiosVoterId: "", votes: [], _dirty: true });
-        }
-        const member = ccById.get(memberId);
-        member._dirty = true;
-        member.firstVoteBlockTime = Math.min(member.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
-        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-        if (!member.koiosVoterId && typeof koiosVote?.koiosVoterId === "string") member.koiosVoterId = koiosVote.koiosVoterId.trim();
-        upsertActorVoteByProposal(member.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup), rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || "", rationaleBodyLength: 0, rationaleSectionCount: 0, voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirstCc);
-      }
-
-      const seenSpoProposalFirst = new Set();
-      for (const vote of spoVotes) {
-        const poolId = vote.voter;
-        const spoKey = `${poolId}:${proposal.id}`;
-        const isFirstSpo = !seenSpoProposalFirst.has(spoKey);
-        if (isFirstSpo) seenSpoProposalFirst.add(spoKey);
-        const votedAt = Number(voteTxTimeCache[vote.tx_hash] || vote.block_time || 0);
-        if (!spoById.has(poolId)) {
-          spoById.set(poolId, { id: poolId, name: "", homepage: "", status: "registered", delegatedDrepLiteralRaw: "", delegatedDrepLiteral: "", delegationStatus: "Not delegated", transparencyScore: null, consistency: 0, totalEligibleVotes: proposals.length, firstVoteBlockTime: proposalBlockTime || Number.MAX_SAFE_INTEGER, votingPowerAda: null, votes: [], _dirty: true });
-        }
-        const pool = spoById.get(poolId);
-        pool._dirty = true;
-        pool.firstVoteBlockTime = Math.min(pool.firstVoteBlockTime, proposalBlockTime || Number.MAX_SAFE_INTEGER);
-        const koiosVote = lookupKoiosVoteRationale(koiosVoteLookup, vote);
-        const txHash = String(vote.tx_hash || "").toLowerCase();
-        const cachedTxRationale = txHash ? voteTxRationaleCache[txHash] : null;
-        const cachedHasRationale = cachedTxRationale ? Boolean(cachedTxRationale.hasRationale) : false;
-        const cachedRationaleUrl = cachedTxRationale ? String(cachedTxRationale.rationaleUrl || "") : "";
-        upsertActorVoteByProposal(pool.votes, { proposalId: proposal.id, vote: titleCase(vote.vote), outcome: currentOutcome, voteTxHash: vote.tx_hash || "", hasRationale: resolveRationalePresence(vote, koiosVote, koiosVoteLookup) || cachedHasRationale, rationaleUrl: getVoteRationaleUrl(vote) || koiosVote?.rationaleUrl || cachedRationaleUrl || "", voterRole: normalizeVoteRole(vote.voter_role), responseHours: proposalBlockTime > 0 && votedAt >= proposalBlockTime ? (votedAt - proposalBlockTime) / 3600 : null, votedAtUnix: votedAt || null, votedAt: votedAt ? new Date(votedAt * 1000).toISOString() : null }, isFirstSpo);
-      }
-
-      if (proposalInfo[proposal.id]) {
-        proposalInfo[proposal.id] = {
-          ...proposalInfo[proposal.id],
-          voteStats: buildProposalVoteStatsFromActorMaps(proposal.id, drepById, ccById, spoById)
-        };
-      }
-
-      proposalDeltaPollState.set(proposalId, {
-        lastCheckedAt: nowMs,
-        lastNewVotesAt: nowMs
-      });
-
-      syncState.processedProposals += 1;
-    });
-  }
+  if (deltaVotes.length > 0 || newProposals.length > 0) saveVoteTxTimeCache();
 
   // --- Phase 3: Refresh DRep details only for DReps with new votes ---
-  const drepIdsToRefresh = Array.from(newlyActiveDrepIds);
-  const drepMetadataPayloadCache = new Map();
-  for (let start = 0; start < drepIdsToRefresh.length; start += SYNC_BATCH_SIZE) {
-    const batch = drepIdsToRefresh.slice(start, start + SYNC_BATCH_SIZE);
-    await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
-      const nowMs = Date.now();
-      const lastRefreshAt = Number(drepProfileRefreshState.get(drepId) || 0);
-      if (lastRefreshAt > 0 && nowMs - lastRefreshAt < DREP_PROFILE_REFRESH_MIN_MS) {
-        return;
-      }
-      const safeId = encodeURIComponent(drepId);
-      const [details, metadata] = await Promise.allSettled([
-        blockfrostGet(`/governance/dreps/${safeId}`),
-        blockfrostGet(`/governance/dreps/${safeId}/metadata`)
-      ]);
-      const row = drepById.get(drepId);
-      if (!row) return;
-      if (details.status === "fulfilled") {
-        row.votingPowerAda = Math.floor(Number(details.value.amount || 0) / 1_000_000);
-        const active = details.value?.active === true;
-        const retired = details.value?.retired === true;
-        const expired = details.value?.expired === true;
-        row.active = active;
-        row.retired = retired;
-        row.expired = expired;
-        row.activeEpoch = Number(details.value?.active_epoch || 0) || null;
-        row.lastActiveEpoch = Number(details.value?.last_active_epoch || 0) || null;
-        row.hasScript = details.value?.has_script === true;
-        row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
-      }
-      if (metadata.status === "fulfilled") {
-        row.transparencyScore = computeTransparencyScore(metadata.value);
-        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadata.value, drepMetadataPayloadCache);
-        row.name = resolveName(metadata.value.json_metadata, row.id);
-        if (!row.name && row.profile?.name) row.name = row.profile.name;
-        if (!row.name) row.name = await resolveDrepNameFromMetadataEnvelope(metadata.value, new Map(), drepMetadataPayloadCache);
-      }
-      if (details.status === "fulfilled" || metadata.status === "fulfilled") {
-        drepProfileRefreshState.set(drepId, nowMs);
-      }
+  const nowMsPhase3 = Date.now();
+  const drepIdsToRefresh = Array.from(newlyActiveDrepIds).filter((drepId) => {
+    const lastRefreshAt = Number(drepProfileRefreshState.get(drepId) || 0);
+    return !(lastRefreshAt > 0 && nowMsPhase3 - lastRefreshAt < DREP_PROFILE_REFRESH_MIN_MS);
+  });
+  if (drepIdsToRefresh.length > 0) {
+    await hydrateDrepRowsFromKoios(drepById, drepIdsToRefresh, { force: true }).catch((error) => {
+      console.warn(`[delta] drep refresh failed: ${error?.message || error}`);
     });
+    for (const drepId of drepIdsToRefresh) drepProfileRefreshState.set(drepId, nowMsPhase3);
+    saveDrepMetaCache();
   }
 
   // --- Phase 3b/3c: Voting power and status refresh, from Koios ---
@@ -6511,32 +6406,31 @@ async function buildDeltaSnapshot(base) {
   const TOP_DREP_STATUS_REFRESH_MS = Number(process.env.TOP_DREP_STATUS_REFRESH_MS || 60 * 60 * 1000);
   const TOP_DREP_STATUS_COUNT = Number(process.env.TOP_DREP_STATUS_COUNT || 500);
   const nowMsPhase3c = Date.now();
+  let specialDreps = base.specialDreps || null;
   if (nowMsPhase3c - lastTopDrepStatusRefreshAt >= TOP_DREP_STATUS_REFRESH_MS) {
     lastTopDrepStatusRefreshAt = nowMsPhase3c;
     await refreshDrepPowerAndStatusFromKoios(drepById, latestEpoch, TOP_DREP_STATUS_COUNT).catch((error) => {
       console.warn(`[status-refresh] failed: ${error?.message || error}`);
     });
+    specialDreps = await govSource.getSpecialDreps(latestEpoch).catch(() => specialDreps);
   }
 
   // --- Phase 4: Reassemble snapshot arrays ---
-  const dreps = Array.from(drepById.values()).map((row) => {
-    // Strip internal _dirty flag
+  const finishRow = (row) => {
+    // Strip the internal _dirty flag; refresh the outcome-alignment metric
+    // for rows whose votes or outcomes changed in this delta.
     const { _dirty, ...clean } = row;
+    if (_dirty) clean.consistency = computeActorConsistency(clean.votes);
     return clean;
-  });
+  };
+  const dreps = Array.from(drepById.values()).map(finishRow);
   dreps.sort((a, b) => b.votingPowerAda - a.votingPowerAda);
 
-  const committeeMembers = Array.from(ccById.values()).map((row) => {
-    const { _dirty, ...clean } = row;
-    return clean;
-  });
+  const committeeMembers = Array.from(ccById.values()).map(finishRow);
   committeeMembers.sort((a, b) => b.votes.length - a.votes.length);
   await enrichCommitteeVotesWithQualitySignals(committeeMembers);
 
-  const spos = Array.from(spoById.values()).map((row) => {
-    const { _dirty, ...clean } = row;
-    return clean;
-  });
+  const spos = Array.from(spoById.values()).map(finishRow);
   spos.sort((a, b) => {
     const voteDelta = b.votes.length - a.votes.length;
     if (voteDelta !== 0) return voteDelta;
@@ -6554,35 +6448,62 @@ async function buildDeltaSnapshot(base) {
     skippedProposalCount: newProposalSkips,
     voteFetchErrorCount: 0,
     proposalInfo,
+    specialDreps: specialDreps || base.specialDreps,
     dreps,
     committeeMembers,
     spos,
-    partial: false
+    partial: false,
+    syncMeta: {
+      ...(base.syncMeta || {}),
+      provider: govSource.name,
+      voteWatermarkBlockTime: voteWatermark,
+      lastDeltaAt: new Date().toISOString(),
+      lastDeltaNewVotes: deltaVotes.length,
+      lastDeltaNewProposals: newProposals.length
+    }
   };
 }
 
+// ---------------------------------------------------------------------------
+// Full sync
+// ---------------------------------------------------------------------------
+// About 170 Koios requests for mainnet: the proposal list, every vote (1,000
+// per page), the DRep list/power/info/metadata in bulk, the pool list and
+// info in bulk, the committee, the tip and the protocol parameters.
 async function buildFullSnapshot() {
-  const proposalsAll = await paginate("/governance/proposals", PROPOSAL_PAGE_SIZE, PROPOSAL_MAX_PAGES);
-  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
-  const epochParams = await blockfrostGet("/epochs/latest/parameters").catch(() => null);
-  const latestEpoch = await blockfrostGet("/epochs/latest").then((x) => Number(x?.epoch || 0)).catch(() => 0);
-  const currentDrepPowerMap = latestEpoch > 0 ? await fetchDrepPowerForEpoch(latestEpoch).catch(() => new Map()) : new Map();
-  const allDrepIds = await fetchAllDrepIdsFromBlockfrost().catch(() => new Set());
-  const koiosCommitteeInfo = await koiosGet("/committee_info")
-    .then((rows) => (Array.isArray(rows) && rows.length > 0 ? rows[0] : null))
-    .catch(() => null);
+  const tip = await govSource.getTip();
+  const latestEpoch = Number(tip?.epoch || 0);
+  const epochParams = await govSource.getEpochParams(latestEpoch).catch(() => null);
   const thresholdContext = buildThresholdContext(epochParams);
-  const blockEpochCache = new Map();
+  const drepActivity = Number(epochParams?.drep_activity || 20) || 20;
 
-  async function getBlockEpoch(blockHash) {
-    const key = String(blockHash || "");
-    if (!key) return null;
-    if (blockEpochCache.has(key)) return blockEpochCache.get(key);
-    const block = await blockfrostGet(`/blocks/${key}`).catch(() => null);
-    const epoch = Number(block?.epoch || 0);
-    const value = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
-    blockEpochCache.set(key, value);
-    return value;
+  const proposalsAll = await govSource.listProposals();
+  const proposals = PROPOSAL_SCAN_LIMIT > 0 ? proposalsAll.slice(0, PROPOSAL_SCAN_LIMIT) : proposalsAll;
+  const scannedIds = new Set(proposals.map((p) => p.id));
+  const currentDrepPowerMap = latestEpoch > 0 ? await govSource.getDrepPowerForEpoch(latestEpoch).catch(() => new Map()) : new Map();
+  const allDrepIds = await govSource.listDrepIds().catch(() => new Set());
+  const koiosCommitteeInfo = await govSource.getCommitteeInfo().catch(() => null);
+  const drepRegistrationEpochs = await govSource.getDrepRegistrationEpochs().catch(() => new Map());
+
+  // Every vote on chain, once. Grouped by proposal; the block time feeds the
+  // response-time metric directly (no per-transaction lookups).
+  let voteWatermark = 0;
+  let voteFetchErrorCount = 0;
+  const votesByProposal = new Map();
+  try {
+    const allVotes = await govSource.listVotes({});
+    for (const vote of allVotes) {
+      if (!scannedIds.has(vote.proposal_id)) continue;
+      if (vote.block_time > voteWatermark) voteWatermark = vote.block_time;
+      if (vote.tx_hash && vote.block_time && !voteTxTimeCache[vote.tx_hash]) voteTxTimeCache[vote.tx_hash] = vote.block_time;
+      if (!votesByProposal.has(vote.proposal_id)) votesByProposal.set(vote.proposal_id, []);
+      votesByProposal.get(vote.proposal_id).push(vote);
+    }
+    // Newest first, like the Blockfrost pages the derivation code expects.
+    for (const list of votesByProposal.values()) list.sort((a, b) => Number(b.block_time || 0) - Number(a.block_time || 0));
+  } catch (error) {
+    voteFetchErrorCount += 1;
+    console.warn(`[full-sync] vote_list read failed: ${error?.message || error}`);
   }
 
   const proposalInfoById = {};
@@ -6592,62 +6513,36 @@ async function buildFullSnapshot() {
   const committeeAggregate = new Map();
   const spoAggregate = new Map();
   let skippedProposalCount = 0;
-  let voteFetchErrorCount = 0;
 
   syncState.totalProposals = proposalsAll.length;
   syncState.scannedProposals = proposals.length;
   syncState.processedProposals = 0;
 
-  for (let start = 0; start < proposals.length; start += SYNC_BATCH_SIZE) {
-    const batch = proposals.slice(start, start + SYNC_BATCH_SIZE);
-    const batchProposalIds = batch.map((proposal) => proposal.id);
-    const [koiosSummaryByProposal, koiosVoteLookupByProposal, koiosSpoVoteLookupByProposal] = await Promise.all([
-      fetchKoiosVotingSummariesByProposalIds(batchProposalIds).catch(() => new Map()),
-      fetchKoiosVoteRationaleLookupsForProposals(batchProposalIds).catch(() => new Map()),
-      fetchKoiosSpoVoteRationaleLookupsForProposals(batchProposalIds).catch(() => new Map())
-    ]);
-    const detailRows = await mapLimit(batch, SYNC_CONCURRENCY, async (proposal) => {
-      const safeId = encodeURIComponent(proposal.id);
-      try {
-        const [detail, rawMetadata, txInfo] = await Promise.all([
-          blockfrostGet(`/governance/proposals/${safeId}`),
-          blockfrostGet(`/governance/proposals/${safeId}/metadata`).catch(() => null),
-          blockfrostGet(`/txs/${proposal.tx_hash}`).catch(() => null)
-        ]);
-        const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-        const koiosVotingSummary = koiosSummaryByProposal.get(proposal.id) || null;
-        const koiosVoteLookup = new Map(koiosVoteLookupByProposal.get(proposal.id) || []);
-        const spoKoiosLookup = koiosSpoVoteLookupByProposal.get(proposal.id) || null;
-        if (spoKoiosLookup instanceof Map) {
-          for (const [key, value] of spoKoiosLookup.entries()) {
-            if (!koiosVoteLookup.has(key)) koiosVoteLookup.set(key, value);
-          }
-          if (spoKoiosLookup.__unresolved && !koiosVoteLookup.__unresolved) {
-            koiosVoteLookup.__unresolved = true;
-          }
-        }
-        const votes = await paginate(`/governance/proposals/${safeId}/votes`, PROPOSAL_VOTES_PAGE_SIZE, PROPOSAL_VOTES_MAX_PAGES)
-          .catch(() => {
-            voteFetchErrorCount += 1;
-            return [];
-          });
-        return {
-          proposalId: proposal.id,
-          detail,
-          metadata,
-          blockTime: Number(txInfo?.block_time || 0),
-          blockEpoch: await getBlockEpoch(txInfo?.block),
-          koiosVotingSummary,
-          koiosVoteLookup,
-          votes
-        };
-      } catch (error) {
-        skippedProposalCount += 1;
-        return null;
-      }
-    });
+  for (const proposal of proposals) {
+    let row;
+    try {
+      const detail = proposal.detail;
+      const metadata = await enrichProposalMetadataWithIpfsFallback(proposal.metadata);
+      const votes = votesByProposal.get(proposal.id) || [];
+      const wantSummary = KOIOS_VOTING_SUMMARY_SCOPE === "all" || outcomeFromProposal(detail) === "pending";
+      const koiosVotingSummary = wantSummary ? await govSource.getProposalVotingSummary(proposal.id).catch(() => null) : null;
+      row = {
+        proposalId: proposal.id,
+        detail,
+        metadata,
+        blockTime: Number(proposal.blockTime || 0),
+        blockEpoch: proposal.blockEpoch || null,
+        koiosVotingSummary,
+        koiosVoteLookup: buildKoiosVoteLookupFromRows(votes),
+        votes
+      };
+    } catch (error) {
+      skippedProposalCount += 1;
+      console.warn(`[full-sync] proposal ${proposal.id} skipped: ${error?.message || error}`);
+      continue;
+    }
 
-    for (const row of detailRows.filter(Boolean)) {
+    {
       const outcome = outcomeFromProposal(row.detail);
       const governanceType = row.detail?.governance_type || "unknown";
       const text = extractProposalNameAndRationale(row.proposalId, row.detail, row.metadata);
@@ -6713,12 +6608,8 @@ async function buildFullSnapshot() {
         voteStats: voteStatsByRole
       };
 
-      const DEBUG_DREP = "drep1ygtxcscvznhs2nqap9u8gtxa0dx0l6q5zhsqqlw46enwh8cttd07h";
       for (const vote of drepVotes) {
         const drepId = vote.voter;
-        if (drepId === DEBUG_DREP) {
-          console.log(`[re-vote debug] proposal=${row.proposalId} vote=${vote.vote} tx=${vote.tx_hash} block_time=${vote.block_time} block_height=${vote.block_height}`);
-        }
         if (!drepAggregate.has(drepId)) {
           drepAggregate.set(drepId, {
             id: drepId,
@@ -6914,29 +6805,41 @@ async function buildFullSnapshot() {
     }
   }
 
+  // Tallies count each voter's latest vote once (a DRep who changed their
+  // vote is one voter, not two), the same definition the delta sync uses.
+  const tallyFromAggregates = (proposalId) => {
+    const byRole = {
+      drep: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+      constitutional_committee: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+      stake_pool: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 },
+      other: { yes: 0, no: 0, abstain: 0, noConfidence: 0, other: 0, total: 0 }
+    };
+    for (const [role, aggregate] of [["drep", drepAggregate], ["constitutional_committee", committeeAggregate], ["stake_pool", spoAggregate]]) {
+      for (const actor of aggregate.values()) {
+        const vote = actor.votesByProposal.get(proposalId);
+        if (vote) addVoteToRoleBucket(byRole[role], vote.vote);
+      }
+    }
+    return byRole;
+  };
+  for (const proposalId of Object.keys(proposalInfoById)) {
+    proposalInfoById[proposalId].voteStats = tallyFromAggregates(proposalId);
+  }
+
+  // Vote timestamps: Koios gave us block_time for every vote above. The
+  // Blockfrost /txs/{hash} lookup is only a last resort for anything missing,
+  // capped by VOTE_TX_TIME_MAX_LOOKUPS (200) and the daily Blockfrost budget.
   const neededTxHashes = new Set();
-  for (const drep of drepAggregate.values()) {
-    for (const vote of drep.votesByProposal.values()) {
-      if (vote.voteTxHash && !voteTxTimeCache[vote.voteTxHash]) {
-        neededTxHashes.add(vote.voteTxHash);
+  for (const aggregate of [drepAggregate, spoAggregate, committeeAggregate]) {
+    for (const actor of aggregate.values()) {
+      for (const vote of actor.votesByProposal.values()) {
+        if (vote.voteTxHash && !voteTxTimeCache[vote.voteTxHash] && !vote.votedAtUnix) {
+          neededTxHashes.add(vote.voteTxHash);
+        }
       }
     }
   }
-  for (const pool of spoAggregate.values()) {
-    for (const vote of pool.votesByProposal.values()) {
-      if (vote.voteTxHash && !voteTxTimeCache[vote.voteTxHash]) {
-        neededTxHashes.add(vote.voteTxHash);
-      }
-    }
-  }
-  for (const member of committeeAggregate.values()) {
-    for (const vote of member.votesByProposal.values()) {
-      if (vote.voteTxHash && !voteTxTimeCache[vote.voteTxHash]) {
-        neededTxHashes.add(vote.voteTxHash);
-      }
-    }
-  }
-  const txHashesToFetch = Array.from(neededTxHashes).slice(0, VOTE_TX_TIME_MAX_LOOKUPS);
+  const txHashesToFetch = BLOCKFROST_API_KEY ? Array.from(neededTxHashes).slice(0, VOTE_TX_TIME_MAX_LOOKUPS) : [];
   for (let start = 0; start < txHashesToFetch.length; start += SYNC_BATCH_SIZE) {
     const batch = txHashesToFetch.slice(start, start + SYNC_BATCH_SIZE);
     await mapLimit(batch, SYNC_CONCURRENCY, async (txHash) => {
@@ -6948,10 +6851,10 @@ async function buildFullSnapshot() {
       }
     });
   }
-  if (txHashesToFetch.length > 0) {
-    saveVoteTxTimeCache();
-  }
+  saveVoteTxTimeCache();
 
+  // SPO rationale from transaction metadata (Blockfrost only, off by default:
+  // the on-chain vote anchor from Koios is the source of truth).
   const neededSpoRationaleTxHashes = new Set();
   for (const pool of spoAggregate.values()) {
     for (const vote of pool.votesByProposal.values()) {
@@ -6967,7 +6870,7 @@ async function buildFullSnapshot() {
       neededSpoRationaleTxHashes.add(txHash);
     }
   }
-  const spoRationaleHashes = Array.from(neededSpoRationaleTxHashes).slice(0, VOTE_TX_RATIONALE_MAX_LOOKUPS);
+  const spoRationaleHashes = BLOCKFROST_API_KEY ? Array.from(neededSpoRationaleTxHashes).slice(0, VOTE_TX_RATIONALE_MAX_LOOKUPS) : [];
   const rationaleFetchStartedAt = Date.now();
   for (let start = 0; start < spoRationaleHashes.length; start += SYNC_BATCH_SIZE) {
     if (Date.now() - rationaleFetchStartedAt >= VOTE_TX_RATIONALE_MAX_DURATION_MS) break;
@@ -6994,69 +6897,29 @@ async function buildFullSnapshot() {
     saveVoteTxRationaleCache();
   }
 
-  const drepIds = Array.from(drepAggregate.keys());
-  const drepMetadataUrlNameCache = new Map();
-  const drepMetadataPayloadCache = new Map();
-  for (let start = 0; start < drepIds.length; start += SYNC_BATCH_SIZE) {
-    const batch = drepIds.slice(start, start + SYNC_BATCH_SIZE);
-    await mapLimit(batch, SYNC_CONCURRENCY, async (drepId) => {
-      const safeId = encodeURIComponent(drepId);
-      const nowMs = Date.now();
-      const cached = drepMetaCache[drepId];
-      const isFresh = cached && (nowMs - Number(cached.fetchedAt || 0)) < DREP_META_CACHE_TTL_MS;
-
-      let detailsValue = isFresh ? cached.details : null;
-      let metadataValue = isFresh ? cached.metadata : null;
-
-      if (!isFresh) {
-        const [details, metadata] = await Promise.allSettled([
-          blockfrostGet(`/governance/dreps/${safeId}`),
-          blockfrostGet(`/governance/dreps/${safeId}/metadata`)
-        ]);
-        detailsValue = details.status === "fulfilled" ? details.value : null;
-        metadataValue = metadata.status === "fulfilled" ? metadata.value : null;
-        drepMetaCache[drepId] = { fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
-      }
-
-      const row = drepAggregate.get(drepId);
-      if (!row) return;
-      if (detailsValue) {
-        row.votingPowerAda = Math.floor(Number(detailsValue.amount || 0) / 1_000_000);
-        const active = detailsValue?.active === true;
-        const retired = detailsValue?.retired === true;
-        const expired = detailsValue?.expired === true;
-        row.active = active;
-        row.retired = retired;
-        row.expired = expired;
-        row.activeEpoch = Number(detailsValue?.active_epoch || 0) || null;
-        row.lastActiveEpoch = Number(detailsValue?.last_active_epoch || 0) || null;
-        row.hasScript = detailsValue?.has_script === true;
-        row.status = retired ? "retired" : expired ? "expired" : active ? "active" : "inactive";
-      }
-      if (metadataValue) {
-        row.transparencyScore = computeTransparencyScore(metadataValue);
-        row.profile = await resolveDrepProfileFromMetadataEnvelope(metadataValue, drepMetadataPayloadCache);
-        row.name = resolveName(metadataValue.json_metadata, row.id);
-        if (!row.name && row.profile?.name) {
-          row.name = row.profile.name;
-        }
-        if (!row.name) {
-          row.name = await resolveDrepNameFromMetadataEnvelope(
-            metadataValue,
-            drepMetadataUrlNameCache,
-            drepMetadataPayloadCache
-          );
-        }
-      }
-    });
-  }
+  // DRep status, power and profile for every DRep that has voted: two bulk
+  // Koios reads in batches of 50, profiles cached by metadata hash.
+  await hydrateDrepRowsFromKoios(drepAggregate, Array.from(drepAggregate.keys()), {
+    force: false,
+    registrationEpochs: drepRegistrationEpochs,
+    drepActivity
+  }).catch((error) => {
+    console.warn(`[full-sync] drep hydration failed: ${error?.message || error}`);
+  });
+  // Registration status (active / expired / retired) for the DReps that have
+  // never voted, from the same bulk endpoint (details only, no metadata).
+  const nonVoterIds = Array.from(new Set([...currentDrepPowerMap.keys(), ...allDrepIds]))
+    .filter((id) => id && !drepAggregate.has(id) && !String(id).startsWith("drep_always"));
+  const nonVoterDetails = nonVoterIds.length > 0
+    ? await govSource.getDrepDetails(nonVoterIds, { registrationEpochs: drepRegistrationEpochs, drepActivity }).catch(() => new Map())
+    : new Map();
   saveDrepMetaCache();
 
   const dreps = [];
   for (const row of drepAggregate.values()) {
     row.votes = Array.from(row.votesByProposal.values()).map((vote) => {
       const submittedAt = Number(proposalMetaById.get(vote.proposalId)?.blockTime || 0);
-      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || 0);
+      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || vote.votedAtUnix || 0);
       const responseHours =
         submittedAt > 0 && votedAt >= submittedAt
           ? (votedAt - submittedAt) / 3600
@@ -7101,72 +6964,50 @@ async function buildFullSnapshot() {
     } else {
       row.totalEligibleVotes = Math.max(row.votes.length, 1);
     }
+    if (!row.activeEpoch && drepRegistrationEpochs.has(row.id)) row.activeEpoch = drepRegistrationEpochs.get(row.id);
     dreps.push(row);
   }
 
-  for (const [drepId, powerAdaRaw] of currentDrepPowerMap.entries()) {
-    const exists = drepAggregate.get(drepId);
-    if (exists) continue;
-    const powerAda = Number(powerAdaRaw || 0);
-    dreps.push({
-      id: drepId,
+  const emptyDrepRow = (drepId, powerAda) => ({
+    id: drepId,
+    name: "",
+    status: "unknown",
+    active: null,
+    retired: null,
+    expired: null,
+    activeEpoch: drepRegistrationEpochs.get(drepId) || null,
+    lastActiveEpoch: null,
+    hasScript: null,
+    transparencyScore: 20,
+    consistency: 0,
+    totalEligibleVotes: Math.max(proposals.length, 1),
+    firstVoteBlockTime: Number.MAX_SAFE_INTEGER,
+    votingPowerAda: Number.isFinite(powerAda) ? Math.max(0, powerAda) : 0,
+    profile: {
       name: "",
-      status: "unknown",
-      active: null,
-      retired: null,
-      expired: null,
-      activeEpoch: null,
-      lastActiveEpoch: null,
-      hasScript: null,
-      transparencyScore: 20,
-      consistency: 0,
-      totalEligibleVotes: Math.max(proposals.length, 1),
-      firstVoteBlockTime: Number.MAX_SAFE_INTEGER,
-      votingPowerAda: Number.isFinite(powerAda) ? Math.max(0, powerAda) : 0,
-      profile: {
-        name: "",
-        bio: "",
-        motivations: "",
-        objectives: "",
-        qualifications: "",
-        email: "",
-        imageUrl: "",
-        references: []
-      },
-      votes: []
-    });
+      bio: "",
+      motivations: "",
+      objectives: "",
+      qualifications: "",
+      email: "",
+      imageUrl: "",
+      references: []
+    },
+    votes: []
+  });
+
+  for (const [drepId, powerAdaRaw] of currentDrepPowerMap.entries()) {
+    if (drepAggregate.has(drepId)) continue;
+    const row = emptyDrepRow(drepId, Number(powerAdaRaw || 0));
+    if (nonVoterDetails.has(drepId)) applyDrepDetailsToRow(row, nonVoterDetails.get(drepId));
+    dreps.push(row);
   }
 
   for (const drepId of allDrepIds) {
-    if (!drepId || drepAggregate.has(drepId)) continue;
-    const powerAda = Number(currentDrepPowerMap.get(drepId) || 0);
-    dreps.push({
-      id: drepId,
-      name: "",
-      status: "unknown",
-      active: null,
-      retired: null,
-      expired: null,
-      activeEpoch: null,
-      lastActiveEpoch: null,
-      hasScript: null,
-      transparencyScore: 20,
-      consistency: 0,
-      totalEligibleVotes: Math.max(proposals.length, 1),
-      firstVoteBlockTime: Number.MAX_SAFE_INTEGER,
-      votingPowerAda: Number.isFinite(powerAda) ? Math.max(0, powerAda) : 0,
-      profile: {
-        name: "",
-        bio: "",
-        motivations: "",
-        objectives: "",
-        qualifications: "",
-        email: "",
-        imageUrl: "",
-        references: []
-      },
-      votes: []
-    });
+    if (!drepId || drepAggregate.has(drepId) || currentDrepPowerMap.has(drepId)) continue;
+    const row = emptyDrepRow(drepId, Number(currentDrepPowerMap.get(drepId) || 0));
+    if (nonVoterDetails.has(drepId)) applyDrepDetailsToRow(row, nonVoterDetails.get(drepId));
+    dreps.push(row);
   }
 
   if (currentDrepPowerMap.size > 0) {
@@ -7268,7 +7109,7 @@ async function buildFullSnapshot() {
   for (const row of committeeAggregate.values()) {
     row.votes = Array.from(row.votesByProposal.values()).map((vote) => {
       const submittedAt = Number(proposalMetaById.get(vote.proposalId)?.blockTime || 0);
-      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || 0);
+      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || vote.votedAtUnix || 0);
       const responseHours =
         submittedAt > 0 && votedAt >= submittedAt
           ? (votedAt - submittedAt) / 3600
@@ -7316,7 +7157,7 @@ async function buildFullSnapshot() {
     }
 
     // Try the roster lookup with the raw ID first, then fall back to the hex
-    // conversion of a bech32 ID — Blockfrost returns cc_hot1… bech32 but the
+    // conversion of a bech32 ID — the voter id may be cc_hot1… bech32 but the
     // Koios roster map is keyed by the underlying hex.
     const rowIdRaw = String(row.id || "").toLowerCase();
     const rowIdHexFromBech32 = bech32IdToHex(String(row.id || "")).toLowerCase();
@@ -7327,8 +7168,8 @@ async function buildFullSnapshot() {
     row.hotCredential = rosterMember?.cc_hot_id || null;
     row.coldCredential = rosterMember?.cc_cold_id || null;
     // If row.id is itself a bech32 hot credential use it directly — this is
-    // the common case when Blockfrost returns the voter as cc_hot1… and the
-    // Koios roster lookup above still came up empty (e.g. key rotation).
+    // the common case when the voter is cc_hot1… and the Koios roster lookup
+    // above still came up empty (e.g. key rotation).
     if (!row.hotCredential && rowIdRaw.startsWith("cc_hot")) {
       row.hotCredential = String(row.id).trim();
     }
@@ -7531,7 +7372,7 @@ async function buildFullSnapshot() {
   for (const row of spoAggregate.values()) {
     row.votes = Array.from(row.votesByProposal.values()).map((vote) => {
       const submittedAt = Number(proposalMetaById.get(vote.proposalId)?.blockTime || 0);
-      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || 0);
+      const votedAt = Number(voteTxTimeCache[vote.voteTxHash] || vote.votedAtUnix || 0);
       const responseHours =
         submittedAt > 0 && votedAt >= submittedAt
           ? (votedAt - submittedAt) / 3600
@@ -7620,10 +7461,8 @@ async function buildFullSnapshot() {
       });
     }
   }
-  // Persist delegation labels into snapshots so cold starts do not need an
-  // API-time warm-up to recover Always Abstain / No Confidence buckets.
-  mergeSpoDelegationFromProfile(spos);
-  await warmSpoDelegationFromKoios(spos).catch(() => null);
+  // Delegation labels come from the same pool_info read the roster used;
+  // persist them into the snapshot so cold starts do not need a warm-up.
   mergeSpoDelegationFromProfile(spos);
   spos.sort((a, b) => {
     const voteDelta = Number((b?.votes || []).length) - Number((a?.votes || []).length);
@@ -7631,7 +7470,9 @@ async function buildFullSnapshot() {
     return Number(b.votingPowerAda || 0) - Number(a.votingPowerAda || 0);
   });
 
-  const specialDreps = await fetchSpecialDreps(true);
+  const specialDreps = await govSource.getSpecialDreps(latestEpoch, currentDrepPowerMap).catch(() => specialDrepsCache.value || {});
+  specialDrepsCache = { fetchedAt: Date.now(), value: specialDreps };
+  carryOverCommitteeRationaleSignals(committeeMembers, snapshot);
   await enrichCommitteeVotesWithQualitySignals(committeeMembers);
 
   return {
@@ -7653,7 +7494,12 @@ async function buildFullSnapshot() {
     specialDreps,
     dreps: DREP_LIMIT > 0 ? dreps.slice(0, DREP_LIMIT) : dreps,
     committeeMembers,
-    spos
+    spos,
+    syncMeta: {
+      provider: govSource.name,
+      voteWatermarkBlockTime: voteWatermark,
+      lastFullSyncAt: new Date().toISOString()
+    }
   };
 }
 
@@ -7765,10 +7611,6 @@ function scheduleDailyUtcHours(hours, label, callback) {
 
 async function runSync(options = {}) {
   if (syncState.syncing) return;
-  if (!BLOCKFROST_API_KEY) {
-    syncState.lastError = "Missing BLOCKFROST_API_KEY environment variable.";
-    return;
-  }
 
   syncState.syncing = true;
   syncState.lastStartedAt = new Date().toISOString();
@@ -8304,18 +8146,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/health") {
-    json(res, 200, { ok: true, hasBlockfrostKey: Boolean(BLOCKFROST_API_KEY) });
+    json(res, 200, { ok: true, provider: govSource.name, hasKoiosKey: Boolean(KOIOS_API_KEY), hasBlockfrostKey: Boolean(BLOCKFROST_API_KEY) });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/network") {
     try {
-      const epochData = await blockfrostGet("/epochs/latest").catch(() => null);
-      const url2 = String(BLOCKFROST_BASE_URL || "");
+      const currentEpoch = await fetchLatestChainEpoch().catch(() => null);
+      const url2 = String(KOIOS_BASE_URL || BLOCKFROST_BASE_URL || "");
       const network = url2.includes("preprod") ? "preprod"
         : url2.includes("preview") ? "preview"
         : "mainnet";
-      json(res, 200, { network, currentEpoch: epochData?.epoch ?? null });
+      json(res, 200, { network, currentEpoch: currentEpoch ?? (Number(snapshot?.latestEpoch) || null) });
     } catch (e) {
       json(res, 500, { error: e?.message });
     }
@@ -8328,11 +8170,6 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "rewardAddress query parameter is required." });
       return;
     }
-    if (!BLOCKFROST_API_KEY) {
-      json(res, 503, { error: "Blockfrost API key is not configured on the server." });
-      return;
-    }
-
     const rewardNetwork = inferRewardAddressNetwork(rewardAddress);
     const configuredNetwork = String(CONFIGURED_BLOCKFROST_NETWORK || "unknown").toLowerCase();
     const configuredIsMainnet = configuredNetwork === "mainnet";
@@ -8362,7 +8199,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const account = await blockfrostGet(`/accounts/${rewardAddress}`);
+      const account = await govSource.getAccountInfo(rewardAddress);
+      if (!account) throw new Error("Koios 404: reward account not found");
       const drepId = String(account?.drep_id || "").trim();
       const payload = {
         ok: true,
@@ -8379,7 +8217,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, payload);
     } catch (error) {
       const message = String(error?.message || "Failed to lookup wallet delegation.");
-      const notFound = message.includes("Blockfrost 404");
+      const notFound = message.includes("404");
       json(res, notFound ? 404 : 502, {
         error: notFound
           ? "Reward account was not found on this network."
@@ -9207,6 +9045,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/sync-status") {
     json(res, 200, {
       ...syncState,
+      provider: govSource.name,
+      syncMeta: snapshot?.syncMeta || null,
+      blockfrostBudget: blockfrostBudgetState(),
       drepRationaleWarm: drepRationaleWarmState,
       pendingSnapshotReady: Boolean(pendingSnapshot),
       pendingSnapshotBuiltAt
@@ -9265,10 +9106,6 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "Missing proposalId." });
       return;
     }
-    if (!BLOCKFROST_API_KEY) {
-      json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
-      return;
-    }
     const PROPOSAL_METADATA_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
     const cached = proposalMetadataCache.get(proposalId);
     if (cached && (Date.now() - Number(cached.cachedAt || 0)) < PROPOSAL_METADATA_CACHE_TTL_MS) {
@@ -9276,25 +9113,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const [rawMetadata, rawDetail] = await Promise.all([
-        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
-        blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
-      ]);
-      const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-
-      // Blockfrost's governance proposals endpoint has no submitted epoch field.
-      // Derive it from the transaction's block_time using the Shelley epoch formula.
-      let submittedEpoch = null;
-      const txHash = rawDetail?.tx_hash ?? null;
-      if (txHash) {
-        const txInfo = await blockfrostGet(`/txs/${txHash}`).catch(() => null);
-        const blockTime = Number(txInfo?.block_time || 0);
-        if (blockTime > 0) {
-          const SHELLEY_EPOCH_208_START = 1596059091;
-          const EPOCH_SECONDS = 5 * 24 * 60 * 60;
-          submittedEpoch = 208 + Math.floor((blockTime - SHELLEY_EPOCH_208_START) / EPOCH_SECONDS);
-        }
+      const resolved = await resolveProposalRecord(proposalId);
+      if (!resolved) {
+        json(res, 404, { error: "Proposal not found." });
+        return;
       }
+      const { rawDetail, metadata, submittedEpoch, txHash } = resolved;
 
       const payload = {
         ok: true,
@@ -9329,10 +9153,6 @@ const server = http.createServer(async (req, res) => {
     const supportedNetworks = new Set(["mainnet", "preview", "preprod", "testnet"]);
     if (!supportedNetworks.has(requestedNetwork)) {
       json(res, 400, { error: "Invalid network. Use mainnet, preview, preprod, or testnet." });
-      return;
-    }
-    if (!BLOCKFROST_API_KEY) {
-      json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
       return;
     }
     const configuredNetwork = detectBlockfrostNetworkFromBaseUrl();
@@ -9449,27 +9269,18 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "Invalid script hash. Expected 56-char hex." });
       return;
     }
-    if (!BLOCKFROST_API_KEY) {
-      json(res, 500, { error: "Missing BLOCKFROST_API_KEY." });
-      return;
-    }
     try {
-      const summary = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}`).catch(() => null);
-      const cborRow = await blockfrostGet(`/scripts/${encodeURIComponent(scriptHash)}/cbor`).catch((err) => {
-        const msg = String(err?.message || "");
-        if (msg.includes("404")) {
-          json(res, 404, { error: `Script not found in Blockfrost for hash ${scriptHash}. It may not be indexed on this network.` });
-        } else {
-          json(res, 500, { error: msg || "Failed to fetch script CBOR." });
-        }
-        return null;
-      });
-      if (cborRow === null) return;
-      const cbor = String(cborRow?.cbor || "").trim();
+      const info = await govSource.getScriptInfo(scriptHash);
+      if (!info) {
+        json(res, 404, { error: `Script not found for hash ${scriptHash}. It may not be indexed on this network.` });
+        return;
+      }
+      const cbor = String(info.bytes || "").trim();
       if (!cbor) {
         json(res, 404, { error: "Script CBOR not found for this script hash." });
         return;
       }
+      const summary = { type: info.type, serialised_size: info.size };
       const rawType = String(summary?.type || "").toLowerCase();
       let version = "";
       if (rawType.includes("v1")) version = "V1";
@@ -10591,20 +10402,16 @@ const server = http.createServer(async (req, res) => {
       if (!survey) {
         source = "anchor";
         // The action's anchor, from the metadata cache when this action was
-        // already read, else from Blockfrost. Without a key, or when the read
-        // fails, the index's answer (no link) stands.
+        // already read, else from the snapshot or Koios. When the read fails,
+        // the index's answer (no link) stands.
         let anchor = null;
         const cachedMeta = proposalMetadataCache.get(proposalId)?.payload;
         if (cachedMeta?.json_metadata) {
           anchor = { jsonMetadata: cachedMeta.json_metadata, expiration: cachedMeta.expirationEpoch };
-        } else if (BLOCKFROST_API_KEY) {
+        } else {
           try {
-            const [rawMetadata, rawDetail] = await Promise.all([
-              blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}/metadata`),
-              blockfrostGet(`/governance/proposals/${encodeURIComponent(proposalId)}`).catch(() => null),
-            ]);
-            const metadata = await enrichProposalMetadataWithIpfsFallback(rawMetadata);
-            anchor = { jsonMetadata: metadata?.json_metadata || null, expiration: rawDetail?.expiration };
+            const resolved = await resolveProposalRecord(proposalId);
+            if (resolved) anchor = { jsonMetadata: resolved.metadata?.json_metadata || null, expiration: resolved.rawDetail?.expiration };
           } catch (error) {
             console.warn(`[surveys] anchor read failed for ${proposalId}: ${error?.message || error}`);
           }
@@ -10652,9 +10459,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/drep-live") {
     const drepId = String(url.searchParams.get("id") || "").trim();
     if (!drepId) { json(res, 400, { error: "id query parameter is required." }); return; }
-    if (!BLOCKFROST_API_KEY) { json(res, 503, { error: "Blockfrost not configured." }); return; }
     try {
-      const safeId = encodeURIComponent(drepId);
       const nowMs = Date.now();
       const CACHE_TTL_MS = 5 * 60 * 1000;
       const cached = drepMetaCache[drepId];
@@ -10663,12 +10468,12 @@ const server = http.createServer(async (req, res) => {
       const isFresh = cached && (nowMs - Number(cached.fetchedAt || 0)) < CACHE_TTL_MS;
       if (!isFresh) {
         const [detailsRes, metadataRes] = await Promise.allSettled([
-          blockfrostGet(`/governance/dreps/${safeId}`),
-          blockfrostGet(`/governance/dreps/${safeId}/metadata`)
+          govSource.getDrepDetails([drepId]),
+          govSource.getDrepMetadata([drepId])
         ]);
-        detailsValue = detailsRes.status === "fulfilled" ? detailsRes.value : detailsValue;
-        metadataValue = metadataRes.status === "fulfilled" ? metadataRes.value : metadataValue;
-        drepMetaCache[drepId] = { fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
+        detailsValue = detailsRes.status === "fulfilled" ? (detailsRes.value.get(drepId) || detailsValue) : detailsValue;
+        metadataValue = metadataRes.status === "fulfilled" ? (metadataRes.value.get(drepId) || metadataValue) : metadataValue;
+        drepMetaCache[drepId] = { ...(cached || {}), fetchedAt: nowMs, details: detailsValue, metadata: metadataValue };
       }
       if (!detailsValue) { json(res, 404, { error: "DRep not found on chain." }); return; }
       const active = detailsValue.active === true;
@@ -11096,4 +10901,20 @@ server.on("error", (error) => {
   throw error;
 });
 
-bindServer();
+if (process.env.CIVITAS_NO_LISTEN === "1") {
+  // Test harness: expose the sync pipeline without binding a socket.
+  module.exports = {
+    __test: {
+      buildFullSnapshot,
+      buildDeltaSnapshot,
+      govSource,
+      getSnapshot: () => snapshot,
+      setSnapshot: (next) => { snapshot = next; },
+      publishSnapshot,
+      snapshotIsComplete,
+      computeVoteWatermark
+    }
+  };
+} else {
+  bindServer();
+}
