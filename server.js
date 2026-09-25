@@ -181,6 +181,10 @@ const VOTE_TX_RATIONALE_CACHE_PATH = process.env.VOTE_TX_RATIONALE_CACHE_PATH ||
 const SPO_PROFILE_CACHE_PATH = process.env.SPO_PROFILE_CACHE_PATH || path.join(__dirname, "cache.spoProfiles.json");
 const DREP_META_CACHE_PATH = process.env.DREP_META_CACHE_PATH || path.join(__dirname, "cache.drepMeta.json");
 const DREP_META_CACHE_TTL_MS = Number(process.env.DREP_META_CACHE_TTL_MS || 48 * 60 * 60 * 1000);
+// How many DRep metadata anchors are fetched at once during hydration.
+const DREP_META_CONCURRENCY = Math.max(1, Number(process.env.DREP_META_CONCURRENCY || 8));
+// How many proposals have their external metadata and rationale lookups warmed at once.
+const PROPOSAL_PREFETCH_CONCURRENCY = Math.max(1, Number(process.env.PROPOSAL_PREFETCH_CONCURRENCY || 6));
 const FRONTEND_DIST_PATH = process.env.FRONTEND_DIST_PATH || path.join(__dirname, "frontend", "dist");
 const BUG_REPORTS_PATH = process.env.BUG_REPORTS_PATH || path.join(__dirname, "reports", "bug_reports.ndjson");
 const BUG_REPORTS_TOKEN = String(process.env.BUG_REPORTS_TOKEN || "").trim();
@@ -2616,13 +2620,18 @@ async function fetchCgovProposalDetails(hashAndIndex) {
   if (cgovProposalDetailCache.has(key)) return cgovProposalDetailCache.get(key) || null;
   const url = `${CGOV_PROPOSAL_API_BASE}/${encodeURIComponent(key)}`;
   const text = await fetchTextWithTimeout(url, 12000);
-  if (!text) return null;
+  if (!text) {
+    // A miss is remembered for this process so one sync never retries it.
+    cgovProposalDetailCache.set(key, null);
+    return null;
+  }
   try {
     const parsed = JSON.parse(text);
     const payload = parsed && typeof parsed === "object" ? parsed : null;
     cgovProposalDetailCache.set(key, payload);
     return payload;
   } catch {
+    cgovProposalDetailCache.set(key, null);
     return null;
   }
 }
@@ -3789,19 +3798,24 @@ async function enrichProposalMetadataWithIpfsFallback(metadata) {
 async function fetchRawMetadataByUrl(metadataUrl, payloadCache) {
   const url = String(metadataUrl || "").trim();
   if (!url) return null;
-  if (payloadCache.has(url)) return payloadCache.get(url);
-  let payload = null;
-  if (url.startsWith("ipfs://")) {
-    const candidates = normalizeIpfsUrl(url);
-    for (const candidate of candidates) {
-      payload = await fetchJsonWithTimeout(candidate, 5000);
-      if (payload && typeof payload === "object") break;
-    }
-  } else {
-    payload = await fetchJsonWithTimeout(url, 5000);
+  // The cache holds the in-flight promise so concurrent callers of the same
+  // anchor share one fetch instead of racing for it.
+  if (!payloadCache.has(url)) {
+    payloadCache.set(url, (async () => {
+      let payload = null;
+      if (url.startsWith("ipfs://")) {
+        const candidates = normalizeIpfsUrl(url);
+        for (const candidate of candidates) {
+          payload = await fetchJsonWithTimeout(candidate, 5000);
+          if (payload && typeof payload === "object") break;
+        }
+      } else {
+        payload = await fetchJsonWithTimeout(url, 5000);
+      }
+      return payload || null;
+    })().catch(() => null));
   }
-  payloadCache.set(url, payload || null);
-  return payload || null;
+  return payloadCache.get(url);
 }
 
 async function resolveDrepNameFromMetadataEnvelope(metadataEnvelope, nameCache, payloadCache) {
@@ -6135,7 +6149,9 @@ async function hydrateDrepRowsFromKoios(rowsById, drepIds, { force = false, regi
   const metadataById = staleIds.length > 0 ? await govSource.getDrepMetadata(staleIds).catch(() => new Map()) : new Map();
   const nameCache = new Map();
   const payloadCache = new Map();
-  for (const id of ids) {
+  // Anchor fetches (CIP-119 profiles) are external and slow; resolve them
+  // concurrently so a rebuild is not bound by one anchor at a time.
+  await mapLimit(ids, DREP_META_CONCURRENCY, async (id) => {
     const row = rowsById.get(id);
     const cached = drepMetaCache[id] || null;
     const fresh = staleIds.includes(id);
@@ -6164,7 +6180,7 @@ async function hydrateDrepRowsFromKoios(rowsById, drepIds, { force = false, regi
         transparencyScore: row?.transparencyScore ?? cached?.transparencyScore ?? null
       };
     }
-  }
+  });
   return { detailsById, metadataById };
 }
 
@@ -6585,11 +6601,25 @@ async function buildFullSnapshot() {
   syncState.scannedProposals = proposals.length;
   syncState.processedProposals = 0;
 
+  // External lookups per proposal (anchor metadata that Koios did not carry,
+  // cgov rationale lookups) are slow and independent of each other, so they
+  // are warmed concurrently here; the sequential loop below then hits caches.
+  const enrichedMetadataById = new Map();
+  await mapLimit(proposals, PROPOSAL_PREFETCH_CONCURRENCY, async (proposal) => {
+    enrichedMetadataById.set(proposal.id, await enrichProposalMetadataWithIpfsFallback(proposal.metadata).catch(() => proposal.metadata));
+    const txHash = proposal.detail?.tx_hash;
+    const certIndex = proposal.detail?.cert_index;
+    const hasVotes = (votesByProposal.get(proposal.id) || []).length > 0;
+    if (hasVotes && (CC_RATIONALE_USE_CGOV_FALLBACK || DREP_RATIONALE_USE_CGOV_FALLBACK || SPO_RATIONALE_USE_CGOV_FALLBACK)) {
+      await fetchCgovProposalDetails(`${String(txHash || "").trim().toLowerCase()}:${Number(certIndex)}`).catch(() => null);
+    }
+  });
+
   for (const proposal of proposals) {
     let row;
     try {
       const detail = proposal.detail;
-      const metadata = await enrichProposalMetadataWithIpfsFallback(proposal.metadata);
+      const metadata = enrichedMetadataById.has(proposal.id) ? enrichedMetadataById.get(proposal.id) : await enrichProposalMetadataWithIpfsFallback(proposal.metadata);
       const votes = votesByProposal.get(proposal.id) || [];
       const wantSummary = KOIOS_VOTING_SUMMARY_SCOPE === "all" || outcomeFromProposal(detail) === "pending";
       const koiosVotingSummary = wantSummary ? await govSource.getProposalVotingSummary(proposal.id).catch(() => null) : null;
