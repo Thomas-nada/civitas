@@ -1,214 +1,129 @@
-import { useEffect, useState } from "react";
+// One funded treasury project: allocation and drawdown, the governance
+// action that funded it, milestones with evidence, activity and UTxOs.
 import { Link, useParams } from "react-router-dom";
 import { useSeoMeta } from "../hooks/useSeoMeta";
-import {
-  fmtAdaShort, fmtAda, fmtPct, fmtDate, fmtDateTime, fmtAgo, eventMeta,
-  statusPillMod, csTx, csAddr, shortHash,
-} from "../lib/treasuryAdmin";
+import { useTreasuryMapping, useTreasuryProject } from "../api/queries";
+import EventFeed from "../components/treasury/EventFeed";
+import { Alert, Button, Card, DataTable, Disclosure, KeyValue, PageHeader, Pill, ProgressBar, Skeleton, StatGrid, StatTile } from "../ui";
+import { IconArrowLeft } from "../ui/icons";
+import { formatAda, formatAdaCompact, formatPct } from "../lib/governance/format";
+import { csAddr, csTx, fmtDate, fmtDateTime, shortHash, statusTone } from "../lib/treasuryAdmin";
 
-function MilestoneRow({ m, index }) {
-  const [open, setOpen] = useState(false);
-  const state = m.withdrawn ? { label: "Withdrawn", color: "#4ade80" }
-    : m.paused ? { label: "Paused", color: "#fbbf24" }
-    : m.completion ? { label: "Completed", color: "#38bdf8" }
-    : m.archived ? { label: "Archived", color: "#94a3b8" }
-    : { label: "Pending", color: "#64748b" };
+function milestoneState(m) {
+  if (m.withdrawn) return { label: "Withdrawn", tone: "success" };
+  if (m.paused) return { label: "Paused", tone: "warning" };
+  if (m.completion) return { label: "Completed", tone: "info" };
+  if (m.archived) return { label: "Archived", tone: "neutral" };
+  return { label: "Pending", tone: "neutral" };
+}
+
+function Milestone({ m, index }) {
+  const state = milestoneState(m);
+  const title = (
+    <span className="t-milestone__title">
+      <span className="tiny muted num">#{m.order || index + 1}</span>
+      <span className="t-milestone__label">{m.label || `Milestone ${m.order || index + 1}`}</span>
+      <span className="small muted num">{formatAdaCompact(m.amountAda)}</span>
+      <Pill size="sm" tone={state.tone}>{state.label}</Pill>
+    </span>
+  );
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 8, marginBottom: "0.6rem", overflow: "hidden" }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 0.9rem",
-          background: "var(--bg-soft)", border: "none", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
-      >
-        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: 26, flexShrink: 0 }}>#{m.order || index + 1}</span>
-        <span style={{ flex: 1, minWidth: 0, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: open ? "normal" : "nowrap" }}>
-          {m.label || `Milestone ${m.order}`}
-        </span>
-        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{fmtAdaShort(m.amountAda)} ₳</span>
-        <span className="pill" style={{ background: `${state.color}20`, color: state.color, border: `1px solid ${state.color}55` }}>{state.label}</span>
-        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
-      </button>
-      {open ? (
-        <div style={{ padding: "0.9rem", borderTop: "1px solid var(--line)", fontSize: "0.85rem" }}>
-          {m.acceptanceCriteria ? (
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>Acceptance criteria</div>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{m.acceptanceCriteria}</div>
-            </div>
-          ) : null}
-          {m.description ? (
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>Description</div>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{m.description}</div>
-            </div>
-          ) : null}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", marginBottom: m.completion || m.withdrawal ? "0.75rem" : 0 }}>
-            <div><div className="muted" style={{ fontSize: "0.72rem" }}>Amount</div><div>{fmtAda(m.amountAda)} ₳</div></div>
-            {m.timeLimitIso ? <div><div className="muted" style={{ fontSize: "0.72rem" }}>Time limit</div><div>{fmtDate(m.timeLimitIso)}</div></div> : null}
-            <div><div className="muted" style={{ fontSize: "0.72rem" }}>Evidence</div><div>{m.evidenceProvided ? "Provided" : "—"}</div></div>
-            {m.pauseHistory > 0 ? <div><div className="muted" style={{ fontSize: "0.72rem" }}>Pauses</div><div style={{ color: "#fbbf24" }}>{m.pauseHistory}</div></div> : null}
-          </div>
-          {m.completion ? (
-            <div style={{ marginBottom: "0.6rem" }}>
-              <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>Completion</div>
-              <div>{fmtDateTime(m.completion.timeIso)} · <a className="ext-link" href={csTx(m.completion.txHash)} target="_blank" rel="noreferrer">{shortHash(m.completion.txHash)}</a></div>
-              {m.completion.description ? <div className="muted" style={{ fontSize: "0.8rem", marginTop: 2 }}>{m.completion.description}</div> : null}
-              {m.completion.evidence && m.completion.evidence.length > 0 ? (
-                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem" }}>
-                  {m.completion.evidence.map((ev, i) => (
-                    <li key={i} style={{ fontSize: "0.82rem" }}>
-                      {ev.url ? <a className="ext-link" href={ev.url} target="_blank" rel="noreferrer">{ev.label || ev.url}</a> : (ev.label || "—")}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-          {m.withdrawal ? (
-            <div>
-              <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>Withdrawal</div>
-              <div>{fmtAda(m.withdrawal.amountAda)} ₳ · {fmtDateTime(m.withdrawal.timeIso)} · <a className="ext-link" href={csTx(m.withdrawal.txHash)} target="_blank" rel="noreferrer">{shortHash(m.withdrawal.txHash)}</a></div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <Disclosure title={title}>
+      <div className="stack">
+        {m.acceptanceCriteria ? <div><div className="caps muted" style={{ marginBottom: 4 }}>Acceptance criteria</div><p className="small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{m.acceptanceCriteria}</p></div> : null}
+        {m.description ? <div><div className="caps muted" style={{ marginBottom: 4 }}>Description</div><p className="small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{m.description}</p></div> : null}
+        <KeyValue items={[
+          ["Amount", formatAda(m.amountAda)],
+          m.timeLimitIso && ["Time limit", fmtDate(m.timeLimitIso)],
+          ["Evidence", m.evidenceProvided ? "Provided" : "—"],
+          m.pauseHistory > 0 && ["Pauses", <span key="p" style={{ color: "var(--color-warning)" }}>{m.pauseHistory}</span>],
+          m.completion && ["Completed", <span key="c">{fmtDateTime(m.completion.timeIso)} · <a className="mono" href={csTx(m.completion.txHash)} target="_blank" rel="noreferrer">{shortHash(m.completion.txHash)}</a>{m.completion.description ? <span className="muted"> · {m.completion.description}</span> : null}</span>],
+          m.withdrawal && ["Withdrawn", <span key="w">{formatAda(m.withdrawal.amountAda)} · {fmtDateTime(m.withdrawal.timeIso)} · <a className="mono" href={csTx(m.withdrawal.txHash)} target="_blank" rel="noreferrer">{shortHash(m.withdrawal.txHash)}</a></span>]
+        ]} />
+        {m.completion?.evidence?.length > 0 ? (
+          <div><div className="caps muted" style={{ marginBottom: 4 }}>Evidence</div><ul className="c-prose" style={{ margin: 0 }}>{m.completion.evidence.map((ev, i) => <li key={i} className="small">{ev.url ? <a href={ev.url} target="_blank" rel="noreferrer">{ev.label || ev.url}</a> : (ev.label || "—")}</li>)}</ul></div>
+        ) : null}
+      </div>
+    </Disclosure>
   );
 }
 
 export default function TreasuryProjectPage() {
   const { projectId } = useParams();
-  const [p, setP] = useState(null);
-  const [match, setMatch] = useState(null);
-  const [error, setError] = useState("");
+  const query = useTreasuryProject(projectId);
+  const mapping = useTreasuryMapping();
+  const p = query.data?.available ? query.data : null;
+  const match = mapping.data?.projectToProposal?.[projectId] || null;
+  useSeoMeta({ title: p?.name ? `${p.name} — Treasury` : "Treasury project", description: "Funded Cardano treasury project detail: milestones, evidence, and on-chain activity." });
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/treasury-admin/mapping").then(r => r.json()).then(d => {
-      if (alive && d && d.projectToProposal) setMatch(d.projectToProposal[projectId] || null);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [projectId]);
-  useSeoMeta({ title: p?.name ? `${p.name} — Treasury` : "Treasury Project", description: "Funded Cardano treasury project detail: milestones, evidence, and on-chain activity." });
-
-  useEffect(() => {
-    let alive = true;
-    setP(null); setError("");
-    fetch(`/api/treasury-admin/project?id=${encodeURIComponent(projectId)}`)
-      .then(r => r.json())
-      .then(d => { if (!alive) return; if (d && d.available) setP(d); else setError(d?.error || "Project not found."); })
-      .catch(() => alive && setError("Failed to load project."));
-    return () => { alive = false; };
-  }, [projectId]);
-
-  if (error) return (
-    <main className="shell"><section className="panel">
-      <Link className="ext-link" to="/treasury/explorer">← Treasury Explorer</Link>
-      <h1 style={{ marginTop: "0.5rem" }}>Project</h1><p className="muted">{error}</p>
-    </section></main>
-  );
-  if (!p) return (
-    <main className="shell"><section className="panel"><p className="muted">Loading project…</p></section></main>
-  );
+  if (query.isLoading) return <main className="shell page p-treasury" aria-busy="true"><Skeleton kind="text" width={160} /><div style={{ height: 12 }} /><Skeleton kind="title" width="50%" /><div style={{ height: 24 }} /><div className="c-stats"><Skeleton kind="card" count={4} /></div></main>;
+  if (!p) {
+    return (
+      <main className="shell page p-treasury">
+        <Link to="/treasury/explorer" className="c-btn c-btn--ghost c-btn--sm"><IconArrowLeft size={16} /> Treasury explorer</Link>
+        <div style={{ height: 16 }} />
+        <Alert tone="warning" title="Project not found.">{query.data?.error || query.error?.message || "This project is not in the administration record."}</Alert>
+      </main>
+    );
+  }
 
   const undrawn = Math.max(0, p.allocatedAda - p.withdrawnAda);
+  const utxoColumns = [
+    { key: "txHash", label: "Transaction", span: true, render: (u) => <a className="mono small" href={csTx(u.txHash)} target="_blank" rel="noreferrer">{shortHash(u.txHash, 12)}</a> },
+    { key: "outputIndex", label: "Index", align: "right", render: (u) => <span className="num">{u.outputIndex ?? "—"}</span> },
+    { key: "amountAda", label: "Amount", align: "right", render: (u) => <span className="num">{formatAda(u.amountAda)}</span> }
+  ];
 
   return (
-    <main className="shell">
-      <section className="panel">
-        <Link className="ext-link" to="/treasury/explorer" style={{ fontSize: "0.82rem" }}>← Treasury Explorer</Link>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginTop: "0.5rem" }}>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ marginBottom: 4 }}>{p.name || "Unnamed project"}</h1>
-            <div className="mono muted" style={{ fontSize: "0.75rem" }}>{p.projectId}</div>
-          </div>
-          <span className={`pill pill--${statusPillMod(p.status)}`} style={{ fontSize: "0.8rem" }}>{p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span>
-        </div>
-        {p.description ? <p style={{ marginTop: "0.75rem", maxWidth: "80ch", lineHeight: 1.55 }}>{p.description}</p> : null}
+    <main className="shell page p-treasury">
+      <Link to="/treasury/explorer" className="c-btn c-btn--ghost c-btn--sm" style={{ marginBottom: 12 }}><IconArrowLeft size={16} /> Treasury explorer</Link>
+      <PageHeader eyebrow={<><span>Funded project</span><Pill size="sm" tone={statusTone(p.status)}>{String(p.status || "").replace(/\b\w/g, (m) => m.toUpperCase())}</Pill></>} title={p.name || "Unnamed project"} lead={p.description || null}>
+        <p className="c-hash break" style={{ marginTop: 8 }}>{p.projectId}</p>
+      </PageHeader>
 
+      <div className="stack--6">
         {match ? (
-          <div style={{ marginTop: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-soft)", fontSize: "0.85rem" }}>
-            <span className="muted">Funded by governance action </span>
-            <Link to={`/actions/${encodeURIComponent(match.proposalId)}`} style={{ fontWeight: 600 }}>{match.proposalName || match.proposalId}</Link>
-            <span className="pill" style={{ marginLeft: 8, fontSize: "0.68rem", background: match.confidence === "strong" ? "rgba(74,222,128,.14)" : "rgba(251,191,36,.14)", color: match.confidence === "strong" ? "#4ade80" : "#fbbf24", border: `1px solid ${match.confidence === "strong" ? "rgba(74,222,128,.4)" : "rgba(251,191,36,.4)"}` }}>
-              {match.confidence === "strong" ? "matched" : "likely match"}
-            </span>
-            {match.outcome ? <span className="muted" style={{ marginLeft: 6 }}>· {match.outcome}</span> : null}
-          </div>
+          <Alert tone="info">
+            Funded by governance action <Link to={`/actions/${encodeURIComponent(match.proposalId)}`} className="strong">{match.proposalName || match.proposalId}</Link>{" "}
+            <Pill size="sm" tone={match.confidence === "strong" ? "success" : "warning"}>{match.confidence === "strong" ? "matched" : "likely match"}</Pill>
+            {match.outcome ? <span className="muted"> · {match.outcome}</span> : null}
+          </Alert>
         ) : null}
 
-        <section className="cards" style={{ marginTop: "1rem" }}>
-          <article className="card"><p>Allocated</p><strong>{fmtAdaShort(p.allocatedAda)} ₳</strong><p className="muted">{fmtAda(p.allocatedAda)} ₳</p></article>
-          <article className="card"><p>Withdrawn</p><strong style={{ color: "#4ade80" }}>{fmtAdaShort(p.withdrawnAda)} ₳</strong><p className="muted">{fmtPct(p.drawdownPct)} drawn</p></article>
-          <article className="card"><p>Undrawn</p><strong>{fmtAdaShort(undrawn)} ₳</strong><p className="muted">remaining</p></article>
-          <article className="card"><p>Contract Balance</p><strong>{fmtAdaShort(p.balanceAda)} ₳</strong><p className="muted">on-chain now</p></article>
-          <article className="card"><p>Funded</p><strong style={{ fontSize: "1.1rem" }}>{fmtDate(p.fundedIso)}</strong><p className="muted">{p.eventCount} events</p></article>
-        </section>
+        <StatGrid>
+          <StatTile label="Allocated" value={formatAdaCompact(p.allocatedAda)} hint={formatAda(p.allocatedAda)} />
+          <StatTile label="Withdrawn" value={formatAdaCompact(p.withdrawnAda)} hint={`${formatPct(p.drawdownPct, 1)} drawn`} tone="accent" />
+          <StatTile label="Undrawn" value={formatAdaCompact(undrawn)} hint="remaining" />
+          <StatTile label="Contract balance" value={formatAdaCompact(p.balanceAda)} hint="on-chain now" />
+          <StatTile label="Funded" value={fmtDate(p.fundedIso)} hint={`${p.eventCount} events`} />
+        </StatGrid>
 
-        <div style={{ marginTop: "1rem" }}>
-          <div className="treasury-progress-track"><div className="treasury-progress-fill" style={{ width: `${p.drawdownPct}%`, background: "#4ade80" }} /></div>
-        </div>
-
-        {/* On-chain identifiers */}
-        <div style={{ marginTop: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.75rem", fontSize: "0.82rem" }}>
-          {p.fundTxHash ? <div><div className="muted" style={{ fontSize: "0.72rem" }}>Fund transaction</div><a className="ext-link mono" href={csTx(p.fundTxHash)} target="_blank" rel="noreferrer">{shortHash(p.fundTxHash, 12)}</a></div> : null}
-          {p.contractAddress ? <div><div className="muted" style={{ fontSize: "0.72rem" }}>Contract address</div><a className="ext-link mono" href={csAddr(p.contractAddress)} target="_blank" rel="noreferrer">{shortHash(p.contractAddress, 12)}</a></div> : null}
-          {p.vendorAddress ? <div><div className="muted" style={{ fontSize: "0.72rem" }}>Vendor address</div><a className="ext-link mono" href={csAddr(p.vendorAddress)} target="_blank" rel="noreferrer">{shortHash(p.vendorAddress, 12)}</a></div> : null}
-        </div>
-      </section>
-
-      {/* Milestones */}
-      <section className="panel">
-        <h2>Milestones <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>({p.milestones.length})</span></h2>
-        {p.milestones.length === 0 ? <p className="muted">No milestones recorded.</p> :
-          p.milestones.map((m, i) => <MilestoneRow key={m.milestoneId || i} m={m} index={i} />)}
-      </section>
-
-      {/* Activity */}
-      <section className="panel">
-        <h2>On-chain Activity <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>({p.events.length})</span></h2>
-        {p.events.length === 0 ? <p className="muted">No events recorded.</p> : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {p.events.map((e, i) => {
-              const meta = eventMeta(e.type);
-              return (
-                <div key={`${e.txHash}-${i}`} style={{ display: "flex", gap: "0.7rem", alignItems: "flex-start", fontSize: "0.85rem", lineHeight: 1.4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, marginTop: 6, flexShrink: 0 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <span style={{ color: meta.color, fontWeight: 600 }}>{meta.label}</span>
-                    {e.amountAda ? <span> · {fmtAda(e.amountAda)} ₳</span> : null}
-                    <span className="muted"> · {fmtDateTime(e.dateIso)} ({fmtAgo(e.dateIso)})</span>
-                    {e.txHash ? <span> · <a className="ext-link mono" href={csTx(e.txHash)} target="_blank" rel="noreferrer">{shortHash(e.txHash)}</a></span> : null}
-                    {e.milestone ? <div className="muted" style={{ fontSize: "0.78rem" }}>{e.milestone}</div> : null}
-                    {e.reason ? <div className="muted" style={{ fontSize: "0.8rem", fontStyle: "italic", marginTop: 2 }}>{e.reason}</div> : null}
-                  </div>
-                </div>
-              );
-            })}
+        <Card title="Drawdown" subtitle={`${formatAdaCompact(p.withdrawnAda)} of ${formatAdaCompact(p.allocatedAda)} withdrawn.`}>
+          <ProgressBar value={p.drawdownPct} tone="yes" large ariaLabel="Drawdown" />
+          <div style={{ marginTop: 16 }}>
+            <KeyValue items={[
+              p.fundTxHash && ["Fund transaction", <a key="f" className="mono" href={csTx(p.fundTxHash)} target="_blank" rel="noreferrer">{shortHash(p.fundTxHash, 12)}</a>],
+              p.contractAddress && ["Contract address", <a key="c" className="mono" href={csAddr(p.contractAddress)} target="_blank" rel="noreferrer">{shortHash(p.contractAddress, 12)}</a>],
+              p.vendorAddress && ["Vendor address", <a key="v" className="mono" href={csAddr(p.vendorAddress)} target="_blank" rel="noreferrer">{shortHash(p.vendorAddress, 12)}</a>]
+            ]} />
           </div>
-        )}
-      </section>
+        </Card>
 
-      {/* UTxOs */}
-      {p.utxos && p.utxos.length > 0 ? (
-        <section className="panel">
-          <h2>Current UTxOs <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>({p.utxos.length})</span></h2>
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead><tr><th>Transaction</th><th>Index</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
-              <tbody>
-                {p.utxos.map((u, i) => (
-                  <tr key={`${u.txHash}-${u.outputIndex}-${i}`}>
-                    <td className="mono"><a className="ext-link" href={csTx(u.txHash)} target="_blank" rel="noreferrer">{shortHash(u.txHash, 12)}</a></td>
-                    <td>{u.outputIndex ?? "—"}</td>
-                    <td style={{ textAlign: "right" }}>{fmtAda(u.amountAda)} ₳</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
+        <Card title={<>Milestones <span className="muted" style={{ fontWeight: 400 }}>({p.milestones.length})</span></>}>
+          {p.milestones.length === 0 ? <p className="muted">No milestones recorded.</p> : p.milestones.map((m, i) => <Milestone key={m.milestoneId || i} m={m} index={i} />)}
+        </Card>
+
+        <Card title={<>On-chain activity <span className="muted" style={{ fontWeight: 400 }}>({p.events.length})</span></>}>
+          <EventFeed events={p.events} max={500} detailed linkProjects={false} emptyMessage="No events recorded." />
+        </Card>
+
+        {p.utxos?.length > 0 ? (
+          <Card title={<>Current UTxOs <span className="muted" style={{ fontWeight: 400 }}>({p.utxos.length})</span></>}>
+            <DataTable columns={utxoColumns} rows={p.utxos} getRowKey={(u) => `${u.txHash}-${u.outputIndex}`} caption="Current UTxOs" />
+          </Card>
+        ) : null}
+        <div><Button to="/treasury/explorer">← Back to the explorer</Button></div>
+      </div>
     </main>
   );
 }

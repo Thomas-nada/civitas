@@ -45,20 +45,21 @@ export function fmtAgo(iso) {
   return months === 1 ? "1 month ago" : `${months} months ago`;
 }
 
+// Colours are theme tokens so the feed follows dark, light and high contrast.
 export const ADMIN_EVENT_META = {
-  fund:       { color: "#60a5fa", label: "Funded" },
-  disburse:   { color: "#60a5fa", label: "Disbursed" },
-  withdraw:   { color: "#4ade80", label: "Withdrawal" },
-  complete:   { color: "#4ade80", label: "Completed" },
-  pause:      { color: "#fbbf24", label: "Paused" },
-  resume:     { color: "#38bdf8", label: "Resumed" },
-  modify:     { color: "#a78bfa", label: "Modified" },
-  initialize: { color: "#94a3b8", label: "Initialized" },
-  publish:    { color: "#94a3b8", label: "Published" },
+  fund:       { color: "var(--color-info)", label: "Funded" },
+  disburse:   { color: "var(--color-info)", label: "Disbursed" },
+  withdraw:   { color: "var(--color-vote-yes)", label: "Withdrawal" },
+  complete:   { color: "var(--color-vote-yes)", label: "Completed" },
+  pause:      { color: "var(--color-warning)", label: "Paused" },
+  resume:     { color: "var(--color-info)", label: "Resumed" },
+  modify:     { color: "var(--color-vote-noconf)", label: "Modified" },
+  initialize: { color: "var(--color-text-muted)", label: "Initialized" },
+  publish:    { color: "var(--color-text-muted)", label: "Published" },
 };
 
 export function eventMeta(type) {
-  return ADMIN_EVENT_META[type] || { color: "#94a3b8", label: type || "event" };
+  return ADMIN_EVENT_META[type] || { color: "var(--color-text-muted)", label: type || "event" };
 }
 
 export function statusPillMod(status) {
@@ -66,7 +67,20 @@ export function statusPillMod(status) {
 }
 
 export function statusColor(status) {
-  return status === "paused" ? "#fbbf24" : status === "completed" ? "#4ade80" : status === "active" ? "#54e4bc" : "#94a3b8";
+  return status === "paused" ? "var(--color-warning)" : status === "completed" ? "var(--color-vote-yes)" : status === "active" ? "var(--color-accent)" : "var(--color-text-muted)";
+}
+
+/** Pill tone for a project status. */
+export function statusTone(status) {
+  return status === "completed" ? "success" : status === "active" ? "active" : status === "paused" ? "warning" : "neutral";
+}
+
+/** Drawdown bar tone: paused is amber; drawdown lagging milestones by 20 points is red. */
+export function drawdownTone(project) {
+  const ms = project?.milestones || {};
+  const msProgress = ms.total > 0 ? (ms.done / ms.total) * 100 : 0;
+  if (project?.status === "paused") return "warning";
+  return Number(project?.drawdownPct || 0) < msProgress - 20 ? "danger" : "yes";
 }
 
 export const csTx = (h) => `https://cardanoscan.io/transaction/${encodeURIComponent(h)}`;

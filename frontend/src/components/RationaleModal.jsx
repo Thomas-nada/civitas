@@ -10,7 +10,7 @@ import { Alert, Modal, Skeleton } from "../ui";
 
 const cache = new Map();
 
-export function rationaleKey(item) {
+function rationaleKey(item) {
   return [item?.proposalId, item?.voterRole, item?.voterId, item?.voteTxHash || item?.rationaleUrl || ""].join("|");
 }
 

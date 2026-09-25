@@ -125,3 +125,21 @@ export function useDrepDelegators(drepId, options = {}) {
     queryFn: ({ signal }) => fetchJson(`/api/drep-delegators?id=${encodeURIComponent(drepId)}`, { signal })
   });
 }
+
+/* Treasury -------------------------------------------------------------- */
+export function useTreasury() {
+  // Snapshot-derived, so it lives under the ["v1"] key and revalidates on publish.
+  return useQuery({ queryKey: key("treasury", ""), queryFn: ({ signal }) => fetchJson("/api/treasury", { signal }) });
+}
+export function useTreasuryAdmin() {
+  return useQuery({ queryKey: ["treasury-admin"], staleTime: 5 * 60_000, retry: 0, queryFn: ({ signal }) => fetchJson("/api/treasury-admin", { signal }) });
+}
+export function useTreasuryAdminEvents(limit = 80) {
+  return useQuery({ queryKey: ["treasury-admin", "events", limit], staleTime: 5 * 60_000, retry: 0, queryFn: ({ signal }) => fetchJson(`/api/treasury-admin/events?limit=${limit}`, { signal }) });
+}
+export function useTreasuryProject(projectId) {
+  return useQuery({ queryKey: ["treasury-admin", "project", projectId], enabled: Boolean(projectId), staleTime: 5 * 60_000, retry: 0, queryFn: ({ signal }) => fetchJson(`/api/treasury-admin/project?id=${encodeURIComponent(projectId)}`, { signal }) });
+}
+export function useTreasuryMapping() {
+  return useQuery({ queryKey: ["treasury-admin", "mapping"], staleTime: 5 * 60_000, retry: 0, queryFn: ({ signal }) => fetchJson("/api/treasury-admin/mapping", { signal }) });
+}

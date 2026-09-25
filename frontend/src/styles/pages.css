@@ -108,3 +108,22 @@
 .p-stats__results li { display: contents; }
 @media (max-width: 560px) { .p-stats__donut { grid-template-columns: 1fr; } }
 @media (min-width: 900px) { .p-stats .c-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Treasury ---------------------------------------------------------------- */
+.t-admin-grid { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.t-project { display: flex; flex-direction: column; gap: 2px; min-width: 220px; }
+.t-drawdown { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.t-drawdown .c-bar { flex: 1; }
+.t-pace { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 8px 12px; }
+.t-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.t-feed__item { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-sm); line-height: 1.4; }
+.t-feed__dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
+.t-feed__body { min-width: 0; }
+.t-feed__project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-feed__clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-feed-scroll { max-height: 640px; overflow-y: auto; }
+.t-milestone__title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.t-milestone__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-treasury .c-disclosure + .c-disclosure { margin-top: var(--space-2); }
+@media (max-width: 960px) { .t-admin-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .t-project { min-width: 0; } .t-milestone__label { white-space: normal; } }

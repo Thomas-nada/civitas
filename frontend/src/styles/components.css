@@ -259,6 +259,8 @@
 .c-bar__seg--accent { background: var(--color-accent); }
 .c-bar__seg--info { background: var(--color-info); }
 .c-bar__seg--warning { background: var(--color-warning); }
+.c-bar__seg--danger { background: var(--color-danger); }
+.c-bar__seg--muted { background: var(--color-text-faint); }
 .c-bar__marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--color-text); opacity: 0.85; }
 .c-bar__marker::after { content: ""; position: absolute; left: -3px; top: -4px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--color-text); }
 .c-vote { display: grid; gap: 6px; min-width: 140px; }
