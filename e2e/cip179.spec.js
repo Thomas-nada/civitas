@@ -81,5 +81,5 @@ test("renders a CIP-179 survey by transaction and survey index", async ({ page }
   await expect(page.getByText("Choose one", { exact: true })).toBeVisible();
   await expect(page.getByText("Rate all", { exact: true })).toBeVisible();
   await expect(page.getByText("Informational tally")).toBeVisible();
-  await expect(page.getByText("1 DRep response counted")).toBeVisible();
+  await expect(page.getByText("1 DRep response counted", { exact: true })).toBeVisible();
 });

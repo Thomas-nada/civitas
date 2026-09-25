@@ -1,4 +1,10 @@
+const fs = require("node:fs");
 const { defineConfig, devices } = require("@playwright/test");
+
+// A pre-installed Chromium (CHROMIUM_PATH, or the sandbox default) is used
+// when present; otherwise Playwright's own download, as in CI.
+const chromiumPath = process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : "");
+const launchOptions = chromiumPath ? { executablePath: chromiumPath } : {};
 
 module.exports = defineConfig({
   testDir: "./e2e",
@@ -10,7 +16,8 @@ module.exports = defineConfig({
   workers: 1,
   use: {
     baseURL: "http://127.0.0.1:18080",
-    trace: "on-first-retry"
+    trace: "on-first-retry",
+    launchOptions
   },
   webServer: {
     command: "node server.js",

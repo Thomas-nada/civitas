@@ -113,7 +113,7 @@ function QuestionTally({ question, head, weighted, weightedAvailable }) {
     <section className="svy-q">
       <div className="svy-q__head">
         <span className="caps muted">Question {question.index + 1}</span>
-        <p className="svy-q__prompt">{question.prompt}{question.required ? <span className="svy-q__req" title="An answer must include this question"> *</span> : null}</p>
+        <p className="svy-q__prompt"><span>{question.prompt}</span>{question.required ? <span className="svy-q__req" title="An answer must include this question"> *</span> : null}</p>
         <p className="tiny muted">{question.kindLabel}</p>
       </div>
       {!head ? <p className="muted small">No reading for this question.</p>
@@ -139,7 +139,7 @@ export default function SurveyTally({ survey, tally, refusal, artifact }) {
       <Card title="Informational tally" subtitle={REFUSALS[refusal] || "No tally is available for this survey."}>
         {questions.length ? questions.map((q) => (
           <section key={q.index} className="svy-q">
-            <div className="svy-q__head"><span className="caps muted">Question {q.index + 1}</span><p className="svy-q__prompt">{q.prompt}{q.required ? <span className="svy-q__req"> *</span> : null}</p><p className="tiny muted">{q.kindLabel}</p></div>
+            <div className="svy-q__head"><span className="caps muted">Question {q.index + 1}</span><p className="svy-q__prompt"><span>{q.prompt}</span>{q.required ? <span className="svy-q__req"> *</span> : null}</p><p className="tiny muted">{q.kindLabel}</p></div>
             {q.options ? <ul className="svy-plain-options">{q.options.map((o, i) => <li key={i}>{o}</li>)}</ul> : null}
           </section>
         )) : null}

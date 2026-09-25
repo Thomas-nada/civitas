@@ -1,7 +1,10 @@
 # Civitas rework plan
 
 Branch: `claude/dazzling-hamilton-697zpu` (nothing goes to `main` until you say so).
-Status: **awaiting approval**. Nothing below has been implemented yet.
+Status: **implemented on this branch** (all four phases). Decisions taken: Koios only on the
+free tier (`KOIOS_API_KEY` optional), Blockfrost demoted to a budget-capped fallback, new
+look with the existing logo, legacy root UI removed on the branch only. See the README for
+the resulting architecture, API and test commands; `docs/screens` has screenshots.
 
 Scope, in your words: rework the whole thing, keep every feature, improve look, feel and
 responsiveness, cut Blockfrost requests hard, make governance-action indexing much faster.

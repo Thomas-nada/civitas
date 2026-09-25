@@ -34,3 +34,8 @@ preview.env.example
 snapshot.seed.json
 
 .claude/
+
+# Test output
+test-results/
+playwright-report/
+reports/
