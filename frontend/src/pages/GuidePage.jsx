@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useSeoMeta } from "../hooks/useSeoMeta";
+import { PageHeader, Select } from "../ui";
 
 const tocGroups = [
   {
@@ -653,7 +654,7 @@ export default function GuidePage() {
 
       case "cardano-governance":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>How Cardano Governance Works</h2>
             <p>
               Cardano's governance model — introduced by the Conway era in 2024 — is one of the most
@@ -719,7 +720,7 @@ export default function GuidePage() {
 
       case "constitution":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>The Cardano Constitution</h2>
             <p>
               The Cardano Constitution is the foundational legal and governance document of the Cardano
@@ -775,7 +776,7 @@ export default function GuidePage() {
 
       case "dreps":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Delegated Representatives (DReps)</h2>
             <p>
               DReps are the primary voting actors in Cardano governance. Any Ada holder can register as a
@@ -825,7 +826,7 @@ export default function GuidePage() {
 
       case "tool-drep-registration":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Register As a DRep</h2>
             <p>
               Civitas lets you register the connected wallet as a DRep directly from the DRep dashboard using
@@ -834,7 +835,7 @@ export default function GuidePage() {
 
             <h3 className="guide-subhead">Where to Find It</h3>
             <p>
-              Open the <Link className="inline-link" to="/dreps">DRep dashboard</Link>. In the DRep Registration
+              Open the <Link  to="/dreps">DRep dashboard</Link>. In the DRep Registration
               panel, click <strong>Register as a DRep</strong> to reveal the registration form.
             </p>
 
@@ -851,7 +852,7 @@ export default function GuidePage() {
             <h3 className="guide-subhead">Step-by-Step</h3>
             <ol>
               <li>Connect your wallet from the top bar.</li>
-              <li>Go to <Link className="inline-link" to="/dreps">DReps</Link>.</li>
+              <li>Go to <Link  to="/dreps">DReps</Link>.</li>
               <li>Click <strong>Register as a DRep</strong>.</li>
               <li>Leave DRep ID empty for auto-derive, or enter a manual ID.</li>
               <li>Confirm deposit and optional anchor fields.</li>
@@ -869,7 +870,7 @@ export default function GuidePage() {
 
       case "tool-drep-delegation":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Delegating to a DRep</h2>
             <p>
               This flow delegates your stake voting power to a selected DRep directly from the DRep pages with wallet-connect.
@@ -884,7 +885,7 @@ export default function GuidePage() {
 
             <h3 className="guide-subhead">Step-by-Step</h3>
             <ol>
-              <li>Open <Link className="inline-link" to="/dreps">DReps</Link>.</li>
+              <li>Open <Link  to="/dreps">DReps</Link>.</li>
               <li>Select a DRep from the table to open details.</li>
               <li>Review attendance, transparency, alignment, responsiveness, and vote history.</li>
               <li>Click the delegation action in the selected DRep panel.</li>
@@ -908,7 +909,7 @@ export default function GuidePage() {
 
       case "tool-drep-delegation-risk":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: DRep Delegation Risk</h2>
             <p>
               Civitas includes a <strong>Delegation Risk</strong> indicator to highlight delegation concentration.
@@ -931,7 +932,7 @@ export default function GuidePage() {
 
             <h3 className="guide-subhead">How To Use It</h3>
             <ol>
-              <li>Open <Link className="inline-link" to="/dreps">DReps</Link>.</li>
+              <li>Open <Link  to="/dreps">DReps</Link>.</li>
               <li>Sort by <strong>Delegation Risk</strong> if you want to prioritize decentralization review.</li>
               <li>Open a DRep profile and compare risk with attendance, rationale behavior, and responsiveness.</li>
               <li>Choose the delegation target that best matches your decentralization and governance priorities.</li>
@@ -958,7 +959,7 @@ export default function GuidePage() {
 
       case "tool-drep-voting":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Voting as a DRep</h2>
             <p>
               Civitas lets an already registered DRep cast governance votes from the Actions page using connected wallet signing.
@@ -973,7 +974,7 @@ export default function GuidePage() {
 
             <h3 className="guide-subhead">Step-by-Step</h3>
             <ol>
-              <li>Open <Link className="inline-link" to="/actions">Governance Actions</Link>.</li>
+              <li>Open <Link  to="/actions">Governance Actions</Link>.</li>
               <li>Open the proposal you want to vote on.</li>
               <li>Select your vote choice as DRep.</li>
               <li>Optionally include rationale metadata/anchor if your workflow supports it.</li>
@@ -993,7 +994,7 @@ export default function GuidePage() {
 
       case "spos":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Stake Pool Operators (SPOs)</h2>
             <p>
               Stake pool operators run the nodes that produce blocks and secure the Cardano network. In
@@ -1036,7 +1037,7 @@ export default function GuidePage() {
 
       case "committee":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Constitutional Committee</h2>
             <p>
               The Constitutional Committee (CC) is Cardano's constitutional safeguard. Members are elected
@@ -1091,7 +1092,7 @@ export default function GuidePage() {
 
       case "tool-submit-actions":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Submit Governance Actions</h2>
             <p>
               This section is a practical walkthrough for submitting governance actions from Civitas, even if
@@ -1100,7 +1101,7 @@ export default function GuidePage() {
 
             <h3 className="guide-subhead">Before You Start</h3>
             <p>
-              Open <Link className="inline-link" to="/actions/submit">Submit Governance Action</Link> and connect
+              Open <Link  to="/actions/submit">Submit Governance Action</Link> and connect
               your wallet in the top bar. You need enough ada for:
             </p>
             <ol>
@@ -1193,7 +1194,7 @@ export default function GuidePage() {
 
       case "tool-cc-cold-credentials":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Constitutional Committee Credentials</h2>
             <p>
               Follow the step wizard below. Pick your track, then copy/paste each command in order.
@@ -1214,10 +1215,10 @@ export default function GuidePage() {
               <li>A secure way to move transaction bodies/witnesses between offline and online machines (for example encrypted USB workflow).</li>
             </ol>
 
-            <div className="vote-confirm-actions">
+            <div className="row">
               <button
                 type="button"
-                className={ccWizardTrack === "individual" ? "mode-btn active" : "mode-btn"}
+                className={ccWizardTrack === "individual" ? "c-btn c-btn--primary" : "c-btn"}
                 onClick={() => {
                   setCcWizardTrack("individual");
                   setCcWizardStep(0);
@@ -1227,7 +1228,7 @@ export default function GuidePage() {
               </button>
               <button
                 type="button"
-                className={ccWizardTrack === "multisig" ? "mode-btn active" : "mode-btn"}
+                className={ccWizardTrack === "multisig" ? "c-btn c-btn--primary" : "c-btn"}
                 onClick={() => {
                   setCcWizardTrack("multisig");
                   setCcWizardStep(0);
@@ -1237,7 +1238,7 @@ export default function GuidePage() {
               </button>
               <button
                 type="button"
-                className={ccWizardTrack === "plutus" ? "mode-btn active" : "mode-btn"}
+                className={ccWizardTrack === "plutus" ? "c-btn c-btn--primary" : "c-btn"}
                 onClick={() => {
                   setCcWizardTrack("plutus");
                   setCcWizardStep(0);
@@ -1267,7 +1268,7 @@ export default function GuidePage() {
                 <h3 className="guide-subhead">{ccCurrentStep.title}</h3>
                 <p>{ccCurrentStep.summary}</p>
                 {ccWizardTrack === "multisig" && ccWizardStep === 0 ? (
-                  <div className="controls dashboard-controls">
+                  <div className="grid grid--2 g-form">
                     <label>
                       Cold Members (comma-separated)
                       <input value={ccColdMembers} onChange={(e) => setCcColdMembers(e.target.value)} placeholder="Alice, Bob, Carol" />
@@ -1295,7 +1296,7 @@ export default function GuidePage() {
                   </div>
                 ) : null}
                 {ccWizardTrack === "multisig" && ccWizardStep === 5 ? (
-                  <div className="controls dashboard-controls">
+                  <div className="grid grid--2 g-form">
                     <label>
                       Cold Script Hash
                       <input value={ccColdScriptHash} onChange={(e) => setCcColdScriptHash(e.target.value)} placeholder="Required for certificate command" />
@@ -1310,7 +1311,7 @@ export default function GuidePage() {
                   <div key={`${ccCurrentStep.title}-${cmd.label}`} className="guide-command-block">
                     <div className="guide-command-head">
                       <strong>{cmd.label}</strong>
-                      <button type="button" className="mode-btn" onClick={() => copyCcText(cmd.text, cmd.label)}>
+                      <button type="button" className="c-btn c-btn--sm" onClick={() => copyCcText(cmd.text, cmd.label)}>
                         Copy
                       </button>
                     </div>
@@ -1318,10 +1319,10 @@ export default function GuidePage() {
                   </div>
                 ))}
                 {ccCopyNotice ? <p className="muted">{ccCopyNotice}</p> : null}
-                <div className="vote-confirm-actions">
+                <div className="row">
                   <button
                     type="button"
-                    className="mode-btn"
+                    className="c-btn c-btn--sm"
                     disabled={ccWizardStep === 0}
                     onClick={() => setCcWizardStep((prev) => Math.max(0, prev - 1))}
                   >
@@ -1329,7 +1330,7 @@ export default function GuidePage() {
                   </button>
                   <button
                     type="button"
-                    className="mode-btn"
+                    className="c-btn c-btn--sm"
                     disabled={ccWizardStep >= ccSteps.length - 1}
                     onClick={() => setCcWizardStep((prev) => Math.min(ccSteps.length - 1, prev + 1))}
                   >
@@ -1350,7 +1351,7 @@ export default function GuidePage() {
             <p>
               Official reference:{" "}
               <a
-                className="inline-link"
+                
                 href="https://developers.cardano.org/docs/get-started/infrastructure/cardano-cli/governance/constitutional%20committee/"
                 target="_blank"
                 rel="noreferrer"
@@ -1359,7 +1360,7 @@ export default function GuidePage() {
               </a>
               {" "}and{" "}
               <a
-                className="inline-link"
+                
                 href="https://credential-manager.readthedocs.io/en/latest/operations/authorizing-the-hot-credential/"
                 target="_blank"
                 rel="noreferrer"
@@ -1372,7 +1373,7 @@ export default function GuidePage() {
 
       case "governance-actions":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Governance Actions</h2>
             <p>
               A governance action is a formal on-chain proposal to change something about Cardano. Anyone can
@@ -1431,7 +1432,7 @@ export default function GuidePage() {
 
       case "ncl":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Net Change Limit (NCL)</h2>
             <p>
               The Net Change Limit is a guardrail on Cardano treasury spending. It defines the maximum total
@@ -1467,7 +1468,7 @@ export default function GuidePage() {
 
       case "scoring":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>How Scores Work</h2>
             <p>
               Every actor on Civitas receives an <strong>Accountability Score</strong> — a weighted composite
@@ -1577,7 +1578,7 @@ export default function GuidePage() {
 
       case "history":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Snapshot History</h2>
             <p>
               Civitas captures epoch-boundary snapshots of governance state. Each snapshot preserves the
@@ -1589,7 +1590,7 @@ export default function GuidePage() {
               Click any epoch link below to open that snapshot in the relevant dashboard.
             </p>
 
-            <div className="wiki-history-box">
+            <div className="c-card c-card--soft c-card--pad g-history">
               {history.length === 0 ? (
                 <p className="muted">No historical snapshots available yet.</p>
               ) : (
@@ -1597,14 +1598,14 @@ export default function GuidePage() {
                   {visibleHistory.map((item) => (
                     <p key={item.key}>
                       <span className="mono">Epoch {item.epoch ?? "?"}</span>{" "}-{" "}
-                      <Link className="inline-link" to={`/dreps?snapshot=${encodeURIComponent(item.key)}`}>DRep</Link>{" "}|{" "}
-                      <Link className="inline-link" to={`/spos?snapshot=${encodeURIComponent(item.key)}`}>SPO</Link>{" "}|{" "}
-                      <Link className="inline-link" to={`/committee?snapshot=${encodeURIComponent(item.key)}`}>Committee</Link>{" "}|{" "}
-                      <Link className="inline-link" to={`/actions?snapshot=${encodeURIComponent(item.key)}`}>Actions</Link>
+                      <Link  to={`/dreps?snapshot=${encodeURIComponent(item.key)}`}>DRep</Link>{" "}|{" "}
+                      <Link  to={`/spos?snapshot=${encodeURIComponent(item.key)}`}>SPO</Link>{" "}|{" "}
+                      <Link  to={`/committee?snapshot=${encodeURIComponent(item.key)}`}>Committee</Link>{" "}|{" "}
+                      <Link  to={`/actions?snapshot=${encodeURIComponent(item.key)}`}>Actions</Link>
                     </p>
                   ))}
                   {history.length > 5 ? (
-                    <button type="button" className="mode-btn" onClick={() => setShowAllSnapshots((v) => !v)}>
+                    <button type="button" className="c-btn c-btn--sm" onClick={() => setShowAllSnapshots((v) => !v)}>
                       {showAllSnapshots ? "Collapse snapshot list" : `Show all ${history.length} snapshots`}
                     </button>
                   ) : null}
@@ -1616,7 +1617,7 @@ export default function GuidePage() {
 
       case "tool-survey-create":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Creating a Survey</h2>
             <p className="wiki-lead">
               Surveys let DReps, SPOs, committee members, and ada holders gather on-chain sentiment
@@ -1699,7 +1700,7 @@ export default function GuidePage() {
               After confirmation, you will be redirected to your new survey page.
             </p>
 
-            <div className="wiki-callout">
+            <div className="c-alert c-alert--info g-callout">
               <strong>Tip:</strong> The survey is final once published — questions, roles, and the sealed/public mode cannot be edited after the transaction lands on-chain.
               Double-check everything before signing.
             </div>
@@ -1708,7 +1709,7 @@ export default function GuidePage() {
 
       case "tool-survey-respond":
         return (
-          <section className="wiki-section panel">
+          <section className="c-card c-card--pad-lg c-prose g-section">
             <h2>Use Civitas: Responding to a Survey</h2>
             <p className="wiki-lead">
               Responding to a survey submits your answers as a Cardano transaction.
@@ -1757,8 +1758,8 @@ export default function GuidePage() {
               Once all required questions are answered, submit the form. Your wallet asks you to sign one transaction: your credential, role and answers are attached as label-17 metadata, and the wallet pays only the network fee. The page shows the transaction hash and updates once the index has read it, usually within a few minutes. You can answer again while the survey is open; the later answer replaces the earlier one.
             </p>
 
-            <div className="wiki-table-wrap" style={{ marginBottom: "1rem" }}>
-              <table className="wiki-table">
+            <div className="c-table-wrap" style={{ marginBottom: "1rem" }}>
+              <table className="c-table">
                 <thead>
                   <tr><th>Survey type</th><th>Button label</th><th>What happens</th></tr>
                 </thead>
@@ -1791,7 +1792,7 @@ export default function GuidePage() {
               <li>You can submit only one response per wallet address per survey.</li>
             </ul>
 
-            <div className="wiki-callout">
+            <div className="c-alert c-alert--info g-callout">
               <strong>Note:</strong> Civitas does not store your answers anywhere other than on-chain.
               There is no server-side record of your response separate from the Cardano blockchain.
             </div>
@@ -1804,38 +1805,28 @@ export default function GuidePage() {
   }
 
   return (
-    <main className="shell wiki-guide-shell">
-      <header className="hero wiki-header">
-        <h1>Governance Guides</h1>
-        <p>Everything you need to understand Cardano governance and how to use Civitas to follow it.</p>
-      </header>
-
-      <section className="wiki-layout">
-        <aside className="wiki-sidebar panel">
-          <h3>Contents</h3>
-          <nav aria-label="Guide sections" className="wiki-nav">
+    <main className="shell page g-page">
+      <PageHeader eyebrow="Reference" title="Governance guides" lead="Everything you need to understand Cardano governance and how to use Civitas to follow it." />
+      <div className="g-layout">
+        <aside className="g-side">
+          <div className="g-side__mobile">
+            <Select value={activeSection} onChange={(e) => setActiveSection(e.target.value)} aria-label="Guide section">
+              {tocGroups.map((group) => <optgroup key={group.title} label={group.title}>{group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
+            </Select>
+          </div>
+          <nav aria-label="Guide sections" className="c-card c-card--pad g-nav">
             {tocGroups.map((group) => (
-              <div key={group.title} className="wiki-nav-group">
-                <p className="wiki-nav-title">{group.title}</p>
+              <div key={group.title} className="g-nav__group">
+                <p className="caps muted g-nav__title">{group.title}</p>
                 {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={activeSection === item.id ? "active" : ""}
-                    onClick={() => setActiveSection(item.id)}
-                  >
-                    {item.label}
-                  </button>
+                  <button key={item.id} type="button" className={`g-nav__item${activeSection === item.id ? " is-active" : ""}`} onClick={() => { setActiveSection(item.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{item.label}</button>
                 ))}
               </div>
             ))}
           </nav>
         </aside>
-
-        <article className="wiki-content">
-          {renderSection()}
-        </article>
-      </section>
+        <article className="g-content">{renderSection()}</article>
+      </div>
     </main>
   );
 }

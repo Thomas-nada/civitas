@@ -43,8 +43,7 @@ const ProposalDetailPage = lazy(() => import("./pages/ProposalDetailPage"));
 const EpochCalendarPage = lazy(() => import("./pages/EpochCalendarPage"));
 const CipListPage = lazy(() => import("./pages/CipListPage"));
 const CipDetailPage = lazy(() => import("./pages/CipDetailPage"));
-const IntersectPage = lazy(() => import("./pages/IntersectPage"));
-const BlockfrostPage = lazy(() => import("./pages/BlockfrostPage"));
+const VoteTrackerPage = lazy(() => import("./pages/VoteTrackerPage"));
 
 function ScrollToTopOnRouteChange() {
   const location = useLocation();
@@ -386,8 +385,8 @@ export default function App() {
             <Route path="/treasury" element={<TreasuryPage />} />
             <Route path="/treasury/explorer" element={<TreasuryExplorerPage />} />
             <Route path="/treasury/explorer/:projectId" element={<TreasuryProjectPage />} />
-            <Route path="/intersect" element={<IntersectPage />} />
-            <Route path="/blockfrost" element={<BlockfrostPage />} />
+            <Route path="/intersect" element={<VoteTrackerPage key="intersect" initialTrack="intersect" />} />
+            <Route path="/blockfrost" element={<VoteTrackerPage key="blockfrost" initialTrack="blockfrost" />} />
             <Route path="/dreps" element={<DashboardPage key="drep" actorType="drep" />} />
             <Route path="/dreps/:actorId" element={<VoterProfilePage key={`drep-${routeKey}`} actorType="drep" />} />
             <Route path="/delegate/:drepId" element={<DelegatePage />} />

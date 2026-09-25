@@ -39,14 +39,7 @@ export default function WalletConnection({
           </p>
         </div>
         {canChange ? (
-          <button
-            type="button"
-            className="wallet-card-change"
-            onClick={() => setChanging((c) => !c)}
-            disabled={disabled}
-          >
-            {changing ? "Cancel" : "Change wallet"}
-          </button>
+          <button type="button" className="c-btn c-btn--sm" onClick={() => setChanging((c) => !c)} disabled={disabled}>{changing ? "Cancel" : "Change wallet"}</button>
         ) : null}
       </div>
 
@@ -66,12 +59,9 @@ export default function WalletConnection({
       ) : null}
 
       {missingCip95 ? (
-        <div className="callout callout--warning" role="status" style={{ marginTop: "0.8rem" }}>
-          <IconWarning size={18} className="callout-icon" />
-          <div className="callout-body">
-            {current.name} does not advertise CIP-95, which signing in as a DRep requires.{" "}
-            {canChange ? "Choose another wallet above." : "Use a DRep-capable wallet such as Eternl, Lace or Typhon."}
-          </div>
+        <div className="c-alert c-alert--warning" role="status" style={{ marginTop: 10 }}>
+          <IconWarning size={18} />
+          <div>{current.name} does not advertise CIP-95, which signing in as a DRep requires. {canChange ? "Choose another wallet above." : "Use a DRep-capable wallet such as Eternl, Lace or Typhon."}</div>
         </div>
       ) : null}
 
