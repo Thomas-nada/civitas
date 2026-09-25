@@ -1,12 +1,11 @@
-// A vote's rationale, the way Civitas has always taken it: a URL to a
-// document the DRep hosts, or text written here (Markdown, previewed) that
-// the server uploads to IPFS as a CIP-100 document. The draft is
-// { mode: "url" | "write", url, text }.
+// A vote's rationale: a URL to a document the DRep hosts, or text written
+// here (Markdown, previewed) that the server uploads to IPFS as a CIP-100
+// document. The draft is { mode: "url" | "write", url, text }.
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
 import { EMPTY_RATIONALE } from "../../services/voteTxService";
+import { Field, Input, Segmented, Textarea } from "../../ui";
 
 export default function RationaleInput({ value = EMPTY_RATIONALE, onChange, rows = 8, autoFocus = false }) {
   const [preview, setPreview] = useState(false);
@@ -14,48 +13,29 @@ export default function RationaleInput({ value = EMPTY_RATIONALE, onChange, rows
   const set = (patch) => onChange?.({ ...draft, ...patch });
 
   return (
-    <div className="vote-rationale-section">
-      <div className="vote-rationale-mode-toggle">
-        <button type="button" className={`mode-btn${draft.mode === "url" ? " active" : ""}`} onClick={() => { set({ mode: "url" }); setPreview(false); }}>
-          Provide URL
-        </button>
-        <button type="button" className={`mode-btn${draft.mode === "write" ? " active" : ""}`} onClick={() => { set({ mode: "write" }); setPreview(false); }}>
-          Write rationale
-        </button>
-      </div>
-
+    <div className="stack--2" style={{ display: "grid", gap: 8 }}>
+      <Segmented
+        ariaLabel="Rationale"
+        value={draft.mode}
+        onChange={(mode) => { set({ mode }); setPreview(false); }}
+        options={[{ value: "url", label: "Provide URL" }, { value: "write", label: "Write rationale" }]}
+      />
       {draft.mode === "url" ? (
-        <label className="vote-rationale-label">
-          Rationale URL (optional)
-          <input
-            type="url"
-            value={draft.url}
-            onChange={(e) => set({ url: e.target.value })}
-            placeholder="https://your-rationale.json  or  ipfs://Qm..."
-          />
-        </label>
+        <Field label="Rationale URL (optional)">{(id) => (
+          <Input id={id} type="url" value={draft.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://your-rationale.json or ipfs://Qm…" />
+        )}</Field>
       ) : (
-        <div className="vote-rationale-write">
-          <div className="vote-rationale-write-tabs">
-            <button type="button" className={`mode-btn${!preview ? " active" : ""}`} onClick={() => setPreview(false)}>Write</button>
-            <button type="button" className={`mode-btn${preview ? " active" : ""}`} onClick={() => setPreview(true)}>Preview</button>
-            <span className="vote-rationale-write-hint">Markdown supported · uploaded to IPFS as CIP-100 JSON</span>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div className="row row--between">
+            <Segmented ariaLabel="Editor mode" value={preview ? "preview" : "write"} onChange={(m) => setPreview(m === "preview")} options={[{ value: "write", label: "Write" }, { value: "preview", label: "Preview" }]} />
+            <span className="tiny muted">Markdown supported · uploaded to IPFS as CIP-100 JSON</span>
           </div>
           {preview ? (
-            <div className="vote-rationale-preview">
-              {draft.text.trim()
-                ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.text}</ReactMarkdown>
-                : <p className="muted">Nothing to preview yet.</p>}
+            <div className="c-card c-card--soft c-card--pad c-prose">
+              {draft.text.trim() ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.text}</ReactMarkdown> : <p className="muted">Nothing to preview yet.</p>}
             </div>
           ) : (
-            <textarea
-              className="vote-rationale-textarea"
-              value={draft.text}
-              onChange={(e) => set({ text: e.target.value })}
-              placeholder="Write your rationale here... (Markdown supported)"
-              rows={rows}
-              autoFocus={autoFocus}
-            />
+            <Textarea value={draft.text} onChange={(e) => set({ text: e.target.value })} placeholder="Write your rationale here… (Markdown supported)" rows={rows} autoFocus={autoFocus} />
           )}
         </div>
       )}

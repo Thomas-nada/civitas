@@ -1,0 +1,270 @@
+/* ==========================================================================
+   Civitas design tokens
+   One source of truth for colour, type, space, radius, elevation and motion.
+   Dark is the default; light is applied with [data-theme="light"], and with
+   prefers-color-scheme when no explicit theme was chosen. Legacy aliases at
+   the bottom keep not-yet-migrated styles on the same palette.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals: cool ink with a hint of teal, so the mint/cyan brand sits well. */
+  --color-bg: #0a1013;
+  --color-bg-elevated: #0f171b;
+  --color-surface: #111b20;
+  --color-surface-2: #16232a;
+  --color-surface-3: #1c2c34;
+  --color-line: rgba(160, 200, 196, 0.14);
+  --color-line-strong: rgba(160, 200, 196, 0.28);
+  --color-text: #e6f2ef;
+  --color-text-muted: #98aeaa;
+  --color-text-faint: #6f8582;
+  --color-inverse-text: #06110e;
+
+  /* Brand */
+  --color-accent: #3ee6b8;
+  --color-accent-strong: #1fd1a1;
+  --color-accent-soft: rgba(62, 230, 184, 0.14);
+  --color-accent-line: rgba(62, 230, 184, 0.45);
+  --color-accent-2: #5cc8ff;
+  --color-accent-2-soft: rgba(92, 200, 255, 0.14);
+
+  /* Semantic */
+  --color-success: #3ee6b8;
+  --color-success-soft: rgba(62, 230, 184, 0.14);
+  --color-danger: #ff6b7a;
+  --color-danger-soft: rgba(255, 107, 122, 0.14);
+  --color-warning: #ffc766;
+  --color-warning-soft: rgba(255, 199, 102, 0.16);
+  --color-info: #5cc8ff;
+  --color-info-soft: rgba(92, 200, 255, 0.14);
+  --color-neutral: #9fb3c8;
+  --color-neutral-soft: rgba(159, 179, 200, 0.14);
+
+  /* Votes and actors */
+  --color-vote-yes: #3ee6b8;
+  --color-vote-no: #ff6b7a;
+  --color-vote-abstain: #9fb3c8;
+  --color-vote-noconf: #b794f6;
+  --color-vote-notvoted: rgba(159, 179, 200, 0.28);
+  --color-role-drep: #3ee6b8;
+  --color-role-spo: #5cc8ff;
+  --color-role-cc: #ffc766;
+
+  /* Charts (categorical, ordered) */
+  --chart-1: #3ee6b8;
+  --chart-2: #5cc8ff;
+  --chart-3: #ffc766;
+  --chart-4: #b794f6;
+  --chart-5: #ff6b7a;
+  --chart-6: #9fb3c8;
+  --chart-grid: rgba(160, 200, 196, 0.12);
+  --chart-text: #98aeaa;
+
+  /* Surfaces */
+  --glass-topbar: rgba(10, 16, 19, 0.82);
+  --overlay: rgba(2, 8, 10, 0.72);
+  --page-gradient:
+    radial-gradient(900px 500px at 8% -10%, rgba(62, 230, 184, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(92, 200, 255, 0.08), transparent 55%);
+
+  /* Typography */
+  --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: "Orbitron", var(--font-sans);
+  --text-xs: 0.75rem;   /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-md: 0.875rem;  /* 14 */
+  --text-base: 1rem;    /* 16 */
+  --text-lg: 1.125rem;  /* 18 */
+  --text-xl: 1.375rem;  /* 22 */
+  --text-2xl: 1.75rem;  /* 28 */
+  --text-3xl: 2.25rem;  /* 36 */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --tracking-caps: 0.08em;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.5);
+  --ring: 0 0 0 3px rgba(62, 230, 184, 0.35);
+
+  /* Layout */
+  --container: 1280px;
+  --gutter: 16px;
+  --topbar-height: 60px;
+  --z-dropdown: 40;
+  --z-sticky: 30;
+  --z-drawer: 60;
+  --z-modal: 80;
+  --z-toast: 90;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 320ms;
+
+  /* Brand mark */
+  --brand-arc-a: #50c4ff;
+  --brand-arc-b: #55f2c9;
+  --brand-ring: #ecfffc;
+  --brand-glow-core: #caffea;
+  --brand-glow-mid: #46ff9b;
+  --brand-dot: #59ff9d;
+  --watermark-logo-url: url("/civitas-logo.svg");
+  --watermark-opacity: 0.06;
+}
+
+@media (min-width: 720px) {
+  :root { --gutter: 24px; }
+}
+@media (min-width: 1100px) {
+  :root { --gutter: 32px; }
+}
+
+/* Light theme -------------------------------------------------------------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f3f7f6;
+  --color-bg-elevated: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2f6f5;
+  --color-surface-3: #e7eeec;
+  --color-line: rgba(20, 60, 54, 0.12);
+  --color-line-strong: rgba(20, 60, 54, 0.24);
+  --color-text: #10201e;
+  --color-text-muted: #4f6a66;
+  --color-text-faint: #7d928f;
+  --color-inverse-text: #ffffff;
+
+  --color-accent: #0f9f86;
+  --color-accent-strong: #0b8a74;
+  --color-accent-soft: rgba(15, 159, 134, 0.12);
+  --color-accent-line: rgba(15, 159, 134, 0.4);
+  --color-accent-2: #1f7fc8;
+  --color-accent-2-soft: rgba(31, 127, 200, 0.12);
+
+  --color-success: #0f9f86;
+  --color-success-soft: rgba(15, 159, 134, 0.12);
+  --color-danger: #c8384e;
+  --color-danger-soft: rgba(200, 56, 78, 0.12);
+  --color-warning: #b47a12;
+  --color-warning-soft: rgba(180, 122, 18, 0.14);
+  --color-info: #1f7fc8;
+  --color-info-soft: rgba(31, 127, 200, 0.12);
+  --color-neutral: #667a8f;
+  --color-neutral-soft: rgba(102, 122, 143, 0.14);
+
+  --color-vote-yes: #0f9f86;
+  --color-vote-no: #c8384e;
+  --color-vote-abstain: #667a8f;
+  --color-vote-noconf: #6d4ac9;
+  --color-vote-notvoted: rgba(102, 122, 143, 0.22);
+  --color-role-drep: #0f9f86;
+  --color-role-spo: #1f7fc8;
+  --color-role-cc: #b47a12;
+
+  --chart-1: #0f9f86;
+  --chart-2: #1f7fc8;
+  --chart-3: #b47a12;
+  --chart-4: #6d4ac9;
+  --chart-5: #c8384e;
+  --chart-6: #667a8f;
+  --chart-grid: rgba(20, 60, 54, 0.12);
+  --chart-text: #4f6a66;
+
+  --glass-topbar: rgba(243, 247, 246, 0.86);
+  --overlay: rgba(16, 32, 30, 0.45);
+  --page-gradient:
+    radial-gradient(900px 500px at 8% -10%, rgba(15, 159, 134, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(31, 127, 200, 0.08), transparent 55%);
+
+  --shadow-sm: 0 1px 2px rgba(16, 32, 30, 0.08);
+  --shadow-md: 0 8px 24px rgba(16, 32, 30, 0.10);
+  --shadow-lg: 0 24px 64px rgba(16, 32, 30, 0.18);
+  --ring: 0 0 0 3px rgba(15, 159, 134, 0.3);
+
+  --brand-arc-a: #1f7fc8;
+  --brand-arc-b: #129f8d;
+  --brand-ring: #10201e;
+  --brand-glow-core: #10201e;
+  --brand-glow-mid: #12b886;
+  --brand-dot: #0f8f73;
+  --watermark-logo-url: url("/civitas-logo-light.svg");
+  --watermark-opacity: 0.04;
+}
+
+/* Legacy aliases (used by styles not yet migrated). ------------------------- */
+:root, :root[data-theme="light"] {
+  --bg: var(--color-bg);
+  --bg-soft: var(--color-surface-2);
+  --panel: var(--color-surface);
+  --line: var(--color-line);
+  --text: var(--color-text);
+  --text-muted: var(--color-text-muted);
+  --mint: var(--color-accent);
+  --amber: var(--color-warning);
+  --rose: var(--color-danger);
+  --accent: var(--color-accent);
+  --green-soft: var(--color-success-soft);
+  --rose-soft: var(--color-danger-soft);
+  --page-background: var(--page-gradient), var(--color-bg);
+  --topbar-bg: var(--glass-topbar);
+  --brand-color: var(--color-text);
+  --brand-slogan-color: var(--color-text-muted);
+  --brand-glow-a: var(--color-accent-soft);
+  --brand-glow-b: var(--color-accent-2-soft);
+  --surface-soft: rgba(127, 127, 127, 0.04);
+  --surface-soft-2: rgba(127, 127, 127, 0.07);
+  --surface-soft-3: rgba(127, 127, 127, 0.10);
+  --control-surface-bg: var(--color-surface-2);
+  --chip-bg: var(--color-surface-2);
+  --chip-active-bg: var(--color-accent-soft);
+  --chip-active-border: var(--color-accent-line);
+  --chip-active-soft-bg: var(--color-accent-soft);
+  --chip-active-soft-border: var(--color-accent-line);
+  --accent-button-text: var(--color-inverse-text);
+  --hero-block-panel: var(--color-surface);
+  --overlay-black: #000;
+  --modal-backdrop-bg: var(--overlay);
+  --detail-backdrop-bg: var(--overlay);
+  --modal-panel-bg: var(--color-bg-elevated);
+  --watermark-drop-shadow: none;
+  --zoom-compensation: 1;
+  --select-menu-bg: var(--color-bg-elevated);
+  --select-menu-text: var(--color-text);
+  --aura-a-x: 0px; --aura-a-y: 0px; --aura-a-scale: 1; --aura-a-opacity: 0.9;
+  --aura-b-x: 0px; --aura-b-y: 0px; --aura-b-scale: 1; --aura-b-opacity: 0.7;
+  --wm-x: 0px; --wm-y: 0px; --wm-scale: 1;
+  --landing-aura-x: 0px; --landing-aura-y: 0px;
+}
+
+/* Seasonal (Easter): a warmer accent, same structure. ---------------------- */
+:root[data-easter="true"] {
+  --color-accent: #f6c344;
+  --color-accent-strong: #e0ad2a;
+  --color-accent-soft: rgba(246, 195, 68, 0.16);
+  --color-accent-line: rgba(246, 195, 68, 0.5);
+}

@@ -3,7 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/civitas-logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a1013" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f3f7f6" media="(prefers-color-scheme: light)" />
+    <!-- Apply the saved (or system) theme before first paint to avoid a flash. -->
+    <script>
+      (function () {
+        var theme = "dark";
+        try {
+          var stored = localStorage.getItem("civitas.theme");
+          if (stored === "light" || stored === "dark") theme = stored;
+          else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
+        } catch (e) { /* storage unavailable */ }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
 
     <!-- Primary meta — overridden per-page by useSeoMeta hook and server-side injection -->
     <title>Civitas — Cardano Governance Dashboard</title>

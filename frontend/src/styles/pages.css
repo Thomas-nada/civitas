@@ -1,0 +1,40 @@
+/* ==========================================================================
+   Page-specific styles (migrated pages). Prefix: p-<page>.
+   ========================================================================== */
+
+/* Actions explorer -------------------------------------------------------- */
+.p-actions__toolbar { margin: var(--space-6) 0 var(--space-4); }
+.p-actions__batch { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.p-actions__batch-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--text-sm); }
+.p-actions__batch-summary strong { font-size: var(--text-lg); }
+.p-actions__vote-status { display: flex; flex-direction: column; gap: 8px; margin-bottom: var(--space-4); }
+.p-actions__title { display: flex; flex-direction: column; gap: 4px; min-width: 240px; }
+.p-actions__name { font-weight: 600; color: var(--color-text); text-decoration: none; }
+.p-actions__name:hover { color: var(--color-accent); text-decoration: none; }
+.p-actions__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.p-actions__bar { display: grid; gap: 5px; min-width: 120px; }
+.p-actions__bar-text { display: flex; gap: 6px; font-size: var(--text-xs); }
+.p-actions__bar-text .yes { color: var(--color-vote-yes); font-weight: 600; }
+.p-actions__bar-text .no { color: var(--color-vote-no); font-weight: 600; }
+.p-actions__table .c-table { min-width: 960px; }
+@media (max-width: 720px) {
+  .p-actions__table .c-table { min-width: 0; }
+  .p-actions__title { min-width: 0; }
+}
+
+/* Action detail ----------------------------------------------------------- */
+.p-detail__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.p-detail__block { margin: 0; }
+.p-detail__bodies { align-items: start; }
+.p-detail__body { padding: var(--space-4) var(--space-5); }
+.p-detail__body-rows { display: grid; gap: 4px; margin: 12px 0 0; }
+.p-detail__body-row { display: flex; justify-content: space-between; gap: 8px; font-size: var(--text-sm); }
+.p-detail__body-row dt { color: var(--color-text-muted); }
+.p-detail__body-row dd { margin: 0; text-align: right; }
+.p-detail__body-row--yes dt { color: var(--color-vote-yes); font-weight: 600; }
+.p-detail__body-row--no dt { color: var(--color-vote-no); font-weight: 600; }
+.p-detail__body-row--abstain dt { color: var(--color-vote-abstain); font-weight: 600; }
+.p-detail__body-row--sub { padding-left: 12px; font-size: var(--text-xs); }
+.p-detail__body-row--sub dt::before { content: "↳ "; color: var(--color-text-faint); }
+.p-detail__delivery { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--color-line); }
+.p-detail__delivery:first-child { border-top: 0; padding-top: 0; }
