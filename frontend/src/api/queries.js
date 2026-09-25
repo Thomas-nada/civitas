@@ -126,6 +126,16 @@ export function useDrepDelegators(drepId, options = {}) {
   });
 }
 
+/** Governance events per epoch boundary for the calendar. */
+export function useCalendar(fromEpoch, toEpoch, snapshotKey = "") {
+  return useQuery({
+    queryKey: key("calendar", snapshotKey, fromEpoch, toEpoch),
+    enabled: Number.isFinite(fromEpoch) && Number.isFinite(toEpoch),
+    placeholderData: (prev) => prev,
+    queryFn: ({ signal }) => fetchJson(withSnapshot(`/api/v1/calendar?from=${fromEpoch}&to=${toEpoch}`, snapshotKey), { signal })
+  });
+}
+
 /* Treasury -------------------------------------------------------------- */
 export function useTreasury() {
   // Snapshot-derived, so it lives under the ["v1"] key and revalidates on publish.

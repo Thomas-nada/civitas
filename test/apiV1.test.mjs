@@ -160,6 +160,24 @@ test("rationales index and stats bundle", () => {
   assert.ok(search.body.results.length > 0);
 });
 
+test("calendar: events per epoch with boundary vote positions", () => {
+  const ref = seed.latestEpoch;
+  const { status, body } = call(`/api/v1/calendar?from=${ref - 6}&to=${ref + 6}`);
+  assert.equal(status, 200);
+  assert.equal(body.referenceEpoch, ref);
+  const epochs = Object.keys(body.epochs).map(Number);
+  assert.ok(epochs.length > 0);
+  assert.ok(epochs.every((e) => e >= ref - 6 && e <= ref + 6));
+  const events = Object.values(body.epochs).flat();
+  assert.ok(events.every((e) => e.type && e.row?.proposalId && e.row?.actionName));
+  assert.ok(events.some((e) => e.type === "voting" || e.type === "submitted"));
+  const size = gzSize(body);
+  console.log(`calendar (13 epochs): ${kb(size)} gzipped`);
+  assert.ok(size < 60 * 1024, `calendar ${kb(size)}`);
+  // A second call is served from the per-epoch memo and is identical.
+  assert.deepEqual(call(`/api/v1/calendar?from=${ref - 6}&to=${ref + 6}`).body.epochs, body.epochs);
+});
+
 test("HTTP: gzip, ETag and 304", async () => {
   const http = server.httpServer;
   await new Promise((resolve) => http.listen(0, "127.0.0.1", resolve));

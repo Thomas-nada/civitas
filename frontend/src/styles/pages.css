@@ -127,3 +127,71 @@
 .p-treasury .c-disclosure + .c-disclosure { margin-top: var(--space-2); }
 @media (max-width: 960px) { .t-admin-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .t-project { min-width: 0; } .t-milestone__label { white-space: normal; } }
+
+/* Epoch calendar ---------------------------------------------------------- */
+.p-cal__countdown { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-5); }
+.p-cal__countdown-left { flex: 1 1 280px; min-width: 0; }
+.p-cal__epoch-big { font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.02em; margin: 4px 0 6px; }
+.p-cal__units { display: flex; gap: var(--space-2); }
+.p-cal__unit { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; padding: 10px 8px; border-radius: var(--radius-md); background: var(--color-surface-2); border: 1px solid var(--color-line); }
+.p-cal__unit .num { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.p-cal__unit span:last-child { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.p-cal__toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.p-cal__title { font-size: var(--text-xl); margin: 0; }
+.p-cal__month-title { font-size: var(--text-lg); margin: 0 0 var(--space-2); }
+.p-cal__legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--text-xs); color: var(--color-text-muted); text-transform: capitalize; }
+.p-cal__swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--color-text-faint); }
+.p-cal__swatch--submitted { background: var(--color-info); }
+.p-cal__swatch--voting { background: var(--color-accent); }
+.p-cal__swatch--expires { background: var(--color-warning); }
+.p-cal__swatch--expired, .p-cal__swatch--dropped { background: var(--color-vote-no); }
+.p-cal__swatch--ratified { background: var(--color-vote-noconf); }
+.p-cal__swatch--enacted { background: var(--color-vote-yes); }
+.p-cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.p-cal__weekday { padding: 4px 6px; font-size: var(--text-xs); font-weight: 600; color: var(--color-text-faint); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.p-cal__cell { position: relative; min-height: 96px; padding: 6px 8px; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.p-cal__grid--compact .p-cal__cell { min-height: 72px; padding: 4px 6px; }
+.p-cal__cell.is-out { opacity: 0.45; }
+.p-cal__cell.is-epoch { cursor: pointer; border-color: var(--color-line-strong); }
+.p-cal__cell.is-future { background: var(--color-surface-2); }
+.p-cal__cell.is-past .p-cal__epoch-num { color: var(--color-text-muted); }
+.p-cal__cell.is-epoch:hover { border-color: var(--color-accent-line); }
+.p-cal__cell.is-selected { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.p-cal__cell.is-today { background: var(--color-accent-soft); }
+.p-cal__cell:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.p-cal__daynum { font-size: var(--text-sm); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.p-cal__dow { display: none; color: var(--color-text-muted); font-weight: 500; }
+@media (max-width: 720px) { .p-cal__dow { display: inline; } }
+.p-cal__today { font-size: 10px; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.p-cal__epoch { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.p-cal__epoch-num { font-size: var(--text-xs); }
+.p-cal__events { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.p-cal__chip { display: block; width: 100%; text-align: left; padding: 3px 6px; border-radius: 4px; border: 0; border-left: 3px solid var(--color-text-faint); background: var(--color-surface-2); color: var(--color-text); font-size: 11px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.p-cal__chip:hover { background: var(--color-bg-elevated); }
+.p-cal__chip.is-voted { font-weight: 600; }
+.p-cal__chip--submitted { border-left-color: var(--color-info); }
+.p-cal__chip--voting { border-left-color: var(--color-accent); }
+.p-cal__chip--expires { border-left-color: var(--color-warning); }
+.p-cal__chip--expired, .p-cal__chip--dropped { border-left-color: var(--color-vote-no); }
+.p-cal__chip--ratified { border-left-color: var(--color-vote-noconf); }
+.p-cal__chip--enacted { border-left-color: var(--color-vote-yes); }
+.p-cal__more { align-self: flex-start; padding: 2px 6px; border: 0; background: none; color: var(--color-accent); font-size: 11px; font-weight: 600; cursor: pointer; }
+.p-cal__list { display: grid; gap: 4px; }
+.p-cal__item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--color-line); border-left-width: 3px; border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--color-text); font-size: var(--text-sm); cursor: pointer; }
+.p-cal__item:hover { border-color: var(--color-accent-line); }
+.p-cal__item-label { flex: 1; min-width: 0; }
+.p-cal__item--submitted { border-left-color: var(--color-info); }
+.p-cal__item--voting { border-left-color: var(--color-accent); }
+.p-cal__item--expires { border-left-color: var(--color-warning); }
+.p-cal__item--expired, .p-cal__item--dropped { border-left-color: var(--color-vote-no); }
+.p-cal__item--ratified { border-left-color: var(--color-vote-noconf); }
+.p-cal__item--enacted { border-left-color: var(--color-vote-yes); }
+.p-cal__type { text-transform: capitalize; }
+@media (max-width: 720px) {
+  .p-cal__grid { grid-template-columns: 1fr; }
+  .p-cal__weekday { display: none; }
+  .p-cal__cell:not(.is-epoch) { display: none; }
+  .p-cal__cell { min-height: 0; }
+  .p-cal__units { width: 100%; justify-content: space-between; }
+  .p-cal__unit { flex: 1; min-width: 0; }
+}
