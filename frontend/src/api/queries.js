@@ -153,3 +153,18 @@ export function useTreasuryProject(projectId) {
 export function useTreasuryMapping() {
   return useQuery({ queryKey: ["treasury-admin", "mapping"], staleTime: 5 * 60_000, retry: 0, queryFn: ({ signal }) => fetchJson("/api/treasury-admin/mapping", { signal }) });
 }
+
+/* Surveys (CIP-179, read from Tessera through the server) ---------------- */
+export function useSurveys() {
+  return useQuery({ queryKey: ["surveys", "list"], staleTime: 60_000, queryFn: ({ signal }) => fetchJson("/api/surveys", { signal }) });
+}
+export function useSurvey(txHash, index, options = {}) {
+  return useQuery({
+    queryKey: ["surveys", "detail", txHash, index],
+    enabled: Boolean(txHash),
+    staleTime: 30_000,
+    retry: (count, error) => error?.status !== 404 && count < 1,
+    queryFn: ({ signal }) => fetchJson(`/api/surveys/${txHash}/${index}`, { signal }),
+    ...options
+  });
+}

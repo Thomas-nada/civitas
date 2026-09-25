@@ -9,6 +9,7 @@ import { explorerTxUrl } from "../../services/surveyNetwork";
 import { cliCommands, cliCredential, downloadTextFile, metadataFileJson, signedTxHexFrom, submitSignedHex } from "../../services/surveyCli";
 import { readableError } from "../../lib/wallet/walletError";
 import TesseraRespond from "./TesseraRespond";
+import { Alert, Button, Card, CopyButton, KeyValue, Textarea } from "../../ui";
 
 const ROLE_NAMES_BY_NUMBER = { 0: "DRep", 1: "SPO", 2: "CC", 3: "Stakeholder", 4: "Keyholder" };
 
@@ -59,13 +60,13 @@ export default function CliAnswer({ survey, data, onSubmitted }) {
 
   if (!credential || !roleAccepted) {
     return (
-      <section className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
-        <h2 style={{ marginTop: 0 }}>Your session's credential cannot answer this survey</h2>
-        <p className="muted" style={{ maxWidth: "460px", margin: "0 auto 1rem" }}>
+      <Card className="svy-signin">
+        <h3 style={{ marginTop: 0 }}>Your session's credential cannot answer this survey</h3>
+        <p className="muted small" style={{ maxWidth: 460, margin: "0 auto" }}>
           You are signed in with cardano-signer as {wallet?.roleLabel || "a CLI user"}. This survey accepts {eligible.join(", ") || "—"}.
           Sign in with a role it accepts, or connect a browser wallet that holds an eligible credential.
         </p>
-      </section>
+      </Card>
     );
   }
 
@@ -88,17 +89,16 @@ export default function CliAnswer({ survey, data, onSubmitted }) {
   }
 
   return (
-    <div className="svy-respond">
-      <section className="panel" style={{ padding: "1rem 1.1rem" }}>
-        <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem" }}>Answer with your own keys</h2>
-        <p className="muted svy-respond-note">
+    <div className="svy-respond stack">
+      <Card title="Answer with your own keys">
+        <p className="muted small svy-note">
           You are signed in with cardano-signer as <strong>{roleName}</strong>; this survey accepts that role. Answering as {roleName} means a transaction witnessed by {credential.signerKey}, which no browser wallet holds, so the steps are: answer here, carry the answer in a transaction you build and sign yourself, and submit it here or with cardano-cli. Your credential, your role and your answers go on chain publicly and permanently.
         </p>
-        {!isOpen ? <p className="muted svy-respond-note">This survey is closed; it no longer accepts answers.</p> : null}
+        {!isOpen ? <p className="muted small svy-note">This survey is closed; it no longer accepts answers.</p> : null}
 
         {isOpen && !payload ? (
           <>
-            <p className="muted svy-respond-note"><strong>Step 1.</strong> Fill in the survey and press its <strong>Sign &amp; submit</strong>: here that only finishes the answer. Nothing is signed in the browser.</p>
+            <p className="muted small svy-note"><strong>Step 1.</strong> Fill in the survey and press its <strong>Sign &amp; submit</strong>: here that only finishes the answer. Nothing is signed in the browser.</p>
             {record ? (
               <TesseraRespond
                 definition={record.definition}
@@ -109,61 +109,42 @@ export default function CliAnswer({ survey, data, onSubmitted }) {
                 onResponse={(result) => setPayload(result.payload)}
                 onError={(e) => setPhase({ kind: "error", message: e.message })}
               />
-            ) : <p className="muted svy-respond-note">Loading the survey form…</p>}
+            ) : <p className="muted small svy-note">Loading the survey form…</p>}
           </>
         ) : null}
 
         {payload && phase.kind !== "done" ? (
-          <div className="svy-cli">
-            <p className="muted svy-respond-note">
+          <div className="stack" style={{ marginTop: 12 }}>
+            <p className="muted small svy-note">
               <strong>Step 2.</strong> Download the metadata file and build a transaction that carries it, with your {roleName} key hash as a required signer:
             </p>
-            <div className="svy-cli-row">
-              <button type="button" className="btn-primary" onClick={() => downloadTextFile("civitas-survey-answer.json", metadataJson)}>Download civitas-survey-answer.json</button>
-              <button type="button" className="mode-btn" onClick={() => navigator.clipboard?.writeText(metadataJson)}>Copy JSON</button>
-              <button type="button" className="mode-btn" onClick={() => setPayload(null)}>Change answers</button>
+            <div className="row">
+              <Button variant="primary" onClick={() => downloadTextFile("civitas-survey-answer.json", metadataJson)}>Download civitas-survey-answer.json</Button>
+              <CopyButton value={metadataJson} label="Copy JSON" variant="default">Copy JSON</CopyButton>
+              <Button onClick={() => setPayload(null)}>Change answers</Button>
             </div>
-            <dl className="svy-facts svy-cli-facts">
-              <div><dt>Required signer hash ({roleName} key)</dt><dd className="mono">{credential.keyHash}</dd></div>
-              <div><dt>Metadata label</dt><dd className="mono">17</dd></div>
-              <div><dt>Witnesses</dt><dd>your payment key and {credential.signerKey}</dd></div>
-            </dl>
-            <button type="button" className="link-btn" onClick={() => setShowCommands((v) => !v)}>{showCommands ? "Hide" : "Show"} cardano-cli steps</button>
-            {showCommands ? <pre className="svy-cli-pre">{commands.join("\n\n")}</pre> : null}
+            <KeyValue items={[[`Required signer hash (${roleName} key)`, <span key="k" className="mono break">{credential.keyHash}</span>], ["Metadata label", <span key="l" className="mono">17</span>], ["Witnesses", `your payment key and ${credential.signerKey}`]]} />
+            <Button size="sm" variant="ghost" onClick={() => setShowCommands((v) => !v)}>{showCommands ? "Hide" : "Show"} cardano-cli steps</Button>
+            {showCommands ? <pre>{commands.join("\n\n")}</pre> : null}
 
-            <p className="muted svy-respond-note">
+            <p className="muted small svy-note">
               <strong>Step 3.</strong> Paste the signed transaction (the contents of answer.signed, or its CBOR hex) to submit it through Koios, or submit it yourself and paste the transaction hash to watch it reach the index.
             </p>
-            <textarea
-              className="svy-cli-textarea"
-              rows={5}
-              value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
-              placeholder='{ "type": "Witnessed Tx ConwayEra", "cborHex": "84a4..." }  or a transaction hash'
-            />
-            {phase.kind === "error" ? <p className="vote-error">{phase.message}</p> : null}
-            <div className="svy-cli-row">
-              <button type="button" className="btn-primary" disabled={!pasted.trim() || phase.kind === "submitting"} onClick={submitPasted}>
-                {phase.kind === "submitting" ? "Submitting…" : "Submit transaction"}
-              </button>
+            <Textarea className="mono" rows={5} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder='{ "type": "Witnessed Tx ConwayEra", "cborHex": "84a4..." }  or a transaction hash' aria-label="Signed transaction" />
+            {phase.kind === "error" ? <Alert tone="danger">{phase.message}</Alert> : null}
+            <div className="row">
+              <Button variant="primary" disabled={!pasted.trim() || phase.kind === "submitting"} loading={phase.kind === "submitting"} onClick={submitPasted}>{phase.kind === "submitting" ? "Submitting…" : "Submit transaction"}</Button>
             </div>
           </div>
         ) : null}
 
         {phase.kind === "done" ? (
-          <div className="svy-success" style={{ padding: 0 }}>
-            <strong>{phase.self ? "Watching your transaction." : "Answer submitted."}</strong>
-            <span className="muted">
-              {indexed
-                ? "The index has picked it up; the figures on this page now include it."
-                : "The figures update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
-            </span>
-            <span className="mono" style={{ fontSize: "0.8rem" }}>
-              Transaction: <a className="ext-link" href={explorerTxUrl(phase.txHash)} target="_blank" rel="noreferrer">{phase.txHash}</a>
-            </span>
-          </div>
+          <Alert tone="success" title={phase.self ? "Watching your transaction." : "Answer submitted."}>
+            {indexed ? "The index has picked it up; the figures on this page now include it." : "The figures update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
+            {" "}<a className="mono" href={explorerTxUrl(phase.txHash)} target="_blank" rel="noreferrer">{phase.txHash.slice(0, 16)}…</a>
+          </Alert>
         ) : null}
-      </section>
+      </Card>
     </div>
   );
 }

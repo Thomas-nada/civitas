@@ -195,3 +195,45 @@
   .p-cal__units { width: 100%; justify-content: space-between; }
   .p-cal__unit { flex: 1; min-width: 0; }
 }
+
+/* Surveys ----------------------------------------------------------------- */
+.svy-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.svy-steps li { display: flex; gap: 10px; align-items: flex-start; }
+.svy-steps__num { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--color-accent-soft); color: var(--color-accent); font-weight: 700; font-size: var(--text-sm); }
+.svy-filters { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.svy-row { display: flex; flex-direction: column; gap: 2px; min-width: 260px; }
+.svy-row__desc { max-width: 60ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svy-answers { margin: 0; padding-left: 16px; font-size: var(--text-sm); }
+.svy-lac { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--color-text); text-decoration: none; }
+.svy-lac:hover { border-color: var(--color-accent-line); text-decoration: none; }
+.svy-lac__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }
+.svy-lac__title { font-weight: 600; }
+.svy-lac__side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.svy-signin { text-align: center; padding: var(--space-6) var(--space-4); }
+.svy-note { margin: 0 0 8px; }
+.svy-vote { display: grid; gap: 10px; padding: var(--space-4); margin: var(--space-3) 0; border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); }
+.svy-vote--needed { border-style: solid; border-color: var(--color-accent-line); }
+.svy-vote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.svy-proof-alt { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--color-line); }
+.svy-widget { margin-top: var(--space-3); }
+.svy-q { padding: var(--space-4) 0; border-top: 1px solid var(--color-line); }
+.svy-q:first-child { border-top: 0; padding-top: 0; }
+.svy-q__head { margin-bottom: 10px; }
+.svy-q__prompt { font-weight: 600; margin: 2px 0; }
+.svy-q__req { color: var(--color-danger); }
+.svy-options { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.svy-option__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; font-size: var(--text-sm); }
+.svy-option__label { min-width: 0; }
+.svy-option__figures { display: flex; gap: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.svy-values { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.svy-values li { display: inline-flex; gap: 6px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--color-surface-2); font-size: var(--text-sm); }
+.svy-plain-options { margin: 4px 0 0; padding-left: 18px; font-size: var(--text-sm); }
+.svy-create { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 7fr) minmax(280px, 4fr); align-items: start; }
+.svy-create__side { position: sticky; top: 80px; display: grid; gap: var(--space-3); }
+.svy-preview { margin: 0; max-height: 420px; overflow: auto; font-size: 11px; line-height: 1.45; }
+.svy-modes { margin-top: 6px; }
+.svy-mode { display: grid; gap: 4px; padding: var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--color-text); text-align: left; cursor: pointer; }
+.svy-mode.is-selected { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.svy-qeditor .c-card__head { align-items: center; }
+@media (max-width: 960px) { .svy-create { grid-template-columns: 1fr; } .svy-create__side { position: static; } }
+@media (max-width: 720px) { .svy-steps { grid-template-columns: 1fr; } .svy-row { min-width: 0; } .svy-row__desc { white-space: normal; } .svy-option__figures { flex-wrap: wrap; white-space: normal; justify-content: flex-end; } }

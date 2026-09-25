@@ -57,7 +57,7 @@ export default function TesseraRespond({
 
   return (
     <div className="svy-widget">
-      {!ready ? <p className="muted svy-widget-loading">Loading the survey form…</p> : null}
+      {!ready ? <p className="muted small">Loading the survey form…</p> : null}
       <tessera-respond ref={ref} />
     </div>
   );

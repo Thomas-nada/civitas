@@ -13,6 +13,7 @@ import { readableError } from "../../lib/wallet/walletError";
 import { lifecycleLabel } from "../../services/surveyPresentation";
 import TesseraRespond from "./TesseraRespond";
 import CliAnswer from "./CliAnswer";
+import { Alert, Button, Card, Select } from "../../ui";
 
 const ROLE_NUMBERS = { DRep: Role.DRep, SPO: Role.SPO, CC: Role.CC, Stakeholder: Role.Stakeholder, Keyholder: Role.Keyholder };
 
@@ -168,8 +169,6 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
 
   const canOfferVote = Boolean(isOpen && wallet?.actingAsDrep && credentials?.responder?.[Role.DRep] && (votableLinks.length > 0 || voteNeeded));
 
-  const panelClass = compact ? "svy-respond-inner" : "panel";
-  const panelStyle = compact ? undefined : { padding: "1rem 1.1rem" };
 
   // A cardano-signer session answers with its own keys: the same form, then
   // a transaction the user builds and signs, pasted back for submission.
@@ -179,22 +178,18 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
 
   if (!walletApi) {
     return (
-      <section className={panelClass} style={{ ...(panelStyle || {}), textAlign: "center", padding: compact ? "1.4rem 1rem" : "2.5rem 1.5rem" }}>
-        <h2 style={{ marginTop: 0, fontSize: compact ? "1rem" : undefined }}>{wallet?.isCliSession ? "A browser wallet is needed to answer" : "Sign in with a wallet to answer"}</h2>
-        <p className="muted" style={{ maxWidth: "460px", margin: "0 auto 1rem" }}>
+      <Card soft={compact} className="svy-signin">
+        <h3 style={{ marginTop: 0 }}>{wallet?.isCliSession ? "A browser wallet is needed to answer" : "Sign in with a wallet to answer"}</h3>
+        <p className="muted small" style={{ maxWidth: 460, margin: "0 auto 12px" }}>
           {wallet?.isCliSession
             ? "You are signed in with cardano-signer, which cannot sign a browser transaction. Connect a wallet that holds an eligible credential, or answer from Tessera with your own tooling."
             : `Answering records your answers on chain as one small transaction (you pay the network fee only). Your wallet must hold a credential this survey accepts: ${eligible.join(", ") || "—"}.`}
         </p>
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-          {!wallet?.isCliSession && typeof wallet?.openSignIn === "function" ? (
-            <button type="button" className="btn-primary" onClick={() => wallet.openSignIn()}>Sign in</button>
-          ) : null}
-          {survey.tesseraUrl ? (
-            <a className="ext-link" href={survey.tesseraUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.82rem" }}>Open on Tessera ↗</a>
-          ) : null}
+        <div className="row" style={{ justifyContent: "center" }}>
+          {!wallet?.isCliSession && typeof wallet?.openSignIn === "function" ? <Button variant="primary" onClick={() => wallet.openSignIn()}>Sign in</Button> : null}
+          {survey.tesseraUrl ? <a className="small" href={survey.tesseraUrl} target="_blank" rel="noreferrer">Open on Tessera ↗</a> : null}
         </div>
-      </section>
+      </Card>
     );
   }
 
@@ -204,62 +199,52 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
     : "Your credential, your role and your answers go on chain publicly and permanently.";
 
   return (
-    <div className="svy-respond">
+    <div className="svy-respond stack">
       {status.kind === "done" ? (
-        <section className={`${panelClass} svy-success`} style={panelStyle}>
-          <strong>Answer submitted.</strong>
-          <span className="muted">
-            {status.voted ? `Your ${status.voted.choice} vote on "${status.voted.title}" went on chain in the same transaction. ` : ""}
-            {status.restated ? "The transaction re-stated your current DRep metadata anchor (no change) so the wallet would sign it with the DRep key. " : ""}
-            {indexed
-              ? "The index has picked it up; the figures now include it."
-              : "The figures update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
-          </span>
-          <span className="mono" style={{ fontSize: "0.8rem" }}>
-            Transaction: <a className="ext-link" href={explorerTxUrl(status.txHash)} target="_blank" rel="noreferrer">{status.txHash}</a>
-          </span>
-        </section>
+        <Alert tone="success" title="Answer submitted.">
+          {status.voted ? `Your ${status.voted.choice} vote on "${status.voted.title}" went on chain in the same transaction. ` : ""}
+          {status.restated ? "The transaction re-stated your current DRep metadata anchor (no change) so the wallet would sign it with the DRep key. " : ""}
+          {indexed ? "The index has picked it up; the figures now include it." : "The figures update once the index has seen the transaction, usually within a few minutes. This page checks for it automatically."}
+          {" "}<a className="mono" href={explorerTxUrl(status.txHash)} target="_blank" rel="noreferrer">{status.txHash.slice(0, 16)}…</a>
+        </Alert>
       ) : null}
 
       {status.kind !== "done" ? (
-        <section className={panelClass} style={panelStyle}>
-          {heading ? <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem" }}>{heading}</h2> : null}
+        <Card soft={compact} title={heading || null}>
           {!isOpen ? (
-            <p className="muted svy-respond-note">This survey is {lifecycleLabel(survey.lifecycle).toLowerCase()}; it no longer accepts answers.</p>
+            <p className="muted small svy-note">This survey is {lifecycleLabel(survey.lifecycle).toLowerCase()}; it no longer accepts answers.</p>
           ) : null}
-          <p className="muted svy-respond-note">
+          <p className="muted small svy-note">
             Answering as <strong>{wallet.walletName}</strong>
             {roles.length ? <> with your {roles.join(" / ")} credential{roles.length > 1 ? "s" : ""}.</> : "."}{" "}
             {disclosure} The wallet pays only the network fee.
           </p>
           {eligible.includes("DRep") && !wallet.actingAsDrep ? (
-            <p className="muted svy-respond-note">
+            <p className="muted small svy-note">
               To answer as a DRep, sign in as a DRep (a registered DRep with the DRep key). Signed in as {wallet.roleLabel}, this wallet answers with its stake or payment credential where the survey allows it.
             </p>
           ) : null}
           {priorAnswers.length ? (
-            <p className="muted svy-respond-note">
+            <p className="muted small svy-note">
               You already answered this survey ({priorAnswers.length === 1 ? "1 response" : `${priorAnswers.length} responses`} on chain). A new answer replaces the earlier one in full and costs another network fee.
             </p>
           ) : null}
-          {credentialError ? <p className="vote-error">{credentialError}</p> : null}
+          {credentialError ? <Alert tone="danger">{credentialError}</Alert> : null}
           {credentials && Object.keys(credentials.responder).length === 0 ? (
-            <p className="vote-notice">
-              This wallet holds no credential this survey accepts ({eligible.join(", ")}). {eligible.includes("DRep") && !wallet.actingAsDrep ? "Sign in as a DRep to answer with your DRep key." : ""}
-            </p>
+            <Alert tone="warning">This wallet holds no credential this survey accepts ({eligible.join(", ")}). {eligible.includes("DRep") && !wallet.actingAsDrep ? "Sign in as a DRep to answer with your DRep key." : ""}</Alert>
           ) : null}
           {canOfferVote ? (
             <div className={`svy-vote${voteNeeded ? " svy-vote--needed" : ""}`}>
               {voteNeeded && pendingResult ? (
                 <div className="svy-proof-alt">
                   <div className="svy-vote-head"><strong>Answer without voting</strong></div>
-                  <p className="muted svy-respond-note">
+                  <p className="muted small svy-note">
                     The transaction carries a DRep update certificate that re-states your current DRep metadata anchor. Nothing about your DRep changes and there is no deposit, only the network fee; the wallet shows it as a DRep update and signs it with the DRep key, which is the signature this answer needs.
                   </p>
                   {status.kind !== "submitting" && !status.attempted?.drepUpdate ? (
-                    <button type="button" className="btn-primary" onClick={() => onResponse(pendingResult, "drep-update")}>Submit the answer without a vote</button>
+                    <Button variant="primary" onClick={() => onResponse(pendingResult, "drep-update")}>Submit the answer without a vote</Button>
                   ) : null}
-                  {status.attempted?.drepUpdate ? <p className="vote-notice" style={{ margin: 0 }}>Tried: the wallet did not sign the certificate with the DRep key.</p> : null}
+                  {status.attempted?.drepUpdate ? <Alert tone="warning">Tried: the wallet did not sign the certificate with the DRep key.</Alert> : null}
                 </div>
               ) : null}
               {votableLinks.length > 0 ? (
@@ -268,7 +253,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
                     <strong>{voteNeeded ? "Or cast your DRep vote with this answer" : "Also cast your DRep vote in the same transaction"}</strong>
                     {!voteNeeded ? <span className="muted">optional</span> : null}
                   </div>
-                  <p className="muted svy-respond-note">
+                  <p className="muted small svy-note">
                     {votableLinks.length === 1 ? (
                       <>The survey is linked to <em>{voteLink?.title || voteLink?.actionId}</em>. </>
                     ) : "This survey is linked to several governance actions. "}
@@ -277,31 +262,29 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
                 </>
               ) : null}
               {votableLinks.length > 1 ? (
-                <select className="svy-vote-select" value={voteLink?.actionId || ""} onChange={(e) => setVoteActionId(e.target.value)}>
+                <Select value={voteLink?.actionId || ""} onChange={(e) => setVoteActionId(e.target.value)} aria-label="Linked action to vote on">
                   {votableLinks.map((link) => <option key={link.actionId} value={link.actionId}>{link.title || link.actionId}</option>)}
-                </select>
+                </Select>
               ) : null}
               {votableLinks.length > 0 ? (
-              <div className="svy-vote-choices" role="group" aria-label="DRep vote">
-                {!voteNeeded ? (
-                  <button type="button" className={`svy-vote-btn${voteChoice === "" ? " active" : ""}`} onClick={() => setVoteChoice("")}>No vote</button>
-                ) : null}
+              <div className="row" role="group" aria-label="DRep vote">
+                {!voteNeeded ? <Button variant={voteChoice === "" ? "soft" : "outline"} aria-pressed={voteChoice === ""} onClick={() => setVoteChoice("")}>No vote</Button> : null}
                 {["Yes", "No", "Abstain"].map((choice) => (
-                  <button key={choice} type="button" className={`svy-vote-btn svy-vote-btn--${choice.toLowerCase()}${voteChoice === choice ? " active" : ""}`} onClick={() => setVoteChoice(choice)}>{choice}</button>
+                  <Button key={choice} variant={voteChoice !== choice ? "outline" : choice === "Yes" ? "primary" : choice === "No" ? "danger" : "soft"} aria-pressed={voteChoice === choice} onClick={() => setVoteChoice(choice)}>{choice}</Button>
                 ))}
               </div>
               ) : null}
               {voteChoice ? <RationaleInput value={voteRationale} onChange={setVoteRationale} rows={6} /> : null}
               {voteNeeded && pendingResult && votableLinks.length > 0 && status.kind !== "submitting" ? (
-                <button type="button" className="btn-primary" disabled={!voteChoice} onClick={() => onResponse(pendingResult, "vote")}>
+                <Button variant="primary" disabled={!voteChoice} onClick={() => onResponse(pendingResult, "vote")}>
                   {voteChoice ? `Vote ${voteChoice} and submit the answer` : "Choose a vote to continue"}
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}
-          {status.kind === "submitting" ? <p className="muted svy-respond-note">Awaiting wallet signature…</p> : null}
+          {status.kind === "submitting" ? <Alert tone="info">Awaiting wallet signature…</Alert> : null}
           {status.kind === "error" ? (
-            <p className="vote-error">{status.message} {!voteNeeded ? <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>Try again</button> : null}</p>
+            <Alert tone="danger">{status.message} {!voteNeeded ? <Button size="sm" onClick={() => setStatus({ kind: "idle" })}>Try again</Button> : null}</Alert>
           ) : null}
           {isOpen && record && credentials && Object.keys(credentials.responder).length > 0 ? (
             <TesseraRespond
@@ -315,7 +298,7 @@ export default function SurveyRespond({ survey, data, onSubmitted, heading = "An
               onError={(e) => setStatus({ kind: "error", message: e.message })}
             />
           ) : null}
-        </section>
+        </Card>
       ) : null}
     </div>
   );
