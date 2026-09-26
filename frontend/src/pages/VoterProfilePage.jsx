@@ -146,7 +146,9 @@ export default function VoterProfilePage({ actorType }) {
   const scored = useMemo(() => {
     if (!actor) return null;
     const [row] = scoreActors([actor], {
-      actorType, proposalInfo, include: { attendance: true, transparency: !isCommittee, alignment: true, responsiveness: !isCommittee, delegationRisk: isDrep },
+      // The same metric set the dashboard scores with, so the profile shows the
+      // dashboard's number.
+      actorType, proposalInfo, include: { attendance: true, transparency: !isCommittee, alignment: isCommittee, responsiveness: isCommittee, delegationRisk: isDrep },
       drepParticipationStartEpoch: meta?.drepParticipationStartEpoch, powerTotals: power
     });
     return row;
@@ -275,7 +277,7 @@ export default function VoterProfilePage({ actorType }) {
         <StatGrid>
           <ScoreTile label="Votes cast" value={formatNumber(scored?.cast ?? voteRows.length)} hint={scored ? `of ${scored.totalEligibleVotes} eligible actions` : null} />
           <ScoreTile label="Attendance" value={formatPct(scored?.attendance, 1)} help={scored ? metricHelp.attendance(scored) : null} />
-          <ScoreTile label="Score" value={scored ? scored.accountability : "—"} hint="accountability" help={scored ? metricHelp.accountability(scored, actorType, { attendance: true, transparency: !isCommittee, alignment: true, responsiveness: !isCommittee, delegationRisk: isDrep }) : null} />
+          <ScoreTile label="Score" value={scored ? scored.accountability : "—"} hint="accountability" help={scored ? metricHelp.accountability(scored, actorType, { attendance: true, transparency: !isCommittee, alignment: isCommittee, responsiveness: isCommittee, delegationRisk: isDrep }) : null} />
           {!isCommittee ? <ScoreTile label="Transparency" value={formatPct(scored?.transparencyScore, 1)} help={scored ? metricHelp.transparency(scored, false) : null} /> : null}
           {!isCommittee ? <ScoreTile label="Alignment" value={formatPct(scored?.consistency, 1)} help={scored ? metricHelp.consistency(scored) : null} /> : <ScoreTile label="Rationale quality" value={formatPct(scored?.consistency, 0)} help={scored ? metricHelp.rationaleQuality(scored) : null} />}
           {!isCommittee ? <ScoreTile label="Avg response" value={formatResponseHours(scored?.avgResponseHours)} help={scored ? metricHelp.responsiveness(scored) : null} /> : null}
