@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSsBdyxLcZcnSGeDxZQ8CNALA65WBXTRQmTrNXtQ5qDTV -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmfVdsFCMNksPs1xZprxF8MFwee5GzPuVsCLKeL2yE1zwN -->
 # AustinAnthony
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Yes Remimburse Ikigai info governance Action Deposit
+Return the funding to the rightful owner.
