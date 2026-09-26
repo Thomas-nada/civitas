@@ -3576,6 +3576,19 @@ function collectHexHashes(value, output = new Set()) {
   return output;
 }
 
+// The cold credential hashes an UpdateCommittee action adds. Its description
+// is { tag, contents: [prevAction, removed[], { "keyHash-…": epoch }, quorum] };
+// only the third entry names members being seated. Older or unexpected shapes
+// fall back to every hash in the description.
+function committeeAddedCredentialHashes(description) {
+  const contents = Array.isArray(description?.contents) ? description.contents : null;
+  if (contents && contents.length >= 3) {
+    const added = contents[2];
+    if (added && typeof added === "object" && !Array.isArray(added)) return collectHexHashes(added);
+  }
+  return collectHexHashes(description || {});
+}
+
 function parseCommitteeMetadataNameMap(metadataEnvelope) {
   const out = new Map();
   if (!metadataEnvelope || typeof metadataEnvelope !== "object") return out;
@@ -5329,9 +5342,14 @@ function normalizeCommitteeMembersForApi(rows, latestEpoch = 0, proposalInfo = n
   const seatStarts = proposalInfo ? committeeSeatStartsByColdHex(proposalInfo) : null;
   return input.map((row) => {
     const out = applyCommitteeRoster(row, latestEpoch);
-    if (!(Number(out.seatStartEpoch) > 0) && seatStarts && out.coldHex) {
+    // A seat starts at the earliest of the stored value and the start derived
+    // from the enacted committee actions: an interim member re-elected later
+    // keeps the original seat, and a snapshot built before a derivation fix
+    // heals on the next boot instead of waiting for a full rebuild.
+    if (seatStarts && out.coldHex) {
       const start = seatStarts.get(String(out.coldHex).toLowerCase());
-      if (Number.isFinite(start) && start > 0) out.seatStartEpoch = start;
+      const stored = Number(out.seatStartEpoch || 0);
+      if (Number.isFinite(start) && start > 0 && (!(stored > 0) || start < stored)) out.seatStartEpoch = start;
     }
     if (!out.hotCredential) {
       const rowIdHex = String(out.id || "").trim().toLowerCase();
@@ -7167,10 +7185,13 @@ async function buildFullSnapshot() {
     if (!gType.includes("new committee")) continue;
     const enacted = Number(info?.enactedEpoch);
     if (!Number.isFinite(enacted) || enacted <= 0) continue;
-    const hashes = collectHexHashes(info?.governanceDescription || {});
+    // A seat starts when the member is first added. Only the added-member
+    // map of the action counts (never the removal list), and a member who is
+    // re-elected by a later action keeps the seat start of the first one.
+    const hashes = committeeAddedCredentialHashes(info?.governanceDescription);
     for (const h of hashes) {
       const current = seatStartByColdHash.get(h);
-      if (!Number.isFinite(current) || enacted > current) {
+      if (!Number.isFinite(current) || enacted < current) {
         seatStartByColdHash.set(h, enacted);
       }
     }
