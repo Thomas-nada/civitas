@@ -7,7 +7,9 @@ import { isActiveAction } from "./status";
 
 export const DREP_SCORE_WEIGHTS = { attendance: 0.35, transparency: 0.25, consistency: 0.15, responsiveness: 0.1, delegationRisk: 0.15 };
 export const SPO_SCORE_WEIGHTS = { attendance: 0.45, transparency: 0.3, consistency: 0.15, responsiveness: 0.1 };
-export const COMMITTEE_SCORE_WEIGHTS = { attendance: 0.55, rationaleQuality: 0.45 };
+// Attendance and rationale quality weigh the same, as the production site
+// has always scored the committee.
+export const COMMITTEE_SCORE_WEIGHTS = { attendance: 0.45, rationaleQuality: 0.45 };
 
 export const DREP_DELEGATION_RISK_REFERENCE_SHARE_PCT = 0.9;
 export const DREP_DELEGATION_RISK_MEDIUM_CUTOFF = 45;
@@ -423,7 +425,7 @@ export const metricHelp = {
   },
   accountability: (row, actorType, include) => {
     const parts = [];
-    if (actorType === "committee") parts.push("Attendance 55%", "Rationale quality 45%");
+    if (actorType === "committee") parts.push("Attendance 50%", "Rationale quality 50%");
     else {
       const w = actorType === "drep" ? DREP_SCORE_WEIGHTS : SPO_SCORE_WEIGHTS;
       if (include.attendance !== false) parts.push(`Attendance ${w.attendance * 100}%`);

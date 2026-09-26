@@ -117,7 +117,7 @@ Scores are computed in the browser from the packed actor payload by `frontend/sr
 - Alignment: votes matching the final outcome / comparable (Yes or No) votes. For the committee, rationale quality (CIP-136 structure and constitutional grounding) takes this slot.
 - Responsiveness: `max(0, 100 − avg response hours / 720 × 100)`.
 - Delegation risk (DReps): share of active voting power scaled so that 0.9% maps to 100.
-- Accountability: weighted average of the enabled metrics (DRep 35/25/15/10/15, SPO 45/30/15/10, committee 55/45).
+- Accountability: weighted average of the enabled metrics (DRep 35/25/15/10/15, SPO 45/30/15/10, committee attendance and rationale quality weighted equally).
 
 Statistics and the calendar are aggregated on the server (`lib/governanceStats.js`, `lib/governanceCalendar.js`); the action model is `lib/governanceModel.js`.
 

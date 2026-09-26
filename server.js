@@ -3956,9 +3956,8 @@ function refreshAllNomosModels(snapshotObj) {
   const pi = snapshotObj?.proposalInfo;
   if (!pi || typeof pi !== "object") return;
   for (const info of Object.values(pi)) {
-    if (!info || typeof info !== "object" || !info.koiosVotingSummary) continue;
-    const model = buildNomosModelFromKoiosSummary(info.koiosVotingSummary);
-    if (model) info.nomosModel = model;
+    if (!info || typeof info !== "object") continue;
+    info.nomosModel = info.koiosVotingSummary ? buildNomosModelFromKoiosSummary(info.koiosVotingSummary) : null;
   }
 }
 
@@ -4332,6 +4331,11 @@ const SPO_FORMULA_TRANSITION_GOV_ACTION =
 const SPO_FORMULA_TRANSITION_EPOCH = 534;
 
 function buildNomosModelFromKoiosSummary(summary) {
+  if (VOTING_MODEL !== "koios") return null;
+  return buildNomosModelFromKoiosSummaryRaw(summary);
+}
+
+function buildNomosModelFromKoiosSummaryRaw(summary) {
   if (!summary || typeof summary !== "object") return null;
 
   const proposalType = String(summary.proposal_type || "");
@@ -6000,7 +6004,12 @@ const DELTA_VOTE_OVERLAP_SECONDS = Number(process.env.DELTA_VOTE_OVERLAP_SECONDS
 // Whether a full sync fetches the Koios voting summary (nomos model) for every
 // proposal ("all") or only for open ones ("pending"). A delta always refreshes
 // it for open proposals that gained votes.
-const KOIOS_VOTING_SUMMARY_SCOPE = String(process.env.KOIOS_VOTING_SUMMARY_SCOPE || "all").toLowerCase();
+const KOIOS_VOTING_SUMMARY_SCOPE = String(process.env.KOIOS_VOTING_SUMMARY_SCOPE || "pending").toLowerCase();
+// Which voting-power model the action rows use. "local" (the default, and
+// what the production site has always shown) derives every percentage from
+// the snapshot's own DRep and pool voting power; "koios" applies the Koios
+// proposal_voting_summary figures on top where a summary is stored.
+const VOTING_MODEL = String(process.env.VOTING_MODEL || "local").toLowerCase();
 
 // One proposal's detail + metadata for the on-demand routes: served from the
 // snapshot when it holds the action, otherwise from a 10-minute cached read
