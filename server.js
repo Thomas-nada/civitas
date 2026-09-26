@@ -5272,6 +5272,33 @@ function applyCommitteeRoster(row, latestEpoch) {
   return out;
 }
 
+// Seat end per cold credential, from the enacted "New committee" actions:
+// a member named in an action's removal list leaves the committee the epoch
+// before that action takes effect. A credential the same or a later action
+// seats again is not treated as removed.
+function committeeRemovalEpochsByColdHex(proposalInfo) {
+  const events = [];
+  for (const info of Object.values(proposalInfo || {})) {
+    if (!String(info?.governanceType || "").toLowerCase().includes("new committee")) continue;
+    const enacted = Number(info?.enactedEpoch || 0);
+    const ratified = Number(info?.ratifiedEpoch || 0);
+    const start = enacted > 0 ? enacted : ratified > 0 ? ratified + 1 : 0;
+    if (!(start > 0)) continue;
+    const description = info?.governanceDescription;
+    if (!description || String(description.tag || "") !== "UpdateCommittee" || !Array.isArray(description.contents)) continue;
+    const removed = Array.isArray(description.contents[1]) ? collectHexHashes(description.contents[1]) : new Set();
+    const added = description.contents[2] && typeof description.contents[2] === "object" ? collectHexHashes(Object.keys(description.contents[2])) : new Set();
+    events.push({ start, removed, added });
+  }
+  events.sort((a, b) => a.start - b.start);
+  const ends = new Map();
+  for (const { start, removed, added } of events) {
+    for (const hex of added) ends.delete(hex);
+    for (const hex of removed) if (!added.has(hex)) ends.set(hex, start - 1);
+  }
+  return ends;
+}
+
 // Seat start per cold credential, from the enacted "New committee" actions
 // in the snapshot: the members an action ADDS (its member map, not its
 // removal list) are seated at its enactment epoch, or the epoch after its
@@ -5340,8 +5367,17 @@ function committeeEligibleVoteCount(row, proposalInfo) {
 function normalizeCommitteeMembersForApi(rows, latestEpoch = 0, proposalInfo = null) {
   const input = mergeCommitteeRows(rows);
   const seatStarts = proposalInfo ? committeeSeatStartsByColdHex(proposalInfo) : null;
+  const seatEnds = proposalInfo ? committeeRemovalEpochsByColdHex(proposalInfo) : null;
   return input.map((row) => {
     const out = applyCommitteeRoster(row, latestEpoch);
+    // A member an enacted committee action removed left the committee then,
+    // whatever term the roster still carries for the credential.
+    if (seatEnds && out.coldHex) {
+      const end = seatEnds.get(String(out.coldHex).toLowerCase());
+      const stored = Number(out.expirationEpoch || 0);
+      if (Number.isFinite(end) && end > 0 && (!(stored > 0) || end < stored)) out.expirationEpoch = end;
+      if (Number.isFinite(end) && end > 0 && Number(latestEpoch) > end && out.status !== "retired") out.status = "expired";
+    }
     // A seat starts at the earliest of the stored value and the start derived
     // from the enacted committee actions: an interim member re-elected later
     // keeps the original seat, and a snapshot built before a derivation fix
@@ -7257,6 +7293,7 @@ async function buildFullSnapshot() {
   }
   const CONWAY_GENESIS_EPOCH = 507;
   const ccNameCache = new Map();
+  const committeeRemovalEnds = committeeRemovalEpochsByColdHex(proposalInfoById);
 
   for (const row of committeeAggregate.values()) {
     row.votes = Array.from(row.votesByProposal.values()).map((vote) => {
@@ -7453,11 +7490,13 @@ async function buildFullSnapshot() {
     const isCardanoAtlanticCouncil = /cardano\s+atlantic\s+council/i.test(String(row.name || ""));
     if (isCardanoAtlanticCouncil) row.status = "retired";
 
+    const removalEnd = row.coldHex ? Number(committeeRemovalEnds.get(String(row.coldHex).toLowerCase()) || 0) : 0;
     const retirementEpochCandidates = [
       String(row.hotCredential || "").toLowerCase(),
       String(row.coldCredential || "").toLowerCase()
     ]
       .map((credential) => Number(committeeRetirementEpochByCredential.get(credential) || 0))
+      .concat(removalEnd > 0 ? [removalEnd] : [])
       .filter((epoch) => Number.isFinite(epoch) && epoch > 0);
     if (retirementEpochCandidates.length > 0) {
       const autoRetirementEpoch = Math.min(...retirementEpochCandidates);
