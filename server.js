@@ -5211,8 +5211,9 @@ function committeeProposalCloseEpoch(info) {
 // the dashboard applies too: CC votes count on every action but a motion of
 // no confidence or a committee update; an action dropped before its expiry
 // is not held against anyone; the action's voting window (submission to
-// close) must overlap the seat, so an action still open when the member was
-// seated counts and one that closed before the seat does not; and past the
+// close) must reach past the seat's first epoch, so an action still open
+// after the member was seated counts and one that closed in that first
+// epoch (or before) belongs to the predecessor committee; and past the
 // seat's end an action the member did not vote on counts only if it closed
 // within the seat.
 function committeeEligibleVoteCount(row, proposalInfo) {
@@ -5228,7 +5229,10 @@ function committeeEligibleVoteCount(row, proposalInfo) {
     if (dropped > 0 && expiration > 0 && dropped < expiration) continue;
     const submitted = Number(info?.submittedEpoch || 0);
     const closeEpoch = committeeProposalCloseEpoch(info);
-    if (start > 0 && closeEpoch && closeEpoch < start) continue;
+    // An action that closes in the seat's first epoch belongs to the
+    // predecessor committee: the seat begins at that epoch's boundary and
+    // the action is gone at the next, so it never had a full epoch here.
+    if (start > 0 && closeEpoch && closeEpoch <= start) continue;
     if (end > 0 && submitted > 0 && submitted > end) continue;
     if (end > 0 && !votedOn.has(proposalId) && (!closeEpoch || closeEpoch > end)) continue;
     eligible += 1;

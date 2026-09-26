@@ -857,11 +857,12 @@ export default function DashboardPage({ actorType }) {
           if (selectedTypeSet.size > 0 && !selectedTypeSet.has(governanceTypeForProposal(vote.proposalId))) return false;
           if (isCommittee && (hasStartEpoch || hasEffectiveEndEpoch)) {
             const proposalEpoch = Number(proposalInfo[vote.proposalId]?.submittedEpoch || 0);
-            // An action still open when the seat began is the member's to
-            // vote on; only one that had already closed is outside the seat.
+            // An action still open after the seat's first epoch is the
+            // member's to vote on; one that closed in that epoch or earlier
+            // belongs to the predecessor committee.
             if (hasStartEpoch) {
               const closeEpoch = committeeProposalTerminalEpoch(vote.proposalId);
-              if (closeEpoch && closeEpoch < startEpoch) return false;
+              if (closeEpoch && closeEpoch <= startEpoch) return false;
             }
             if (hasEffectiveEndEpoch && Number.isFinite(proposalEpoch) && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) return false;
           }
@@ -894,7 +895,7 @@ export default function DashboardPage({ actorType }) {
               const proposalEpoch = Number(filteredProposalEpochs.get(proposalId) || 0);
               if (hasStartEpoch) {
                 const closeEpoch = committeeProposalTerminalEpoch(proposalId);
-                if (closeEpoch && closeEpoch < startEpoch) continue;
+                if (closeEpoch && closeEpoch <= startEpoch) continue;
               }
               if (hasEffectiveEndEpoch && Number.isFinite(proposalEpoch) && proposalEpoch > 0 && proposalEpoch > effectiveEndEpoch) continue;
               if (hasEffectiveEndEpoch && !actorVoteByProposal.has(proposalId)) {
