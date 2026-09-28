@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/adosiawolf/drep-rationale/refs/heads/main/0092 -->
+<!-- url: https://raw.githubusercontent.com/adosiawolf/drep-rationale/refs/heads/main/0056 -->
 # Kyle Solomon
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I am voting YES to reimburse Ikigai. It's the right thing to do.
+I am voting YES because what matters is what's in your heart, and it's ok to be retarded
