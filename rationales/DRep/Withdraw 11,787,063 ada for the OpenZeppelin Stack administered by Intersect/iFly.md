@@ -1,0 +1,27 @@
+<!-- url: https://raw.githubusercontent.com/026iFly/swada/06d8e49c331f262ff92a6344a5a6c271303efb04/votes/vote-2026-09-openzeppelin.jsonld -->
+# iFly
+
+**Proposal:** Withdraw 11,787,063 ada for the OpenZeppelin Stack administered by Intersect
+**Vote:** No
+**Voter ID:** `drep1yg228a8u4jc5qnqmerhs4e29jyyjac3g39z399kt8gr8vfc0ylw7s`
+
+---
+
+EN — iFly (SWADA) votes NO on the 11,787,063 ada withdrawal for the OpenZeppelin stack.
+This is a vote against this proposal, not against OpenZeppelin. An audited contracts library and reference implementations would raise the quality of what gets built on Cardano, and OpenZeppelin's standing with EVM developers is not something Cardano can manufacture. I would like to see them here.
+Why no:
+The treasury already funded this. IO's Developer Experience Initiative — 3,601,926 ada, enacted at epoch 634 — has a ContractsLibrary as its Q3 2026 deliverable, described in its own text as 'inspired by OpenZeppelin', with at least five ready-to-audit contracts, and the public repository was updated this week. This proposal asks for 11.8 million ada more for a library of similar scope and publishes no gap analysis, no division of labour, and no statement of which library builders should treat as the standard. Evaluate what the funded one delivers, then decide whether a second is worth buying.
+The core technical choice is deferred. The smart contract language is to be chosen after funding. Approving 11.8 million ada before knowing whether this is Aiken, Plutus or something else means nobody can judge cost, interoperability, or the risk of fragmenting the ecosystem's tooling.
+The price is set at 0.16 dollars per ada while ada trades around 0.22. The delivery portion converts to roughly 2.5 million dollars against a 1.83 million dollar budget, and the surplus sits in the contract for thirteen months until the automatic sweep-back, with no rule for returning it at conversion.
+What is good, and should be the template: Intersect's treasury reserve contract with a six-entity oversight committee, 20% up front and four milestone payments each gated on published evidence, and unspent funds swept back to the treasury automatically. That is exactly how large treasury asks should be structured. The problem is what is being bought, not how it is paid.
+What would change my vote: resubmit after IO's library has shipped, with a gap analysis against it; name the language; return any conversion surplus at signature rather than after a year; and — speaking as a stake pool operator — design the liquid staking reference implementation to spread delegation across many pools and respect saturation. A liquid staking token that concentrates delegation is the fastest route to stake centralisation Cardano has, and a reference implementation is where that design decision gets made for everyone who later forks it.
+I vote NO.
+SV — iFly (SWADA) röstar NEJ på uttaget av 11 787 063 ada för OpenZeppelin-stacken.
+Det här är en röst mot förslaget, inte mot OpenZeppelin. Ett granskat kontraktsbibliotek och referensimplementationer skulle höja kvaliteten på det som byggs på Cardano, och OpenZeppelins ställning bland EVM-utvecklare är inget Cardano kan tillverka. Jag vill gärna se dem här.
+Varför nej:
+Statskassan har redan finansierat detta. IO:s Developer Experience Initiative — 3 601 926 ada, antaget i epok 634 — har ett ContractsLibrary som leverans för Q3 2026, i sin egen text beskrivet som 'inspirerat av OpenZeppelin', med minst fem granskningsklara kontrakt, och det offentliga kodförrådet uppdaterades den här veckan. Det här förslaget begär 11,8 miljoner ada till för ett bibliotek av liknande omfattning och publicerar ingen gapanalys, ingen arbetsfördelning och inget besked om vilket bibliotek utvecklare ska betrakta som standard. Utvärdera vad det finansierade levererar, och avgör sedan om ett andra är värt att köpa.
+Det centrala tekniska valet skjuts upp. Programmeringsspråket för kontrakten ska väljas efter finansieringen. Att godkänna 11,8 miljoner ada innan man vet om det blir Aiken, Plutus eller något annat innebär att ingen kan bedöma kostnad, interoperabilitet eller risken att fragmentera ekosystemets verktyg.
+Priset är satt till 0,16 dollar per ada medan ada handlas kring 0,22. Leveransdelen omvandlas till ungefär 2,5 miljoner dollar mot en budget på 1,83 miljoner, och överskottet ligger kvar i kontraktet i tretton månader tills den automatiska återföringen, utan någon regel för att återlämna det vid omvandlingen.
+Det som är bra, och borde vara mallen: Intersects reservkontrakt med en tillsynskommitté av sex parter, 20 % i förskott och fyra delmålsbetalningar som var och en kräver publicerade bevis, och oanvända medel som automatiskt går tillbaka till statskassan. Precis så ska stora anslag struktureras. Problemet är vad som köps, inte hur det betalas.
+Vad som skulle ändra min röst: lägg fram igen när IO:s bibliotek har levererats, med en gapanalys mot det; namnge språket; återlämna eventuellt omvandlingsöverskott vid signering i stället för efter ett år; och — som stakepooloperatör — utforma referensimplementationen för liquid staking så att den sprider delegering över många pooler och respekterar mättnad. En liquid staking-token som koncentrerar delegering är den snabbaste vägen till stake-centralisering Cardano har, och en referensimplementation är där det designbeslutet fattas för alla som senare forkar den.
+Jag röstar NEJ.
