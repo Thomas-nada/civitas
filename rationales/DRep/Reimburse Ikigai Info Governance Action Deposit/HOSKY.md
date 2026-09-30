@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmUJ1ZtmMXodyrfxCfDFKmgRf2d95PfuuLJPwbzrJ2jHTE -->
+<!-- url: ipfs://QmWb8ne2vjEPmf8DN26sVGhAd8NiNVR3kmGXV2uGB13gF9 -->
 # HOSKY
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -9,34 +9,42 @@
 
 A [PDF version][pdf-link] of this rationale is also made available.
 
-[pdf-link]: https://ipfs.io/ipfs/Qme4QafweqK7ahoAA6bB39fiZDASqrcSxvULnAKgeodjCs
+[pdf-link]: https://ipfs.io/ipfs/QmfXRYsd5rszrw9LKCfymXSKXEJHAf3khMUZNWVZtDwKYE
 
 ## Vote: Yes
 
-This withdraws 103,000 ADA to make whole the submitter of one of Cardano's first post-Chang Info governance actions, who lost a 100,000 ADA deposit not through any error of their own but because of a node bug that allowed an unregistered stake key on the action, leaving the deposit unrecoverable. The extra 3,000 ADA covers staking rewards foregone since. The Cardano First framework reads as a clean Yes led by Governance Transparency.
+I support the 103,000 ADA withdrawal to reimburse the Ikigai governance-action submitter: 100,000 ADA for the deposit lost after a node bug allowed an unregistered stake key, plus 3,000 ADA in staking-reward compensation. This is a specific, documented loss with a direct payment to the affected participant.
 
-HOSKY is already on record supporting this. We voted Yes on the earlier Ikigai reimbursement Info action that signalled community will to fix this; this is the binding treasury action that actually does it. The principle is also already established in practice: the community previously reimbursed BigPey 100,000 ADA after he made the same mistake, so this action applies a precedent rather than setting a new one.
+My position under the HOSKY Cardano First framework remains the same as my earlier support for this reimbursement. The previous treasury action expired without enactment. This resubmission asks governance to finish that correction.
 
-## Pillar Analysis
+## Pillar analysis
 
 ### Governance Transparency (lead pillar)
 
-The withdrawal is about as clean as a treasury action gets. The loss has a documented technical cause (a node bug permitting an unregistered stake key), the amount is fully accounted for (100,000 principal plus 3,000 in foregone staking rewards at a stated 2% rate), and the constitutional checklist is satisfied line by line under Article II.6 and II.7. There is no administrator overhead, no escrow, and no multi-month delivery to monitor: funds go straight to the named stake address on enactment, and the distribution is verifiable on-chain by anyone. A governance system that can cleanly correct its own early infrastructure faults, in public and on the record, is a more trustworthy system than one that lets the cost of a protocol bug sit permanently on an individual.
+The proposal identifies the cause of the loss, separates the deposit from the additional compensation, and specifies the recipient. Payment occurs directly on enactment and can be checked on-chain. There is no delivery programme or intermediary spending process to supervise.
+
+A governance system should have a clear way to correct losses caused by its own infrastructure. Leaving this unresolved places the cost of an early technical failure on the person who participated in good faith.
 
 ### Economic Sustainability
 
-This is a one-time corrective payment, not a programme or an ongoing liability. At 103,000 ADA it sits trivially within the Net Change Limit, creates no recurring obligation, and the recipient has taken no prior treasury funding. Treating it as a sustainability question, the treasury is not funding new spend so much as returning a deposit it was never meant to keep. The marginal cost is negligible and there is no tail.
+The request is a one-time payment with a fixed amount. I accept the additional 3,000 ADA as the proposal's bounded allowance for lost staking rewards. It does not create an ongoing claim on future rewards or a recurring treasury commitment.
+
+The justification is the documented deposit loss. Future reimbursement requests should be evaluated on their own evidence, including the technical cause, the amount and whether compensation has already been received.
 
 ### Adoption
 
-There is a soft but real signal value. The submitter was an early governance pioneer who participated in good faith weeks after on-chain governance launched and was penalised by a bug in the system itself. Making them whole tells current and future participants that the cost of Cardano's own infrastructure failures will not be left on the people who showed up first. That is the kind of fairness that keeps people willing to engage with governance.
+People need confidence that using Cardano governance will not leave them permanently carrying the cost of a system fault. Correcting this case supports that confidence. The benefit here is fair treatment of participants, rather than a measurable increase in transactions or commercial activity.
 
-## Risks I'm Accepting With This Yes
+## Risks I'm accepting with this Yes
 
-### Reimbursement precedent
+### 1. A broader reimbursement expectation
 
-Approving a deposit reimbursement invites the question of where the line sits for future claims. I am accepting this because the facts are narrow: the loss was caused by a protocol-level node bug that allowed an unregistered stake key, not by the submitter's carelessness, an expired action, or a normal cost of participation. The line is also already drawn, the community reimbursed BigPey 100,000 ADA for the same class of accidental deposit loss, so this is consistent treatment rather than a novel one. A reimbursement scoped to losses of this kind is a defensible and limited principle, not an open door to refunding ordinary deposit losses.
+Other participants may cite this payment in future claims. I accept that risk while keeping the principle narrow: documented infrastructure failure, an identifiable loss and a proportionate remedy. Approval does not establish a general refund policy for unsuccessful governance actions.
 
-## Bottom Line
+### 2. Compensation is an estimate
 
-A documented protocol-bug loss, a fully accounted 103,000 ADA, a clean constitutional checklist, instant on-chain distribution, and a position HOSKY already signalled. Correcting the system's own early fault is the right call. **Yes.**
+The additional 3,000 ADA is a fixed estimate of foregone staking rewards. I accept that approximation to resolve the matter without turning a limited reimbursement into an open-ended accounting exercise.
+
+## Decision
+
+The amount is bounded, the payment is traceable, and the underlying reason for reimbursement remains sound. **Yes.**
