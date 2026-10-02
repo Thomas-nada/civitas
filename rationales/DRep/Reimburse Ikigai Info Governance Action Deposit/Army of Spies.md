@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmbh6AmAAeGJJYPGQTWFH5YhwLhhVewdY7B8gMhiC18trC -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmbjUg1wbcmTjfSZWg1KYQBELAGSLyYYSJdDQvDLwd4LBH -->
 # Army of Spies
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I voted "YES" on this last time and it should have passed.   It is long overdue that this money be returned to the rightful owner!
+Voting once again for this reimbursement.  This should have already been completed for the reasons I previously articulated.
