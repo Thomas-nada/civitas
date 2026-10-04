@@ -1,11 +1,10 @@
-<!-- url: ipfs://bafkreig4zkevpmvwouxhxd77fcwdzyurle4zw6h5qbloxvpwou4xtgvrze -->
+<!-- url: ipfs://bafkreiaz6yxyejs5bf645f5vkdwhfcvtee5e2soorbofugbsn4wzjyhgi4 -->
 # MUEN
 
 **Proposal:** Should stakePoolTargetNum (k) be raised from 500 to 1000 (SPO poll)
-**Vote:** Yes
+**Vote:** Abstain
 **Voter ID:** `drep1yt6lgdpqjey286qwt287mnk7sdqh95avfmde42vq3mltjys75kg5k`
 
 ---
 
-今回はYESとします。
-もちろん、kパラメータの変更単体ですべての課題が解決するとは考えていません。マルチプールの乱立対策やプレッジ効果の再設計など、包括的な議論が不可欠であるという前提に立ちつつも、まずは停滞している分散化への議論を一歩前進させるための契機として賛成票を投じます。
+I reconsidered and realized that if it isn't used in conjunction with minPoolCost, it might not be very effective after all. In fact, this whole discussion is pointless unless it's used in conjunction with minPoolMargin.
