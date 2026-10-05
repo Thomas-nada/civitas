@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmco7b2xnXLdMjTgxHCyPkYh2eKeJZRmU5RL9ij5cXVWXm -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmWMKJoX3231XCzhuMRukKmroUrthMGv4iQxpPqJtdjfZR -->
 # Chris [STR8] - Straightpool
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I support reimbursing the Ikigai Info Governance Action deposit. The submitter should not be punished for being an early governance pioneer affected by a node bug, and I verified on-chain that the treasury withdrawal recipient matches the original proposal’s return stake credential.
+Yes. I support reimbursing the Ikigai Info Governance Action deposit. The submitter should not be punished for being an early governance pioneer affected by a node bug, and I verified on-chain that the treasury withdrawal recipient matches the original proposal’s return stake credential.
