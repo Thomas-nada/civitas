@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_34.jsonld -->
+<!-- url: https://raw.githubusercontent.com/Cerkoryn/governance-reference/refs/heads/main/voting-history/info/TreasuryWithdrawal_63.jsonld -->
 # Cerkoryn
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-It was a clear accident when the proposal deposit from Ikigai was mistakenly sent to the treasury in September 2024 rather than being returned to the proposer.  This vote is an easy YES.
+It is unfortunate that it has taken this long, but I think this is only fair to reimburse Ikigai for being one of the first to submit a governance action on-chain and encountering this issue.  Easy YES for me.
