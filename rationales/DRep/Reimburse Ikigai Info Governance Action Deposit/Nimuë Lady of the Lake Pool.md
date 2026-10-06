@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreifvzvynyuymyngzcrhhbcldv4rukj3icdhycen7trkcrc4i5lrh7m -->
+<!-- url: ipfs://bafkreidcjxzpvkqxhndhutywoc4kjyno7xw6hujf3yn44qmmstgoiacl2e -->
 # Nimuë Lady of the Lake Pool
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,6 +7,5 @@
 
 ---
 
-As I’ve stated before, I’ll only approve the reimbursement of the 100k ada, not the additional 3k ada for ‘lost staking rewards’.
-
-Also, I would prefer the original deposit stake key to be added as a required signer, proving both that Ikigai stands behind this reimbursement and that they still have access to that key. This won’t be a requirement for me to approve, though.
+I'm not against a reimbursement of the lost funds, because those went to the treasury anyway, but the treasury shouldn't pay for lost staking rewards or airdrops, because those are not paid by the treasury. Only the amount of 100k should be reimbursed.
+Also it's not clear who submitted this governance action. Only if they asked for a reimbursement themselves, it should be done.
