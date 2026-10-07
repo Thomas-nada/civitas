@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/EMGDRep/rationale/refs/heads/main/Vote_Ikigai.jsonld -->
+<!-- url: https://raw.githubusercontent.com/EMGDRep/rationale/refs/heads/main/Vote_Ikigai2.jsonld -->
 # EMURGO
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
