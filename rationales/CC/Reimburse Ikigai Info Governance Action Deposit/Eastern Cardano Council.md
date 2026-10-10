@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/Eastern-Cardano-Council/ga-rationales-2025/refs/heads/main/ga125/ga125-rationale.jsonld -->
+<!-- url: https://raw.githubusercontent.com/Eastern-Cardano-Council/ga-rationales-2025/refs/heads/main/ga155/ga155-rationale.jsonld -->
 # Eastern Cardano Council
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,7 +7,7 @@
 
 ---
 
-The governance action with ID "gov_action1654yj97lf7guxsh27phtknq2tsc4dajp95fh7vrucaltjy0502csq7qtkhq" and title "Reimburse Ikigai Info Governance Action Deposit." is a Treasury Withdrawal, and is therefore subject to the following sections and guardrails in the Cardano Constitution.
+The governance action with ID "gov_action105mjyzm3spjppny2m776lwk5jnsuu07uva9tz0yg5u4nkf770rvsql5raht" and title "Reimburse Ikigai Info Governance Action Deposit." is a Treasury Withdrawal, and is therefore subject to the following sections and guardrails in the Cardano Constitution.
 
 ARTICLE II, Section 6 of the Cardano Constitution states that governance actions must follow a standardized and legible format, including a URL hosting an immutable document and a corresponding hash, and must provide sufficient rationale including a title, abstract, justification, and supporting materials.
 
@@ -36,14 +36,14 @@ This governance action states that "The recipient of this reimbursement has not 
 
 ARTICLE II, Section 7(3) requires that Treasury Withdrawals must not exceed the Net Change Limit.
 
-The Net Change Limit in effect at the time of submission of this vote on-chain is the governance action with ID "gov_action1m3xx08yv788vfxqh6nfvrjtvmqpwezsy0ggaczctkyjmttc2wmxsq4jsr7q".
+The Net Change Limit in effect at the time of submission of this vote on-chain is the governance action with ID "gov_action15atytcy8ru7mkcs8m7r8mx7k5x36t0h6grtgmak6v5wmf4nq07lsqhakceq".
 
-- A. Current NCL Amount: 350000000 ada
+- A. Current NCL Amount: 500000000 ada
 - B. Current NCL Time Period: Epoch 613 to Epoch 713 (Inclusive)
-- C. Total of Treasury Withdrawals within the Current NCL Time Period: 291435336 ada
+- C. Total of Treasury Withdrawals within the Current NCL Time Period: 457395629 ada
 - D. Amount of this Treasury Withdrawal: 103000 ada
-- E. "C" plus "D" = 291538336 ada
-- F. "A" minus "E" = 58461664 ada
+- E. "C" plus "D" = 457498629 ada
+- F. "A" minus "E" = 42501371 ada
 
 As the value of "F" is greater than or equal to zero, this governance action fulfils the NCL requirement.
 
@@ -67,7 +67,7 @@ This governance action specifies that "The funds will not be held by an Administ
 
 Finally, the guardrails that require consideration for this governance action are TREASURY-01a, TREASURY-02a, and TREASURY-03a.  These are addressed as follows:
 
-- TREASURY-01a - The net change limit with governance action ID "gov_action1m3xx08yv788vfxqh6nfvrjtvmqpwezsy0ggaczctkyjmttc2wmxsq4jsr7q" is currently in effect, after being "agreed by the DReps via an on-chain governance action with a threshold of greater than 50% of the active voting stake".
+- TREASURY-01a - The net change limit with governance action ID "gov_action15atytcy8ru7mkcs8m7r8mx7k5x36t0h6grtgmak6v5wmf4nq07lsqhakceq" is currently in effect, after being "agreed by the DReps via an on-chain governance action with a threshold of greater than 50% of the active voting stake".
 - TREASURY-02a - As per the above assessment, this treasury withdrawal does not exceed the current Net Change Limit.
 - TREASURY-03a - This treasury withdrawal is denominated in ada.
 
