@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmZ52FaGiAiA5Bfwb2kgr4i88Ck8hXWcwXFQQgcJxszyWZ -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYumMs3hKmqA2R8umKyk5H3RMgPV3cxawU5zsi9WZq1av -->
 # $Khale
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-This proposal reimburses the 100,000 ADA deposit lost by the submitter of the early Ikigai Info governance action because an early Cardano-node defect permitted an unregistered stake credential to be used as the deposit-return address, preventing normal recovery of the refundable deposit. The 103,000 ADA request consists of the lost principal plus a modest stated allowance for foregone staking rewards. The payment is immediate, direct, and publicly auditable on chain, with no continuing operational obligation or administrative custody. This is a proportionate resolution of a discrete loss caused by early governance-system behavior rather than proposer misconduct, and I therefore vote Yes.
+I am voting YES on “Reimburse Ikigai Info Governance Action Deposit” because it is a narrowly scoped, corrective withdrawal that reimburses 100,000 ADA lost due to a documented node bug affecting an early Info governance action, with a modest 3,000 ADA top‑up to approximate missed staking rewards. The proposal is transparent, constitutionally compliant, and sends funds directly to the original submitter without administrator custody or additional overhead, which makes it a simple and proportionate way to resolve a long‑standing issue and reinforce trust in Cardano’s governance system.
