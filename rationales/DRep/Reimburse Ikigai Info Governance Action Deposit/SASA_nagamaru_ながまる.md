@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmWUU4jf2i2WuzK5BeKcCjEAZVpNHcBpuTes9hKrsmibMx -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmdvaiyHofUCfXGrWZMiqWeU37dzD14b2Nwk81tgcntJCv -->
 # SASA_nagamaru_ながまる
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,27 +7,34 @@
 
 ---
 
-I support this proposal.
+I vote YES.
 
-I view this request not as a typical funding proposal, but as compensation for a loss that resulted from a protocol-level issue during the early stages of Cardano's on-chain governance.
+This governance action seeks to resolve the loss suffered by an early and sincere participant in Cardano governance, caused not by their actions but by a protocol implementation bug.
 
-If the submitter did not act negligently and the deposit was genuinely lost due to a node-related bug, it would be unfair for the individual alone to bear the cost. This is especially true given that the governance action was submitted shortly after the Chang hard fork, when governance processes were still new and early participants were effectively helping pioneer the system.
+It is natural that those who step forward first take on some risk.
+However, when unfair, system-originated risk is left unaddressed, it discourages others from stepping forward and ultimately stalls governance itself.
 
-The requested amount is relatively modest, and approving this reimbursement would demonstrate that the Cardano community values fairness and recognizes the contributions of early governance participants.
+For Cardano to advance, participants must trust that good-faith contributions are properly protected.
 
-At the same time, similar cases should not be handled solely through ad hoc decisions. In the future, Cardano should establish clear compensation standards and guidelines so that comparable situations can be addressed consistently, transparently, and fairly.
+This is not a personal benefit but a reasonable and minimal remedy to restore what was lost due to a system failure.
+It reflects the values and integrity we want our governance culture to stand on.
 
-For these reasons, I vote Yes.
+In respect for those who took the first steps —
+and to support those who will take the next —
+I vote YES.
 
+僕は YES に投票します。
 
-本提案を支持します。
+Cardanoガバナンスの初期段階で、誠実に行動した参加者がノード実装のバグによって不当に損失を被った問題を解決するための提案です。
 
-本件は通常の助成金や事業提案への資金提供ではなく、Cardanoの初期ガバナンス段階において発生したプロトコル側の不具合に起因する損失の補償であると理解しています。
+「先に進む者が一定のリスクを負うのは当然」です。
+しかし、バグによる 制度外の不条理なリスクを放置してしまえば、次に続く人を阻むメッセージとなり、ガバナンスは停滞します。
 
-もし提出者に重大な過失がなく、実際にノードの不具合によってデポジットを失ったのであれば、その損失を本人だけに負担させることは公平ではありません。特に、Changハードフォーク直後という前例の少ない時期にガバナンスへ参加した先駆的な貢献者に対しては、適切な対応が必要だと考えます。
+Cardanoのガバナンスが発展するためには、正しく行動した者が正しく守られるという信頼が土台であるべきです。
 
-また、要求額は比較的小規模であり、Cardanoコミュニティが初期ガバナンス参加者を尊重し、公平性を重視する姿勢を示すことにも繋がると考えています。
+これは単なる金銭補償ではなく、コミュニティの信義とガバナンス文化の健全性を守る選択です。
 
-一方で、このようなケースをその都度個別判断するのではなく、将来的には明確な補償基準やガイドラインを整備し、同様の事案に対して一貫性と透明性を持って対応できる仕組みを構築すべきだと考えます。
+この提案は、利益供与ではなく、
+システム起因の損失を公平かつ最小限に回復する合理的な提案です。
 
-以上の理由から、Yesとします。
+先に進もうとした人への敬意として、そして次に進もうとする人の背中を押すために、僕はこのコミットメントを尊重します。
