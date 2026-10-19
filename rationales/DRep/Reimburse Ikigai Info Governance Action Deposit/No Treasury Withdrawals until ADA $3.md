@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVSmKUL7aSyuh2yA67yUPLBWAQDxzR4gWPbP2Z4vPQ85g -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmTJKyF3oModB5mPmG3FKVQLiSyvjGanT47qnrjBDS5DLV -->
 # No Treasury Withdrawals until ADA $3
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,12 +7,4 @@
 
 ---
 
-This apparently needs explaining, but the concept of ownership is as follows - this amount does not belong to the treasury so it should be returned. 
-
-It is a clear exception to my dRep statement and mission to prevent excessive spending. Other possible exceptions for a YES vote are: 
-
-- Loans with BTC/Stable-coin collateral 
-- Burning treasury funds
-- Setting NCL to the amount of YoY treasury income. 
-
-All the best and happy voting.
+As last time - this is a reimbursement of funds so it is an exception to my policy of treasury protection.
