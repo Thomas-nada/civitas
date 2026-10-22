@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreig3pylxqfdsdkntb7ecgwnfwotdptz2dnipsqlg4hdrtnthocrafm -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmVKsnQq2z8QBTtizULbvYe6pMSqEmZpHhbcPEU5rRLY4g -->
 # BWtake(長崎)Japan
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,13 +7,14 @@
 
 ---
 
-YES — 誠実な修復行為を通じて、信頼あるガバナンスを育てるために支持します。 
-Changハードフォーク直後、最初期のオンチェーン提案「Ikigai Info Action」の提出時に、未登録ステークキーが使用できてしまうノードのバグが存在し、これにより提出者のデポジット10万ADAが自動返還されないままロックされる事態が発生しました。 当時から補償の必要性は広く認識されていましたが、当時はまだトレジャリー引き出し機能が存在せず、対応が保留されていました。 今回の提案はその問題を正式なガバナンス手続きで誠実に修復する行為であり、Cardanoの制度が「個人の損失を無視しない文化」として成熟していることを示しています。 この補償は単なる返金ではなく、信頼あるガバナンスの礎を築く象徴的な一歩といえます。
+私は本Treasury Withdrawalに賛成します。
+本提案は、Cardanoのオンチェーンガバナンス導入初期に提出された「Cardanoの生きがい - Ikigai -」Info Actionにおいて、実装上の問題により回収不能となった100,000 ADAのdepositと、その間のstaking rewards相当額3,000 ADAを返還するものです。
+これは通常の損失補償ではなく、制度自身が生じさせた明確な損失を、透明なガバナンス手続で修復する措置と考えます。このような是正能力は、成熟した分散型ガバナンスに必要と考えます。
 
-—
+---
 
-YES — I support this proposal as a sincere act of restoration that strengthens trustworthy governance.
-Soon after the Chang hard fork, during the submission of one of the earliest on-chain proposals, the “Ikigai Info Action,” a node bug allowed the use of an unregistered stake key, causing the submitter’s 100,000 ADA deposit to remain locked and unrecoverable.
-Although the need for reimbursement was widely recognized at the time, the treasury withdrawal mechanism did not yet exist, and thus corrective action had to be postponed.
-This proposal represents a sincere and principled effort to resolve that issue through proper governance, demonstrating Cardano’s maturity as a system that does not ignore individual losses.
-It is more than a refund — it is a symbolic step toward cultivating a culture of fairness, accountability, and trustworthy governance within Cardano.
+I vote YES on this Treasury Withdrawal.
+
+This proposal reimburses the 100,000 ADA deposit that became unrecoverable due to an implementation issue involving the “Cardano no Ikigai - Ikigai -” Info Action, submitted during the early stage of Cardano’s on-chain governance, along with 3,000 ADA in estimated staking rewards.
+
+I see this not as ordinary compensation for a loss, but as a measure to correct a clear loss caused by the governance system itself through a transparent governance process. This ability to correct such problems is important for a mature decentralized governance system.
