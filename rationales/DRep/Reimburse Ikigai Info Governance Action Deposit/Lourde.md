@@ -1,4 +1,4 @@
-<!-- url: https://dreptalk.com/vote-rationale/5f1689c7968f4ae7d8a62d2e598fc541474d43e99c76d431473be9a6be631ace.json -->
+<!-- url: ipfs://bafkreihbgcqqe7jsixyf5jhr452rao6losx5ep3jax2vklpv2dqo7x2dsu -->
 # Lourde
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I vote YES for this proposal
+I agree with this request for reimbursement and 3K compensation for loss ~Lourde~ Ouroborus Imperator Aeternalis
