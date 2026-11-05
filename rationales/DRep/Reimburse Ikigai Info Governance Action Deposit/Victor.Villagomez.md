@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSrLgAmh3Tnd8D8nbRHTBkG4mKFKukBc718VspmFJg4j5 -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmSoJTrGK5kVZoUwHD6WJiBTAE4Jr1QR8RuHDk2iePg8pB -->
 # Victor.Villagomez
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,8 +7,4 @@
 
 ---
 
-Reasons I voted Yes
-Moral: Punishing the first governance pioneer for a node bug feels not good for Karma.  
-Precedent: Sounds like BigPey and Atrium ran into similar issue and they got refunded.
-Cost: 103k ADA = 0.0003% of the treasury. Rounding error.  
-Signal: Cardano keeps promises and fixes its own mistakes.
+Just to stay consistent with my previous votes on related matter
