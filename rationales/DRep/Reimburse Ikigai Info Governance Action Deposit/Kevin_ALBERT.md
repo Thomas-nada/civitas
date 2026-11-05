@@ -1,4 +1,4 @@
-<!-- url: https://tinyurl.com/mryva7eu -->
+<!-- url: https://tinyurl.com/5ben82v9 -->
 # Kevin_ALBERT
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-I vote YES to reimburse the 100,000 ADA deposit lost in this early governance action case, because this appears to be a narrow restitution issue caused by an implementation or tooling failure rather than ordinary proposal risk. I am less convinced by the additional 3,000 ADA for missed staking rewards, since normal governance action deposits do not receive interest and this should not become a precedent for open-ended opportunity-cost claims. However, given the small size of the extra amount and the importance of correcting a clear early-governance edge case, I support resolving this case now. Future reimbursement requests should require clear recipient verification and stronger guardrails.
+I vote YES on "Reimburse Ikigai Info Governance Action Deposit" because the 100,000 ADA deposit was lost in an early governance tooling failure rather than through ordinary proposal risk. The withdrawal credential matches the credential of the original Ikigai InfoAction, so the principal is technically traceable to the affected address. I consider the extra 3,000 ADA for estimated staking rewards a weak and opportunistic addition, since normal governance deposits do not earn staking rewards. Still, this small amount should not block a narrow correction; it must not create a precedent for interest, price-loss, or opportunity-cost claims.
