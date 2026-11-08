@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmeJ48LJ1MNxdC4ZygYWXz8cEt8RkrfjmA1mK5GdqAZ3h9 -->
+<!-- url: ipfs://QmWuy3N7nr4J3rSrfAEGuXriPRcBsQsrKAVaf5a5tTDbM9 -->
 # Dave
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -9,8 +9,6 @@
 
 A [PDF version][pdf-link] of this rationale is also made available.
 
-[pdf-link]: https://ipfs.io/ipfs/QmW3vtVknyEcHXMK9iWsohiGEHPe2FPimZwSNvKdCmiUiH
+[pdf-link]: https://ipfs.io/ipfs/QmW8ssKKE4W1keyJWttdo2WAQxTVPB3TA4PLQvhpDUwBB9
 
-I am voting a strong **YES**. My vote is built on a non-negotiable principle: **trust in our governance system is essential for it to be used**.
-
-This community member was an early pioneer of governance, and they lost their deposit due to a critical **flaw in the tooling** provided to submit governance actions, not user error. This is a failure of the system's readiness, and it should have been caught in testing *before* governance went live. These early pioneers deserve our full support. Making this right is a fundamental test of our ecosystem's integrity and **sustainability**.
+Early pioneers of our new governance system should not be impacted financially through no fault of their own and this proposal has my full support.
