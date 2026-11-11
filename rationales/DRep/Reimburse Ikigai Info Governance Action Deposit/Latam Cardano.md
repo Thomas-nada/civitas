@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmRLsmCngz5s4D44rf43K5JL4ekPEBqHbQkobVnjnJVo9a -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmUEHKUkXxDSzuDkq5s9x556c3ohiYJA9ZrBMW4msyWE4f -->
 # Latam Cardano
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,7 +7,5 @@
 
 ---
 
-We support the refund but we are voting NO for two reasons: 
-1- It is unclear the author is the legitimate recipient. The Gov Action should clearly state that the address that payed the deposit is the same recieving the reimbursment.
-2- The long time that has passed is responsability of the proposer. We do not agree with the 3k Ada asked to compensate lost rewards. This reumbusrment should have been asked for a long time ago.
-We will vote YES is those two points are adressed.
+We previously voted no on this same proposal and can't find any differences in the content so we will maintain our position. We do not support creating the precedent of paying for the rewards. The time passed since the original proposal is purely the proposer's responsibility.
+Having said this we do support reimbursing the 100k deposit.
