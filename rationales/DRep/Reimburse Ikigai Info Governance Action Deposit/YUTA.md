@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR9tyfmaYsKUNFgGgTSz1d5EkcDbRWnrrx8mT2NwYyNyy -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/Qmdxyp5GmGrRpsqw222KN7noGPcmAayv6iEJWUjuHVizKR -->
 # YUTA
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,12 +7,24 @@
 
 ---
 
-I vote YES on the Ikigai deposit reimbursement.
+It would be a good idea to repay Ikigai's governance action deposit that was involuntarily sent to the treasury.
 
-My reasons are the same as in my previous vote. I have also verified that the destination of the funds is legitimate.
+Of course, it is true that this was due to a lack of checks on the part of the governance action proposer, but it was undesirable that governance actions could be sent without registering a staking address, and this has now been fixed.
+
+It should be possible to repay Ikigai's governance action deposit by simply returning it to the address to which it was sent.
+
+However, there is some room for debate as to whether staking rewards and compensation for midnight are necessary, as it is true that the governance action proposer lacked checks in their practice of sending governance actions.
+
+However, I believe that the 100,000 ADA should be repaid as soon as possible, so after considering all factors, I will vote YES at this stage.
 
 ---
 
-Ikigai供託金の払い戻しにYESを投票します。
+不本意にトレジャリーに送付されてしまったIkigaiのガバナンスアクションデポジットを返済することは良いことでしょう。
 
-理由は、前回の投票と同じ理由です。また、送金先が正統であることを確認しました。
+もちろん、これはガバナンスアクション提案者の確認不足であることは事実ですが、ステークアドレスを登録せずにガバナンスアクションが送信できる状態であったことは望ましくない状態であり、これは修正されました。
+
+Ikigaiのガバナンスアクションデポジットを送付したアドレスにそのまま返済すれば確実に本人に返済することは可能なはずです。
+
+ただし、ステーキング報酬やミッドナイト分の補償までが必要なのかは少し議論の余地があるでしょう。ガバナンスアクション提案者のガバナンスアクションの送付実務において確認不足があったことは事実であるためです。
+
+ただ、10万ADAはなるべく早く返済されるべきと考えるので総合的に考慮して現段階でYESを投票します。
