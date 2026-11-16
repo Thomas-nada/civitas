@@ -1,4 +1,4 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR9tyfmaYsKUNFgGgTSz1d5EkcDbRWnrrx8mT2NwYyNyy -->
+<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmYizh9T4ZqZHq8fybKvxQmvY37UdQQdHSVbeDy3FJrVEG -->
 # YUTA
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,12 +7,8 @@
 
 ---
 
-I vote YES on the Ikigai deposit reimbursement.
-
-My reasons are the same as in my previous vote. I have also verified that the destination of the funds is legitimate.
+YES. This may not be a protocol bug, but it was at least due to poor design. Let's give the funds back.
 
 ---
 
-Ikigai供託金の払い戻しにYESを投票します。
-
-理由は、前回の投票と同じ理由です。また、送金先が正統であることを確認しました。
+YES。これはプロトコルのバグではないかもしれませんが、少なくとも不親切な設計が原因でした。資金を返してあげましょう。
