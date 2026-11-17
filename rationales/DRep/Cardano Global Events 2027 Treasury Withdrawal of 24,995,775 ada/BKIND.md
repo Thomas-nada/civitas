@@ -1,0 +1,26 @@
+<!-- url: https://smitblockchainops.nl/governance/vote-global-events-2027-3815fd9e.jsonld -->
+# BKIND
+
+**Proposal:** Cardano Global Events 2027 Treasury Withdrawal of 24,995,775 ada
+**Vote:** No
+**Voter ID:** `drep1ytc6867ae0xmkekvmex79r9akyy28eu8nu03jf3xu9fle6c82l4eq`
+
+---
+
+Action: treasury withdrawal 3815fd9e916c8fdeb0dfde556860f4600bdd981f11a76b0bfb6b30edf9a5e947#0, 24,995,775 ada to the reward account stake1uyyqmz5ae7ct4f26p4t87y2xrrgu7f3e0cpap66zgcnxu0gl7gy6y under the current constitution's guardrails script, fa24fb305126805cf2164c161d852a0e7330cf988f1fe558cf7d4a64. I verified on chain that the action withdraws exactly this amount to that credential, that the credential is a public key and not a script, that the action was published on chain on 16 November 2026 in epoch 668, and that the proposal document hashes to the on-chain anchor, d8c29ffecfacabac757d78405af85043a52509217c7e229857374fed6fb05126.
+
+What I support. A shared Cardano presence at industry events has value, and I understand why it is planned a year ahead. The proposal reports that the 2025 to 2026 program met or exceeded its targets. The budget in this proposal is itemized by event and its sums are correct. The Foundation charges no staff time and states that it "will make no profit from this proposal". My No is not to events. It is to the size of this withdrawal at this price and to the way the money is released and held.
+
+The whole amount, before any event. The first event is in February 2027 and the last in December 2027. The action pays all 24,995,775 ada when it is enacted. The proposal calls this "upfront funding of one year's events". The budget behind it is not fixed: "Costs shown are estimates", and an event may be replaced by another. The checks the proposal offers all come after the full amount has left the treasury: five milestone reports between January 2027 and March 2028, a dashboard updated after every event, and the return of unspent funds "within six months of the final activation". The audit of this withdrawal is not yet final: "Subject to final agreement on the engagement terms, Grant Thornton will conduct a financial audit of the Treasury Withdrawal and provide an on-chain attestation."
+
+A single key. The receiving reward account is the same public key credential that action 163 names. The proposal states: "While the key credential is single-signature on-chain, there are cryptographic processes in place to implement multi-signature controls operationally within the Foundation." Controls inside an organization cannot be read from the chain. At the protocol level one key controls the full amount.
+
+A rate above the market. The request converts a budget of 4,999,155 dollars at an assumed rate of 0.20 dollars per ada. On 17 November 2026 ada traded near 0.153 dollars on Kraken, and at that rate the withdrawal is worth about 3.8 million dollars. The proposal answers a lower price with fewer events: "If the ada price falls significantly, the Foundation will scale back later activations so that spending stays within the amount withdrawn". The treasury would then pay the full 24,995,775 ada for a smaller program. The proposal does not say when the ada is converted into the currencies the events are paid in. It states that the dollar value of the withdrawn ada is reviewed every quarter, so ada may be held through the year.
+
+The cost in ada. The treasury holds ada, not dollars. The 2025 to 2026 events program was funded with 6,000,000 ada. This action asks more than four times that amount in ada for 12 events, where the earlier program funded 14 booths and sponsorships.
+
+The Net Change Limit. The proposal places itself within the 500,000,000 ada Net Change Limit for epochs 613 to 713. By my count on chain, the treasury withdrawals enacted from epoch 613 up to and including epoch 668 total 457,395,629 ada, which leaves 42,604,371 ada under that limit until epoch 713. This action alone takes more than half of what remains.
+
+One organization. In 2025 to 2026 three partners delivered the program. In this proposal the Foundation is the one accountable party and holds all funds, and it states that it has put itself forward as a potential steward of the budget domain these events would fall under. One counterparty is easier to hold to account. It also places custody, delivery and reporting with the same organization.
+
+A founding entity. The Cardano Foundation is one of the three founding entities of Cardano. The five stake pools registered under its name, CF1 to CF5, hold 249,969,212 ada of stake in epoch 668, which makes it number 10 of 2,244 pool owners in the grouping of my Decentralization Monitor. The DRep registered under its name holds 150,512,643 ada of voting power in epoch 668, number 9 of 263 active DReps. That DRep voted Yes on action 163, which pays to the same key as this action. It had not voted on this action when I measured on 17 November 2026. When an entity that holds this much stake and vote asks the treasury for funds, I look for controls that lie outside that entity. This is not the ground for my No. It is why custody on a single key of the requester weighs heavily here. I stand for dispersed stake and governance power, as a pool operator since 2019 and as a DRep.
