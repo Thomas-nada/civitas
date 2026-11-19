@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmYSQAgZnczkiidrxE9L6rYMFa1sRL8MLdWQatVsJqrYgn -->
+<!-- url: ipfs://QmQJ9B1sTMmkwGuyPtKsFvrevGTJHTBPvixZgUSHDvxqzU -->
 # Krypto Labs
 
 **Proposal:** PFMS Bringing Government Scale Adoption to Cardano by Trivolve Tech
@@ -7,4 +7,6 @@
 
 ---
 
-Abstaining from voting as a DRep due to my role as a member of the Tingvard constitutional consortium, ensuring structural independence and avoiding conflicts of interest between governance delegation and constitutional interpretation.Thank you for reading my rationale. You can follow my governance journey on X as user @kenerik
+I am abstaining from voting as a DRep due to my role as a member of the Tingvard Constitutional Consortium. This ensures structural independence and avoids potential conflicts of interest between governance delegation and constitutional interpretation.
+
+Thank you for taking the time to read my rationale. You can follow my governance journey on X: @kenerik
