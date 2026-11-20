@@ -1,12 +1,10 @@
-<!-- url: https://most-brass-sun.quicknode-ipfs.com/ipfs/QmQqnX9aeR9xJyAq6WUUxobJ6n8Rx7cJUHUF8M2Ar7ze21 -->
+<!-- url: https://dreptalk.com/vote-rationale/76026526e46c4a77de07627eaa69b95e07b2541ff178e12dbff2ac7071e3aae0.json -->
 # Aichi Tokai_DRep
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
-**Vote:** No
+**Vote:** Yes
 **Voter ID:** `drep1y2xacakh0g8q4exfgmvywy62an74cj7ejcpcrgq6vh4dckqhtsyh5`
 
 ---
 
-I vote NO.  
-I recognize the value and importance of the work presented in this proposal. However, given the current Treasury balance and the remaining Net Change Limit, I cannot support funding for initiatives that are not essential to Cardano’s operational continuity.
-To preserve long‑term financial sustainability, I must vote against this proposal.
+I support this reimbursement because it addresses a unique and exceptional case caused by a Cardano node bug during the early Chang era. The loss of 100k ada was not due to user error, and compensating this deposit is important for maintaining fairness and trust in the governance system. The requested amount is small, fully compliant with the NCL, and poses no meaningful fiscal risk. Given the special circumstances and the need to uphold governance integrity, I vote Yes.
