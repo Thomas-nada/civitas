@@ -1,4 +1,4 @@
-<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/Ikigai_.jsonld -->
+<!-- url: https://raw.githubusercontent.com/YoroiDRep/rationale/refs/heads/main/Ikigai.jsonld -->
 # Yoroi W₳llet
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
