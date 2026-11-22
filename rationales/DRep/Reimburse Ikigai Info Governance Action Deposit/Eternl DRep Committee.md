@@ -1,4 +1,4 @@
-<!-- url: ipfs://QmQUtDfUVmpauwuJSqheN9G1RZjWPRPDE4TFXasKUoukYx -->
+<!-- url: ipfs://QmUQ4KYxHd9diwHiVpdUiemjkkbucg8u5vVzY1XJ25AvKg -->
 # Eternl DRep Committee
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-...
+Lots of Japanese DReps already voted YES, so we assume it's legit. Ping us if it turns out not to be.
