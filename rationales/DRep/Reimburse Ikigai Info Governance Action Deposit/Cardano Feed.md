@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreig3lbyratuaql2jtv5vxhbojpwi5brnmjdxm5ztijpmjlytrmqkhy -->
+<!-- url: ipfs://bafkreiflvt4bkf5gkncrmyxcm2mjn6xjcwjxfilx6xh4j3s2bbo2c7qqj4 -->
 # Cardano Feed
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,4 +7,4 @@
 
 ---
 
-Yes
+I fully agree with the refund of the deposit due to an error in the initial governance action, which made it impossible to return the funds.
