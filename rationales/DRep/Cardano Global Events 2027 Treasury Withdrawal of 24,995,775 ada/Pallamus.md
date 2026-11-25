@@ -1,30 +1,47 @@
-<!-- url: https://raw.githubusercontent.com/izzbargas/pallamus-drep/refs/heads/main/vote-context/Cardano_Global_Events_Yes.jsonld -->
+<!-- url: https://raw.githubusercontent.com/izzbargas/pallamus-drep/refs/heads/main/vote-context/Cardano_Global_Events_No.jsonld -->
 # Pallamus
 
 **Proposal:** Cardano Global Events 2027 Treasury Withdrawal of 24,995,775 ada
-**Vote:** Yes
+**Vote:** No
 **Voter ID:** `drep1ytsj5tchu9qh32zml24ctuvam90tygx8p286uw3n78nlypc2fqmyr`
 
 ---
 
-Vote: YES — Cardano Global Events 2027
+Voting Rationale — NO
 
-Cardano has spent years building a secure, decentralized, and technologically sophisticated blockchain. However, technological excellence alone does not guarantee adoption. We must actively demonstrate Cardano's capabilities to developers, enterprises, institutions, and the broader global community.
+Proposal: Cardano Global Events 2027
+Treasury Withdrawal: 24,995,775 ADA
 
-My YES vote reflects my belief that strategic international exposure, ecosystem engagement, and meaningful industry partnerships are essential to Cardano's long-term growth and competitiveness.
+After further deliberation and careful consideration of the arguments presented by members of the Cardano community, I have reconsidered my initial position and have elected to vote NO.
 
-The Cardano ecosystem cannot afford to remain technologically ambitious while allowing opportunities for adoption and recognition to pass it by. Our builders deserve visibility, our technology deserves serious consideration, and our community deserves the opportunity to compete on the world stage.
+While I remain a strong advocate for increasing Cardano's global visibility, attracting institutional interest, and expanding ecosystem adoption, I must weigh these objectives against the opportunity cost of committing nearly 25 million ADA in Treasury resources.
 
-However, my support is not unconditional.
+My primary concern is whether this expenditure represents the most effective and prudent use of our limited Treasury resources at this stage of Cardano's development.
 
-Nearly ₳25 million represents a substantial commitment of Treasury resources. I expect responsible financial stewardship, transparent expenditure reporting, and measurable results. Success must extend beyond conference attendance, marketing impressions, and conversations. We should expect demonstrable progress in developer participation, meaningful partnerships, ecosystem expansion, and real-world adoption.
+Cardano must increasingly prioritize initiatives that deliver measurable commercial adoption, sustainable economic activity, liquidity growth, and meaningful on-chain utilization. Although participation in global events can contribute to these objectives, exposure alone does not guarantee their realization.
 
-I have consistently maintained that the Cardano Treasury must not become a mechanism for subsidizing private commercial interests without sufficient accountability. I distinguish such expenditures from initiatives intended to benefit the broader ecosystem, but that distinction does not excuse waste, inefficiency, or failure to deliver.
+I believe Treasury-funded initiatives of this magnitude should demonstrate:
 
-Cardano's future will ultimately be determined not by speculation or short-term price movements, but by the utility, resilience, and adoption of its technology.
+Clearly defined and measurable performance indicators.
 
-We have invested years in building the foundation. It is time to demonstrate what can be built upon it.
+Tangible and independently verifiable outcomes.
 
-I vote YES in support of greater global exposure, ecosystem opportunity, and Cardano's long-term competitiveness, with the clear expectation that every ADA entrusted to this initiative is managed responsibly and produces measurable value for the community.
+Accountability for the effective use of allocated resources.
 
-— Pallamus, Cardano DRep
+A compelling justification relative to alternative investments in ecosystem growth.
+
+A credible path toward long-term economic sustainability.
+
+Furthermore, I believe the Cardano Foundation should explore financing a greater portion of its promotional and marketing activities through its own financial resources.
+
+My decision should not be interpreted as opposition to marketing, global representation, or the Cardano Foundation itself. Rather, it reflects a reassessment of our spending priorities and the need to exercise greater fiscal prudence.
+
+This change in position is not the result of peer pressure, but of independent deliberation and consideration of reasonable and compelling arguments.
+
+As a DRep, my responsibility is not to defend a previous decision for the sake of consistency, but to exercise sound judgment and responsible stewardship of the Cardano Treasury.
+
+My principles remain unchanged. My assessment of how best to uphold them has evolved.
+
+Vote: NO
+
+— Pallamus, DRep
