@@ -1,4 +1,4 @@
-<!-- url: ipfs://bafkreifvzvynyuymyngzcrhhbcldv4rukj3icdhycen7trkcrc4i5lrh7m -->
+<!-- url: ipfs://bafkreihz4hbsxb7pa3bsdboqaakotglbcstchjwhwpl3addghf4xlnln6m -->
 # Nimuë Lady of the Lake Pool
 
 **Proposal:** Reimburse Ikigai Info Governance Action Deposit
@@ -7,6 +7,8 @@
 
 ---
 
-As I’ve stated before, I’ll only approve the reimbursement of the 100k ada, not the additional 3k ada for ‘lost staking rewards’.
+I agree that Ikigai should be reimbursed for the mistake they made, as the tooling at the time did not prevent this user error as it should have.
 
-Also, I would prefer the original deposit stake key to be added as a required signer, proving both that Ikigai stands behind this reimbursement and that they still have access to that key. This won’t be a requirement for me to approve, though.
+This TWGA withdraws to the same stake address that was used as the receiving address for the deposit of the original governance action, which is an important requirement for me. That address was also registered only a few weeks ago, indicating that Ikigai still had access to it at that time (assuming the private key has not been compromised). However, I believe it would have been preferable to include this address as a required signer to the TWGA, as that would have demonstrated both Ikigai's support for the reimbursement and continued control of the key at the time of signing.
+
+I will vote NO, however, because this TWGA also includes an additional 3,000 ada for "lost staking rewards". I do not believe the treasury should cover this amount because: (1) ada held in the treasury is not staked, and (2) while the reimbursement itself is justified, the loss ultimately resulted from user error rather than from a bug or issue that could not have been avoided.
