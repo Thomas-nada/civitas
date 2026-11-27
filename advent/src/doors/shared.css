@@ -1,0 +1,65 @@
+/* Styles for the helpers in shared.ts (used by doors 1–24). */
+
+[hidden] { display: none !important; }
+
+/* ---------- wallet prompts ---------- */
+.need-wallet { text-align: center; padding: 20px 10px; }
+.need-wallet p { max-width: 46ch; margin-left: auto; margin-right: auto; }
+.wallet-cta {
+  text-align: center;
+  margin: 14px 0 8px;
+  padding: 16px 12px 12px;
+  border: 1px dashed rgba(255, 209, 102, .5);
+  border-radius: var(--radius, 14px);
+  background: rgba(255, 209, 102, .06);
+}
+.wallet-cta p { margin: 10px auto 0; max-width: 44ch; }
+.btn-ico { width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
+
+/* ---------- rows of buttons ---------- */
+.door-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin: 12px 0; }
+.share-err { flex-basis: 100%; }
+
+/* ---------- "Sample" label for try-before-you-connect previews ---------- */
+.sample-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: var(--ink-warm, #3b2a12);
+  color: var(--cream, #fffaf0);
+  border: 1px solid rgba(255, 209, 102, .6);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* ---------- cream paper surfaces: readable text, links and code on a light sheet ---------- */
+.on-paper {
+  background: var(--cream, #fffaf0);
+  color: var(--ink-warm, #3b2a12);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  color-scheme: light;
+}
+.on-paper a { color: var(--cardano, #0033ad); }
+.on-paper .muted, .on-paper .label, .on-paper summary { color: #7a6240; }
+.on-paper code { background: rgba(59, 42, 18, .08); color: inherit; }
+.on-paper details { margin: 8px 0 0; }
+
+/* ---------- explain(): fallback only, the shell's .explain rules win ---------- */
+:where(details.explain) { margin: 16px 0 4px; }
+:where(details.explain) > :where(summary) { cursor: pointer; }
+:where(.explain-body) { font-size: .92rem; line-height: 1.55; }
+.explain-body > :first-child { margin-top: 8px; }
+.explain-body > :last-child { margin-bottom: 4px; }
+
+/* ---------- stake / vote delegation confirm card ---------- */
+.dg-card { animation: dg-in .3s ease-out backwards; }
+@keyframes dg-in { from { opacity: 0; transform: translateY(8px); } }
+.dg-sum { margin: 6px 0 2px; font-size: 1.08rem; overflow-wrap: anywhere; }
+.dg-id { display: inline-block; margin-bottom: 6px; }
+.dg-card ul { margin: 8px 0; padding-left: 1.2em; }
+.dg-card li { margin: 4px 0; }
+@media (prefers-reduced-motion: reduce) { .dg-card { animation: none; } }

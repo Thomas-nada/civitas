@@ -7,6 +7,8 @@
 node_modules/
 frontend/node_modules/
 frontend/dist/
+advent/node_modules/
+advent/dist/
 
 # Runtime caches and snapshots
 cache.*.json

@@ -1,0 +1,139 @@
+/* The lit-tree strip (src/scene.ts). Everything is prefixed scn- and scoped under .scn. */
+
+/* Reserve the height before mountScene runs, so nothing below it jumps. */
+#scene, .scn-host { height: 220px; margin: 0 0 18px; }
+
+.scn {
+  position: relative; height: 100%; overflow: hidden; isolation: isolate; contain: layout paint;
+  border-radius: var(--radius, 14px);
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  /* see-through night sky: the page gradient (and its snow) carries on behind it */
+  background: linear-gradient(180deg, rgba(7, 13, 43, .5) 0%, rgba(14, 26, 85, .62) 52%, rgba(30, 50, 140, .8) 100%);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+}
+.scn-art { position: absolute; inset: 0; }
+.scn-svg { display: block; width: 100%; height: 100%; }
+
+@media (max-width: 520px) {
+  #scene, .scn-host { height: 140px; margin-bottom: 14px; }
+}
+
+/* ---------- unlit / lit ---------- */
+.scn-off { fill: #1c2a70; stroke: rgba(255, 255, 255, .26); stroke-width: .6; }
+.scn-win .scn-off { fill: #0a1136; stroke: rgba(160, 180, 255, .24); stroke-width: .5; }
+.scn-star .scn-off { fill: #25347c; stroke: rgba(255, 255, 255, .34); stroke-width: .8; stroke-linejoin: round; }
+.scn-on { opacity: 0; transition: opacity .6s ease; transform-box: fill-box; transform-origin: center; }
+.lit > .scn-on { opacity: 1; }
+.scn-aura { opacity: 0; transition: opacity 1.2s ease; }
+
+/* ---------- always-on, slow and cheap (opacity / transform only) ---------- */
+/* windows: a dim warm glow in every house (a door you open makes its window bright) */
+.scn-cosy { opacity: .3; pointer-events: none; }
+.scn-win.lit .scn-cosy { opacity: 0; }
+.scn-flick { animation: scn-flick 4s ease-in-out var(--d, 0s) infinite; }
+@keyframes scn-flick { 0%, 100% { opacity: .3; } 30% { opacity: .42; } 45% { opacity: .24; } 70% { opacity: .38; } }
+
+/* fairy lights on the tree */
+.scn-fairy { animation: scn-fairy var(--t, 2.4s) ease-in-out var(--d, 0s) infinite alternate; }
+@keyframes scn-fairy { from { opacity: 1; } to { opacity: .25; } }
+
+/* Santa's sleigh: crosses the sky when .go is set (see santa() in scene.ts) */
+.scn-santa { opacity: 0; }
+.scn-santa.go { animation: scn-santa var(--dur, 14s) linear both; }
+@keyframes scn-santa {
+  0% { transform: translate(var(--sx0), var(--sy0)); opacity: 0; }
+  4%, 94% { opacity: 1; }
+  100% { transform: translate(var(--sx1), var(--sy1)); opacity: 0; }
+}
+.scn-santa.go .scn-santa-bob { animation: scn-bob 1.4s ease-in-out infinite; }
+@keyframes scn-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.scn-trail { animation: scn-trail 1.5s ease-out var(--d, 0s) infinite; }
+@keyframes scn-trail { 0% { opacity: .9; } 100% { opacity: 0; } }
+
+.scn-tw { animation: scn-tw var(--t, 4s) ease-in-out var(--d, 0s) infinite; }
+@keyframes scn-tw { 50% { opacity: .15; } }
+
+.scn-smoke circle {
+  fill: #c9d4ff; opacity: 0; transform-box: fill-box; transform-origin: center;
+  animation: scn-smoke 6s linear var(--d, 0s) infinite;
+}
+@keyframes scn-smoke {
+  0% { transform: translate(0, 0) scale(.5); opacity: 0; }
+  15% { opacity: .34; }
+  100% { transform: translate(8px, -28px) scale(2); opacity: 0; }
+}
+
+.scn-star.lit > .scn-on { animation: scn-star 3.2s ease-in-out infinite; }
+@keyframes scn-star { 0%, 100% { transform: scale(1); opacity: .88; } 50% { transform: scale(1.1); opacity: 1; } }
+
+/* all 24 lit: the whole tree shimmers gently */
+.scn.all .scn-bulb.lit > .scn-on { animation: scn-shim 2.8s ease-in-out calc(var(--i, 0) * -0.41s) infinite; }
+@keyframes scn-shim { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .62; transform: scale(.9); } }
+
+/* ---------- one-shots ---------- */
+/* a new block: lit bulbs twinkle once, bottom to top */
+.scn.twk .scn-bulb.lit > .scn-on { animation: scn-twk .8s ease-in-out calc(var(--i, 0) * 28ms) both; }
+@keyframes scn-twk {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  40% { opacity: .25; transform: scale(.8); }
+  70% { opacity: 1; transform: scale(1.4); }
+}
+
+/* a door was opened: its bulb (and, for door 24, the star) pops on */
+.scn .scn-art .scn-bulb.pop > .scn-on, .scn .scn-art .scn-star.pop > .scn-on { animation: scn-pop .75s cubic-bezier(.3, 1.5, .5, 1) both; }
+@keyframes scn-pop {
+  0% { transform: scale(.2); opacity: 0; }
+  55% { transform: scale(1.8); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.scn-shoot { opacity: 0; }
+.scn-shoot.go { animation: scn-shoot 1.25s cubic-bezier(.3, .1, .7, 1) both; }
+@keyframes scn-shoot {
+  0% { transform: translate(var(--x0), var(--y0)); opacity: 0; }
+  12%, 70% { opacity: 1; }
+  100% { transform: translate(var(--x1), var(--y1)); opacity: 0; }
+}
+
+.scn-sp { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.scn-burst.go .scn-sp { animation: scn-sp 1.15s ease-out var(--dl, 0ms) both; }
+@keyframes scn-sp {
+  0% { transform: translate(0, 0) scale(.2) rotate(0deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1.3) rotate(90deg); opacity: 0; }
+}
+
+/* ---------- captions ---------- */
+.scn-cap {
+  position: absolute; bottom: 5px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  font: 600 12px/1 var(--font-body, system-ui, sans-serif); font-variant-numeric: tabular-nums;
+  color: var(--ink, #e9eeff); background: rgba(7, 13, 43, .72); border: 1px solid rgba(255, 255, 255, .14);
+}
+.scn-cap[hidden] { display: none; }
+.scn-cap-l { left: 6px; }
+.scn-cap-r { right: 6px; color: var(--muted, #9aa6d6); }
+.scn-pip, .scn-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--gold, #ffd166); }
+.scn-pip { box-shadow: 0 0 6px var(--gold, #ffd166); }
+.scn-live { animation: scn-live 2.4s ease-in-out infinite; }
+@keyframes scn-live { 50% { opacity: .3; } }
+/* the "new block" line fades in over the quiet one for a few seconds */
+.scn-fresh {
+  right: 6px; opacity: 0; transition: opacity .45s ease;
+  color: var(--gold, #ffd166); background: rgba(7, 13, 43, .95); border-color: rgba(255, 209, 102, .55);
+}
+.scn-fresh.show { opacity: 1; }
+
+@media (min-width: 521px) {
+  .scn-cap { bottom: 8px; padding: 5px 10px; }
+  .scn-cap-l { left: 10px; }
+  .scn-cap-r, .scn-fresh { right: 10px; }
+}
+
+/* ---------- off switches ---------- */
+.scn.paused *, .scn.paused *::before, .scn.paused *::after { animation-play-state: paused !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scn *, .scn *::before, .scn *::after { animation: none !important; transition: none !important; }
+  .scn-shoot, .scn-burst, .scn-santa { display: none; }
+}
