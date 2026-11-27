@@ -8242,8 +8242,147 @@ async function fetchCipContent(cipId) {
   };
 }
 
+// ── Cardano Advent calendar (civitasexplorer.com/advent/) ────────────────────
+// The calendar is its own Vite app in ./advent, built with `npm run build:advent`
+// into ./advent/dist. It reads chain data from Koios through /advent/koios/<net>/…
+// (Koios's responses lack CORS headers, so the browser can't call it directly).
+// Set KOIOS_API_TOKEN to send a Koios bearer token and get a higher rate limit.
+const ADVENT_PREFIX = "/advent/";
+const ADVENT_DIST_PATH = path.join(__dirname, "advent", "dist");
+const ADVENT_KOIOS = {
+  mainnet: "https://api.koios.rest/api/v1",
+  preprod: "https://preprod.koios.rest/api/v1",
+  preview: "https://preview.koios.rest/api/v1",
+};
+const ADVENT_TYPES = {
+  ...contentTypes,
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain; charset=utf-8",
+};
+
+async function adventKoios(req, res, url, net, rest) {
+  if (req.method !== "GET" && req.method !== "POST" && req.method !== "HEAD") {
+    res.writeHead(405, { Allow: "GET, POST, HEAD" });
+    res.end();
+    return;
+  }
+  try {
+    let body;
+    if (req.method === "POST") {
+      const chunks = [];
+      let size = 0;
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 1_000_000) {
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Request too large." }));
+          return;
+        }
+        chunks.push(chunk);
+      }
+      body = Buffer.concat(chunks);
+    }
+    const headers = { accept: req.headers.accept || "application/json" };
+    if (req.headers["content-type"]) headers["content-type"] = req.headers["content-type"];
+    if (process.env.KOIOS_API_TOKEN) headers.authorization = `Bearer ${process.env.KOIOS_API_TOKEN}`;
+    const upstream = await fetch(`${ADVENT_KOIOS[net]}/${rest}${url.search}`, {
+      method: req.method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(45_000),
+    });
+    const out = {
+      "Content-Type": upstream.headers.get("content-type") || "application/json",
+      "Cache-Control": "no-store",
+    };
+    for (const h of ["content-range", "retry-after"]) {
+      const v = upstream.headers.get(h);
+      if (v) out[h] = v;
+    }
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.writeHead(upstream.status, out);
+    res.end(req.method === "HEAD" ? undefined : buf);
+  } catch (e) {
+    console.warn("[advent] Koios proxy:", e?.message || e);
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Koios is unreachable right now." }));
+  }
+}
+
+function serveAdvent(req, res, url) {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { Allow: "GET, HEAD" });
+    res.end();
+    return;
+  }
+  let rel;
+  try {
+    rel = decodeURIComponent(url.pathname.slice(ADVENT_PREFIX.length)) || "index.html";
+  } catch {
+    res.writeHead(400);
+    res.end("Bad Request");
+    return;
+  }
+  const filePath = path.join(ADVENT_DIST_PATH, rel);
+  if (!filePath.startsWith(ADVENT_DIST_PATH + path.sep)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+  const send = (file, content) => {
+    const ext = path.extname(file).toLowerCase();
+    // Vite puts content-hashed files under assets/; everything else may change on deploy.
+    const hashed = rel.startsWith("assets/") && file === filePath;
+    res.writeHead(200, {
+      "Content-Type": ADVENT_TYPES[ext] || "application/octet-stream",
+      "Cache-Control": hashed ? "public, max-age=31536000, immutable" : "no-cache",
+    });
+    res.end(req.method === "HEAD" ? undefined : content);
+  };
+  fs.readFile(filePath, (error, content) => {
+    if (!error) return send(filePath, content);
+    // Unknown file-like paths are a 404; anything else gets the calendar's page.
+    if (path.extname(rel)) {
+      res.writeHead(404);
+      res.end("Not Found");
+      return;
+    }
+    const index = path.join(ADVENT_DIST_PATH, "index.html");
+    fs.readFile(index, (idxErr, idx) => {
+      if (idxErr) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("The advent calendar hasn't been built on this server (npm run build:advent).");
+        return;
+      }
+      send(index, idx);
+    });
+  });
+}
+
+/** True when the request was handled as part of the advent calendar. */
+function handleAdvent(req, res, url) {
+  if (url.pathname === "/advent") {
+    res.writeHead(301, { Location: ADVENT_PREFIX + url.search });
+    res.end();
+    return true;
+  }
+  if (!url.pathname.startsWith(ADVENT_PREFIX)) return false;
+  const m = url.pathname.match(/^\/advent\/koios\/(mainnet|preprod|preview)\/(.*)$/);
+  if (m) {
+    void adventKoios(req, res, url, m[1], m[2]);
+    return true;
+  }
+  serveAdvent(req, res, url);
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (handleAdvent(req, res, url)) return;
 
   if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
     res.writeHead(204, {

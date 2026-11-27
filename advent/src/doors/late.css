@@ -1,0 +1,471 @@
+/* Doors 13–24, plus the friend's-tree view. One prefix per door:
+   l13 mailbox · l14 stockings · l15 ornament · l16 gifts · l17 gift a friend · l18 candle
+   l19 carolers · l20 snow globes · l21 sealed wish · l22 tree · l23 sleighs · l24 star
+   lt-* are helpers shared by these doors (.lt-paper itself lives in early.css).
+   Sized for a 375px phone (about 343px of usable width inside the modal). */
+
+/* ================================================================ shared helpers */
+.lt-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin: 12px 0; }
+.lt-row > .btn { max-width: 100%; }
+.lt-wrap {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.45;
+  max-height: 160px;
+  overflow: auto;
+}
+.lt-pill {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.5;
+  background: rgba(47, 138, 95, .16);
+  border: 1px solid rgba(47, 138, 95, .55);
+  color: #1f6b47;
+}
+.lt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.lt-tags span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 600;
+  background: rgba(59, 42, 18, .07);
+  border: 1px solid rgba(59, 42, 18, .2);
+  overflow-wrap: anywhere;
+}
+.lt-tags i { font-style: normal; font-weight: 400; font-size: .75rem; color: #7a6240; }
+.lt-sample {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: var(--ink-warm, #3b2a12);
+  color: var(--cream, #fffaf0);
+  border: 1px solid rgba(255, 209, 102, .6);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.lt-meter { height: 10px; margin: 8px 0 6px; overflow: hidden; border-radius: 99px; background: rgba(59, 42, 18, .15); }
+.lt-meter > div { height: 100%; min-width: 2px; border-radius: 99px; background: linear-gradient(90deg, var(--pine, #2f8a5f), var(--gold-deep, #e9a800)); }
+
+/* ================================================================ 13 · Santa's Mailbox */
+.l13-letter { padding-right: 64px; }
+.l13-stamp { position: absolute; top: 10px; right: 12px; width: 38px; transform: rotate(5deg); }
+.l13-stamp svg { display: block; width: 100%; height: auto; }
+.l13-body { margin: 0 0 8px; font-family: var(--font-display, Georgia, serif); font-size: 1.05rem; line-height: 1.5; overflow-wrap: anywhere; }
+.l13-meta { color: #7a6240; overflow-wrap: anywhere; }
+.l13-notes { display: grid; gap: 8px; margin: 10px 0; }
+.l13-note {
+  padding: 10px 14px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  border-left: 3px solid rgba(255, 209, 102, .6);
+  border-radius: 12px;
+  background: var(--card, rgba(255, 255, 255, .06));
+}
+.l13-note p { margin: 0 0 6px; line-height: 1.45; overflow-wrap: anywhere; }
+.l13-foot { font-size: .8rem; color: var(--muted, #9aa6d6); overflow-wrap: anywhere; }
+
+/* ================================================================ 14 · Treasury Stockings */
+.l14-sack {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: var(--radius, 14px);
+  border: 1px solid rgba(255, 209, 102, .35);
+  background: linear-gradient(135deg, rgba(255, 209, 102, .14), rgba(255, 157, 60, .07));
+}
+.l14-sackart { flex: none; width: 64px; }
+.l14-sackart svg { display: block; width: 100%; height: auto; }
+.l14-sack > div { min-width: 0; }
+.l14-sack .value { color: var(--gold, #ffd166); overflow-wrap: anywhere; }
+/* the mantel: a wooden shelf the stockings hang from */
+.l14-mantel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 14px 0 10px;
+  padding: 0 4px 6px;
+  border-top: 10px solid #6b4420;
+  border-radius: 4px 4px 0 0;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .18);
+}
+@media (min-width: 560px) { .l14-mantel { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+.l14-sock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 2px 8px;
+  border: 1px solid transparent;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.l14-art { display: block; transform-origin: 50% 0; transition: transform .2s; }
+.l14-art svg { display: block; width: 100%; height: auto; }
+.l14-sock:hover .l14-art { transform: rotate(-4deg); }
+.l14-sock[aria-pressed="true"] { border-color: rgba(255, 209, 102, .6); background: rgba(255, 209, 102, .1); }
+.l14-sock[aria-pressed="true"] .l14-amt { color: var(--gold, #ffd166); }
+.l14-amt { font-size: .75rem; font-weight: 700; line-height: 1.2; text-align: center; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.l14-x {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+  background: var(--night-2, #0c1747);
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+}
+.l14-detail { overflow-wrap: anywhere; }
+.l14-title { margin: 2px 0 8px; font-family: var(--font-display, Georgia, serif); font-size: 1.25rem; font-weight: 700; line-height: 1.25; }
+.l14-abs { font-style: italic; color: #6b5433; }
+
+/* ================================================================ 15 · Mint an Ornament */
+.l15-stage { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 24px; margin: 12px 0 6px; }
+.l15-art { flex: none; width: min(200px, 60vw); aspect-ratio: 1; }
+.l15-art img { display: block; width: 100%; height: 100%; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .5)); }
+.l15-pop { animation: l15-pop .5s cubic-bezier(.3, 1.4, .5, 1) backwards; }
+@keyframes l15-pop { from { opacity: 0; transform: scale(.8); } }
+.l15-side { flex: 1 1 200px; min-width: 0; max-width: 320px; }
+.l15-blk { margin: 2px 0 10px; font-size: 1.2rem; font-weight: 700; color: var(--gold, #ffd166); overflow-wrap: anywhere; }
+.l15-traits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.l15-traits > div {
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  background: var(--card, rgba(255, 255, 255, .06));
+}
+.l15-traits .label { display: block; }
+.l15-traits b { display: block; overflow-wrap: anywhere; }
+.l15-hint { min-height: 1.4em; margin: 6px 0 0; }
+.l15-closed { border-color: rgba(255, 209, 102, .35); }
+
+/* ================================================================ 16 · Biggest Gift */
+.l16-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.l16-gift {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 6px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  border-radius: var(--radius, 14px);
+  background: var(--card, rgba(255, 255, 255, .06));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.l16-gift:hover { background: rgba(255, 255, 255, .1); }
+.l16-gift[aria-pressed="true"] { border-color: var(--gold, #ffd166); background: rgba(255, 209, 102, .12); }
+.l16-floor { display: flex; align-items: flex-end; justify-content: center; width: 100%; max-width: 120px; aspect-ratio: 1; margin-bottom: 6px; }
+.l16-box { display: block; transition: transform .2s; }
+.l16-box svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .35)); }
+.l16-gift:hover .l16-box, .l16-gift[aria-pressed="true"] .l16-box { transform: translateY(-3px); }
+.l16-k { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #9aa6d6); text-align: center; }
+.l16-v { font-weight: 700; text-align: center; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.l16-big { margin: 2px 0 6px; font-family: var(--font-display, Georgia, serif); font-size: clamp(1.5rem, 7vw, 2rem); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.l16-detail p { overflow-wrap: anywhere; }
+.l16-compare { padding: 10px 14px; border-left: 3px solid var(--gold, #ffd166); border-radius: 6px; background: rgba(255, 209, 102, .08); }
+.l16-compare b { color: var(--gold, #ffd166); }
+
+/* ================================================================ 17 · Gift a Friend */
+.l17-form { min-width: 0; margin: 12px 0; padding: 0; border: 0; }
+.l17-form:disabled { opacity: .6; }
+.l17-form > label { margin: 14px 0 0; font-weight: 600; }
+.l17-form .label { display: block; margin: 14px 0 6px; }
+.l17-kinds, .l17-amts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.l17-chip {
+  min-height: 40px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, .3);
+  background: transparent;
+  color: var(--ink, #e9eeff);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.l17-chip:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.l17-chip[aria-pressed="true"] { border-color: var(--gold, #ffd166); background: rgba(255, 209, 102, .16); color: var(--gold, #ffd166); }
+.l17-chip:disabled { cursor: not-allowed; }
+.l17-custom { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; }
+.l17-custom input:not([type=checkbox]) { display: inline-block; width: 6.5em; margin: 0; min-height: 40px; }
+.l17-ok { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: rgba(47, 138, 95, .14); border: 1px solid rgba(47, 138, 95, .55); }
+.l17-ok > div { min-width: 0; overflow-wrap: anywhere; }
+.l17-tick { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+.l17-tick svg { display: block; width: 100%; height: 100%; }
+.l17-orns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.l17-confirm { animation: l17-in .35s ease-out backwards; }
+@keyframes l17-in { from { opacity: 0; transform: translateY(10px); } }
+.l17-sum { margin: 6px 0 4px; font-size: 1.1rem; overflow-wrap: anywhere; }
+.l17-addr { margin: 4px 0 10px; }
+.l17-card { margin: 10px 0; padding: 10px 14px; border-left: 3px solid var(--berry, #d62839); background: rgba(59, 42, 18, .05); border-radius: 4px; font-family: var(--font-display, Georgia, serif); font-size: 1.05rem; font-style: italic; overflow-wrap: anywhere; }
+.l17-back {
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--cardano, #0033ad);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.l17-back:hover:not(:disabled) { background: rgba(59, 42, 18, .07); }
+.l17-back:disabled { opacity: .5; cursor: not-allowed; }
+.paper .l17-back:focus-visible { outline: 2px solid var(--cardano, #0033ad); outline-offset: 2px; }
+
+/* ================================================================ 18 · Christmas in Slots */
+.l18 { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px 22px; margin: 12px 0; }
+.l18-candle { width: 120px; }
+.l18-candle svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 0 14px rgba(255, 157, 60, .25)); }
+.l18-flick { transform-box: fill-box; transform-origin: 50% 100%; animation: l18-flick 1.3s ease-in-out infinite alternate; }
+.l18-flare .l18-flick { animation: l18-flare .9s ease-out, l18-flick 1.3s ease-in-out .9s infinite alternate; }
+@keyframes l18-flick { 0% { transform: scale(1, 1) rotate(-2deg); } 50% { transform: scale(.92, 1.08) rotate(2deg); } 100% { transform: scale(1.04, .95) rotate(-1deg); } }
+@keyframes l18-flare { 0% { transform: scale(1); } 30% { transform: scale(1.35, 1.6); } 100% { transform: scale(1); } }
+.l18-nums { min-width: 0; }
+.l18-nums .label { margin-top: 10px; }
+.l18-nums .label:first-child { margin-top: 0; }
+.l18-big { font-size: clamp(1.6rem, 8vw, 2.4rem); font-weight: 700; line-height: 1.1; color: var(--gold, #ffd166); overflow-wrap: anywhere; }
+.l18-n { font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.l18-nums p { margin: 12px 0 0; }
+@media (max-width: 420px) {
+  .l18 { gap: 10px 14px; }
+  .l18-candle { width: 88px; }
+}
+
+/* ================================================================ 19 · DRep Carolers */
+.l19-choir { margin: 12px auto 0; width: min(360px, 100%); }
+.l19-choir svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* the notes carry a transform attribute, so they move with `translate` (composes with it) */
+.l19-note { animation: l19-float 2.6s ease-in-out infinite; }
+.l19-n2 { animation-delay: -.9s; }
+.l19-n3 { animation-delay: -1.7s; }
+@keyframes l19-float { 0%, 100% { translate: 0 0; opacity: .55; } 50% { translate: 0 -6px; opacity: 1; } }
+.l19-bubble { position: relative; margin-top: 14px; overflow-wrap: anywhere; }
+.l19-bubble::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  margin-left: -10px;
+  border: 10px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--cream, #fffaf0);
+}
+.l19-name { margin: 2px 0 6px; font-family: var(--font-display, Georgia, serif); font-size: 1.3rem; font-weight: 700; line-height: 1.2; }
+.l19-says { margin: 0 0 10px; font-style: italic; line-height: 1.5; color: #6b5433; }
+
+/* ================================================================ 20 · Ghost of Christmas Past */
+.l20-line { position: relative; list-style: none; margin: 14px 0; padding: 0; }
+.l20-line::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: 31px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(255, 209, 102, .55), rgba(255, 209, 102, .1));
+}
+.l20-line li { position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; align-items: center; padding: 8px 0; }
+.l20-globe { display: block; width: 64px; }
+.l20-globe svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .4)); }
+.l20-body { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+.l20-y { font-family: var(--font-display, Georgia, serif); font-size: 1.4rem; font-weight: 700; line-height: 1.1; color: var(--cream, #fffaf0); }
+.l20-miss .l20-globe { opacity: .45; }
+.l20-miss .l20-body { color: var(--muted, #9aa6d6); }
+.l20-miss .l20-y { color: var(--muted, #9aa6d6); }
+@media (max-width: 420px) {
+  .l20-line li { grid-template-columns: 52px minmax(0, 1fr); gap: 12px; }
+  .l20-globe { width: 52px; }
+  .l20-line::before { left: 25px; }
+}
+
+/* ================================================================ 21 · Seal a Secret Wish */
+.l21-env { width: min(260px, 80%); margin: 10px auto; }
+.l21-env svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .4)); }
+.l21-flap, .l21-wax { transform-box: fill-box; }
+.l21-flap { transform-origin: 50% 0; }
+.l21-wax { transform-origin: 50% 50%; }
+/* just sealed: the flap folds down, then the wax lands */
+.l21-go svg { animation: l21-drop .5s cubic-bezier(.3, 1.3, .5, 1) backwards; }
+.l21-go .l21-flap { animation: l21-fold .45s .25s ease-in backwards; }
+.l21-go .l21-wax { animation: l21-thunk .4s .65s cubic-bezier(.2, 1.5, .4, 1) backwards; }
+@keyframes l21-drop { from { opacity: 0; transform: translateY(-24px) scale(.9); } }
+@keyframes l21-fold { from { transform: scaleY(-1); } }
+@keyframes l21-thunk { from { opacity: 0; transform: scale(2.2); } }
+.l21-sealed { margin: 12px 0; padding: 12px 14px; border: 1px solid rgba(255, 209, 102, .35); border-radius: var(--radius, 14px); background: rgba(255, 209, 102, .06); }
+.l21-sealed > p { overflow-wrap: anywhere; }
+.l21-peek { margin: 8px 0; }
+.l21-peek > summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 600; }
+.l21-peek > p { margin: 4px 0 8px; padding: 10px 14px; border-radius: 8px; background: var(--cream, #fffaf0); color: var(--ink-warm, #3b2a12); font-family: var(--font-display, Georgia, serif); overflow-wrap: anywhere; }
+.l21-sheet label { margin-top: 0; font-family: var(--font-display, Georgia, serif); font-size: 1.1rem; font-weight: 700; }
+.l21-sheet textarea { font-family: var(--font-display, Georgia, serif); font-size: 1.05rem; line-height: 1.5; }
+.l21-sheet textarea:focus { outline-color: var(--cardano, #0033ad); }
+.l21-code { margin: 12px 0; padding: 12px 14px; border: 1px dashed rgba(255, 209, 102, .55); border-radius: 12px; background: rgba(0, 0, 0, .18); }
+.l21-code p { margin: 6px 0 8px; }
+.l21-codebox { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: .8rem; line-height: 1.4; word-break: break-all; overflow-wrap: anywhere; resize: none; }
+
+/* ================================================================ 22 · Hang Your Ornaments (and a friend's tree) */
+.l22-tree { margin: 8px auto 4px; width: min(340px, 100%); text-align: center; }
+.l22-tree svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+.l22-count { margin: 6px 0 10px; }
+.l22-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0; }
+.l22-orn {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 4px;
+  border: 1.5px solid var(--line, rgba(255, 255, 255, .12));
+  border-radius: 12px;
+  background: var(--card, rgba(255, 255, 255, .06));
+  cursor: pointer;
+  transition: transform .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.l22-orn img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.l22-orn:hover { transform: translateY(-2px); }
+.l22-orn[aria-pressed="true"] { border-color: var(--gold, #ffd166); background: rgba(255, 209, 102, .16); }
+.l22-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 16px; animation: l22-in .3s ease-out backwards; }
+@keyframes l22-in { from { opacity: 0; transform: translateY(6px); } }
+.l22-card > img { flex: none; width: 96px; height: 96px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+.l22-info { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.l22-info .small { margin-top: 4px; }
+.l22-name { font-family: var(--font-display, Georgia, serif); font-size: 1.2rem; font-weight: 700; line-height: 1.25; }
+.l22-link { margin: 8px 0 6px; font-size: .85rem; overflow-wrap: anywhere; }
+#l22-ftree:not(:empty) { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255, 255, 255, .12)); }
+
+/* ================================================================ 23 · Elf Workload Report */
+.l23-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 12px; }
+.l23-head > div:last-child { min-width: 0; }
+.l23-num { flex: none; font-family: var(--font-display, Georgia, serif); font-size: clamp(2rem, 10vw, 2.8rem); font-weight: 700; line-height: 1; color: var(--gold, #ffd166); font-variant-numeric: tabular-nums; }
+.l23-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 10px 0 6px; }
+@media (min-width: 600px) { .l23-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+.l23-sleigh {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  border-radius: 10px;
+  background: var(--card, rgba(255, 255, 255, .06));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.l23-sleigh svg { display: block; width: 100%; max-width: 56px; height: auto; transition: transform .15s; }
+.l23-sleigh:hover svg { transform: translateX(2px); }
+.l23-sleigh[aria-pressed="true"] { border-color: var(--gold, #ffd166); background: rgba(255, 209, 102, .14); }
+.l23-detail { overflow-wrap: anywhere; }
+.l23-fill { margin-top: 4px; font-size: 1.05rem; }
+
+/* ================================================================ 24 · Light the Star */
+.l24-hero { position: relative; width: min(220px, 64vw); aspect-ratio: 1; margin: 8px auto 10px; }
+.l24-hero::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 209, 102, .45), rgba(255, 157, 60, 0) 65%);
+  opacity: 0;
+  transition: opacity .8s;
+  pointer-events: none;
+}
+.l24-hero img { position: relative; display: block; width: 100%; height: 100%; border-radius: 20px; }
+.l24-lit::before { opacity: 1; animation: l24-glow 2.4s ease-in-out .8s infinite alternate; }
+@keyframes l24-glow { from { opacity: 1; } to { opacity: .55; } }
+.l24-lit img { animation: l24-pop .6s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes l24-pop { 40% { transform: scale(1.06); } }
+.l24-dim img { opacity: .55; filter: grayscale(.6); }
+.l24-list { list-style: none; display: grid; gap: 8px; margin: 12px 0; padding: 0; }
+.l24-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  border-radius: 12px;
+  background: var(--card, rgba(255, 255, 255, .06));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+button.l24-item { cursor: pointer; }
+button.l24-item:hover { background: rgba(255, 255, 255, .1); }
+.l24-item.done { border-color: rgba(47, 138, 95, .6); background: rgba(47, 138, 95, .12); }
+.l24-mark { display: block; width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); }
+.l24-item.done .l24-mark { border: 0; }
+.l24-mark svg { display: block; width: 100%; height: 100%; }
+.l24-go { font-size: .75rem; font-weight: 700; color: var(--gold, #ffd166); white-space: nowrap; }
+.l24-go::after { content: " \203A"; }
+.l24-wish { overflow-wrap: anywhere; }
+.l24-wishtext { margin: 6px 0 10px; font-family: var(--font-display, Georgia, serif); font-size: 1.2rem; line-height: 1.45; }
+.l24-check { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0 0; font-weight: 500; cursor: pointer; }
+.l24-check input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--cardano, #0033ad); }
+.l24-paste { margin: 10px 0; }
+.l24-paste > summary { display: flex; align-items: center; min-height: 40px; font-weight: 600; }
+.l24-paste textarea { font-size: .8rem; word-break: break-all; }
+.btn.l24-btn { min-height: 52px; padding: 12px 32px; font-size: 1.1rem; }
+
+/* ================================================================ focus */
+.l14-sock:focus-visible, .l16-gift:focus-visible, .l17-chip:focus-visible, .l22-orn:focus-visible,
+.l23-sleigh:focus-visible, .l24-item:focus-visible, .l21-peek > summary:focus-visible, .l24-paste > summary:focus-visible {
+  outline: 2px solid var(--gold, #ffd166);
+  outline-offset: 2px;
+}
+
+/* ================================================================ phones */
+@media (max-width: 520px) {
+  .l13-letter { padding-right: 56px; }
+  .l13-stamp { width: 32px; }
+  .l14-sack { gap: 10px; padding: 10px 12px; }
+  .l14-sackart { width: 52px; }
+  .l15-traits { gap: 6px; }
+  .l16-row { gap: 6px; }
+  .l16-gift { padding: 8px 4px; }
+  .l24-item { gap: 10px; padding: 10px 12px; }
+}
+
+/* ================================================================ reduced motion: everything still works, nothing moves */
+@media (prefers-reduced-motion: reduce) {
+  .l15-pop, .l17-confirm, .l18-flick, .l18-flare .l18-flick, .l19-note, .l21-go svg, .l21-go .l21-flap,
+  .l21-go .l21-wax, .l22-card, .l24-lit::before, .l24-lit img { animation: none !important; }
+  .l14-art, .l16-box, .l22-orn, .l23-sleigh svg, .l24-hero::before { transition: none !important; }
+  .l14-sock:hover .l14-art, .l16-gift:hover .l16-box, .l16-gift[aria-pressed="true"] .l16-box,
+  .l22-orn:hover, .l23-sleigh:hover svg { transform: none; }
+  .l19-note { opacity: 1; }
+}

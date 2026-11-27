@@ -8,7 +8,8 @@ services:
     # Root prod deps (cip-179, @evolution-sdk/evolution) are required by
     # lib/cip179.js at runtime for the surveys index; --omit=dev skips the
     # playwright devDependency (heavy browser download, e2e-only).
-    buildCommand: npm install --omit=dev && npm install --prefix frontend && npm run build
+    # The advent calendar (civitasexplorer.com/advent/) is a separate Vite app in ./advent.
+    buildCommand: npm install --omit=dev && npm install --prefix frontend && npm run build && npm run build:advent
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
@@ -24,4 +25,7 @@ services:
       - key: PERSIST_RUNTIME_SNAPSHOT_ON_PUBLISH
         value: "false"
       - key: BLOCKFROST_API_KEY
+        sync: false
+      # Optional: a Koios token for the advent calendar's chain lookups (higher rate limit).
+      - key: KOIOS_API_TOKEN
         sync: false
