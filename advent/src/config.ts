@@ -195,7 +195,8 @@ export function mergeProgress(rec: { opened?: unknown; onday?: unknown }, when: 
   const have = getOpened();
   const added: number[] = [];
   for (let day = 1; day <= 24; day++) {
-    if (!(opened & (1 << (day - 1))) || have[day] || !isUnlocked(day)) continue;
+    // Kept even while the door is still locked on this device: it shows once the day comes.
+    if (!(opened & (1 << (day - 1))) || have[day]) continue;
     have[day] = onday & (1 << (day - 1)) ? new Date(CAL_YEAR, 11, day, 12).toISOString() : when;
     added.push(day);
   }

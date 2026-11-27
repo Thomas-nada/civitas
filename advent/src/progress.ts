@@ -75,7 +75,22 @@ async function link(w: ConnectedWallet): Promise<Masks> {
  * does nothing unless `ask` is set, in which case the wallet is asked for its one signature.
  * Resolves to the days newly marked here and whether the device is (now) linked.
  */
-export async function syncProgress(w: ConnectedWallet, ask: boolean): Promise<{ added: number[]; linked: boolean; first: boolean }> {
+let inFlight: Promise<{ added: number[]; linked: boolean; first: boolean }> | null = null;
+let inFlightAsks = false;
+
+export function syncProgress(w: ConnectedWallet, ask: boolean): Promise<{ added: number[]; linked: boolean; first: boolean }> {
+  // One at a time, so a reconnect and a click never open two signature popups.
+  if (inFlight && (inFlightAsks || !ask)) return inFlight;
+  const run = (inFlight ?? Promise.resolve()).catch(() => {}).then(() => syncOnce(w, ask));
+  inFlight = run;
+  inFlightAsks = ask;
+  run.finally(() => {
+    if (inFlight === run) inFlight = null;
+  }).catch(() => {});
+  return run;
+}
+
+async function syncOnce(w: ConnectedWallet, ask: boolean): Promise<{ added: number[]; linked: boolean; first: boolean }> {
   const token = store.get<unknown>(tokenKey(w), null);
   let data: Masks | null = null;
   let first = false;

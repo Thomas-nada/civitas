@@ -916,8 +916,7 @@ function drawWalletSheet() {
             ? `Connected to ${who}. Switched to ${NET_LABEL[state.network]} to match your wallet.`
             : `Connected to ${who}.`,
         );
-        // First time on this device: one free signature so opened doors follow the wallet.
-        if (wallet && !isLinked(wallet)) void pullProgress(true);
+        // (wallet-changed asks for the one free signature if this device isn't linked yet)
       } catch (e) {
         console.error(e);
         if (b.isConnected) {
@@ -946,7 +945,20 @@ window.addEventListener("wallet-changed", () => {
   drawHeader();
   if (layers.includes(wdlg) && !connecting) drawWalletSheet();
   rerenderSoon();
-  pullProgress();
+  // Connected (by hand or silently on page load) but not linked on this device yet: ask once.
+  const w = wallet;
+  if (w && !isLinked(w) && !autoAsked.has(w.rewardAddress ?? w.changeAddress)) {
+    autoAsked.add(w.rewardAddress ?? w.changeAddress);
+    void pullProgress(true);
+  } else void pullProgress();
+});
+
+/** Wallets already asked for the sync signature on this page load (a "no" isn't asked again). */
+const autoAsked = new Set<string>();
+
+// Coming back to the tab (say after opening doors on another device): catch up.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void pullProgress();
 });
 
 /**
