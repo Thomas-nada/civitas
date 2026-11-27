@@ -8379,10 +8379,43 @@ function handleAdvent(req, res, url) {
   return true;
 }
 
+// ── Civitas closes on Dec 1, 2026 00:00 UTC ──────────────────────────────────
+// From then on only the advent calendar (/advent/) stays up: every other page
+// redirects there and the API answers 410 Gone. /api/health keeps working so
+// Render's health check stays green. CIVITAS_CLOSES_AT (any date Date.parse
+// understands) moves the moment, e.g. for testing; "never" turns it off.
+const CIVITAS_CLOSES_AT = (() => {
+  const raw = String(process.env.CIVITAS_CLOSES_AT || "2026-12-01T00:00:00Z").trim();
+  if (raw.toLowerCase() === "never") return Infinity;
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : Date.parse("2026-12-01T00:00:00Z");
+})();
+
+/** True when the request was answered because Civitas has closed. */
+function handleClosed(req, res, url) {
+  if (Date.now() < CIVITAS_CLOSES_AT) return false;
+  if (url.pathname === "/api/health") return false;
+  if (url.pathname === "/robots.txt") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+    res.end("User-agent: *\nAllow: /advent/\nDisallow: /api/\n");
+    return true;
+  }
+  if (url.pathname.startsWith("/api/")) {
+    res.writeHead(410, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ error: "Civitas has closed. Visit /advent/ for the Cardano Advent calendar." }));
+    return true;
+  }
+  // Temporary (302), so browsers don't remember it forever if the site comes back.
+  res.writeHead(302, { Location: ADVENT_PREFIX, "Cache-Control": "no-store" });
+  res.end();
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (handleAdvent(req, res, url)) return;
+  if (handleClosed(req, res, url)) return;
 
   if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
     res.writeHead(204, {
