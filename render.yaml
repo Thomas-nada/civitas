@@ -8,8 +8,8 @@ services:
     # Root prod deps (cip-179, @evolution-sdk/evolution) are required by
     # lib/cip179.js at runtime for the surveys index; --omit=dev skips the
     # playwright devDependency (heavy browser download, e2e-only).
-    # The advent calendar (civitasexplorer.com/advent/) is a separate Vite app in ./advent.
-    buildCommand: npm install --omit=dev && npm install --prefix frontend && npm run build && npm run build:advent
+    # `npm run build` also builds the advent calendar (./advent) through the postbuild script.
+    buildCommand: npm install --omit=dev && npm install --prefix frontend && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
