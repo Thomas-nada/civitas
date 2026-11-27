@@ -2,7 +2,7 @@ import { defineConfig, type ProxyOptions } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 // `vite build --mode civitas` builds the calendar for civitasexplorer.com/advent/.
-const CIVITAS = { base: "advent", site: "https://civitasexplorer.com/advent" };
+const CIVITAS = { base: "advent", site: "https://www.civitasexplorer.com/advent" };
 
 export default defineConfig(({ mode }) => {
   const civitas = mode === "civitas";

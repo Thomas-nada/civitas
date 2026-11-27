@@ -1,6 +1,6 @@
 # Cardano Advent Calendar 🎄₳
 
-> **Inside Civitas:** this folder is served at **civitasexplorer.com/advent/** by the Civitas `server.js`, which also forwards `/advent/koios/<network>/…` to Koios (set `KOIOS_API_TOKEN` on Render for a higher rate limit). Render builds it with `npm run build:advent` from the repo root (`vite build --mode civitas`). The Netlify / Vercel / Render notes below are for running the calendar on its own.
+> **Inside Civitas:** this folder is served at **www.civitasexplorer.com/advent/** by the Civitas `server.js`, which also forwards `/advent/koios/<network>/…` to Koios (set `KOIOS_API_TOKEN` on Render for a higher rate limit). Render builds it with `npm run build:advent` from the repo root (`vite build --mode civitas`). The Netlify / Vercel / Render notes below are for running the calendar on its own.
 
 
 A 24-door advent calendar where every door opens onto the live Cardano blockchain. Doors unlock on their day in December, using the visitor's local time. 14 of the doors need no wallet.
