@@ -519,6 +519,12 @@ export function mountScene(host: HTMLElement): void {
     if (day === TOTAL) flash(art.querySelector(".scn-star"), "pop", 800);
   });
 
+  // Doors opened on another device, picked up from the wallet's transactions: light them quietly.
+  window.addEventListener("progress-synced", () => {
+    readOpened();
+    paint();
+  });
+
   // ---- the user's own transaction made it into a block
   window.addEventListener("tx-confirmed", (e) => {
     const h = Number((e as CustomEvent<{ blockHeight?: number }>).detail?.blockHeight);

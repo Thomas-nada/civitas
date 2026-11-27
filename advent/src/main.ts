@@ -11,6 +11,7 @@ import { mountScene } from "./scene";
 import { initSound } from "./sound";
 import { $, errorBox, errorMsg, esc } from "./ui";
 import { connect, disconnect, installedWallets, loadMesh, networkMismatch, tryReconnect, wallet } from "./wallet";
+import { SyncUnavailable, isLinked, pushSoon, syncProgress } from "./progress";
 
 // Classic advent calendars scatter the numbers. Fixed so it looks the same every visit.
 const ORDER = [7, 15, 2, 21, 10, 4, 18, 12, 1, 23, 9, 14, 5, 20, 3, 17, 24, 8, 13, 6, 19, 11, 22, 16];
@@ -393,6 +394,7 @@ function knock(day: number, reveal = false) {
 function visit(day: number): boolean {
   const first = markOpened(day);
   syncDoors();
+  if (first) pushSoon(wallet); // remember it for this wallet's other devices
   window.dispatchEvent(new CustomEvent("door-opened", { detail: { day, first } }));
   return first;
 }
@@ -829,6 +831,12 @@ function drawWalletSheet() {
     const net = wallet.networkId === 1 ? "Mainnet" : state.network === "mainnet" ? "Testnet" : NET_LABEL[state.network];
     html = `<p class="wrow">${iconImg(wallet.icon, "wicon")}<b>${esc(wallet.name)}</b><span class="chip">${net}</span></p>
       <code class="wrap">${esc(wallet.changeAddress)}</code>
+      ${
+        isLinked(wallet)
+          ? `<p class="muted small">The doors you open are remembered for this wallet on all your devices.</p>`
+          : `<p class="muted small">Sign one free message (not a transaction) and the doors you open are remembered for this wallet on all your devices.</p>
+             <p><button type="button" class="btn" id="link">Remember my doors everywhere</button></p>`
+      }
       <p><button type="button" class="btn ghost" id="dc">Disconnect</button></p>`;
   } else if (list.length) {
     title.textContent = "Choose a wallet";
@@ -858,6 +866,15 @@ function drawWalletSheet() {
 
   const sel = $<HTMLSelectElement>(body, "#net");
   sel.onchange = () => setNetwork(sel.value as Net);
+
+  const linkBtn = body.querySelector<HTMLButtonElement>("#link");
+  if (linkBtn)
+    linkBtn.onclick = async () => {
+      linkBtn.disabled = true;
+      linkBtn.innerHTML = `<span class="spin">❄</span> Waiting for your wallet…`;
+      await pullProgress(true);
+      if (linkBtn.isConnected) drawWalletSheet();
+    };
 
   const dc = body.querySelector<HTMLButtonElement>("#dc");
   if (dc)
@@ -899,6 +916,8 @@ function drawWalletSheet() {
             ? `Connected to ${who}. Switched to ${NET_LABEL[state.network]} to match your wallet.`
             : `Connected to ${who}.`,
         );
+        // First time on this device: one free signature so opened doors follow the wallet.
+        if (wallet && !isLinked(wallet)) void pullProgress(true);
       } catch (e) {
         console.error(e);
         if (b.isConnected) {
@@ -927,7 +946,40 @@ window.addEventListener("wallet-changed", () => {
   drawHeader();
   if (layers.includes(wdlg) && !connecting) drawWalletSheet();
   rerenderSoon();
+  pullProgress();
 });
+
+/**
+ * Swap opened doors with the server for this wallet, so every device knows all of them.
+ * `ask`: if this device isn't linked yet, ask the wallet for its one free signature.
+ */
+function pullProgress(ask = false) {
+  const w = wallet;
+  if (!w || networkMismatch()) return Promise.resolve();
+  return syncProgress(w, ask)
+    .then(({ added, first }) => {
+      if (wallet !== w) return;
+      if (layers.includes(wdlg) && !connecting) drawWalletSheet();
+      if (added.length) {
+        syncDoors();
+        window.dispatchEvent(new CustomEvent("progress-synced", { detail: { added } }));
+        if (current?.day === 24) rerenderSoon(); // the Star counts opened doors
+      }
+      if (added.length)
+        toast(
+          added.length === 1
+            ? `Door ${added[0]} is marked opened: you opened it on another device.`
+            : `${added.length} doors are marked opened: you opened them on another device.`,
+        );
+      else if (first) toast("Done. The doors you open are now remembered for this wallet on all your devices.");
+    })
+    .catch((e) => {
+      console.warn("progress sync", e);
+      if (!ask) return;
+      if (e instanceof SyncUnavailable) toast(e.message);
+      else toast(`${errorMsg(e)} Your opened doors are kept on this device; you can try again from the wallet menu.`);
+    });
+}
 window.addEventListener("network-changed", () => {
   drawHeader();
   if (layers.includes(wdlg) && !connecting) drawWalletSheet();

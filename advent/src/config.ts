@@ -156,6 +156,53 @@ export function markOpened(day: number): boolean {
   return true;
 }
 
+// ---------- opened doors that travel with the wallet ----------
+// The Civitas server keeps, per wallet, which doors were opened (progress.ts), as two 24-bit
+// masks: opened, and opened on its own day (so the gold star survives the trip).
+
+const openedOnItsDay = (day: number, iso: string) => {
+  const at = new Date(iso);
+  return at.getFullYear() === CAL_YEAR && at.getMonth() === 11 && at.getDate() === day;
+};
+
+/** Bit (day − 1) set for each opened door, and for each door opened on its own day, in base 36. */
+export function progressMasks(): { opened: string; onday: string } | null {
+  let opened = 0, onday = 0;
+  for (const [k, iso] of Object.entries(getOpened())) {
+    const bit = 1 << (Number(k) - 1);
+    opened |= bit;
+    if (openedOnItsDay(Number(k), iso)) onday |= bit;
+  }
+  if (!opened) return null;
+  return { opened: (opened >>> 0).toString(36), onday: (onday >>> 0).toString(36) };
+}
+
+const MASK_RX = /^[0-9a-z]{1,5}$/;
+const parseMask = (v: unknown): number => {
+  if (typeof v !== "string" || !MASK_RX.test(v)) return 0;
+  const n = parseInt(v, 36);
+  return n < 2 ** 24 ? n : 0;
+};
+
+/**
+ * Merge an opened-doors record from another device into this browser. Doors already opened here
+ * keep their own time. New ones get their own day (if they were opened on it, so the gold star
+ * survives) or else `when`. Returns the days added.
+ */
+export function mergeProgress(rec: { opened?: unknown; onday?: unknown }, when: string): number[] {
+  const opened = parseMask(rec.opened), onday = parseMask(rec.onday) & opened;
+  if (!opened) return [];
+  const have = getOpened();
+  const added: number[] = [];
+  for (let day = 1; day <= 24; day++) {
+    if (!(opened & (1 << (day - 1))) || have[day] || !isUnlocked(day)) continue;
+    have[day] = onday & (1 << (day - 1)) ? new Date(CAL_YEAR, 11, day, 12).toISOString() : when;
+    added.push(day);
+  }
+  if (added.length) store.set(OPENED_KEY, have);
+  return added;
+}
+
 // ---------- explorer links ----------
 
 const seg = (s: string) => encodeURIComponent(String(s));

@@ -36,3 +36,6 @@ preview.env.example
 snapshot.seed.json
 
 .claude/
+
+# advent calendar progress (local fallback when no gist token)
+.data/

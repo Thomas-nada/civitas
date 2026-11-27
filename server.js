@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
 const surveys = require("./lib/surveys");
+const { handleAdventProgress } = require("./lib/adventProgress");
 // BLAKE2b — pure JS, RFC 7693, no external deps. `outlen` is the digest length
 // in bytes: 32 for metadata hashes, 28 for Cardano key/credential hashes.
 function blake2b(data, outlen = 32) {
@@ -8370,6 +8371,7 @@ function handleAdvent(req, res, url) {
     return true;
   }
   if (!url.pathname.startsWith(ADVENT_PREFIX)) return false;
+  if (handleAdventProgress(req, res, url, { readJsonBody, getClientIp })) return true;
   const m = url.pathname.match(/^\/advent\/koios\/(mainnet|preprod|preview)\/(.*)$/);
   if (m) {
     void adventKoios(req, res, url, m[1], m[2]);

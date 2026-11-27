@@ -29,3 +29,7 @@ services:
       # Optional: a Koios token for the advent calendar's chain lookups (higher rate limit).
       - key: KOIOS_API_TOKEN
         sync: false
+      # The advent calendar keeps each wallet's opened doors in a secret GitHub Gist (Render's disk is wiped
+      # on every deploy). A GitHub token with only the Gists read/write permission; see lib/adventProgress.js.
+      - key: ADVENT_GIST_TOKEN
+        sync: false

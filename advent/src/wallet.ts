@@ -744,10 +744,10 @@ export async function mintNft(
 }
 
 /** CIP-30 signData (CIP-8 message signing). Free: no transaction, no fee. */
-export async function signMessage(text: string) {
+export async function signMessage(text: string, address?: string) {
   const w = requireWallet();
   try {
-    return (await w.bw.signData(text, w.changeAddress, true)) as { signature: string; key: string };
+    return (await w.bw.signData(text, address ?? w.changeAddress, true)) as { signature: string; key: string };
   } catch (e) {
     throw new WalletError("signData", e);
   }
